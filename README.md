@@ -1,73 +1,165 @@
-# Welcome to your Lovable project
+# Buildamax AI Tender Tool
 
-## Project info
+A comprehensive construction estimation and tender management platform for Australian builders.
 
-**URL**: https://lovable.dev/projects/fd8a67ed-42fe-497d-b32f-46823fda191f
+## Features
 
-## How can I edit this code?
+### PDF Takeoff Tool
+- Interactive canvas for measuring areas, lengths, and counts on PDF plans
+- Scale calibration for accurate measurements
+- Cost estimation with SOW rate linking
+- CSV export and markup calculation
 
-There are several ways of editing your application.
+### Market Insights
+- Labour rates by state with data freshness tracking
+- Scope of Work (SOW) rates for all Australian states
+- Supplier database with 5-7 suppliers per state
+- Price webhook system for automatic updates
 
-**Use Lovable**
+### Estimation Tools
+- Material pricing with real-time search
+- NCC compliance checking
+- Quote analyzer for subcontractor quotes
+- Revision tracking and diff viewer
+- Project templates (residential, commercial, industrial)
 
-Simply visit the [Lovable Project](https://lovable.dev/projects/fd8a67ed-42fe-497d-b32f-46823fda191f) and start prompting.
+### AI Features
+- AI chatbot for assistance
+- Plan analysis with symbol detection
+- Fixture and opening summarization
 
-Changes made via Lovable will be committed automatically to this repo.
+## Tech Stack
 
-**Use your preferred IDE**
+- **Frontend**: React + TypeScript + Vite
+- **Styling**: Tailwind CSS + shadcn/ui
+- **Backend**: Supabase (Auth, Database, Edge Functions)
+- **PDF**: PDF.js + Fabric.js for canvas
+- **Charts**: Recharts
 
-If you want to work locally using your own IDE, you can clone this repo and push changes. Pushed changes will also be reflected in Lovable.
+## Setup Instructions
 
-The only requirement is having Node.js & npm installed - [install with nvm](https://github.com/nvm-sh/nvm#installing-and-updating)
+### 1. Clone the Repository
 
-Follow these steps:
+```bash
+git clone https://github.com/yannlb1990/Desktop-AI-Estimation-.git
+cd Desktop-AI-Estimation-
+```
 
-```sh
-# Step 1: Clone the repository using the project's Git URL.
-git clone <YOUR_GIT_URL>
+### 2. Install Node.js
 
-# Step 2: Navigate to the project directory.
-cd <YOUR_PROJECT_NAME>
+If you don't have Node.js installed:
+```bash
+# Using Homebrew (macOS)
+brew install node
 
-# Step 3: Install the necessary dependencies.
-npm i
+# Or using nvm
+curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.0/install.sh | bash
+nvm install 18
+nvm use 18
+```
 
-# Step 4: Start the development server with auto-reloading and an instant preview.
+### 3. Install Dependencies
+
+```bash
+npm install
+```
+
+### 4. Configure Supabase
+
+1. Create a Supabase project at https://supabase.com
+2. Go to **Settings** > **API** in your Supabase dashboard
+3. Copy the **Project URL** and **anon/public key**
+4. Create a `.env` file based on `.env.example`:
+
+```bash
+cp .env.example .env
+```
+
+5. Update the `.env` file with your Supabase credentials:
+
+```env
+VITE_SUPABASE_PROJECT_ID="your_project_id"
+VITE_SUPABASE_PUBLISHABLE_KEY="your_anon_key_here"
+VITE_SUPABASE_URL="https://your_project_id.supabase.co"
+```
+
+### 5. Set Up Database
+
+1. Go to your Supabase dashboard
+2. Navigate to **SQL Editor**
+3. Run the migration files in order from `supabase/migrations/`:
+   - Start with `001_initial_schema.sql`
+   - Then run each numbered migration in sequence
+
+Or run all migrations at once:
+```bash
+# If you have Supabase CLI installed
+supabase db push
+```
+
+### 6. Run Development Server
+
+```bash
 npm run dev
 ```
 
-**Edit a file directly in GitHub**
+The app will be available at `http://localhost:5173`
 
-- Navigate to the desired file(s).
-- Click the "Edit" button (pencil icon) at the top right of the file view.
-- Make your changes and commit the changes.
+### 7. Build for Production
 
-**Use GitHub Codespaces**
+```bash
+npm run build
+```
 
-- Navigate to the main page of your repository.
-- Click on the "Code" button (green button) near the top right.
-- Select the "Codespaces" tab.
-- Click on "New codespace" to launch a new Codespace environment.
-- Edit files directly within the Codespace and commit and push your changes once you're done.
+## Project Structure
 
-## What technologies are used for this project?
+```
+src/
+├── components/        # React components
+│   ├── features/     # Feature-specific components
+│   ├── takeoff/      # PDF takeoff components
+│   └── ui/           # shadcn/ui components
+├── data/             # Static data (rates, templates)
+├── hooks/            # Custom React hooks
+├── integrations/     # Supabase client
+├── lib/              # Utilities and API clients
+│   └── api/          # API layer
+├── pages/            # Page components
+└── utils/            # Helper utilities
 
-This project is built with:
+supabase/
+├── functions/        # Edge functions for AI
+└── migrations/       # Database schema
+```
 
-- Vite
-- TypeScript
-- React
-- shadcn-ui
-- Tailwind CSS
+## Key Components
 
-## How can I deploy this project?
+| Component | Description |
+|-----------|-------------|
+| `PDFTakeoff` | Interactive PDF viewer with measurement tools |
+| `InteractiveCanvas` | Fabric.js canvas for drawing measurements |
+| `MarketInsights` | Labour rates, SOW rates, suppliers dashboard |
+| `CostEstimator` | Cost calculation with SOW rate linking |
+| `NCCCompliancePanel` | NCC compliance checking |
+| `QuoteAnalyzerPanel` | Analyze subcontractor quotes |
 
-Simply open [Lovable](https://lovable.dev/projects/fd8a67ed-42fe-497d-b32f-46823fda191f) and click on Share -> Publish.
+## Environment Variables
 
-## Can I connect a custom domain to my Lovable project?
+| Variable | Description |
+|----------|-------------|
+| `VITE_SUPABASE_URL` | Your Supabase project URL |
+| `VITE_SUPABASE_PUBLISHABLE_KEY` | Your Supabase anon/public key |
+| `VITE_SUPABASE_PROJECT_ID` | Your Supabase project ID |
 
-Yes, you can!
+## Deployment
 
-To connect a domain, navigate to Project > Settings > Domains and click Connect Domain.
+Deploy to Vercel, Netlify, or any static hosting:
 
-Read more here: [Setting up a custom domain](https://docs.lovable.dev/features/custom-domain#custom-domain)
+```bash
+npm run build
+# Deploy the 'dist' folder
+```
+
+## License
+
+Private - Buildamax Pty Ltd
