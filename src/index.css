@@ -1,0 +1,141 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Definition of the design system. All colors, gradients, fonts, etc should be defined here. 
+All colors MUST be HSL.
+*/
+
+@layer base {
+  :root {
+    --background: 0 0% 100%;
+    --foreground: 210 11% 15%;
+
+    --card: 0 0% 100%;
+    --card-foreground: 210 11% 15%;
+
+    --popover: 0 0% 100%;
+    --popover-foreground: 210 11% 15%;
+
+    /* Deep Navy Primary */
+    --primary: 210 50% 10%;
+    --primary-foreground: 0 0% 98%;
+
+    /* Electric Blue */
+    --secondary: 211 100% 50%;
+    --secondary-foreground: 0 0% 98%;
+
+    /* Soft Grey */
+    --muted: 210 14% 97%;
+    --muted-foreground: 210 8% 45%;
+
+    /* Lime Green Accent */
+    --accent: 76 61% 67%;
+    --accent-foreground: 210 50% 10%;
+
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 0 0% 98%;
+
+    --border: 210 14% 89%;
+    --input: 210 14% 89%;
+    --ring: 211 100% 50%;
+
+    --radius: 0.75rem;
+
+    /* Custom Gradients */
+    --gradient-primary: linear-gradient(135deg, hsl(210 50% 10%) 0%, hsl(211 100% 30%) 100%);
+    --gradient-hero: linear-gradient(180deg, hsl(210 50% 10%) 0%, hsl(211 40% 20%) 100%);
+    --gradient-accent: linear-gradient(90deg, hsl(211 100% 50%) 0%, hsl(195 100% 50%) 100%);
+    
+    /* Shadows */
+    --shadow-sm: 0 2px 8px hsl(210 50% 10% / 0.04);
+    --shadow-md: 0 4px 16px hsl(210 50% 10% / 0.08);
+    --shadow-lg: 0 8px 32px hsl(210 50% 10% / 0.12);
+    --shadow-glow: 0 0 40px hsl(211 100% 50% / 0.2);
+
+    /* Animations */
+    --transition-smooth: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+
+  .dark {
+    --background: 210 50% 10%;
+    --foreground: 0 0% 98%;
+
+    --card: 210 45% 12%;
+    --card-foreground: 0 0% 98%;
+
+    --popover: 210 45% 12%;
+    --popover-foreground: 0 0% 98%;
+
+    --primary: 0 0% 98%;
+    --primary-foreground: 210 50% 10%;
+
+    --secondary: 211 100% 50%;
+    --secondary-foreground: 0 0% 98%;
+
+    --muted: 210 30% 18%;
+    --muted-foreground: 210 8% 65%;
+
+    --accent: 76 61% 67%;
+    --accent-foreground: 210 50% 10%;
+
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 0 0% 98%;
+
+    --border: 210 30% 18%;
+    --input: 210 30% 18%;
+    --ring: 211 100% 50%;
+
+    --shadow-sm: 0 2px 8px hsl(0 0% 0% / 0.3);
+    --shadow-md: 0 4px 16px hsl(0 0% 0% / 0.4);
+    --shadow-lg: 0 8px 32px hsl(0 0% 0% / 0.5);
+    --shadow-glow: 0 0 40px hsl(211 100% 50% / 0.3);
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-foreground;
+    font-feature-settings: "rlig" 1, "calt" 1;
+  }
+
+  h1, h2, h3, h4, h5, h6 {
+    font-family: 'Poppins', system-ui, sans-serif;
+    font-weight: 700;
+    letter-spacing: -0.02em;
+  }
+
+  .font-display {
+    font-family: 'Poppins', system-ui, sans-serif;
+  }
+
+  .font-mono {
+    font-family: 'Space Grotesk', 'Roboto Mono', monospace;
+  }
+}
+
+@layer utilities {
+  .gradient-primary {
+    background: var(--gradient-primary);
+  }
+  
+  .gradient-hero {
+    background: var(--gradient-hero);
+  }
+  
+  .gradient-accent {
+    background: var(--gradient-accent);
+  }
+
+  .shadow-glow {
+    box-shadow: var(--shadow-glow);
+  }
+
+  .transition-smooth {
+    transition: var(--transition-smooth);
+  }
+}

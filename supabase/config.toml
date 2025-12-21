@@ -1,0 +1,28 @@
+project_id = "tpvhkhphufdgfnqofwxf"
+
+[functions.analyze-plan]
+verify_jwt = true
+
+[functions.ai-chat]
+verify_jwt = true
+
+[functions.analyze-plan-takeoff]
+verify_jwt = true
+
+[functions.ai-material-search]
+verify_jwt = true
+
+[functions.plan-detect-symbols]
+verify_jwt = true
+
+[functions.plan-extract-schedules]
+verify_jwt = true
+
+[functions.link-symbols-to-schedules]
+verify_jwt = true
+
+[functions.summarise-fixtures-openings]
+verify_jwt = true
+
+[functions.analyze-plan-pricing]
+verify_jwt = true
