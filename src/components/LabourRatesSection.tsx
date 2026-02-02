@@ -5,7 +5,6 @@ import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { DollarSign, Plus, Trash2 } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
-import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 
 const AU_TRADES = [
@@ -26,6 +25,15 @@ const DEFAULT_RATES: Record<string, number> = {
   Landscaper: 80
 };
 
+// LocalStorage keys
+const LABOUR_RATES_KEY = 'user_labour_rates';
+const CUSTOM_TRADES_KEY = 'user_custom_trades';
+
+interface CustomTrade {
+  trade_name: string;
+  default_rate: number;
+}
+
 interface LabourRatesSectionProps {
   rates: Record<string, number>;
   onRatesChange: (rates: Record<string, number>) => void;
@@ -44,81 +52,61 @@ export const LabourRatesSection = ({ rates, onRatesChange }: LabourRatesSectionP
     loadUserLabourRates();
   }, []);
 
-  const loadUserLabourRates = async () => {
+  // Load labour rates from localStorage
+  const loadUserLabourRates = () => {
     try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return;
-
-      const { data, error } = await supabase
-        .from("user_labour_rates")
-        .select("trade_name, hourly_rate")
-        .eq("user_id", user.id);
-
-      if (error) throw error;
-
-      if (data && data.length > 0) {
-        const loadedRates: Record<string, number> = {};
-        data.forEach(row => {
-          loadedRates[row.trade_name] = row.hourly_rate;
-        });
-        onRatesChange({ ...rates, ...loadedRates });
+      const storedRates = localStorage.getItem(LABOUR_RATES_KEY);
+      if (storedRates) {
+        const loadedRates: Record<string, number> = JSON.parse(storedRates);
+        onRatesChange({ ...DEFAULT_RATES, ...loadedRates });
+      } else {
+        // Initialize with default rates
+        onRatesChange({ ...DEFAULT_RATES });
       }
     } catch (error) {
       console.error("Error loading user labour rates:", error);
+      onRatesChange({ ...DEFAULT_RATES });
     }
   };
 
-  const loadCustomTrades = async () => {
+  // Load custom trades from localStorage
+  const loadCustomTrades = () => {
     try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return;
-
-      const { data, error } = await supabase
-        .from("custom_trades")
-        .select("trade_name, default_rate")
-        .eq("user_id", user.id);
-
-      if (error) throw error;
-
-      if (data && data.length > 0) {
-        const tradeNames = data.map(t => t.trade_name);
+      const storedTrades = localStorage.getItem(CUSTOM_TRADES_KEY);
+      if (storedTrades) {
+        const trades: CustomTrade[] = JSON.parse(storedTrades);
+        const tradeNames = trades.map(t => t.trade_name);
         setCustomTrades(tradeNames);
         setAllTrades([...AU_TRADES, ...tradeNames]);
 
+        // Load custom trade rates
         const customRates: Record<string, number> = {};
-        data.forEach(trade => {
-          customRates[trade.trade_name] = trade.default_rate || DEFAULT_RATES[trade.trade_name] || 90;
+        trades.forEach(trade => {
+          customRates[trade.trade_name] = trade.default_rate || 90;
         });
-        onRatesChange({ ...rates, ...customRates });
+
+        // Merge with existing rates
+        const storedRates = localStorage.getItem(LABOUR_RATES_KEY);
+        const existingRates = storedRates ? JSON.parse(storedRates) : {};
+        onRatesChange({ ...DEFAULT_RATES, ...customRates, ...existingRates });
       }
     } catch (error) {
       console.error("Error loading custom trades:", error);
     }
   };
 
-  const handleRateChange = async (trade: string, value: string) => {
+  // Save rate to localStorage
+  const handleRateChange = (trade: string, value: string) => {
     const numValue = value === '' ? 0 : parseFloat(value);
-    onRatesChange({
+    const newRates = {
       ...rates,
       [trade]: numValue
-    });
+    };
+    onRatesChange(newRates);
 
-    // Save to database
+    // Save to localStorage
     try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return;
-
-      const { error } = await supabase
-        .from("user_labour_rates")
-        .upsert({
-          user_id: user.id,
-          trade_name: trade,
-          hourly_rate: numValue,
-          updated_at: new Date().toISOString()
-        }, { onConflict: 'user_id,trade_name' });
-
-      if (error) throw error;
-
+      localStorage.setItem(LABOUR_RATES_KEY, JSON.stringify(newRates));
       toast({
         title: "Rate saved",
         description: `${trade} rate updated to $${numValue}/hr`,
@@ -133,7 +121,8 @@ export const LabourRatesSection = ({ rates, onRatesChange }: LabourRatesSectionP
     }
   };
 
-  const addCustomTrade = async () => {
+  // Add custom trade to localStorage
+  const addCustomTrade = () => {
     if (!newTradeName.trim()) {
       toast({
         title: "Error",
@@ -143,68 +132,87 @@ export const LabourRatesSection = ({ rates, onRatesChange }: LabourRatesSectionP
       return;
     }
 
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) {
+    // Check if trade already exists
+    if (allTrades.includes(newTradeName.trim())) {
       toast({
         title: "Error",
-        description: "Please log in to add custom trades",
+        description: "This trade already exists",
         variant: "destructive",
       });
       return;
     }
 
-    const { error } = await supabase
-      .from("custom_trades")
-      .insert({
-        user_id: user.id,
+    try {
+      // Load existing custom trades
+      const storedTrades = localStorage.getItem(CUSTOM_TRADES_KEY);
+      const trades: CustomTrade[] = storedTrades ? JSON.parse(storedTrades) : [];
+
+      // Add new trade
+      const newTrade: CustomTrade = {
         trade_name: newTradeName.trim(),
         default_rate: parseFloat(newTradeRate) || 90
-      });
+      };
+      trades.push(newTrade);
 
-    if (error) {
+      // Save to localStorage
+      localStorage.setItem(CUSTOM_TRADES_KEY, JSON.stringify(trades));
+
+      // Update rates
+      const newRates = {
+        ...rates,
+        [newTradeName.trim()]: parseFloat(newTradeRate) || 90
+      };
+      localStorage.setItem(LABOUR_RATES_KEY, JSON.stringify(newRates));
+      onRatesChange(newRates);
+
+      toast({
+        title: "Success",
+        description: `${newTradeName} added successfully`,
+      });
+      setNewTradeName("");
+      setNewTradeRate("90");
+      setShowAddDialog(false);
+      loadCustomTrades();
+    } catch (error) {
       toast({
         title: "Error",
         description: "Failed to add custom trade",
         variant: "destructive",
       });
       console.error(error);
-      return;
     }
-
-    toast({
-      title: "Success",
-      description: `${newTradeName} added successfully`,
-    });
-    setNewTradeName("");
-    setNewTradeRate("90");
-    setShowAddDialog(false);
-    loadCustomTrades();
   };
 
-  const deleteCustomTrade = async (tradeName: string) => {
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return;
+  // Delete custom trade from localStorage
+  const deleteCustomTrade = (tradeName: string) => {
+    try {
+      // Load existing custom trades
+      const storedTrades = localStorage.getItem(CUSTOM_TRADES_KEY);
+      const trades: CustomTrade[] = storedTrades ? JSON.parse(storedTrades) : [];
 
-    const { error } = await supabase
-      .from("custom_trades")
-      .delete()
-      .eq("user_id", user.id)
-      .eq("trade_name", tradeName);
+      // Remove the trade
+      const updatedTrades = trades.filter(t => t.trade_name !== tradeName);
+      localStorage.setItem(CUSTOM_TRADES_KEY, JSON.stringify(updatedTrades));
 
-    if (error) {
+      // Remove from rates
+      const newRates = { ...rates };
+      delete newRates[tradeName];
+      localStorage.setItem(LABOUR_RATES_KEY, JSON.stringify(newRates));
+      onRatesChange(newRates);
+
+      toast({
+        title: "Success",
+        description: `${tradeName} removed`,
+      });
+      loadCustomTrades();
+    } catch (error) {
       toast({
         title: "Error",
         description: "Failed to delete trade",
         variant: "destructive",
       });
-      return;
+      console.error(error);
     }
-
-    toast({
-      title: "Success",
-      description: `${tradeName} removed`,
-    });
-    loadCustomTrades();
   };
 
   return (

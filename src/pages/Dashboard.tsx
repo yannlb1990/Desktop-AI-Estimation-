@@ -1,11 +1,9 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { supabase } from "@/integrations/supabase/client";
-import { User, Session } from "@supabase/supabase-js";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { toast } from "sonner";
-import { 
+import {
   LogOut, Plus, FileText, DollarSign, TrendingUp, BarChart3,
   Upload, Zap, Settings
 } from "lucide-react";
@@ -13,66 +11,23 @@ import { Loader2 } from "lucide-react";
 
 const Dashboard = () => {
   const navigate = useNavigate();
-  const [user, setUser] = useState<User | null>(null);
-  const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
   const [projects, setProjects] = useState<any[]>([]);
 
   useEffect(() => {
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      (event, session) => {
-        setSession(session);
-        setUser(session?.user ?? null);
-        if (!session) {
-          navigate("/auth");
-        }
-      }
-    );
+    loadProjects();
+  }, []);
 
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setSession(session);
-      setUser(session?.user ?? null);
-      if (!session) {
-        navigate("/auth");
-      } else {
-        loadProjects();
-      }
-      setLoading(false);
-    });
-
-    return () => subscription.unsubscribe();
-  }, [navigate]);
-
-  const loadProjects = async () => {
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return;
-
-    const { data, error } = await supabase
-      .from("projects")
-      .select(`
-        *,
-        estimates!left(total_inc_gst),
-        overhead_items!left(amount)
-      `)
-      .eq("user_id", user.id)
-      .order("updated_at", { ascending: false })
-      .limit(5);
-
-    if (error) {
-      toast.error("Failed to load projects");
-    } else {
-      setProjects(data || []);
-    }
+  const loadProjects = () => {
+    // Load from localStorage (no auth required)
+    const localProjects = JSON.parse(localStorage.getItem('local_projects') || '[]');
+    setProjects(localProjects);
+    setLoading(false);
   };
 
-  const handleSignOut = async () => {
-    const { error } = await supabase.auth.signOut();
-    if (error) {
-      toast.error("Failed to sign out");
-    } else {
-      toast.success("Signed out successfully");
-      navigate("/auth");
-    }
+  const handleSignOut = () => {
+    toast.success("Signed out (local mode)");
+    navigate("/");
   };
 
   if (loading) {
@@ -114,7 +69,7 @@ const Dashboard = () => {
         {/* Header */}
         <div className="mb-8">
           <h1 className="font-display text-4xl font-bold mb-2">
-            Welcome back, {user?.user_metadata?.company_name || "Builder"}!
+            Welcome back, Builder!
           </h1>
           <p className="text-muted-foreground">
             Manage your estimation projects and tenders
@@ -254,7 +209,7 @@ const Dashboard = () => {
                   <div className="flex-1">
                     <div className="font-medium">{project.name}</div>
                     <div className="text-sm text-muted-foreground">
-                      {project.client_name || "No client"} • {new Date(project.updated_at).toLocaleDateString()}
+                      {project.client_name || "No client"} • {new Date(project.created_at || Date.now()).toLocaleDateString()}
                     </div>
                   </div>
                   <div className="flex items-center gap-4">

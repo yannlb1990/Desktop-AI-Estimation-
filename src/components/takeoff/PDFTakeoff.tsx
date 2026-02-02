@@ -153,6 +153,11 @@ export const PDFTakeoff = ({ projectId, estimateId, onAddCostItems }: PDFTakeoff
     toast.success('Last measurement deleted');
   }, [dispatch, state.measurements]);
 
+  const handleDeleteMeasurement = useCallback((id: string) => {
+    dispatch({ type: 'DELETE_MEASUREMENT', payload: id });
+    toast.success('Measurement deleted');
+  }, [dispatch]);
+
   const handleCalibrationPointsSet = useCallback((points: [WorldPoint, WorldPoint]) => {
     setManualCalibrationPoints(points);
     toast.info('Enter real-world distance below');
@@ -196,14 +201,209 @@ export const PDFTakeoff = ({ projectId, estimateId, onAddCostItems }: PDFTakeoff
     dispatch({ type: 'RESET_SCALE', payload: state.currentPageIndex });
   }, [dispatch, state.currentPageIndex]);
 
+  // Handle measurement updates from canvas (resize/move)
+  const handleMeasurementUpdate = useCallback((id: string, updates: Partial<Measurement>) => {
+    dispatch({ type: 'UPDATE_MEASUREMENT', payload: { id, updates } });
+    toast.success('Measurement updated');
+  }, [dispatch]);
+
   const handleFetchNCCCode = useCallback(async (id: string, area: string, materials: string[]) => {
     return await fetchNCCCode(area, materials);
   }, []);
 
   const handleAddToEstimate = useCallback((measurementIds: string[]) => {
-    toast.success(`Added ${measurementIds.length} items to estimate`);
-    // Future: integrate with cost items
-  }, []);
+    let itemsCreated = 0;
+
+    measurementIds.forEach(id => {
+      const measurement = state.measurements.find(m => m.id === id);
+      if (!measurement) return;
+
+      // Calculate effective quantity and unit
+      let quantity = measurement.realValue;
+      let unit = measurement.unit;
+
+      // Wall: calculate m² from LM × height
+      if (measurement.measurementType === 'Wall' && measurement.height && measurement.unit === 'LM') {
+        quantity = measurement.realValue * measurement.height;
+        unit = 'M2';
+      }
+
+      // Concrete floor: calculate m³
+      if (measurement.measurementType === 'Floor' && measurement.isConcreteFloor && measurement.concreteDepth) {
+        quantity = measurement.realValue * measurement.concreteDepth;
+        unit = 'M3';
+      }
+
+      // 1. Create main framing/structure item
+      if (measurement.framingSystem && measurement.framingSystem !== 'none') {
+        const framingLabels: Record<string, string> = {
+          'steel_64': 'Steel Frame 64mm',
+          'steel_92': 'Steel Frame 92mm',
+          'timber_90_mgp12': 'Timber Frame 90mm MGP12',
+          'timber_90_mgp10': 'Timber Frame 90mm MGP10',
+        };
+
+        // Auto-set trade based on framing type
+        const isSteel = measurement.framingSystem.includes('steel');
+        const trade = isSteel ? 'General' : 'Carpenter';
+
+        // Framing is always measured in M2, regardless of concrete depth
+        const framingQty = measurement.measurementType === 'Wall' && measurement.height && measurement.unit === 'LM'
+          ? measurement.realValue * measurement.height
+          : measurement.realValue;
+
+        const framingItem: CostItem = {
+          id: crypto.randomUUID(),
+          category: 'Framing',
+          name: framingLabels[measurement.framingSystem] || 'Framing',
+          description: `${measurement.measurementType} framing - ${measurement.area || 'General'}`,
+          unit: 'M2', // Framing is always M2
+          unitCost: 0,
+          quantity: framingQty,
+          linkedMeasurements: [measurement.id],
+          wasteFactor: 1.1,
+          subtotal: 0,
+          area: measurement.area,
+          measurementType: measurement.measurementType,
+          drawingNumber: measurement.drawingNumber || `Page ${measurement.pageIndex + 1}`,
+          laborHours: measurement.labourHours,
+          trade: trade,
+          material: framingLabels[measurement.framingSystem],
+        };
+        dispatch({ type: 'ADD_COST_ITEM', payload: framingItem });
+        itemsCreated++;
+      }
+
+      // 2. Create lining item if checked
+      if (measurement.hasLining) {
+        const liningLabels: Record<string, string> = {
+          'pb_10': 'Plasterboard 10mm',
+          'pb_13': 'Plasterboard 13mm',
+          'fc_6': 'FC Cement 6mm',
+          'fc_9': 'FC Cement 9mm',
+          'custom': measurement.customLining || 'Custom Lining',
+        };
+
+        const liningName = liningLabels[measurement.liningType || ''] || 'Wall Lining';
+
+        const liningItem: CostItem = {
+          id: crypto.randomUUID(),
+          category: 'Lining',
+          name: liningName,
+          description: `${measurement.measurementType} lining - ${measurement.area || 'General'}`,
+          unit: 'M2',
+          unitCost: 0,
+          quantity: quantity, // Same m² as framing
+          linkedMeasurements: [measurement.id],
+          wasteFactor: 1.1,
+          subtotal: 0,
+          area: measurement.area,
+          measurementType: measurement.measurementType,
+          drawingNumber: measurement.drawingNumber || `Page ${measurement.pageIndex + 1}`,
+          parentItemId: measurement.id,
+          trade: 'Plasterer',
+          material: liningName,
+        };
+        dispatch({ type: 'ADD_COST_ITEM', payload: liningItem });
+        itemsCreated++;
+      }
+
+      // 3. Create insulation item if checked
+      if (measurement.hasInsulation) {
+        const insulationLabels: Record<string, string> = {
+          'r2_batts': 'R2.0 Batts',
+          'r25_batts': 'R2.5 Batts',
+          'r3_batts': 'R3.0 Batts',
+          'r4_batts': 'R4.0 Batts',
+          'foam': 'Spray Foam',
+          'reflective': 'Reflective Foil',
+          'acoustic': 'Acoustic Batts',
+          'custom': 'Custom Insulation',
+        };
+
+        const insulationName = insulationLabels[measurement.insulationType || ''] || 'Wall Insulation';
+
+        const insulationItem: CostItem = {
+          id: crypto.randomUUID(),
+          category: 'Insulation',
+          name: insulationName,
+          description: `${measurement.measurementType} insulation - ${measurement.area || 'General'}`,
+          unit: 'M2',
+          unitCost: 0,
+          quantity: quantity, // Same m² as framing
+          linkedMeasurements: [measurement.id],
+          wasteFactor: 1.05,
+          subtotal: 0,
+          area: measurement.area,
+          measurementType: measurement.measurementType,
+          drawingNumber: measurement.drawingNumber || `Page ${measurement.pageIndex + 1}`,
+          parentItemId: measurement.id,
+          trade: 'Insulation',
+          material: insulationName,
+        };
+        dispatch({ type: 'ADD_COST_ITEM', payload: insulationItem });
+        itemsCreated++;
+      }
+
+      // 4. If no framing but still a measurement, create generic item
+      if (!measurement.framingSystem || measurement.framingSystem === 'none') {
+        if (!measurement.hasLining && !measurement.hasInsulation) {
+          // Auto-determine trade based on measurement type and area
+          let autoTrade = 'General';
+          let material = '';
+
+          if (measurement.isConcreteFloor) {
+            autoTrade = 'Concreter';
+            const concreteLabels: Record<string, string> = {
+              '20mpa': '20 MPa Concrete',
+              '25mpa': '25 MPa Concrete',
+              '32mpa': '32 MPa Concrete',
+              '40mpa': '40 MPa Concrete',
+            };
+            material = concreteLabels[measurement.concreteType || ''] || 'Concrete';
+          } else if (measurement.measurementType === 'Floor') {
+            autoTrade = 'Tiler'; // Default for floor finishes
+          } else if (measurement.measurementType === 'Ceiling') {
+            autoTrade = 'Plasterer';
+          } else if (measurement.area === 'Bathroom' || measurement.area === 'Ensuite' || measurement.area === 'Laundry') {
+            autoTrade = 'Waterproofer';
+          }
+
+          const genericItem: CostItem = {
+            id: crypto.randomUUID(),
+            category: measurement.measurementType || 'General',
+            name: measurement.label || `${measurement.measurementType || measurement.type} - ${measurement.area || 'General'}`,
+            description: measurement.comments || `Measurement from takeoff`,
+            unit: unit,
+            unitCost: 0,
+            quantity: quantity,
+            linkedMeasurements: [measurement.id],
+            wasteFactor: 1.0,
+            subtotal: 0,
+            area: measurement.area,
+            measurementType: measurement.measurementType,
+            drawingNumber: measurement.drawingNumber || `Page ${measurement.pageIndex + 1}`,
+            laborHours: measurement.labourHours,
+            trade: autoTrade,
+            material: material || undefined,
+          };
+          dispatch({ type: 'ADD_COST_ITEM', payload: genericItem });
+          itemsCreated++;
+        }
+      }
+
+      // Mark measurement as added to estimate
+      dispatch({
+        type: 'UPDATE_MEASUREMENT',
+        payload: { id: measurement.id, updates: { addedToEstimate: true, validated: true } }
+      });
+    });
+
+    if (itemsCreated > 0) {
+      toast.success(`Added ${itemsCreated} cost items to estimate`);
+      setActiveTab('costs'); // Switch to costs tab
+    }
+  }, [state.measurements, dispatch]);
 
   return (
     <div className="space-y-6">
@@ -325,11 +525,14 @@ export const PDFTakeoff = ({ projectId, estimateId, onAddCostItems }: PDFTakeoff
                     unitsPerMetre={state.currentScale?.unitsPerMetre || null}
                     calibrationMode={state.calibrationMode}
                     selectedColor={state.selectedColor}
+                    measurements={state.measurements}
                     onMeasurementComplete={handleMeasurementComplete}
+                    onMeasurementUpdate={handleMeasurementUpdate}
                     onCalibrationPointsSet={handleCalibrationPointsSet}
                     onTransformChange={handleTransformChange}
                     onViewportReady={handleViewportReady}
                     onDeleteLastMeasurement={handleDeleteLastMeasurement}
+                    onDeleteMeasurement={handleDeleteMeasurement}
                   />
                 </div>
               </div>
@@ -391,10 +594,23 @@ export const PDFTakeoff = ({ projectId, estimateId, onAddCostItems }: PDFTakeoff
                       JSON
                     </Button>
                   </div>
+
+                  {/* Takeoff Table Button - Opens detailed table sheet */}
+                  <TakeoffTable
+                    measurements={filteredMeasurements}
+                    onUpdateMeasurement={(id, updates) =>
+                      dispatch({ type: 'UPDATE_MEASUREMENT', payload: { id, updates } })
+                    }
+                    onDeleteMeasurement={(id) =>
+                      dispatch({ type: 'DELETE_MEASUREMENT', payload: id })
+                    }
+                    onAddToEstimate={handleAddToEstimate}
+                    onFetchNCCCode={handleFetchNCCCode}
+                  />
                 </Card>
 
                 <Card className="p-4">
-                  <div className="space-y-3 max-h-[520px] overflow-y-auto">
+                  <div className="space-y-3 max-h-[400px] overflow-y-auto">
                     {filteredMeasurements.length === 0 ? (
                       <p className="text-sm text-muted-foreground">No measurements yet</p>
                     ) : (
@@ -437,9 +653,9 @@ export const PDFTakeoff = ({ projectId, estimateId, onAddCostItems }: PDFTakeoff
                               </SelectContent>
                             </Select>
                             <div className="ml-auto flex items-center gap-2">
-                              <span 
-                                className="inline-flex h-3 w-3 rounded-full" 
-                                style={{ backgroundColor: m.color }} 
+                              <span
+                                className="inline-flex h-3 w-3 rounded-full"
+                                style={{ backgroundColor: m.color }}
                               />
                               <Button
                                 variant="ghost"

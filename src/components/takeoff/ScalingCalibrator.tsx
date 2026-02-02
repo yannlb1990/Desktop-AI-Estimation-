@@ -36,19 +36,37 @@ export const ScalingCalibrator = ({
 }: ScalingCalibratorProps) => {
   const [calibrationMode, setCalibrationMode] = useState<'preset' | 'manual'>('preset');
   const [selectedScale, setSelectedScale] = useState('1:100');
+  const [customScale, setCustomScale] = useState('');
   const [manualDistance, setManualDistance] = useState('');
   const [unit, setUnit] = useState<DistanceUnit>('m');
   const [drawingAreaPercent, setDrawingAreaPercent] = useState(85);
+  const [useCustomScale, setUseCustomScale] = useState(false);
 
-  const presetScales = ['1:20', '1:50', '1:100', '1:200', '1:500'];
+  // Expanded preset scales for Australian construction drawings
+  const presetScales = [
+    '1:10', '1:20', '1:25', '1:50', '1:75',
+    '1:100', '1:150', '1:200', '1:250', '1:500', '1:1000'
+  ];
 
   const handlePresetScale = () => {
     const pageWidth = pdfViewport?.width || 595;
-    console.log('Preset scale using PDF width:', pageWidth, 'Drawing area:', drawingAreaPercent + '%');
-    
-    const scale = calculatePresetScaleWorld(selectedScale, pageWidth, drawingAreaPercent / 100);
+
+    // Use custom scale if enabled and valid
+    let scaleToUse = selectedScale;
+    if (useCustomScale && customScale) {
+      const customRatio = parseInt(customScale);
+      if (isNaN(customRatio) || customRatio <= 0) {
+        toast.error('Please enter a valid custom scale ratio (e.g., 75 for 1:75)');
+        return;
+      }
+      scaleToUse = `1:${customRatio}`;
+    }
+
+    console.log('Preset scale using PDF width:', pageWidth, 'Drawing area:', drawingAreaPercent + '%', 'Scale:', scaleToUse);
+
+    const scale = calculatePresetScaleWorld(scaleToUse, pageWidth, drawingAreaPercent / 100);
     onScaleSet(scale);
-    toast.success(`Scale set to ${selectedScale} (${drawingAreaPercent}% drawing area)`);
+    toast.success(`Scale set to ${scaleToUse} (${drawingAreaPercent}% drawing area)`);
   };
 
   const handleManualCalibrationComplete = () => {
@@ -145,19 +163,46 @@ export const ScalingCalibrator = ({
       {calibrationMode === 'preset' && (
         <div className="space-y-4">
           <div>
-            <Label>Select Scale</Label>
-            <Select value={selectedScale} onValueChange={setSelectedScale}>
-              <SelectTrigger>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent className="bg-popover">
-                {presetScales.map(scale => (
-                  <SelectItem key={scale} value={scale}>
-                    {scale}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <div className="flex items-center justify-between mb-2">
+              <Label>Select Scale</Label>
+              <label className="flex items-center gap-1.5 text-xs cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={useCustomScale}
+                  onChange={(e) => setUseCustomScale(e.target.checked)}
+                  className="h-3 w-3"
+                />
+                Custom
+              </label>
+            </div>
+
+            {useCustomScale ? (
+              <div className="flex gap-2 items-center">
+                <span className="text-sm font-medium">1:</span>
+                <Input
+                  type="number"
+                  placeholder="e.g., 75"
+                  value={customScale}
+                  onChange={(e) => setCustomScale(e.target.value)}
+                  min="1"
+                  step="1"
+                  className="flex-1"
+                />
+              </div>
+            ) : (
+              <Select value={selectedScale} onValueChange={setSelectedScale}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent className="bg-popover max-h-60">
+                  {presetScales.map(scale => (
+                    <SelectItem key={scale} value={scale}>
+                      {scale}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            )}
           </div>
 
           <div className="space-y-2">
@@ -168,9 +213,9 @@ export const ScalingCalibrator = ({
             <Slider
               value={[drawingAreaPercent]}
               onValueChange={(val) => setDrawingAreaPercent(val[0])}
-              min={60}
+              min={50}
               max={100}
-              step={5}
+              step={1}
               className="w-full"
             />
             <p className="text-[10px] text-muted-foreground">
@@ -208,23 +253,32 @@ export const ScalingCalibrator = ({
 
           {manualPoints && (
             <>
-              <Badge variant="secondary" className="w-full justify-center py-1">
-                Line drawn on plan ✓
-              </Badge>
+              <div className="bg-green-50 dark:bg-green-950 p-2 rounded-md">
+                <Badge variant="secondary" className="w-full justify-center py-1 mb-2">
+                  Line drawn on plan ✓
+                </Badge>
+                <p className="text-xs text-center text-muted-foreground">
+                  Line length: {Math.hypot(
+                    manualPoints[1].x - manualPoints[0].x,
+                    manualPoints[1].y - manualPoints[0].y
+                  ).toFixed(1)} PDF units
+                </p>
+              </div>
 
               <div className="space-y-2">
                 <Label>Real-World Distance</Label>
                 <div className="flex gap-2">
                   <Input
                     type="number"
-                    placeholder="e.g., 5"
+                    placeholder="e.g., 5.5"
                     value={manualDistance}
                     onChange={(e) => setManualDistance(e.target.value)}
                     min="0"
-                    step="0.1"
+                    step="0.01"
+                    className="flex-1"
                   />
                   <Select value={unit} onValueChange={(v: DistanceUnit) => setUnit(v)}>
-                    <SelectTrigger className="w-24">
+                    <SelectTrigger className="w-28">
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent className="bg-popover">
@@ -236,6 +290,9 @@ export const ScalingCalibrator = ({
                     </SelectContent>
                   </Select>
                 </div>
+                <p className="text-[10px] text-muted-foreground">
+                  Enter the exact dimension shown on the plan (e.g., 5.5m or 5500mm)
+                </p>
               </div>
 
               <div className="flex gap-2">
@@ -247,7 +304,11 @@ export const ScalingCalibrator = ({
                   <X className="h-4 w-4 mr-1" />
                   Cancel
                 </Button>
-                <Button onClick={handleManualCalibrationComplete} className="flex-1">
+                <Button
+                  onClick={handleManualCalibrationComplete}
+                  className="flex-1"
+                  disabled={!manualDistance || parseFloat(manualDistance) <= 0}
+                >
                   Apply
                 </Button>
               </div>

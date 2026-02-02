@@ -2,7 +2,6 @@ import { useState } from 'react';
 import { Upload, FileText, AlertCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { PDFFile } from '@/lib/takeoff/types';
 
@@ -21,13 +20,13 @@ export const PDFUploadManager = ({ projectId, onUploadComplete, onError }: PDFUp
     if (file.size > 50 * 1024 * 1024) {
       return 'File size must be less than 50MB';
     }
-    
+
     // Check file type
     const validTypes = ['application/pdf', 'image/png', 'image/jpeg', 'image/jpg'];
     if (!validTypes.includes(file.type)) {
       return 'File must be PDF, PNG, or JPG';
     }
-    
+
     return null;
   };
 
@@ -36,7 +35,7 @@ export const PDFUploadManager = ({ projectId, onUploadComplete, onError }: PDFUp
     if (!file) return;
 
     setValidationError(null);
-    
+
     // Validate file
     const error = validateFile(file);
     if (error) {
@@ -48,31 +47,15 @@ export const PDFUploadManager = ({ projectId, onUploadComplete, onError }: PDFUp
     setUploading(true);
 
     try {
-      // Get current user
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) throw new Error('Not authenticated');
-
-      // Upload to Supabase storage
-      const filename = `${Date.now()}_${file.name}`;
-      const filePath = `${user.id}/${projectId}/${filename}`;
-
-      const { error: uploadError } = await supabase.storage
-        .from('plans')
-        .upload(filePath, file);
-
-      if (uploadError) throw uploadError;
-
-      // Get public URL
-      const { data: { publicUrl } } = supabase.storage
-        .from('plans')
-        .getPublicUrl(filePath);
+      // Create local blob URL (no Supabase storage needed)
+      const localUrl = URL.createObjectURL(file);
 
       // Get page count (for PDFs, use PDF.js)
       let pageCount = 1;
       if (file.type === 'application/pdf') {
         const pdfjsLib = await import('pdfjs-dist');
         pdfjsLib.GlobalWorkerOptions.workerSrc = `https://unpkg.com/pdfjs-dist@${pdfjsLib.version}/build/pdf.worker.min.mjs`;
-        
+
         const arrayBuffer = await file.arrayBuffer();
         const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
         pageCount = pdf.numPages;
@@ -80,13 +63,13 @@ export const PDFUploadManager = ({ projectId, onUploadComplete, onError }: PDFUp
 
       const pdfFile: PDFFile = {
         file,
-        url: publicUrl,
+        url: localUrl,
         name: file.name,
         pageCount
       };
 
       onUploadComplete(pdfFile);
-      toast.success(`Uploaded ${file.name} (${pageCount} page${pageCount > 1 ? 's' : ''})`);
+      toast.success(`Loaded ${file.name} (${pageCount} page${pageCount > 1 ? 's' : ''})`);
     } catch (err) {
       const errorMsg = err instanceof Error ? err.message : 'Upload failed';
       setValidationError(errorMsg);

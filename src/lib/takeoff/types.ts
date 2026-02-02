@@ -59,14 +59,9 @@ export const MATERIAL_CATEGORIES = {
   Structural: ['Steel', 'Timber Frame', 'Concrete', 'Block'],
 } as const;
 
-// Enhanced measurement with additional fields
-export interface EnhancedMeasurement extends Measurement {
-  area?: MeasurementArea;
-  materials?: string[];
-  nccCode?: string;
-  validated?: boolean;
-  addedToEstimate?: boolean;
-}
+// EnhancedMeasurement is now merged into Measurement type
+// Keeping alias for backward compatibility
+export type EnhancedMeasurement = Measurement;
 export type CalibrationMode = 'preset' | 'manual' | null;
 export type DistanceUnit = 'm' | 'mm' | 'cm' | 'ft' | 'in';
 
@@ -100,6 +95,42 @@ export interface Measurement {
   linkedCostItem?: string;
   pageIndex: number;
   timestamp: Date;
+
+  // Enhanced fields for takeoff table
+  area?: MeasurementArea;
+  materials?: string[];
+  nccCode?: string;
+  validated?: boolean;
+  addedToEstimate?: boolean;
+
+  // Construction-specific fields
+  measurementType?: 'Wall' | 'Floor' | 'Ceiling' | 'Item';
+  height?: number;              // For walls - to calculate m²
+  isConcreteFloor?: boolean;    // For floors
+  concreteDepth?: number;       // For concrete floors - to calculate m³
+  concreteType?: string;        // 20MPa, 25MPa, 32MPa, etc.
+  framingSystem?: string;
+  hasLining?: boolean;
+  liningType?: string;
+  customLining?: string;
+  hasInsulation?: boolean;
+  insulationType?: string;
+  comments?: string;
+  lockedToSOW?: boolean;
+  labourHours?: number;
+
+  // Location tracking
+  drawingNumber?: string;       // Drawing/sheet reference
+  drawingLocation?: string;     // Area on drawing
+
+  // For count items
+  countName?: string;
+  itemSize?: string;
+  itemModel?: string;
+
+  // Computed values
+  computedM2?: number;          // Calculated wall area (LM × height)
+  computedM3?: number;          // Calculated volume (m² × depth)
 }
 
 // === COST ITEM ===
@@ -117,7 +148,83 @@ export interface CostItem {
   supplierCode?: string;
   notes?: string;
   subtotal: number;
+
+  // Enhanced fields from measurements
+  area?: MeasurementArea;
+  measurementType?: 'Wall' | 'Floor' | 'Ceiling' | 'Item';
+  materials?: string[];
+  drawingNumber?: string;
+
+  // Trade and material specification
+  trade?: string;
+  material?: string;
+  customMaterial?: string;  // When material = 'Custom'
+  supplierUrl?: string;
+  markupPercent?: number;
+
+  // Labour fields
+  hourlyRate?: number;
+  labourWastePercent?: number;  // Default 10%
+
+  // Material waste
+  materialWastePercent?: number;  // Default 5-10%
+
+  // Related items (for lining, insulation linked to framing)
+  relatedItems?: CostItem[];
+  relatedMaterials?: RelatedMaterial[];  // Suggested fixings/materials
+  parentItemId?: string;
 }
+
+// Related materials (screws, fixings, etc.)
+export interface RelatedMaterial {
+  id: string;
+  name: string;
+  description?: string;
+  quantity: number;
+  unit: string;
+  unitCost: number;
+  isAccepted: boolean;  // User accepted suggestion
+  isManual: boolean;    // User added manually
+}
+
+// Consumable item
+export interface ConsumableItem {
+  id: string;
+  name: string;
+  description?: string;
+  quantity: number;
+  unit: string;
+  unitCost: number;
+  total: number;
+}
+
+// Trade options for construction - matching UI dropdown
+export const TRADE_OPTIONS = [
+  'Preliminaries',
+  'Site Works',
+  'Demolition',
+  'Concrete',
+  'Structural Steel',
+  'Carpentry',
+  'Brickwork',
+  'Roofing',
+  'Windows & Doors',
+  'Plasterboard',
+  'Joinery',
+  'Painting',
+  'Tiling',
+  'Floor Coverings',
+  'Plumbing',
+  'Electrical',
+  'HVAC',
+  'Fire Services',
+  'Landscaping',
+  'External Works',
+  'Certifications',
+  'Other',
+] as const;
+
+export type Trade = typeof TRADE_OPTIONS[number];
 
 // === PDF FILE ===
 export interface PDFFile {

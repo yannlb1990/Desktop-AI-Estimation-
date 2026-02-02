@@ -8,8 +8,10 @@ import { Textarea } from "@/components/ui/textarea";
 import { Card } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "sonner";
-import { ArrowLeft, Upload, Zap, Loader2, FileText } from "lucide-react";
+import { ArrowLeft, Upload, Zap, Loader2, FileText, Brain, CheckCircle } from "lucide-react";
 import { z } from "zod";
+import { analyzePDFWithData, PlanAnalysisResult, EstimatedLineItem } from "@/lib/aiPlanAnalyzer";
+import AIPlanAnalyzer from "@/components/AIPlanAnalyzer";
 
 const projectSchema = z.object({
   name: z.string().min(1, "Project name required").max(200),
@@ -23,7 +25,11 @@ const NewProject = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [uploadedFile, setUploadedFile] = useState<File | null>(null);
+  const [pdfData, setPdfData] = useState<ArrayBuffer | null>(null);
   const [activeTab, setActiveTab] = useState("upload");
+  const [analysisResult, setAnalysisResult] = useState<PlanAnalysisResult | null>(null);
+  const [analysisStep, setAnalysisStep] = useState<'upload' | 'analyzing' | 'review' | 'complete'>('upload');
+  const [selectedEstimateItems, setSelectedEstimateItems] = useState<EstimatedLineItem[]>([]);
   const [formData, setFormData] = useState({
     name: "",
     client_name: "",
@@ -42,10 +48,9 @@ const NewProject = () => {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    // Validate file type
-    const allowedTypes = ['application/pdf', 'image/png', 'image/jpeg'];
-    if (!allowedTypes.includes(file.type)) {
-      toast.error("Please upload PDF, PNG, or JPG files only");
+    // Validate file type - only PDF for AI analysis
+    if (file.type !== 'application/pdf') {
+      toast.error("Please upload PDF files only for AI analysis");
       return;
     }
 
@@ -56,7 +61,9 @@ const NewProject = () => {
     }
 
     setUploadedFile(file);
-    toast.success(`${file.name} ready to upload`);
+    setAnalysisResult(null); // Reset any previous analysis
+    setAnalysisStep('upload');
+    toast.success(`${file.name} ready for analysis`);
   };
 
   const handlePlanUpload = async (e: React.FormEvent) => {
@@ -66,77 +73,104 @@ const NewProject = () => {
       return;
     }
 
-    setIsLoading(true);
-    setIsAnalyzing(true);
-
+    // Validate form data first
     try {
-      const validData = projectSchema.parse(formData);
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) {
-        toast.error("Please sign in to create a project");
-        navigate("/auth");
+      projectSchema.parse(formData);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        toast.error(error.errors[0].message);
         return;
       }
+    }
 
-      // Upload file to storage
-      const fileExt = uploadedFile.name.split('.').pop();
-      const filePath = `${user.id}/${Date.now()}.${fileExt}`;
-      
-      const { error: uploadError } = await supabase.storage
-        .from('plans')
-        .upload(filePath, uploadedFile);
+    setIsLoading(true);
+    setIsAnalyzing(true);
+    setAnalysisStep('analyzing');
 
-      if (uploadError) throw uploadError;
+    try {
+      // Analyze the PDF and get both analysis result and ArrayBuffer
+      toast.info("Analyzing PDF - extracting text, symbols, and schedules...");
+      console.log(`[NewProject] Starting analysis of ${uploadedFile.name}`);
 
-      // Get public URL
-      const { data: { publicUrl } } = supabase.storage
-        .from('plans')
-        .getPublicUrl(filePath);
+      const { analysis: result, arrayBuffer } = await analyzePDFWithData(uploadedFile);
 
-      // Create project
-      const { data: project, error: projectError } = await supabase
-        .from("projects")
-        .insert({
-          user_id: user.id,
-          name: validData.name,
-          client_name: validData.client_name || null,
-          site_address: validData.site_address || null,
-          plan_file_url: publicUrl,
-          plan_file_name: uploadedFile.name,
-          status: "in_progress",
-        })
-        .select()
-        .single();
+      console.log(`[NewProject] Analysis complete. ArrayBuffer: ${arrayBuffer.byteLength} bytes, Pages: ${result.totalPages}`);
 
-      if (projectError) throw projectError;
+      // Set state in correct order
+      setPdfData(arrayBuffer);
+      setAnalysisResult(result);
+      setAnalysisStep('review');
 
-      toast.success("Plan uploaded! AI analyzing...");
+      toast.success(`Analysis complete! Found ${result.totalPages} pages with ${result.estimatedItems.length} estimated items.`);
+    } catch (error) {
+      console.error("[NewProject] PDF analysis error:", error);
+      toast.error("Failed to analyze PDF. Please try again or use manual entry.");
+      setAnalysisStep('upload');
+      setPdfData(null);
+    } finally {
+      setIsLoading(false);
+      setIsAnalyzing(false);
+    }
+  };
 
-      // Run AI plan analysis
-      const { data: analysisData, error: analysisError } = await supabase.functions.invoke('analyze-plan-takeoff', {
-        body: {
-          planUrl: publicUrl,
-          projectName: validData.name
-        }
-      });
+  const handleAcceptEstimate = (items: EstimatedLineItem[]) => {
+    setSelectedEstimateItems(items);
+    createProjectWithEstimate(items);
+  };
 
-      if (analysisError) {
-        console.error("Analysis error:", analysisError);
-        toast.error("Plan uploaded, but AI analysis failed");
-      } else if (analysisData?.success) {
-        toast.success("AI analysis complete!");
-        
-        // Store analysis results
-        await supabase.from("ai_analyses").insert({
-          project_id: project.id,
-          user_id: user.id,
-          analysis_type: 'takeoff',
-          results: analysisData,
-          confidence_score: analysisData.analysis?.confidence || 0.85
-        });
-      }
+  const createProjectWithEstimate = async (items: EstimatedLineItem[]) => {
+    setIsLoading(true);
+    try {
+      const validData = projectSchema.parse(formData);
 
-      navigate(`/project/${project.id}`);
+      // Generate a local project ID for testing (no auth required)
+      const projectId = `local-${Date.now()}`;
+
+      // Convert EstimatedLineItem to project estimate format
+      const estimateItems = items.map((item, index) => ({
+        id: `item-${index + 1}`,
+        category: item.category,
+        name: item.description,
+        description: item.description,
+        unit: item.unit,
+        unitCost: item.unitRate,
+        quantity: item.quantity,
+        trade: item.trade,
+        materialCost: item.materialCost,
+        labourCost: item.labourCost,
+        labourHours: item.labourHours,
+        subtotal: item.totalCost,
+        source: item.source,
+        confidence: item.confidence,
+        linkedMeasurements: [],
+        wasteFactor: 1.05,
+      }));
+
+      // Store project in localStorage for testing
+      const projects = JSON.parse(localStorage.getItem('local_projects') || '[]');
+      const newProject = {
+        id: projectId,
+        name: validData.name,
+        client_name: validData.client_name || null,
+        site_address: validData.site_address || null,
+        plan_file_name: uploadedFile?.name,
+        status: "in_progress",
+        created_at: new Date().toISOString(),
+        estimate_items: estimateItems,
+        analysis_summary: analysisResult?.summary,
+        construction_type: analysisResult?.summary.constructionType,
+        total_estimate: items.reduce((sum, item) => sum + item.totalCost, 0),
+      };
+      projects.push(newProject);
+      localStorage.setItem('local_projects', JSON.stringify(projects));
+
+      setAnalysisStep('complete');
+      toast.success("Project created with AI-generated estimate!");
+
+      // Navigate after short delay to show success
+      setTimeout(() => {
+        navigate(`/project/${projectId}`);
+      }, 500);
     } catch (error) {
       if (error instanceof z.ZodError) {
         toast.error(error.errors[0].message);
@@ -146,8 +180,32 @@ const NewProject = () => {
       }
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const handleReanalyze = async () => {
+    if (!uploadedFile) return;
+    setIsAnalyzing(true);
+    setAnalysisStep('analyzing');
+    try {
+      const { analysis: result, arrayBuffer } = await analyzePDFWithData(uploadedFile);
+      setPdfData(arrayBuffer);
+      setAnalysisResult(result);
+      setAnalysisStep('review');
+      toast.success("Reanalysis complete!");
+    } catch (error) {
+      console.error("Reanalysis error:", error);
+      toast.error("Reanalysis failed");
+      setAnalysisStep('review');
+    } finally {
       setIsAnalyzing(false);
     }
+  };
+
+  const handleBackToUpload = () => {
+    setAnalysisResult(null);
+    setAnalysisStep('upload');
+    setSelectedEstimateItems([]);
   };
 
   const handleManualEntry = async (e: React.FormEvent) => {
@@ -156,39 +214,26 @@ const NewProject = () => {
 
     try {
       const validData = projectSchema.parse(formData);
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) {
-        toast.error("Please sign in to create a project");
-        navigate("/auth");
-        return;
-      }
 
-      const { data: project, error: projectError } = await supabase
-        .from("projects")
-        .insert({
-          user_id: user.id,
-          name: validData.name,
-          client_name: validData.client_name || null,
-          site_address: validData.site_address || null,
-          status: "in_progress",
-        })
-        .select()
-        .single();
+      // Generate a local project ID for testing (no auth required)
+      const projectId = `local-${Date.now()}`;
 
-      if (projectError) throw projectError;
-
-      // Create empty estimate for manual entry
-      const { data: estimate } = await supabase
-        .from("estimates")
-        .insert({
-          project_id: project.id,
-          user_id: user.id,
-        })
-        .select()
-        .single();
+      // Store project in localStorage for testing
+      const projects = JSON.parse(localStorage.getItem('local_projects') || '[]');
+      const newProject = {
+        id: projectId,
+        name: validData.name,
+        client_name: validData.client_name || null,
+        site_address: validData.site_address || null,
+        status: "in_progress",
+        created_at: new Date().toISOString(),
+        estimate_items: []
+      };
+      projects.push(newProject);
+      localStorage.setItem('local_projects', JSON.stringify(projects));
 
       toast.success("Project created!");
-      navigate(`/project/${project.id}`);
+      navigate(`/project/${projectId}`);
     } catch (error) {
       if (error instanceof z.ZodError) {
         toast.error(error.errors[0].message);
@@ -200,6 +245,96 @@ const NewProject = () => {
       setIsLoading(false);
     }
   };
+
+  // If we're in the review step, show the AI Plan Analyzer
+  if (analysisStep === 'review' && analysisResult) {
+    return (
+      <div className="min-h-screen bg-muted/30">
+        <nav className="border-b border-border bg-background">
+          <div className="container mx-auto px-6 py-4 flex items-center justify-between">
+            <Button variant="ghost" onClick={handleBackToUpload}>
+              <ArrowLeft className="h-4 w-4 mr-2" />
+              Back to Upload
+            </Button>
+            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+              <Brain className="h-4 w-4" />
+              Analyzing: {formData.name || uploadedFile?.name}
+            </div>
+          </div>
+        </nav>
+
+        <div className="container mx-auto px-6 py-8 max-w-6xl">
+          <AIPlanAnalyzer
+            analysis={analysisResult}
+            pdfData={pdfData || undefined}
+            onAcceptEstimate={handleAcceptEstimate}
+            onReanalyze={handleReanalyze}
+            isLoading={isAnalyzing}
+          />
+        </div>
+      </div>
+    );
+  }
+
+  // If we're in the analyzing step, show a loading state
+  if (analysisStep === 'analyzing') {
+    return (
+      <div className="min-h-screen bg-muted/30 flex items-center justify-center">
+        <Card className="p-12 text-center max-w-md">
+          <div className="flex flex-col items-center gap-6">
+            <div className="relative">
+              <Brain className="h-16 w-16 text-accent animate-pulse" />
+              <Loader2 className="h-8 w-8 text-primary absolute -bottom-1 -right-1 animate-spin" />
+            </div>
+            <div>
+              <h2 className="text-2xl font-bold mb-2">Analyzing Your Plans</h2>
+              <p className="text-muted-foreground">
+                AI is reading your PDF and extracting construction details...
+              </p>
+            </div>
+            <div className="w-full space-y-2">
+              <div className="flex items-center gap-2 text-sm">
+                <CheckCircle className="h-4 w-4 text-green-500" />
+                <span>Extracting text and dimensions</span>
+              </div>
+              <div className="flex items-center gap-2 text-sm">
+                <Loader2 className="h-4 w-4 animate-spin text-accent" />
+                <span>Recognizing symbols (doors, windows)</span>
+              </div>
+              <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                <div className="h-4 w-4" />
+                <span>Parsing schedules</span>
+              </div>
+              <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                <div className="h-4 w-4" />
+                <span>Generating estimate</span>
+              </div>
+            </div>
+          </div>
+        </Card>
+      </div>
+    );
+  }
+
+  // If complete, show success state
+  if (analysisStep === 'complete') {
+    return (
+      <div className="min-h-screen bg-muted/30 flex items-center justify-center">
+        <Card className="p-12 text-center max-w-md">
+          <div className="flex flex-col items-center gap-6">
+            <CheckCircle className="h-16 w-16 text-green-500" />
+            <div>
+              <h2 className="text-2xl font-bold mb-2">Project Created!</h2>
+              <p className="text-muted-foreground">
+                Redirecting to your project...
+              </p>
+            </div>
+            <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+          </div>
+        </Card>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-muted/30">
@@ -272,12 +407,12 @@ const NewProject = () => {
                 </div>
 
                 <div>
-                  <Label htmlFor="plan_file">Upload Plan File (PDF, PNG, JPG) *</Label>
+                  <Label htmlFor="plan_file">Upload Plan File (PDF) *</Label>
                   <div className="mt-2">
                     <Input
                       id="plan_file"
                       type="file"
-                      accept=".pdf,.png,.jpg,.jpeg"
+                      accept=".pdf"
                       onChange={handleFileUpload}
                       required
                       className="cursor-pointer"
@@ -289,34 +424,38 @@ const NewProject = () => {
                     )}
                   </div>
                   <p className="text-xs text-muted-foreground mt-1">
-                    Max 50MB. Supported: PDF, PNG, JPG
+                    Max 50MB. Supported: PDF architectural drawings
                   </p>
                 </div>
 
                 <div className="bg-muted/50 p-6 rounded-lg border border-border">
                   <div className="flex items-start gap-3">
-                    <Zap className="h-6 w-6 text-accent mt-1 flex-shrink-0" />
+                    <Brain className="h-6 w-6 text-accent mt-1 flex-shrink-0" />
                     <div className="flex-1">
                       <h3 className="font-semibold text-lg mb-2">AI-Powered Plan Analysis</h3>
                       <p className="text-sm text-muted-foreground mb-3">
-                        Our AI will automatically:
+                        Our AI will automatically analyze your plans and:
                       </p>
                       <ul className="text-sm text-muted-foreground space-y-2">
                         <li className="flex items-start gap-2">
                           <span className="text-accent font-bold">1.</span>
-                          <span>Identify trade packages (Carpentry, Plumbing, Electrical, etc.)</span>
+                          <span>Classify drawing types (floor plans, elevations, schedules, FF&E)</span>
                         </li>
                         <li className="flex items-start gap-2">
                           <span className="text-accent font-bold">2.</span>
-                          <span>Extract material quantities and specifications</span>
+                          <span>Detect construction type (timber frame, brick veneer, steel frame)</span>
                         </li>
                         <li className="flex items-start gap-2">
                           <span className="text-accent font-bold">3.</span>
-                          <span>Estimate labour hours based on Australian productivity rates</span>
+                          <span>Recognize symbols (doors, windows, electrical, plumbing)</span>
                         </li>
                         <li className="flex items-start gap-2">
                           <span className="text-accent font-bold">4.</span>
-                          <span>Organize takeoff by area and scope of work</span>
+                          <span>Parse window/door schedules and match to symbols</span>
+                        </li>
+                        <li className="flex items-start gap-2">
+                          <span className="text-accent font-bold">5.</span>
+                          <span>Generate line-item estimate with Australian rates</span>
                         </li>
                       </ul>
                     </div>
@@ -345,8 +484,8 @@ const NewProject = () => {
                       </>
                     ) : (
                       <>
-                        <Upload className="mr-2 h-4 w-4" />
-                        Upload & Analyze
+                        <Brain className="mr-2 h-4 w-4" />
+                        Analyze Plans
                       </>
                     )}
                   </Button>

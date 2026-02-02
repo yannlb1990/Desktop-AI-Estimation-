@@ -36,14 +36,13 @@ const ProjectDetail = () => {
   const handleDueDateChange = async (date: Date | undefined) => {
     if (!projectId) return;
     setDueDate(date);
-    const { error } = await supabase
-      .from('projects')
-      .update({ due_date: date?.toISOString() })
-      .eq('id', projectId);
-    
-    if (error) {
-      toast.error("Failed to update due date");
-    } else {
+
+    // Update in localStorage
+    const projects = JSON.parse(localStorage.getItem('local_projects') || '[]');
+    const projectIndex = projects.findIndex((p: any) => p.id === projectId);
+    if (projectIndex !== -1) {
+      projects[projectIndex].due_date = date?.toISOString();
+      localStorage.setItem('local_projects', JSON.stringify(projects));
       toast.success("Due date updated");
     }
   };
@@ -58,48 +57,29 @@ const ProjectDetail = () => {
 
   const loadProject = async () => {
     try {
-      const { data: projectData, error: projectError } = await supabase
-        .from("projects")
-        .select("*")
-        .eq("id", projectId)
-        .single();
+      // Load from localStorage (no auth required)
+      const projects = JSON.parse(localStorage.getItem('local_projects') || '[]');
+      const projectData = projects.find((p: any) => p.id === projectId);
 
-      if (projectError) throw projectError;
-      setProject(projectData);
-
-      const { data: analysesData, error: analysesError } = await supabase
-        .from("ai_analyses")
-        .select("*")
-        .eq("project_id", projectId)
-        .order("created_at", { ascending: false });
-
-      if (!analysesError) {
-        setAnalyses(analysesData || []);
+      if (!projectData) {
+        toast.error("Project not found");
+        navigate("/dashboard");
+        return;
       }
 
-      // Load or create estimate
-      const { data: estimateData } = await supabase
-        .from("estimates")
-        .select("*")
-        .eq("project_id", projectId)
-        .single();
+      setProject(projectData);
+      setAnalyses([]);
 
-      if (estimateData) {
-        setEstimate(estimateData);
-      } else {
-        // Create new estimate
-        const { data: { user } } = await supabase.auth.getUser();
-        if (user) {
-          const { data: newEstimate } = await supabase
-            .from("estimates")
-            .insert({
-              project_id: projectId,
-              user_id: user.id,
-            })
-            .select()
-            .single();
-          setEstimate(newEstimate);
-        }
+      // Create a local estimate object
+      const localEstimate = {
+        id: `estimate-${projectId}`,
+        project_id: projectId,
+        estimate_items: projectData.estimate_items || []
+      };
+      setEstimate(localEstimate);
+
+      if (projectData.due_date) {
+        setDueDate(new Date(projectData.due_date));
       }
     } catch (error) {
       console.error("Error loading project:", error);

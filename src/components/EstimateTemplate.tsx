@@ -176,15 +176,12 @@ export const EstimateTemplate = ({ projectId, estimateId }: EstimateTemplateProp
     loadOverheads();
   }, [projectId]);
 
-  const loadOverheads = async () => {
-    const { data } = await supabase
-      .from("overhead_items")
-      .select("amount")
-      .eq("project_id", projectId);
-    
-    if (data) {
-      const total = data.reduce((sum, item) => sum + item.amount, 0);
-      setOverheadTotal(total);
+  const loadOverheads = () => {
+    // Load from localStorage (no Supabase)
+    const projects = JSON.parse(localStorage.getItem('local_projects') || '[]');
+    const project = projects.find((p: any) => p.id === projectId);
+    if (project && project.overhead_total) {
+      setOverheadTotal(project.overhead_total);
     }
   };
 
@@ -200,69 +197,22 @@ export const EstimateTemplate = ({ projectId, estimateId }: EstimateTemplateProp
   });
 
   useEffect(() => {
-    if (estimateId) loadItems();
-  }, [estimateId]);
+    if (projectId) loadItems();
+  }, [projectId]);
 
-  const loadItems = async () => {
-    if (!estimateId) return;
+  const loadItems = () => {
+    // Load from localStorage
+    const projects = JSON.parse(localStorage.getItem('local_projects') || '[]');
+    const project = projects.find((p: any) => p.id === projectId);
 
-    const { data, error } = await supabase
-      .from("estimate_items")
-      .select("*")
-      .eq("estimate_id", estimateId)
-      .order("created_at");
-
-    if (error) {
-      console.error("Load error:", error);
-      toast.error("Failed to load items");
-      return;
-    }
-
-    if (data) {
-      const mappedItems = data.map((item: any, index: number) => {
-        // Generate item number based on trade grouping
-        const tradeItems = data.filter((i: any) => i.category === item.category);
-        const tradeIndex = tradeItems.findIndex((i: any) => i.id === item.id);
-        const tradeNumber = data.filter((i: any, idx: number) => idx < index && i.category !== item.category)
-          .reduce((acc: any, curr: any) => {
-            if (!acc.includes(curr.category)) acc.push(curr.category);
-            return acc;
-          }, []).length + 1;
-        const itemNumber = `${tradeNumber}.${tradeIndex + 1}`;
-
-        return {
-          id: item.id,
-          section_id: item.section_id,
-          area: item.description?.split(" - ")[0] || "",
-          trade: item.category || "",
-          scope_of_work: item.item_type || "",
-          material_type: item.description?.split(" - ")[1] || item.description || "",
-          quantity: parseFloat(item.quantity) || 0,
-          unit: item.unit || "m²",
-          unit_price: parseFloat(item.unit_price) || 0,
-          labour_hours: parseFloat(item.labour_hours) || 0,
-          labour_rate: parseFloat(item.labour_rate) || config.defaultLabourRate,
-          material_wastage_pct: parseFloat(item.material_wastage_pct) || config.materialWastage,
-          labour_wastage_pct: parseFloat(item.labour_wastage_pct) || config.labourWastage,
-          markup_pct: item.markup_pct !== null && item.markup_pct !== undefined ? parseFloat(item.markup_pct) : config.defaultMarkup,
-          notes: "",
-          expanded: false,
-          item_number: itemNumber,
-          isEditing: false
-        };
-      });
-      setItems(mappedItems);
+    if (project && project.estimate_items && project.estimate_items.length > 0) {
+      setItems(project.estimate_items);
     }
   };
 
-  const addItem = async () => {
+  const addItem = () => {
     if (!newItem.area || !newItem.trade || !newItem.material_type) {
       toast.error("Please fill in required fields");
-      return;
-    }
-
-    if (!estimateId) {
-      toast.error("No estimate found");
       return;
     }
 
@@ -275,28 +225,39 @@ export const EstimateTemplate = ({ projectId, estimateId }: EstimateTemplateProp
       return;
     }
 
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return;
-
-    const { error } = await supabase.from("estimate_items").insert({
-      estimate_id: estimateId,
-      category: newItem.trade,
-      item_type: newItem.scope_of_work,
-      description: `${newItem.area} - ${newItem.material_type}`,
+    // Create new estimate item
+    const newEstimateItem: EstimateItem = {
+      id: `item-${Date.now()}`,
+      section_id: null,
+      area: newItem.area,
+      trade: newItem.trade,
+      scope_of_work: newItem.scope_of_work,
+      material_type: newItem.material_type,
       quantity: qty,
       unit: newItem.unit,
       unit_price: unitPrice,
-      total_price: 0, // Will be calculated on load
       labour_hours: labourHrs,
-      labour_rate: config.defaultLabourRate,
+      labour_rate: labourRates[newItem.trade] || config.defaultLabourRate,
       material_wastage_pct: config.materialWastage,
       labour_wastage_pct: config.labourWastage,
-    });
+      markup_pct: config.defaultMarkup,
+      notes: "",
+      expanded: false,
+      item_number: `${items.length + 1}`,
+      isEditing: false,
+      relatedMaterials: []
+    };
 
-    if (error) {
-      console.error("Insert error:", error);
-      toast.error("Failed to add item: " + error.message);
-      return;
+    // Add to local state
+    const updatedItems = [...items, newEstimateItem];
+    setItems(updatedItems);
+
+    // Save to localStorage
+    const projects = JSON.parse(localStorage.getItem('local_projects') || '[]');
+    const projectIndex = projects.findIndex((p: any) => p.id === projectId);
+    if (projectIndex !== -1) {
+      projects[projectIndex].estimate_items = updatedItems;
+      localStorage.setItem('local_projects', JSON.stringify(projects));
     }
 
     toast.success("Item added successfully");
@@ -310,17 +271,22 @@ export const EstimateTemplate = ({ projectId, estimateId }: EstimateTemplateProp
       unit_price: "",
       labour_hours: "",
     });
-    await loadItems();
   };
 
-  const deleteItem = async (id: string) => {
-    const { error } = await supabase.from("estimate_items").delete().eq("id", id);
-    if (error) {
-      toast.error("Failed to delete");
-      return;
+  const deleteItem = (id: string) => {
+    // Remove from local state
+    const updatedItems = items.filter(item => item.id !== id);
+    setItems(updatedItems);
+
+    // Save to localStorage
+    const projects = JSON.parse(localStorage.getItem('local_projects') || '[]');
+    const projectIndex = projects.findIndex((p: any) => p.id === projectId);
+    if (projectIndex !== -1) {
+      projects[projectIndex].estimate_items = updatedItems;
+      localStorage.setItem('local_projects', JSON.stringify(projects));
     }
+
     toast.success("Item deleted");
-    loadItems();
   };
 
   const startEditing = (item: EstimateItem) => {
@@ -343,30 +309,38 @@ export const EstimateTemplate = ({ projectId, estimateId }: EstimateTemplateProp
     setEditValues({});
   };
 
-  const saveEdit = async (id: string) => {
-    const { error } = await supabase
-      .from("estimate_items")
-      .update({
-        quantity: editValues.quantity,
-        unit_price: editValues.unit_price,
-        labour_hours: editValues.labour_hours,
-        labour_rate: editValues.labour_rate,
-        material_wastage_pct: editValues.material_wastage_pct,
-        labour_wastage_pct: editValues.labour_wastage_pct,
-        markup_pct: editValues.markup_pct,
-        description: `${editValues.area} - ${editValues.material_type}`
-      })
-      .eq("id", id);
+  const saveEdit = (id: string) => {
+    // Update in local state
+    const updatedItems = items.map(item => {
+      if (item.id === id) {
+        return {
+          ...item,
+          quantity: editValues.quantity ?? item.quantity,
+          unit_price: editValues.unit_price ?? item.unit_price,
+          labour_hours: editValues.labour_hours ?? item.labour_hours,
+          labour_rate: editValues.labour_rate ?? item.labour_rate,
+          material_wastage_pct: editValues.material_wastage_pct ?? item.material_wastage_pct,
+          labour_wastage_pct: editValues.labour_wastage_pct ?? item.labour_wastage_pct,
+          markup_pct: editValues.markup_pct ?? item.markup_pct,
+          area: editValues.area ?? item.area,
+          material_type: editValues.material_type ?? item.material_type
+        };
+      }
+      return item;
+    });
+    setItems(updatedItems);
 
-    if (error) {
-      toast.error("Failed to update item");
-      return;
+    // Save to localStorage
+    const projects = JSON.parse(localStorage.getItem('local_projects') || '[]');
+    const projectIndex = projects.findIndex((p: any) => p.id === projectId);
+    if (projectIndex !== -1) {
+      projects[projectIndex].estimate_items = updatedItems;
+      localStorage.setItem('local_projects', JSON.stringify(projects));
     }
 
     toast.success("Item updated");
     setEditingId(null);
     setEditValues({});
-    loadItems();
   };
 
   const toggleExpanded = (id: string) => {

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
-import { Canvas as FabricCanvas, FabricImage, Circle, Line, Rect, Polygon, Text, Point as FabricPoint } from 'fabric';
+import { Canvas as FabricCanvas, FabricImage, Circle, Line, Rect, Polygon, Text, Point as FabricPoint, util as fabricUtil } from 'fabric';
 import * as pdfjsLib from 'pdfjs-dist';
 import { Loader2, Check, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -19,11 +19,14 @@ interface InteractiveCanvasProps {
   unitsPerMetre: number | null;
   calibrationMode: 'preset' | 'manual' | null;
   selectedColor?: string;
+  measurements?: Measurement[]; // Pass measurements to sync canvas with state
   onMeasurementComplete: (measurement: Measurement) => void;
+  onMeasurementUpdate?: (id: string, updates: Partial<Measurement>) => void; // Update measurement after resize
   onCalibrationPointsSet: (points: [WorldPoint, WorldPoint]) => void;
   onTransformChange: (transform: Partial<Transform>) => void;
   onViewportReady: (viewport: PDFViewportData) => void;
   onDeleteLastMeasurement?: () => void;
+  onDeleteMeasurement?: (id: string) => void; // Delete specific measurement by ID
 }
 
 export const InteractiveCanvas = ({
@@ -34,11 +37,14 @@ export const InteractiveCanvas = ({
   isCalibrated,
   unitsPerMetre,
   calibrationMode,
+  measurements = [],
   onMeasurementComplete,
+  onMeasurementUpdate,
   onCalibrationPointsSet,
   onTransformChange,
   onViewportReady,
   onDeleteLastMeasurement,
+  onDeleteMeasurement,
 }: InteractiveCanvasProps) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -46,6 +52,12 @@ export const InteractiveCanvas = ({
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [viewport, setViewport] = useState<PDFViewportData | null>(null);
+
+  // Track canvas objects by measurement ID for sync
+  const measurementObjectsRef = useRef<Map<string, any[]>>(new Map());
+
+  // Track measurement ID on each shape for resize handling
+  const shapeToMeasurementIdRef = useRef<Map<any, string>>(new Map());
 
   // Drawing state
   const [isDrawing, setIsDrawing] = useState(false);
@@ -58,6 +70,10 @@ export const InteractiveCanvas = ({
   // Count tool state - for grouped counting with numbered markers
   const [countPoints, setCountPoints] = useState<WorldPoint[]>([]);
   const [countMarkers, setCountMarkers] = useState<(Circle | Text)[]>([]);
+  const [countPreset, setCountPreset] = useState<string>('Custom'); // Preset name for count items
+
+  // Count preset options
+  const COUNT_PRESETS = ['Toilet', 'Window', 'Door', 'Light', 'Power Point', 'Switch', 'Custom'];
 
   // Calibration state - now supports drag-to-calibrate
   const [calibrationPoints, setCalibrationPoints] = useState<WorldPoint[]>([]);
@@ -237,16 +253,298 @@ export const InteractiveCanvas = ({
 
   // Clear calibration markers when calibration is complete
   useEffect(() => {
-    if (isCalibrated && calibrationObjects.length > 0) {
-      const canvas = fabricCanvasRef.current;
-      if (canvas) {
-        calibrationObjects.forEach(obj => canvas.remove(obj));
+    const canvas = fabricCanvasRef.current;
+    if (!canvas) return;
+
+    // Clear when calibration is complete
+    if (isCalibrated) {
+      // Remove all calibration objects
+      calibrationObjects.forEach(obj => {
+        try {
+          canvas.remove(obj);
+        } catch (e) {
+          // Object may already be removed
+        }
+      });
+      if (calibrationPreviewLine) {
+        try {
+          canvas.remove(calibrationPreviewLine);
+        } catch (e) {
+          // Preview line may already be removed
+        }
+        setCalibrationPreviewLine(null);
+      }
+      if (calibrationObjects.length > 0) {
         setCalibrationObjects([]);
         setCalibrationPoints([]);
-        canvas.requestRenderAll();
+        setCalibrationStartPoint(null);
+        setIsCalibrationDragging(false);
       }
+      canvas.requestRenderAll();
     }
-  }, [isCalibrated, calibrationObjects]);
+  }, [isCalibrated, calibrationObjects, calibrationPreviewLine]);
+
+  // Clear calibration visuals when exiting calibration mode (cancel)
+  useEffect(() => {
+    const canvas = fabricCanvasRef.current;
+    if (!canvas) return;
+
+    if (calibrationMode === null) {
+      // Remove all calibration objects
+      calibrationObjects.forEach(obj => {
+        try {
+          canvas.remove(obj);
+        } catch (e) {
+          // Object may already be removed
+        }
+      });
+      if (calibrationPreviewLine) {
+        try {
+          canvas.remove(calibrationPreviewLine);
+        } catch (e) {
+          // Preview line may already be removed
+        }
+        setCalibrationPreviewLine(null);
+      }
+      if (calibrationObjects.length > 0) {
+        setCalibrationObjects([]);
+        setCalibrationPoints([]);
+        setCalibrationStartPoint(null);
+        setIsCalibrationDragging(false);
+      }
+      canvas.requestRenderAll();
+    }
+  }, [calibrationMode, calibrationObjects, calibrationPreviewLine]);
+
+  // Sync canvas objects with measurements state - remove objects for deleted measurements
+  useEffect(() => {
+    const canvas = fabricCanvasRef.current;
+    if (!canvas) return;
+
+    const measurementIds = new Set(measurements.map(m => m.id));
+    const objectsMap = measurementObjectsRef.current;
+
+    // Find and remove objects for measurements that no longer exist
+    const idsToRemove: string[] = [];
+    objectsMap.forEach((objects, id) => {
+      if (!measurementIds.has(id)) {
+        objects.forEach(obj => canvas.remove(obj));
+        idsToRemove.push(id);
+      }
+    });
+
+    // Clean up the map
+    idsToRemove.forEach(id => objectsMap.delete(id));
+
+    if (idsToRemove.length > 0) {
+      canvas.requestRenderAll();
+    }
+  }, [measurements]);
+
+  // Toggle selection mode on shapes when tool changes
+  useEffect(() => {
+    const canvas = fabricCanvasRef.current;
+    if (!canvas) return;
+
+    const isSelectMode = activeTool === 'select';
+
+    // Update all measurement objects' selectability
+    measurementObjectsRef.current.forEach((objects) => {
+      objects.forEach(obj => {
+        if (obj && typeof obj.set === 'function') {
+          obj.set({
+            selectable: isSelectMode,
+            evented: isSelectMode,
+            hasControls: isSelectMode,
+            hasBorders: isSelectMode,
+            lockRotation: true, // Don't allow rotation for measurements
+            cornerColor: '#2563eb',
+            cornerStyle: 'circle',
+            cornerSize: 10,
+            transparentCorners: false,
+            borderColor: '#2563eb',
+            borderScaleFactor: 2,
+          });
+        }
+      });
+    });
+
+    // Update canvas selection setting
+    canvas.selection = isSelectMode;
+
+    // Set cursor based on mode
+    if (isSelectMode) {
+      canvas.defaultCursor = 'default';
+      canvas.hoverCursor = 'move';
+    }
+
+    canvas.requestRenderAll();
+  }, [activeTool]);
+
+  // Handle object modification (resize/move) to update measurements
+  useEffect(() => {
+    const canvas = fabricCanvasRef.current;
+    if (!canvas || !onMeasurementUpdate) return;
+
+    const handleObjectModified = (e: any) => {
+      const target = e.target;
+      if (!target) return;
+
+      const measurementId = shapeToMeasurementIdRef.current.get(target);
+      if (!measurementId) return;
+
+      const effectiveUnits = unitsPerMetre || 1;
+      const objects = measurementObjectsRef.current.get(measurementId);
+
+      // Get the transformed coordinates
+      if (target.type === 'line') {
+        // For lines, we need to apply the transformation matrix to get actual coordinates
+        // Fabric.js lines store x1,y1,x2,y2 relative to their origin
+        const matrix = target.calcTransformMatrix();
+        const p1 = fabricUtil.transformPoint({ x: target.x1, y: target.y1 }, matrix);
+        const p2 = fabricUtil.transformPoint({ x: target.x2, y: target.y2 }, matrix);
+
+        const startPoint: WorldPoint = { x: p1.x, y: p1.y };
+        const endPoint: WorldPoint = { x: p2.x, y: p2.y };
+        const result = calculateLinearWorld(startPoint, endPoint, effectiveUnits);
+
+        const labelText = isCalibrated ? `${result.realValue.toFixed(2)} m` : `${result.worldValue.toFixed(0)} px`;
+
+        onMeasurementUpdate(measurementId, {
+          worldPoints: [startPoint, endPoint],
+          worldValue: result.worldValue,
+          realValue: isCalibrated ? result.realValue : result.worldValue,
+          label: labelText,
+        });
+
+        // Update the label object position and text
+        if (objects && objects[1]) {
+          const midX = (p1.x + p2.x) / 2;
+          const midY = (p1.y + p2.y) / 2;
+          objects[1].set({
+            text: labelText,
+            left: midX,
+            top: midY - 10,
+          });
+          objects[1].setCoords();
+        }
+
+        // Keep line coordinates absolute after transform
+        target.set({
+          x1: p1.x - target.left,
+          y1: p1.y - target.top,
+          x2: p2.x - target.left,
+          y2: p2.y - target.top,
+          scaleX: 1,
+          scaleY: 1,
+        });
+        target.setCoords();
+
+      } else if (target.type === 'rect') {
+        // For rectangles, calculate from bounding box after transform
+        const left = target.left;
+        const top = target.top;
+        const width = target.width * target.scaleX;
+        const height = target.height * target.scaleY;
+
+        const startPoint: WorldPoint = { x: left, y: top };
+        const endPoint: WorldPoint = { x: left + width, y: top + height };
+        const result = calculateRectangleAreaWorld(startPoint, endPoint, effectiveUnits);
+
+        const labelText = isCalibrated ? `${result.realValue.toFixed(2)} m²` : `${result.worldValue.toFixed(0)} px²`;
+
+        onMeasurementUpdate(measurementId, {
+          worldPoints: [startPoint, endPoint],
+          worldValue: result.worldValue,
+          realValue: isCalibrated ? result.realValue : result.worldValue,
+          dimensions: result.dimensions,
+          label: labelText,
+        });
+
+        // Update the label object position and text
+        if (objects && objects[1]) {
+          objects[1].set({
+            text: labelText,
+            left: left + width / 2 - 30,
+            top: top + height / 2 - 10,
+          });
+          objects[1].setCoords();
+        }
+
+        // Reset scale and apply size directly
+        target.set({
+          width: width,
+          height: height,
+          scaleX: 1,
+          scaleY: 1,
+        });
+        target.setCoords();
+
+      } else if (target.type === 'circle') {
+        // For circles, calculate from radius
+        const centerX = target.left + target.radius * target.scaleX;
+        const centerY = target.top + target.radius * target.scaleY;
+        const radius = target.radius * Math.max(target.scaleX, target.scaleY);
+
+        const startPoint: WorldPoint = { x: centerX, y: centerY };
+        const endPoint: WorldPoint = { x: centerX + radius, y: centerY };
+        const result = calculateCircleAreaWorld(startPoint, endPoint, effectiveUnits);
+
+        const labelText = isCalibrated ? `${result.realValue.toFixed(2)} m²` : `${result.worldValue.toFixed(0)} px²`;
+
+        onMeasurementUpdate(measurementId, {
+          worldPoints: [startPoint, endPoint],
+          worldValue: result.worldValue,
+          realValue: isCalibrated ? result.realValue : result.worldValue,
+          label: labelText,
+        });
+
+        // Update the label object position and text
+        if (objects && objects[1]) {
+          objects[1].set({
+            text: labelText,
+            left: centerX - 30,
+            top: centerY - 10,
+          });
+          objects[1].setCoords();
+        }
+
+        // Reset scale and apply radius directly
+        target.set({
+          radius: radius,
+          left: centerX - radius,
+          top: centerY - radius,
+          scaleX: 1,
+          scaleY: 1,
+        });
+        target.setCoords();
+
+      } else if (target.type === 'polygon') {
+        // For polygons, update the label position when moved
+        // Polygons can only be moved, not resized
+        const boundingRect = target.getBoundingRect();
+        const centerX = boundingRect.left + boundingRect.width / 2;
+        const centerY = boundingRect.top + boundingRect.height / 2;
+
+        // Update the label position
+        if (objects && objects[1]) {
+          objects[1].set({
+            left: centerX - 30,
+            top: centerY - 10,
+          });
+          objects[1].setCoords();
+        }
+      }
+
+      canvas.requestRenderAll();
+    };
+
+    canvas.on('object:modified', handleObjectModified);
+
+    return () => {
+      canvas.off('object:modified', handleObjectModified);
+    };
+  }, [onMeasurementUpdate, unitsPerMetre, isCalibrated]);
 
   // Handle mouse wheel zoom
   useEffect(() => {
@@ -443,9 +741,40 @@ export const InteractiveCanvas = ({
       return;
     }
 
-    // Handle eraser - delete last measurement
+    // Handle eraser - click on shape to delete, or delete last if no shape clicked
     if (activeTool === 'eraser') {
-      if (onDeleteLastMeasurement) {
+      // Check if user clicked on a measurement shape
+      const clickedObjects = canvas.getObjects().filter(obj => {
+        if (!obj.selectable && obj !== canvas.backgroundImage) {
+          // Check if point is within the object
+          const objBounds = obj.getBoundingRect();
+          const vt = canvas.viewportTransform || [1, 0, 0, 1, 0, 0];
+          // Convert world point to screen for bounds check
+          const screenX = worldPoint.x * vt[0] + vt[4];
+          const screenY = worldPoint.y * vt[3] + vt[5];
+          return (
+            screenX >= objBounds.left &&
+            screenX <= objBounds.left + objBounds.width &&
+            screenY >= objBounds.top &&
+            screenY <= objBounds.top + objBounds.height
+          );
+        }
+        return false;
+      });
+
+      // Find which measurement this object belongs to
+      let deletedId: string | null = null;
+      for (const obj of clickedObjects) {
+        const measurementId = shapeToMeasurementIdRef.current.get(obj);
+        if (measurementId && onDeleteMeasurement) {
+          onDeleteMeasurement(measurementId);
+          deletedId = measurementId;
+          break;
+        }
+      }
+
+      // If no specific shape was clicked, delete the last measurement
+      if (!deletedId && onDeleteLastMeasurement) {
         onDeleteLastMeasurement();
       }
       return;
@@ -694,6 +1023,14 @@ export const InteractiveCanvas = ({
         strokeWidth: strokeWidth,
         selectable: false,
         evented: false,
+        hasControls: true,
+        hasBorders: true,
+        lockRotation: true,
+        cornerColor: '#2563eb',
+        cornerStyle: 'circle',
+        cornerSize: 10,
+        transparentCorners: false,
+        borderColor: '#2563eb',
       });
       canvas.add(line);
 
@@ -713,8 +1050,16 @@ export const InteractiveCanvas = ({
       });
       canvas.add(label);
 
+      const measurementId = crypto.randomUUID();
+
+      // Register objects for sync with state
+      measurementObjectsRef.current.set(measurementId, [line, label]);
+
+      // Register shape for resize handling
+      shapeToMeasurementIdRef.current.set(line, measurementId);
+
       const measurement: Measurement = {
-        id: crypto.randomUUID(),
+        id: measurementId,
         type: 'line',
         worldPoints: [startPoint, worldEndPoint],
         worldValue: result.worldValue,
@@ -742,6 +1087,14 @@ export const InteractiveCanvas = ({
         strokeWidth: strokeWidth,
         selectable: false,
         evented: false,
+        hasControls: true,
+        hasBorders: true,
+        lockRotation: true,
+        cornerColor: '#2563eb',
+        cornerStyle: 'circle',
+        cornerSize: 10,
+        transparentCorners: false,
+        borderColor: '#2563eb',
       });
       canvas.add(rect);
 
@@ -761,8 +1114,16 @@ export const InteractiveCanvas = ({
       });
       canvas.add(label);
 
+      const measurementId = crypto.randomUUID();
+
+      // Register objects for sync with state
+      measurementObjectsRef.current.set(measurementId, [rect, label]);
+
+      // Register shape for resize handling
+      shapeToMeasurementIdRef.current.set(rect, measurementId);
+
       const measurement: Measurement = {
-        id: crypto.randomUUID(),
+        id: measurementId,
         type: 'rectangle',
         worldPoints: [startPoint, worldEndPoint],
         worldValue: result.worldValue,
@@ -795,6 +1156,15 @@ export const InteractiveCanvas = ({
         strokeWidth: strokeWidth,
         selectable: false,
         evented: false,
+        hasControls: true,
+        hasBorders: true,
+        lockRotation: true,
+        cornerColor: '#2563eb',
+        cornerStyle: 'circle',
+        cornerSize: 10,
+        transparentCorners: false,
+        borderColor: '#2563eb',
+        lockUniScaling: true, // Keep circle uniform when scaling
       });
       canvas.add(circle);
 
@@ -812,8 +1182,16 @@ export const InteractiveCanvas = ({
       });
       canvas.add(label);
 
+      const measurementId = crypto.randomUUID();
+
+      // Register objects for sync with state
+      measurementObjectsRef.current.set(measurementId, [circle, label]);
+
+      // Register shape for resize handling
+      shapeToMeasurementIdRef.current.set(circle, measurementId);
+
       const measurement: Measurement = {
-        id: crypto.randomUUID(),
+        id: measurementId,
         type: 'circle',
         worldPoints: [startPoint, worldEndPoint],
         worldValue: result.worldValue,
@@ -857,6 +1235,16 @@ export const InteractiveCanvas = ({
       strokeWidth: strokeWidth,
       selectable: false,
       evented: false,
+      hasControls: true,
+      hasBorders: true,
+      lockRotation: true,
+      lockScalingX: true, // Polygon scaling is complex, just allow moving
+      lockScalingY: true,
+      cornerColor: '#2563eb',
+      cornerStyle: 'circle',
+      cornerSize: 10,
+      transparentCorners: false,
+      borderColor: '#2563eb',
     });
     canvas.add(polygon);
 
@@ -881,8 +1269,16 @@ export const InteractiveCanvas = ({
     setPolygonMarkers([]);
     setPolygonLines([]);
 
+    const measurementId = crypto.randomUUID();
+
+    // Register objects for sync with state
+    measurementObjectsRef.current.set(measurementId, [polygon, label]);
+
+    // Register shape for selection (polygon move only, no resize)
+    shapeToMeasurementIdRef.current.set(polygon, measurementId);
+
     const measurement: Measurement = {
-      id: crypto.randomUUID(),
+      id: measurementId,
       type: 'polygon',
       worldPoints: polygonPoints,
       worldValue: result.worldValue,
@@ -922,25 +1318,36 @@ export const InteractiveCanvas = ({
     const canvas = fabricCanvasRef.current;
     if (!canvas || countPoints.length === 0) return;
 
+    const measurementId = crypto.randomUUID();
+
+    // Register count markers for sync with state
+    measurementObjectsRef.current.set(measurementId, [...countMarkers]);
+
+    // Generate label based on preset
+    const labelName = countPreset === 'Custom' ? 'Items' : countPreset;
+    const labelText = `${countPoints.length} × ${labelName}`;
+
     const measurement: Measurement = {
-      id: crypto.randomUUID(),
-      type: 'circle',
+      id: measurementId,
+      type: 'count' as any, // Count type for proper handling
       worldPoints: countPoints,
       worldValue: countPoints.length,
       realValue: countPoints.length,
       unit: 'count',
       color: '#FF9800',
-      label: `Count: ${countPoints.length} items`,
+      label: labelText,
       pageIndex: pageIndex,
       timestamp: new Date(),
-    };
+      // Store the preset name for the table
+      countName: countPreset,
+    } as any;
 
     onMeasurementComplete(measurement);
     setCountPoints([]);
-    // Keep markers visible on canvas
     setCountMarkers([]);
+    setCountPreset('Custom'); // Reset preset for next count
     canvas.requestRenderAll();
-  }, [countPoints, pageIndex, onMeasurementComplete]);
+  }, [countPoints, countMarkers, countPreset, pageIndex, onMeasurementComplete]);
 
   // Cancel count - remove all markers
   const handleCancelCount = useCallback(() => {
@@ -1021,38 +1428,62 @@ export const InteractiveCanvas = ({
 
       {/* Count completion controls */}
       {activeTool === 'count' && countPoints.length >= 1 && (
-        <div className="absolute bottom-4 left-1/2 transform -translate-x-1/2 flex gap-2 z-10">
-          <Button
-            onClick={handleCompleteCount}
-            className="bg-orange-600 hover:bg-orange-700 text-white shadow-lg"
-            size="sm"
-          >
-            <Check className="h-4 w-4 mr-1" />
-            Finish Count ({countPoints.length} items)
-          </Button>
-          <Button
-            onClick={handleCancelCount}
-            variant="destructive"
-            size="sm"
-            className="shadow-lg"
-          >
-            <X className="h-4 w-4 mr-1" />
-            Cancel
-          </Button>
+        <div className="absolute bottom-4 left-1/2 transform -translate-x-1/2 z-10 space-y-2">
+          {/* Preset selection */}
+          <div className="flex flex-wrap gap-1 justify-center bg-white/95 dark:bg-gray-900/95 p-2 rounded-lg shadow-lg">
+            {COUNT_PRESETS.map(preset => (
+              <Button
+                key={preset}
+                variant={countPreset === preset ? 'default' : 'outline'}
+                size="sm"
+                className="h-7 text-xs"
+                onClick={() => setCountPreset(preset)}
+              >
+                {preset}
+              </Button>
+            ))}
+          </div>
+          {/* Action buttons */}
+          <div className="flex gap-2 justify-center">
+            <Button
+              onClick={handleCompleteCount}
+              className="bg-orange-600 hover:bg-orange-700 text-white shadow-lg"
+              size="sm"
+            >
+              <Check className="h-4 w-4 mr-1" />
+              Finish: {countPoints.length} × {countPreset === 'Custom' ? 'Items' : countPreset}
+            </Button>
+            <Button
+              onClick={handleCancelCount}
+              variant="destructive"
+              size="sm"
+              className="shadow-lg"
+            >
+              <X className="h-4 w-4 mr-1" />
+              Cancel
+            </Button>
+          </div>
         </div>
       )}
 
       {/* Count hint when tool is active */}
       {activeTool === 'count' && countPoints.length === 0 && (
         <div className="absolute bottom-4 left-1/2 transform -translate-x-1/2 bg-orange-500/90 text-white px-4 py-2 rounded-md text-sm font-medium z-10 shadow-lg">
-          Click to count items - click "Finish Count" when done
+          Click to count items (toilets, windows, doors, etc.) - select type then click "Finish"
         </div>
       )}
 
       {/* Eraser hint */}
       {activeTool === 'eraser' && (
         <div className="absolute bottom-4 left-1/2 transform -translate-x-1/2 bg-red-500/90 text-white px-4 py-2 rounded-md text-sm font-medium z-10 shadow-lg">
-          Click anywhere to delete the last measurement
+          Click on a measurement to delete it, or click empty space to delete last
+        </div>
+      )}
+
+      {/* Select tool hint */}
+      {activeTool === 'select' && (
+        <div className="absolute bottom-4 left-1/2 transform -translate-x-1/2 bg-blue-600/90 text-white px-4 py-2 rounded-md text-sm font-medium z-10 shadow-lg">
+          Click shapes to select - drag corners to resize, drag center to move
         </div>
       )}
 
