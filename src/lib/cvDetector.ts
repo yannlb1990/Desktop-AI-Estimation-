@@ -628,6 +628,7 @@ function classifyShapes(
 /**
  * Main function: Analyze a PDF page image for architectural elements
  * Enhanced for Australian architectural drawings
+ * Added error handling and memory management to prevent crashes
  */
 export async function analyzePageImage(
   canvas: HTMLCanvasElement,
@@ -635,9 +636,68 @@ export async function analyzePageImage(
 ): Promise<CVAnalysisResult> {
   const startTime = performance.now();
 
-  const ctx = canvas.getContext('2d')!;
-  const { width, height } = canvas;
-  const imageData = ctx.getImageData(0, 0, width, height);
+  try {
+    const ctx = canvas.getContext('2d');
+    if (!ctx) {
+      throw new Error('Failed to get canvas 2D context');
+    }
+
+    let { width, height } = canvas;
+
+    // Limit canvas size to prevent memory issues - max 2000x2000
+    const maxDimension = 2000;
+    let scale = 1;
+    if (width > maxDimension || height > maxDimension) {
+      scale = maxDimension / Math.max(width, height);
+      // Create a smaller canvas for analysis
+      const scaledCanvas = document.createElement('canvas');
+      const scaledWidth = Math.floor(width * scale);
+      const scaledHeight = Math.floor(height * scale);
+      scaledCanvas.width = scaledWidth;
+      scaledCanvas.height = scaledHeight;
+      const scaledCtx = scaledCanvas.getContext('2d');
+      if (!scaledCtx) {
+        throw new Error('Failed to create scaled canvas context');
+      }
+      scaledCtx.drawImage(canvas, 0, 0, scaledWidth, scaledHeight);
+      width = scaledWidth;
+      height = scaledHeight;
+      // Use scaled canvas for analysis
+      const imageData = scaledCtx.getImageData(0, 0, width, height);
+      const result = await processImageData(imageData, width, height, pageNumber, startTime);
+      scaledCanvas.remove();
+      return result;
+    }
+
+    const imageData = ctx.getImageData(0, 0, width, height);
+    return await processImageData(imageData, width, height, pageNumber, startTime);
+  } catch (error) {
+    console.error('CV Analysis error:', error);
+    // Return empty result on error instead of crashing
+    return {
+      pageNumber,
+      shapes: [],
+      walls: [],
+      doors: [],
+      windows: [],
+      fixtures: [],
+      processingTimeMs: performance.now() - startTime,
+      imageWidth: canvas.width,
+      imageHeight: canvas.height,
+    };
+  }
+}
+
+/**
+ * Process image data for CV analysis - extracted for reuse
+ */
+async function processImageData(
+  imageData: ImageData,
+  width: number,
+  height: number,
+  pageNumber: number,
+  startTime: number
+): Promise<CVAnalysisResult> {
 
   // Step 1: Convert to grayscale
   const gray = toGrayscale(imageData);

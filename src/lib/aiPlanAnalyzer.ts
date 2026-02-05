@@ -56,7 +56,7 @@ export type DrawingType =
 export type ConstructionType = 'timber_frame' | 'steel_frame' | 'brick_veneer' | 'double_brick' | 'concrete' | 'unknown';
 
 export interface DetectedSymbol {
-  type: 'door' | 'window' | 'power_point' | 'light' | 'switch' | 'tap' | 'sink' | 'toilet' | 'shower' | 'appliance' | 'furniture' | 'other';
+  type: 'door' | 'window' | 'power_point' | 'light' | 'switch' | 'tap' | 'sink' | 'toilet' | 'shower' | 'appliance' | 'furniture' | 'site_element' | 'other';
   subType?: string;
   bounds: { x: number; y: number; width: number; height: number };
   label?: string;
@@ -388,6 +388,38 @@ const SYMBOL_PATTERNS: Record<string, { regex: RegExp; type: DetectedSymbol['typ
     { regex: /\b(fridge|refrigerator)\b/gi, type: 'appliance', subType: 'fridge' },
     { regex: /\boven\b/gi, type: 'appliance', subType: 'oven' },
     { regex: /\b(AC|air\s*con)/gi, type: 'appliance', subType: 'aircon' },
+  ],
+  site_elements: [
+    // Bike racks and parking
+    { regex: /\b(bike\s*rack|bicycle\s*rack|bike\s*stand|bicycle\s*stand|cycle\s*rack)\b/gi, type: 'site_element', subType: 'bike_rack' },
+    { regex: /\b(\d+)\s*(?:bike|bicycle)\s*spaces?\b/gi, type: 'site_element', subType: 'bike_parking' },
+    // Bollards and barriers
+    { regex: /\b(bollard|removable\s*bollard|fixed\s*bollard)\b/gi, type: 'site_element', subType: 'bollard' },
+    { regex: /\b(wheel\s*stop|car\s*stop)\b/gi, type: 'site_element', subType: 'wheel_stop' },
+    // Site furniture
+    { regex: /\b(bench\s*seat|park\s*bench|seating|seat)\b/gi, type: 'site_element', subType: 'bench' },
+    { regex: /\b(bin|rubbish\s*bin|waste\s*bin|recycling\s*bin)\b/gi, type: 'site_element', subType: 'bin' },
+    { regex: /\b(drinking\s*fountain|water\s*fountain|bubbler)\b/gi, type: 'site_element', subType: 'fountain' },
+    { regex: /\b(shade\s*structure|pergola|shelter|gazebo)\b/gi, type: 'site_element', subType: 'shade' },
+    // Signage
+    { regex: /\b(signage|sign|wayfinding|directional\s*sign)\b/gi, type: 'site_element', subType: 'signage' },
+    { regex: /\b(entry\s*sign|building\s*sign)\b/gi, type: 'site_element', subType: 'signage' },
+    // Landscaping elements
+    { regex: /\b(planter|planter\s*box|raised\s*garden)\b/gi, type: 'site_element', subType: 'planter' },
+    { regex: /\b(retaining\s*wall|garden\s*wall)\b/gi, type: 'site_element', subType: 'retaining_wall' },
+    { regex: /\b(fence|fencing|paling\s*fence|colorbond\s*fence)\b/gi, type: 'site_element', subType: 'fence' },
+    { regex: /\b(letterbox|mail\s*box)\b/gi, type: 'site_element', subType: 'letterbox' },
+    // Parking and driveways
+    { regex: /\b(car\s*space|parking\s*space|car\s*park)\b/gi, type: 'site_element', subType: 'car_space' },
+    { regex: /\b(driveway|crossover)\b/gi, type: 'site_element', subType: 'driveway' },
+    { regex: /\b(footpath|pathway|paved\s*path)\b/gi, type: 'site_element', subType: 'footpath' },
+    // External services
+    { regex: /\b(meter\s*box|electric\s*meter)\b/gi, type: 'site_element', subType: 'meter_box' },
+    { regex: /\b(NBN\s*pit|telstra\s*pit)\b/gi, type: 'site_element', subType: 'comms_pit' },
+    { regex: /\b(stormwater\s*pit|gully\s*pit|drain)\b/gi, type: 'site_element', subType: 'drainage' },
+    // Outdoor lighting
+    { regex: /\b(bollard\s*light|garden\s*light|path\s*light)\b/gi, type: 'site_element', subType: 'outdoor_light' },
+    { regex: /\b(flood\s*light|security\s*light)\b/gi, type: 'site_element', subType: 'security_light' },
   ],
 };
 

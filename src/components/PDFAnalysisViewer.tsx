@@ -68,6 +68,8 @@ import {
   Palette,
   ClipboardList,
   Building,
+  Hand,
+  GripHorizontal,
 } from 'lucide-react';
 import { PageAnalysis, PlanAnalysisResult, StandardsReference, MaterialSelection, FloorArea } from '@/lib/aiPlanAnalyzer';
 import { analyzePageImage, CVAnalysisResult, DetectedShape } from '@/lib/cvDetector';
@@ -89,8 +91,8 @@ import {
   MeasuredRoom,
 } from '@/lib/projectManager';
 
-// Measurement mode types
-type MeasurementMode = 'none' | 'calibrate' | 'distance' | 'area';
+// Measurement mode types - added 'pan' for document navigation
+type MeasurementMode = 'none' | 'calibrate' | 'distance' | 'area' | 'pan';
 
 // Extended element types for auto-detection
 type ElementType =
@@ -100,7 +102,8 @@ type ElementType =
   | 'beam' | 'column' | 'slab' | 'footing'
   | 'hvac' | 'duct' | 'diffuser'
   | 'appliance' | 'furniture'
-  | 'dimension' | 'annotation' | 'symbol';
+  | 'dimension' | 'annotation' | 'symbol'
+  | 'site_element' | 'bike_rack' | 'bollard' | 'signage' | 'fence' | 'landscaping';
 
 interface DetectionMarkup {
   id: string;
@@ -185,6 +188,14 @@ const ELEMENT_COLORS: Record<ElementType, { color: string; label: string; icon: 
   dimension: { color: '#64748b', label: 'Dimension', icon: <Grid3X3 className="h-3 w-3" /> },
   annotation: { color: '#94a3b8', label: 'Annotation', icon: <PaintBucket className="h-3 w-3" /> },
   symbol: { color: '#6b7280', label: 'Symbol', icon: <CircleDot className="h-3 w-3" /> },
+
+  // Site Elements (external/outdoor)
+  site_element: { color: '#84cc16', label: 'Site Element', icon: <MapPin className="h-3 w-3" /> },
+  bike_rack: { color: '#65a30d', label: 'Bike Rack', icon: <GripHorizontal className="h-3 w-3" /> },
+  bollard: { color: '#a3a3a3', label: 'Bollard', icon: <CircleDot className="h-3 w-3" /> },
+  signage: { color: '#0284c7', label: 'Signage', icon: <MapPin className="h-3 w-3" /> },
+  fence: { color: '#78716c', label: 'Fence', icon: <Grid3X3 className="h-3 w-3" /> },
+  landscaping: { color: '#22c55e', label: 'Landscaping', icon: <Box className="h-3 w-3" /> },
 };
 
 export function PDFAnalysisViewer({
@@ -248,6 +259,11 @@ export function PDFAnalysisViewer({
   const [calibrationDistance, setCalibrationDistance] = useState('');
   const [calibrationUnit, setCalibrationUnit] = useState<'mm' | 'm' | 'ft' | 'in'>('m');
   const [showMeasurements, setShowMeasurements] = useState(true);
+
+  // Pan/drag state for document navigation
+  const [isPanning, setIsPanning] = useState(false);
+  const [panStart, setPanStart] = useState({ x: 0, y: 0 });
+  const [scrollStart, setScrollStart] = useState({ x: 0, y: 0 });
 
   // Get calibration for current page
   const currentCalibration = calibrations[currentPage] || null;
@@ -435,14 +451,27 @@ export function PDFAnalysisViewer({
     }
   }, [pdfDoc, currentPage, isCvAnalyzing]);
 
-  // Handle canvas click for measurements
+  // Handle canvas click for measurements - fixed coordinate calculation for zoom/pan
   const handleCanvasClick = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
-    if (measurementMode === 'none' || canvasSize.width === 0) return;
+    // Skip if in pan mode or no measurement mode
+    if (measurementMode === 'none' || measurementMode === 'pan' || canvasSize.width === 0) return;
 
-    const rect = e.currentTarget.getBoundingClientRect();
+    // Get the canvas element (not the wrapper div)
+    const canvasEl = canvasRef.current;
+    if (!canvasEl) return;
+
+    // Use the canvas bounding rect for accurate positioning
+    const rect = canvasEl.getBoundingClientRect();
+
+    // Calculate position relative to canvas, accounting for any transforms
     const x = ((e.clientX - rect.left) / rect.width) * 100;
     const y = ((e.clientY - rect.top) / rect.height) * 100;
-    const point: CalibrationPoint = { x, y };
+
+    // Clamp values to valid range
+    const clampedX = Math.max(0, Math.min(100, x));
+    const clampedY = Math.max(0, Math.min(100, y));
+
+    const point: CalibrationPoint = { x: clampedX, y: clampedY };
 
     if (measurementMode === 'calibrate') {
       if (calibrationPoints.length === 0) {
@@ -738,19 +767,22 @@ export function PDFAnalysisViewer({
     renderPage();
   }, [pdfDoc, currentPage, zoom, rotation, renderKey]);
 
-  // Re-render on window resize and initial mount
+  // Re-render on window resize only - removed automatic re-render on mount
+  // The initial render is handled by the PDF load effect
   useEffect(() => {
+    let resizeTimer: ReturnType<typeof setTimeout>;
     const handleResize = () => {
-      setRenderKey(k => k + 1);
+      // Debounce resize events to prevent multiple re-renders
+      clearTimeout(resizeTimer);
+      resizeTimer = setTimeout(() => {
+        setRenderKey(k => k + 1);
+      }, 150);
     };
     window.addEventListener('resize', handleResize);
 
-    // Also trigger on initial mount after a short delay to ensure layout
-    const mountTimer = setTimeout(() => setRenderKey(k => k + 1), 100);
-
     return () => {
       window.removeEventListener('resize', handleResize);
-      clearTimeout(mountTimer);
+      clearTimeout(resizeTimer);
     };
   }, []);
 
@@ -777,6 +809,34 @@ export function PDFAnalysisViewer({
   // Rotation
   const rotate = useCallback(() => {
     setRotation(r => (r + 90) % 360);
+  }, []);
+
+  // Pan/drag handlers for document navigation
+  const handlePanStart = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
+    if (measurementMode !== 'pan') return;
+    e.preventDefault();
+    setIsPanning(true);
+    setPanStart({ x: e.clientX, y: e.clientY });
+    const container = containerRef.current;
+    if (container) {
+      setScrollStart({ x: container.scrollLeft, y: container.scrollTop });
+    }
+  }, [measurementMode]);
+
+  const handlePanMove = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
+    if (!isPanning || measurementMode !== 'pan') return;
+    e.preventDefault();
+    const container = containerRef.current;
+    if (container) {
+      const dx = e.clientX - panStart.x;
+      const dy = e.clientY - panStart.y;
+      container.scrollLeft = scrollStart.x - dx;
+      container.scrollTop = scrollStart.y - dy;
+    }
+  }, [isPanning, measurementMode, panStart, scrollStart]);
+
+  const handlePanEnd = useCallback(() => {
+    setIsPanning(false);
   }, []);
 
   // Get markups for current page (using combined markups)
@@ -900,7 +960,7 @@ export function PDFAnalysisViewer({
             </TooltipContent>
           </Tooltip>
 
-          {/* Measure Area */}
+          {/* Measure Area (m²) */}
           <Tooltip>
             <TooltipTrigger asChild>
               <Button
@@ -911,11 +971,29 @@ export function PDFAnalysisViewer({
                 className="h-8"
               >
                 <PenTool className="h-4 w-4 mr-1" />
-                Area
+                Area m²
               </Button>
             </TooltipTrigger>
             <TooltipContent>
-              <p>{currentCalibration ? 'Click points to draw polygon area' : 'Calibrate this page first'}</p>
+              <p>{currentCalibration ? 'Click points to draw polygon area (square meters)' : 'Calibrate this page first'}</p>
+            </TooltipContent>
+          </Tooltip>
+
+          {/* Pan/Grab Tool */}
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                variant={measurementMode === 'pan' ? 'default' : 'outline'}
+                size="sm"
+                onClick={() => setMeasurementMode(measurementMode === 'pan' ? 'none' : 'pan')}
+                className="h-8"
+              >
+                <Hand className="h-4 w-4 mr-1" />
+                Pan
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>
+              <p>Drag to pan/move the document when zoomed in</p>
             </TooltipContent>
           </Tooltip>
 
@@ -1011,7 +1089,7 @@ export function PDFAnalysisViewer({
       )}
 
       {/* Measurement Mode Instructions */}
-      {measurementMode !== 'none' && (
+      {measurementMode !== 'none' && measurementMode !== 'pan' && (
         <div className={`px-4 py-2 border-b ${
           measurementMode === 'calibrate' ? 'bg-amber-50 dark:bg-amber-950 border-amber-200 dark:border-amber-800' :
           measurementMode === 'distance' ? 'bg-blue-50 dark:bg-blue-950 border-blue-200 dark:border-blue-800' :
@@ -1069,11 +1147,17 @@ export function PDFAnalysisViewer({
         </div>
       )}
 
-      {/* PDF Canvas Container - Full Width */}
+      {/* PDF Canvas Container - Full Width with pan support */}
       <div
         ref={containerRef}
-        className="overflow-auto bg-gray-200 dark:bg-gray-800"
+        className={`overflow-auto bg-gray-200 dark:bg-gray-800 ${
+          measurementMode === 'pan' ? (isPanning ? 'cursor-grabbing' : 'cursor-grab') : ''
+        }`}
         style={{ maxHeight: '70vh' }}
+        onMouseDown={handlePanStart}
+        onMouseMove={handlePanMove}
+        onMouseUp={handlePanEnd}
+        onMouseLeave={handlePanEnd}
       >
         <div className="relative p-4 flex justify-center">
           {/* Loading state */}
@@ -1102,6 +1186,7 @@ export function PDFAnalysisViewer({
           {!loadError && (
           <div
             className={`relative inline-block shadow-xl rounded-lg overflow-hidden bg-white ${
+              measurementMode === 'pan' ? '' :
               measurementMode !== 'none' ? 'cursor-crosshair' : ''
             }`}
             onClick={handleCanvasClick}
