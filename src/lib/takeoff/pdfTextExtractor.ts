@@ -118,61 +118,96 @@ export async function extractFullPageText(
   return rows.join('\n');
 }
 
-// Extract floor areas from text (e.g., "GF LIVING 136.37", "TOTAL 174.53m²")
-// Strict extraction - only actual room floor areas from schedules/title blocks
+// Extract floor areas from text (e.g., "GF LIVING 136.37", "TOTAL 174.53m²", "OFFICE 7P 45.5m²")
+// Includes both residential and commercial building patterns
 export function extractFloorAreas(texts: ExtractedText[], pageIndex: number): ExtractedFloorArea[] {
   const areas: ExtractedFloorArea[] = [];
   const allText = texts.map(t => t.text).join(' ');
   const seen = new Set<string>();
 
-  // STRICT room name keywords - must be actual rooms, not descriptions
-  const roomKeywords = /^(living|bed|bath|kitchen|garage|alfresco|porch|entry|lounge|dining|study|office|laundry|store|wir|bir|ensuite|meals|family|rumpus|theatre|pantry|foyer|hall|nook|retreat|master|guest|powder|toilet|utility|mud|scullery)/i;
-
   // Words that indicate it's NOT a room area (exclude these)
   const excludeKeywords = /roof|plan area|site|colorbond|single|double|storey|house|actual|building|coverage|setback|boundary|lot|block|structure/i;
 
-  // Only match specific floor area table formats
-  // Pattern: "GF LIVING" or "BEDROOM 1" followed by number
-  const strictRoomPattern = /\b((?:GF|FF|UF|GROUND|FIRST|UPPER|LOWER)?\s*(?:LIVING|BED(?:ROOM)?|BATH(?:ROOM)?|KITCHEN|GARAGE|ALFRESCO|PORCH|ENTRY|LOUNGE|DINING|STUDY|OFFICE|LAUNDRY|STORE|WIR|BIR|ENS(?:UITE)?|MEALS|FAMILY|RUMPUS|THEATRE|PANTRY|FOYER|HALL|NOOK|RETREAT|MASTER|GUEST|POWDER|TOILET|UTILITY|MUD|SCULLERY)(?:\s*\d)?)\s+(\d+\.\d{1,2})/gi;
+  // Pattern 1: Residential format - "GF LIVING" or "BEDROOM 1" followed by number
+  const residentialPattern = /\b((?:GF|FF|UF|GROUND|FIRST|UPPER|LOWER)?\s*(?:LIVING|BED(?:ROOM)?|BATH(?:ROOM)?|KITCHEN|GARAGE|ALFRESCO|PORCH|ENTRY|LOUNGE|DINING|STUDY|LAUNDRY|STORE|WIR|BIR|ENS(?:UITE)?|MEALS|FAMILY|RUMPUS|THEATRE|PANTRY|FOYER|HALL|NOOK|RETREAT|MASTER|GUEST|POWDER|TOILET|UTILITY|MUD|SCULLERY)(?:\s*\d)?)\s+(\d+\.?\d*)\s*(?:m²|m2|sqm)?/gi;
+
+  // Pattern 2: Commercial format - "OFFICE 7P", "CORRIDOR", "MEETING ROOM 1" followed by area
+  const commercialPattern = /\b((?:OFFICE|CORRIDOR|MEETING|CONFERENCE|BOARDROOM|RECEPTION|LOBBY|LIFT|STAIR|PLANT|AC\s*PLANT|COMMS|SERVER|ELECTRICAL|MECHANICAL|AMENITIES|BREAKOUT|KITCHENETTE|CLEANERS?|STORAGE|FIRE\s*STAIR|SERVICE\s*LIFT)(?:\s*(?:ROOM)?)?(?:\s*\d+)?[A-Z]?)\s+(\d+\.?\d*)\s*(?:m²|m2|sqm)?/gi;
+
+  // Pattern 3: Room number format - "4.28A 45.5m²"
+  const roomNumberPattern = /\b(\d+\.\d+[A-Z]?)\s+(\d+\.?\d*)\s*(?:m²|m2|sqm)/gi;
+
+  // Pattern 4: Level-based format - "L4.28" or "G.01"
+  const levelRoomPattern = /\b([GBLP]\d*\.\d+[A-Z]?)\s+(\d+\.?\d*)\s*(?:m²|m2|sqm)?/gi;
 
   let match;
-  while ((match = strictRoomPattern.exec(allText)) !== null) {
+
+  // Extract residential areas
+  while ((match = residentialPattern.exec(allText)) !== null) {
     const name = match[1].trim().toUpperCase();
     const area = parseFloat(match[2]);
 
-    // Skip if area is unrealistic for a room (< 2m² or > 200m²)
-    if (area < 2 || area > 200) continue;
-
-    // Skip if contains exclude keywords
+    if (area < 1 || area > 500) continue;
     if (excludeKeywords.test(name)) continue;
 
     const key = name.replace(/\s+/g, ' ');
     if (!seen.has(key)) {
       seen.add(key);
-      areas.push({
-        name: key,
-        area,
-        unit: 'm²',
-        pageIndex,
-      });
+      areas.push({ name: key, area, unit: 'm²', pageIndex });
     }
   }
 
-  // Also look for "TOTAL FLOOR AREA" or "TOTAL AREA" specifically (not ROOF AREA, PLAN AREA)
-  const totalPattern = /\b(TOTAL\s+(?:FLOOR\s+)?AREA|TOTAL\s+GFA|NET\s+FLOOR|GROSS\s+FLOOR)\s*:?\s*(\d+\.\d{1,2})/gi;
+  // Extract commercial areas
+  while ((match = commercialPattern.exec(allText)) !== null) {
+    const name = match[1].trim().toUpperCase();
+    const area = parseFloat(match[2]);
+
+    if (area < 1 || area > 2000) continue; // Commercial can be larger
+    if (excludeKeywords.test(name)) continue;
+
+    const key = name.replace(/\s+/g, ' ');
+    if (!seen.has(key)) {
+      seen.add(key);
+      areas.push({ name: key, area, unit: 'm²', pageIndex });
+    }
+  }
+
+  // Extract room number areas (e.g., 4.28A 45.5)
+  while ((match = roomNumberPattern.exec(allText)) !== null) {
+    const name = `ROOM ${match[1].toUpperCase()}`;
+    const area = parseFloat(match[2]);
+
+    if (area < 1 || area > 500) continue;
+
+    if (!seen.has(name)) {
+      seen.add(name);
+      areas.push({ name, area, unit: 'm²', pageIndex });
+    }
+  }
+
+  // Extract level-based room areas (G.01, L1.05)
+  while ((match = levelRoomPattern.exec(allText)) !== null) {
+    const name = `ROOM ${match[1].toUpperCase()}`;
+    const area = parseFloat(match[2]);
+
+    if (area < 1 || area > 500) continue;
+
+    if (!seen.has(name)) {
+      seen.add(name);
+      areas.push({ name, area, unit: 'm²', pageIndex });
+    }
+  }
+
+  // Look for "TOTAL FLOOR AREA" or "NLA" (Net Lettable Area) for commercial
+  const totalPattern = /\b(TOTAL\s+(?:FLOOR\s+)?AREA|TOTAL\s+GFA|NET\s+FLOOR|GROSS\s+FLOOR|NLA|GFA|NET\s+LETTABLE)\s*:?\s*(\d+\.?\d*)\s*(?:m²|m2|sqm)?/gi;
   while ((match = totalPattern.exec(allText)) !== null) {
     const name = 'TOTAL FLOOR AREA';
     const area = parseFloat(match[2]);
 
-    // Total should be between 50-800m² for a typical house
-    if (area >= 50 && area <= 800 && !seen.has(name)) {
+    // Commercial buildings can be much larger
+    if (area >= 10 && area <= 50000 && !seen.has(name)) {
       seen.add(name);
-      areas.push({
-        name,
-        area,
-        unit: 'm²',
-        pageIndex,
-      });
+      areas.push({ name, area, unit: 'm²', pageIndex });
     }
   }
 
@@ -432,18 +467,48 @@ export function findDimensions(texts: ExtractedText[]): ExtractedElement[] {
 
 // Find room labels (kitchen, bathroom, bedroom, etc.)
 export function findRoomLabels(texts: ExtractedText[]): ExtractedElement[] {
-  // Keywords to match directly
+  // Keywords to match directly - includes residential AND commercial building terms
   const roomKeywords = [
+    // Residential
     'kitchen', 'bathroom', 'bedroom', 'living', 'dining', 'laundry',
     'garage', 'patio', 'balcony', 'hall', 'hallway', 'entry', 'foyer',
-    'office', 'store', 'storage', 'ensuite', 'wc', 'toilet', 'powder',
+    'store', 'storage', 'ensuite', 'wc', 'toilet', 'powder',
     'bath', 'bed', 'lounge', 'study', 'rumpus', 'family', 'meals',
     'alfresco', 'theatre', 'pantry', 'scullery', 'mud', 'walk-in',
     'wardrobe', 'robe', 'wir', 'bir', 'master', 'guest', 'utility',
-    'porch', 'ens', 'l\'dry', 'ldry', 'mpl', 'mpd', 'nook', 'retreat'
+    'porch', 'ens', 'l\'dry', 'ldry', 'mpl', 'mpd', 'nook', 'retreat',
+
+    // Commercial / Office buildings
+    'office', 'corridor', 'lobby', 'reception', 'meeting', 'conference',
+    'boardroom', 'breakout', 'break room', 'cafeteria', 'canteen',
+    'server', 'comms', 'communications', 'electrical', 'mechanical',
+    'plant', 'plant room', 'ac plant', 'hvac', 'lift', 'elevator',
+    'stair', 'stairwell', 'fire stair', 'loading', 'dock', 'dock leveller',
+    'amenities', 'changeroom', 'change room', 'locker', 'shower',
+    'cleaners', 'cleaner', 'waste', 'bin', 'garbage', 'refuse',
+    'mailroom', 'mail room', 'copy', 'print', 'filing', 'archive',
+    'training', 'interview', 'quiet', 'focus', 'collaboration',
+    'open plan', 'workstation', 'hot desk', 'booth', 'phone booth',
+    'kitchenette', 'tea room', 'staff', 'waiting', 'ante',
+
+    // Industrial / Warehouse
+    'warehouse', 'workshop', 'factory', 'production', 'assembly',
+    'dispatch', 'receiving', 'staging', 'coolroom', 'cold store',
+    'freezer', 'dry store', 'bulk store', 'dangerous goods', 'dg store',
+
+    // Healthcare
+    'consult', 'treatment', 'procedure', 'recovery', 'ward',
+    'nurses', 'station', 'pharmacy', 'pathology', 'radiology',
+
+    // Retail
+    'retail', 'sales', 'display', 'fitting', 'cashier', 'pos',
+
+    // Service areas
+    'service', 'services', 'riser', 'duct', 'shaft', 'void',
+    'ceiling void', 'floor void', 'plenum', 'bulkhead', 'soffit'
   ];
 
-  // Patterns for numbered rooms (BED 1, BATH 2, etc.)
+  // Patterns for numbered rooms (BED 1, BATH 2, OFFICE 3P, etc.)
   const roomPatterns = [
     /^bed\s*\d+$/i,
     /^bath\s*\d+$/i,
@@ -454,6 +519,28 @@ export function findRoomLabels(texts: ExtractedText[]): ExtractedElement[] {
     /^garage\s*\d*$/i,
     /^store\s*\d*$/i,
     /^robe\s*\d*$/i,
+    // Commercial patterns
+    /^office\s*\d+[a-z]?$/i,        // OFFICE 1, OFFICE 7P
+    /^meeting\s*\d+$/i,              // MEETING 1
+    /^conference\s*\d+$/i,           // CONFERENCE 1
+    /^corridor\s*\d*$/i,             // CORRIDOR, CORRIDOR 1
+    /^lift\s*\d*$/i,                 // LIFT, LIFT 1
+    /^stair\s*\d*$/i,                // STAIR, STAIR 1
+    /^level\s*\d+$/i,                // LEVEL 1, LEVEL 2
+    /^floor\s*\d+$/i,                // FLOOR 1
+    /^zone\s*\d+$/i,                 // ZONE 1
+    /^area\s*\d+$/i,                 // AREA 1
+    // Room number patterns (e.g., 4.28A, 4.28D, G.01, L1.05)
+    /^\d+\.\d+[a-z]?$/i,             // 4.28A, 4.28, 1.05B
+    /^[gbl]\d*\.\d+[a-z]?$/i,        // G.01, B.02, L1.05 (Ground, Basement, Level)
+    /^rm\s*\d+$/i,                   // RM 1, RM 101
+    /^room\s*\d+$/i,                 // ROOM 1
+    // Service room patterns
+    /^service\s*lift$/i,             // SERVICE LIFT
+    /^fire\s*stair$/i,               // FIRE STAIR
+    /^plant\s*room$/i,               // PLANT ROOM
+    /^ac\s*plant$/i,                 // AC PLANT
+    /^comms\s*room$/i,               // COMMS ROOM
   ];
 
   return texts

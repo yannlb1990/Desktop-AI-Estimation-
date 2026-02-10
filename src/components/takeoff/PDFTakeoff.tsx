@@ -10,6 +10,7 @@ import { ViewportControls } from './ViewportControls';
 import { Magnifier } from './Magnifier';
 import { TakeoffTable } from './TakeoffTable';
 import { CostEstimator } from './CostEstimator';
+import { AIExtractionPanel } from './AIExtractionPanel';
 import { useTakeoffState } from '@/hooks/useTakeoffState';
 import { WorldPoint, MeasurementUnit, Measurement, PDFViewportData, CostItem } from '@/lib/takeoff/types';
 import { fetchNCCCode } from '@/lib/takeoff/nccCodeFetcher';
@@ -18,6 +19,7 @@ import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { exportMeasurementsToCSV, exportMeasurementsToJSON } from '@/lib/takeoff/export';
 import { Card } from '@/components/ui/card';
+import { DimensionExtraction, ExtractedTable } from '@/lib/api/pdfExtractionApi';
 
 interface PDFTakeoffProps {
   projectId: string;
@@ -34,6 +36,9 @@ export const PDFTakeoff = ({ projectId, estimateId, onAddCostItems }: PDFTakeoff
   const [pageFilter, setPageFilter] = useState<number | 'all'>('all');
   const [showMagnifier, setShowMagnifier] = useState(false);
   const [showGrid, setShowGrid] = useState(false);
+  const [uploadedFile, setUploadedFile] = useState<File | null>(null);
+  const [extractedDimensions, setExtractedDimensions] = useState<DimensionExtraction[]>([]);
+  const [extractedTables, setExtractedTables] = useState<ExtractedTable[]>([]);
   const canvasContainerRef = useRef<HTMLDivElement | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const initialFitDoneRef = useRef(false);
@@ -209,6 +214,47 @@ export const PDFTakeoff = ({ projectId, estimateId, onAddCostItems }: PDFTakeoff
 
   const handleFetchNCCCode = useCallback(async (id: string, area: string, materials: string[]) => {
     return await fetchNCCCode(area, materials);
+  }, []);
+
+  // AI Extraction handlers
+  const handleDimensionsExtracted = useCallback((dimensions: DimensionExtraction[]) => {
+    setExtractedDimensions(dimensions);
+
+    // Optionally auto-create measurements from extracted dimensions
+    dimensions.forEach((dim) => {
+      // Create a measurement from the extracted dimension
+      const measurement: Measurement = {
+        id: crypto.randomUUID(),
+        type: 'line',
+        points: [], // Will be positioned based on bbox
+        pixelValue: 0,
+        realValue: dim.value,
+        unit: dim.dimension_type === 'area' ? 'M2' : 'LM',
+        label: `AI: ${dim.text}`,
+        color: '#10B981', // Green for AI-extracted
+        pageIndex: dim.page,
+        timestamp: Date.now(),
+        validated: false,
+        addedToEstimate: false,
+        comments: `Extracted from PDF: ${dim.text} (${dim.unit})`,
+      };
+
+      dispatch({ type: 'ADD_MEASUREMENT', payload: measurement });
+    });
+
+    if (dimensions.length > 0) {
+      toast.success(`Added ${dimensions.length} AI-extracted dimensions`);
+    }
+  }, [dispatch]);
+
+  const handleTablesExtracted = useCallback((tables: ExtractedTable[]) => {
+    setExtractedTables(tables);
+    // Tables can be used for BOQ import
+  }, []);
+
+  const handleTextExtracted = useCallback((text: string) => {
+    // Text can be used for drawing title detection, notes, etc.
+    console.log('Extracted text:', text.substring(0, 200));
   }, []);
 
   const handleAddToEstimate = useCallback((measurementIds: string[]) => {
@@ -415,16 +461,31 @@ export const PDFTakeoff = ({ projectId, estimateId, onAddCostItems }: PDFTakeoff
         </TabsList>
 
         <TabsContent value="upload" className="space-y-4">
-          <PDFUploadManager
-            projectId={projectId}
-            onUploadComplete={(pdfFile) => {
-              dispatch({ type: 'SET_PDF_FILE', payload: pdfFile });
-            }}
-            onError={(error) => {
-              dispatch({ type: 'SET_UPLOAD_ERROR', payload: error });
-              toast.error(error);
-            }}
-          />
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+            <div className="lg:col-span-2">
+              <PDFUploadManager
+                projectId={projectId}
+                onUploadComplete={(pdfFile) => {
+                  dispatch({ type: 'SET_PDF_FILE', payload: pdfFile });
+                  if (pdfFile.file) setUploadedFile(pdfFile.file);
+                }}
+                onError={(error) => {
+                  dispatch({ type: 'SET_UPLOAD_ERROR', payload: error });
+                  toast.error(error);
+                }}
+              />
+            </div>
+            <div className="lg:col-span-1">
+              <AIExtractionPanel
+                pdfFile={uploadedFile}
+                pdfUrl={state.pdfFile?.url || null}
+                currentPage={state.currentPageIndex}
+                onDimensionsExtracted={handleDimensionsExtracted}
+                onTablesExtracted={handleTablesExtracted}
+                onTextExtracted={handleTextExtracted}
+              />
+            </div>
+          </div>
         </TabsContent>
 
         <TabsContent value="measure" className="space-y-4">

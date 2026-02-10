@@ -265,6 +265,14 @@ export function PDFAnalysisViewer({
   const [panStart, setPanStart] = useState({ x: 0, y: 0 });
   const [scrollStart, setScrollStart] = useState({ x: 0, y: 0 });
 
+  // Pan offset for unrestricted movement (beyond scroll bounds)
+  const [panOffset, setPanOffset] = useState({ x: 0, y: 0 });
+
+  // Drag-to-draw state for distance/area measurements
+  const [isDragging, setIsDragging] = useState(false);
+  const [dragStartPoint, setDragStartPoint] = useState<CalibrationPoint | null>(null);
+  const [dragCurrentPoint, setDragCurrentPoint] = useState<CalibrationPoint | null>(null);
+
   // Get calibration for current page
   const currentCalibration = calibrations[currentPage] || null;
 
@@ -451,63 +459,137 @@ export function PDFAnalysisViewer({
     }
   }, [pdfDoc, currentPage, isCvAnalyzing]);
 
-  // Handle canvas click for measurements - fixed coordinate calculation for zoom/pan
-  const handleCanvasClick = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
-    // Skip if in pan mode or no measurement mode
-    if (measurementMode === 'none' || measurementMode === 'pan' || canvasSize.width === 0) return;
-
-    // Get the canvas element (not the wrapper div)
+  // Get canvas coordinates from mouse event
+  const getCanvasCoordinates = useCallback((e: React.MouseEvent): CalibrationPoint | null => {
     const canvasEl = canvasRef.current;
-    if (!canvasEl) return;
+    if (!canvasEl || canvasSize.width === 0) return null;
 
-    // Use the canvas bounding rect for accurate positioning
     const rect = canvasEl.getBoundingClientRect();
-
-    // Calculate position relative to canvas, accounting for any transforms
     const x = ((e.clientX - rect.left) / rect.width) * 100;
     const y = ((e.clientY - rect.top) / rect.height) * 100;
 
-    // Clamp values to valid range
-    const clampedX = Math.max(0, Math.min(100, x));
-    const clampedY = Math.max(0, Math.min(100, y));
+    return {
+      x: Math.max(0, Math.min(100, x)),
+      y: Math.max(0, Math.min(100, y))
+    };
+  }, [canvasSize]);
 
-    const point: CalibrationPoint = { x: clampedX, y: clampedY };
+  // Handle mouse down for drag-to-draw measurements
+  const handleCanvasMouseDown = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
+    if (measurementMode === 'none' || measurementMode === 'pan') return;
+
+    const point = getCanvasCoordinates(e);
+    if (!point) return;
 
     if (measurementMode === 'calibrate') {
       if (calibrationPoints.length === 0) {
         setCalibrationPoints([point]);
-      } else if (calibrationPoints.length === 1) {
-        setCalibrationPoints([calibrationPoints[0], point]);
-        setShowCalibrationDialog(true);
+        setIsDragging(true);
+        setDragStartPoint(point);
+        setDragCurrentPoint(point);
       }
     } else if (measurementMode === 'distance') {
       if (!currentCalibration) {
         alert('Please calibrate this page first');
         return;
       }
-      if (measurementPoints.length === 0) {
-        setMeasurementPoints([point]);
-      } else if (measurementPoints.length === 1) {
-        const newLine = createMeasuredLine(
-          `Distance ${measuredLines.length + 1}`,
-          currentPage,
-          measurementPoints[0],
-          point,
-          currentCalibration,
-          canvasSize.width,
-          canvasSize.height
-        );
-        setMeasuredLines([...measuredLines, newLine]);
-        setMeasurementPoints([]);
-      }
+      setIsDragging(true);
+      setDragStartPoint(point);
+      setDragCurrentPoint(point);
     } else if (measurementMode === 'area') {
       if (!currentCalibration) {
         alert('Please calibrate this page first');
         return;
       }
-      setMeasurementPoints([...measurementPoints, point]);
+      // Area mode: Start rectangle drag
+      setIsDragging(true);
+      setDragStartPoint(point);
+      setDragCurrentPoint(point);
     }
-  }, [measurementMode, calibrationPoints, measurementPoints, currentCalibration, canvasSize, currentPage, measuredLines]);
+  }, [measurementMode, calibrationPoints, currentCalibration, getCanvasCoordinates]);
+
+  // Handle mouse move for drag-to-draw
+  const handleCanvasMouseMove = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
+    if (!isDragging || measurementMode === 'none' || measurementMode === 'pan') return;
+
+    const point = getCanvasCoordinates(e);
+    if (point) {
+      setDragCurrentPoint(point);
+    }
+  }, [isDragging, measurementMode, getCanvasCoordinates]);
+
+  // Handle mouse up to complete drag-to-draw measurement
+  const handleCanvasMouseUp = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
+    if (!isDragging || !dragStartPoint || !dragCurrentPoint) {
+      setIsDragging(false);
+      return;
+    }
+
+    const endPoint = getCanvasCoordinates(e) || dragCurrentPoint;
+
+    // Calculate distance to ensure it's not just a click (minimum drag distance)
+    const dragDist = Math.sqrt(
+      Math.pow(endPoint.x - dragStartPoint.x, 2) + Math.pow(endPoint.y - dragStartPoint.y, 2)
+    );
+
+    if (dragDist < 1) {
+      // Too short - treat as a click, reset
+      setIsDragging(false);
+      setDragStartPoint(null);
+      setDragCurrentPoint(null);
+      return;
+    }
+
+    if (measurementMode === 'calibrate') {
+      setCalibrationPoints([dragStartPoint, endPoint]);
+      setShowCalibrationDialog(true);
+    } else if (measurementMode === 'distance' && currentCalibration) {
+      const newLine = createMeasuredLine(
+        `Distance ${measuredLines.length + 1}`,
+        currentPage,
+        dragStartPoint,
+        endPoint,
+        currentCalibration,
+        canvasSize.width,
+        canvasSize.height
+      );
+      setMeasuredLines([...measuredLines, newLine]);
+    } else if (measurementMode === 'area' && currentCalibration) {
+      // Create rectangle from drag start to end
+      const minX = Math.min(dragStartPoint.x, endPoint.x);
+      const maxX = Math.max(dragStartPoint.x, endPoint.x);
+      const minY = Math.min(dragStartPoint.y, endPoint.y);
+      const maxY = Math.max(dragStartPoint.y, endPoint.y);
+
+      const rectanglePoints: CalibrationPoint[] = [
+        { x: minX, y: minY }, // Top-left
+        { x: maxX, y: minY }, // Top-right
+        { x: maxX, y: maxY }, // Bottom-right
+        { x: minX, y: maxY }, // Bottom-left
+      ];
+
+      setPendingAreaPoints(rectanglePoints);
+      setShowRoomAssignmentDialog(true);
+    }
+
+    setIsDragging(false);
+    setDragStartPoint(null);
+    setDragCurrentPoint(null);
+  }, [isDragging, dragStartPoint, dragCurrentPoint, measurementMode, currentCalibration, measuredLines, currentPage, canvasSize, getCanvasCoordinates]);
+
+  // Handle canvas click for measurements - now only for calibration second point
+  const handleCanvasClick = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
+    // Only handle clicks for calibration mode when we have 1 point already
+    // Other modes now use drag-to-draw
+    if (measurementMode !== 'calibrate' || calibrationPoints.length !== 1) return;
+    if (canvasSize.width === 0) return;
+
+    const point = getCanvasCoordinates(e);
+    if (!point) return;
+
+    setCalibrationPoints([calibrationPoints[0], point]);
+    setShowCalibrationDialog(true);
+  }, [measurementMode, calibrationPoints, canvasSize, getCanvasCoordinates]);
 
   // Complete area measurement - show room assignment dialog
   const completeAreaMeasurement = useCallback(() => {
@@ -811,33 +893,42 @@ export function PDFAnalysisViewer({
     setRotation(r => (r + 90) % 360);
   }, []);
 
-  // Pan/drag handlers for document navigation
+  // Pan/drag handlers for document navigation - unrestricted movement
   const handlePanStart = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
     if (measurementMode !== 'pan') return;
     e.preventDefault();
     setIsPanning(true);
     setPanStart({ x: e.clientX, y: e.clientY });
-    const container = containerRef.current;
-    if (container) {
-      setScrollStart({ x: container.scrollLeft, y: container.scrollTop });
-    }
   }, [measurementMode]);
 
   const handlePanMove = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
     if (!isPanning || measurementMode !== 'pan') return;
     e.preventDefault();
-    const container = containerRef.current;
-    if (container) {
-      const dx = e.clientX - panStart.x;
-      const dy = e.clientY - panStart.y;
-      container.scrollLeft = scrollStart.x - dx;
-      container.scrollTop = scrollStart.y - dy;
-    }
-  }, [isPanning, measurementMode, panStart, scrollStart]);
+    const dx = e.clientX - panStart.x;
+    const dy = e.clientY - panStart.y;
+    // Update pan offset for unrestricted movement
+    setPanOffset(prev => ({
+      x: prev.x + dx,
+      y: prev.y + dy
+    }));
+    setPanStart({ x: e.clientX, y: e.clientY });
+  }, [isPanning, measurementMode, panStart]);
 
   const handlePanEnd = useCallback(() => {
     setIsPanning(false);
   }, []);
+
+  // Reset pan offset when changing pages or zoom
+  const resetPanOffset = useCallback(() => {
+    setPanOffset({ x: 0, y: 0 });
+  }, []);
+
+  // Double-click to reset pan when in pan mode
+  const handleDoubleClick = useCallback(() => {
+    if (measurementMode === 'pan') {
+      resetPanOffset();
+    }
+  }, [measurementMode, resetPanOffset]);
 
   // Get markups for current page (using combined markups)
   const currentPageMarkups = allMarkups.filter(m => m.pageNumber === currentPage);
@@ -956,7 +1047,7 @@ export function PDFAnalysisViewer({
               </Button>
             </TooltipTrigger>
             <TooltipContent>
-              <p>{currentCalibration ? 'Measure distance between two points' : 'Calibrate this page first'}</p>
+              <p>{currentCalibration ? 'Drag to measure distance between two points' : 'Calibrate this page first'}</p>
             </TooltipContent>
           </Tooltip>
 
@@ -975,7 +1066,7 @@ export function PDFAnalysisViewer({
               </Button>
             </TooltipTrigger>
             <TooltipContent>
-              <p>{currentCalibration ? 'Click points to draw polygon area (square meters)' : 'Calibrate this page first'}</p>
+              <p>{currentCalibration ? 'Drag to draw rectangle area (square meters)' : 'Calibrate this page first'}</p>
             </TooltipContent>
           </Tooltip>
 
@@ -993,12 +1084,12 @@ export function PDFAnalysisViewer({
               </Button>
             </TooltipTrigger>
             <TooltipContent>
-              <p>Drag to pan/move the document when zoomed in</p>
+              <p>Drag to pan/move the document freely. Double-click to reset position.</p>
             </TooltipContent>
           </Tooltip>
 
-          {/* Complete Area / Cancel */}
-          {measurementMode === 'area' && measurementPoints.length >= 3 && (
+          {/* Complete Area / Cancel - shown when using polygon mode (legacy) */}
+          {measurementMode === 'area' && measurementPoints.length >= 3 && !isDragging && (
             <Button
               variant="default"
               size="sm"
@@ -1119,9 +1210,9 @@ export function PDFAnalysisViewer({
                     Distance Mode:
                   </span>
                   <span className="text-sm text-blue-600 dark:text-blue-400">
-                    {measurementPoints.length === 0
-                      ? 'Click start point'
-                      : 'Click end point'}
+                    {isDragging
+                      ? 'Release to complete measurement'
+                      : 'Click and drag to measure distance'}
                   </span>
                 </>
               )}
@@ -1132,9 +1223,9 @@ export function PDFAnalysisViewer({
                     Area Mode:
                   </span>
                   <span className="text-sm text-green-600 dark:text-green-400">
-                    {measurementPoints.length === 0
-                      ? 'Click to start drawing polygon'
-                      : `${measurementPoints.length} points - click more or Complete`}
+                    {isDragging
+                      ? 'Release to create room area'
+                      : 'Click and drag to draw rectangle area'}
                   </span>
                 </>
               )}
@@ -1189,7 +1280,22 @@ export function PDFAnalysisViewer({
               measurementMode === 'pan' ? '' :
               measurementMode !== 'none' ? 'cursor-crosshair' : ''
             }`}
+            style={{
+              transform: `translate(${panOffset.x}px, ${panOffset.y}px)`,
+              transition: isPanning ? 'none' : 'transform 0.1s ease-out',
+            }}
             onClick={handleCanvasClick}
+            onDoubleClick={handleDoubleClick}
+            onMouseDown={handleCanvasMouseDown}
+            onMouseMove={handleCanvasMouseMove}
+            onMouseUp={handleCanvasMouseUp}
+            onMouseLeave={() => {
+              if (isDragging) {
+                setIsDragging(false);
+                setDragStartPoint(null);
+                setDragCurrentPoint(null);
+              }
+            }}
           >
             <canvas ref={canvasRef} />
 
@@ -1248,8 +1354,8 @@ export function PDFAnalysisViewer({
                   />
                 )}
 
-                {/* Distance being measured */}
-                {measurementMode === 'distance' && measurementPoints.length === 1 && (
+                {/* Distance being measured - old click mode */}
+                {measurementMode === 'distance' && measurementPoints.length === 1 && !isDragging && (
                   <circle
                     cx={`${measurementPoints[0].x}%`}
                     cy={`${measurementPoints[0].y}%`}
@@ -1260,8 +1366,89 @@ export function PDFAnalysisViewer({
                   />
                 )}
 
-                {/* Area polygon being drawn */}
-                {measurementMode === 'area' && measurementPoints.length > 0 && (
+                {/* Distance being drawn - drag mode */}
+                {isDragging && measurementMode === 'distance' && dragStartPoint && dragCurrentPoint && (
+                  <>
+                    <line
+                      x1={`${dragStartPoint.x}%`}
+                      y1={`${dragStartPoint.y}%`}
+                      x2={`${dragCurrentPoint.x}%`}
+                      y2={`${dragCurrentPoint.y}%`}
+                      stroke="#3b82f6"
+                      strokeWidth="3"
+                      strokeDasharray="8,4"
+                    />
+                    <circle
+                      cx={`${dragStartPoint.x}%`}
+                      cy={`${dragStartPoint.y}%`}
+                      r="6"
+                      fill="#3b82f6"
+                      stroke="white"
+                      strokeWidth="2"
+                    />
+                    <circle
+                      cx={`${dragCurrentPoint.x}%`}
+                      cy={`${dragCurrentPoint.y}%`}
+                      r="6"
+                      fill="#3b82f6"
+                      stroke="white"
+                      strokeWidth="2"
+                    />
+                    {currentCalibration && (
+                      <text
+                        x={`${(dragStartPoint.x + dragCurrentPoint.x) / 2}%`}
+                        y={`${(dragStartPoint.y + dragCurrentPoint.y) / 2 - 2}%`}
+                        textAnchor="middle"
+                        fill="white"
+                        stroke="#3b82f6"
+                        strokeWidth="3"
+                        paintOrder="stroke"
+                        fontSize="14"
+                        fontWeight="bold"
+                      >
+                        {(() => {
+                          const dist = calculatePixelDistance(dragStartPoint, dragCurrentPoint, canvasSize.width, canvasSize.height);
+                          const realDist = pixelsToReal(dist, currentCalibration);
+                          return `${realDist.toFixed(2)}m`;
+                        })()}
+                      </text>
+                    )}
+                  </>
+                )}
+
+                {/* Calibration being drawn - drag mode */}
+                {isDragging && measurementMode === 'calibrate' && dragStartPoint && dragCurrentPoint && (
+                  <>
+                    <line
+                      x1={`${dragStartPoint.x}%`}
+                      y1={`${dragStartPoint.y}%`}
+                      x2={`${dragCurrentPoint.x}%`}
+                      y2={`${dragCurrentPoint.y}%`}
+                      stroke="#f59e0b"
+                      strokeWidth="3"
+                      strokeDasharray="8,4"
+                    />
+                    <circle
+                      cx={`${dragStartPoint.x}%`}
+                      cy={`${dragStartPoint.y}%`}
+                      r="6"
+                      fill="#f59e0b"
+                      stroke="white"
+                      strokeWidth="2"
+                    />
+                    <circle
+                      cx={`${dragCurrentPoint.x}%`}
+                      cy={`${dragCurrentPoint.y}%`}
+                      r="6"
+                      fill="#f59e0b"
+                      stroke="white"
+                      strokeWidth="2"
+                    />
+                  </>
+                )}
+
+                {/* Area polygon being drawn - old click mode */}
+                {measurementMode === 'area' && measurementPoints.length > 0 && !isDragging && (
                   <>
                     <polygon
                       points={measurementPoints.map(p => `${(p.x / 100) * canvasSize.width},${(p.y / 100) * canvasSize.height}`).join(' ')}
@@ -1281,6 +1468,60 @@ export function PDFAnalysisViewer({
                         strokeWidth="2"
                       />
                     ))}
+                  </>
+                )}
+
+                {/* Area rectangle being drawn - drag mode */}
+                {isDragging && measurementMode === 'area' && dragStartPoint && dragCurrentPoint && (
+                  <>
+                    <rect
+                      x={`${Math.min(dragStartPoint.x, dragCurrentPoint.x)}%`}
+                      y={`${Math.min(dragStartPoint.y, dragCurrentPoint.y)}%`}
+                      width={`${Math.abs(dragCurrentPoint.x - dragStartPoint.x)}%`}
+                      height={`${Math.abs(dragCurrentPoint.y - dragStartPoint.y)}%`}
+                      fill="rgba(34, 197, 94, 0.2)"
+                      stroke="#22c55e"
+                      strokeWidth="2"
+                      strokeDasharray="6,3"
+                    />
+                    <circle
+                      cx={`${dragStartPoint.x}%`}
+                      cy={`${dragStartPoint.y}%`}
+                      r="5"
+                      fill="#22c55e"
+                      stroke="white"
+                      strokeWidth="2"
+                    />
+                    <circle
+                      cx={`${dragCurrentPoint.x}%`}
+                      cy={`${dragCurrentPoint.y}%`}
+                      r="5"
+                      fill="#22c55e"
+                      stroke="white"
+                      strokeWidth="2"
+                    />
+                    {currentCalibration && (
+                      <text
+                        x={`${(dragStartPoint.x + dragCurrentPoint.x) / 2}%`}
+                        y={`${(dragStartPoint.y + dragCurrentPoint.y) / 2}%`}
+                        textAnchor="middle"
+                        dominantBaseline="middle"
+                        fill="white"
+                        stroke="#22c55e"
+                        strokeWidth="3"
+                        paintOrder="stroke"
+                        fontSize="16"
+                        fontWeight="bold"
+                      >
+                        {(() => {
+                          const widthPx = Math.abs(dragCurrentPoint.x - dragStartPoint.x) / 100 * canvasSize.width;
+                          const heightPx = Math.abs(dragCurrentPoint.y - dragStartPoint.y) / 100 * canvasSize.height;
+                          const areaPx = widthPx * heightPx;
+                          const areaReal = pixelAreaToReal(areaPx, currentCalibration);
+                          return `${areaReal.toFixed(2)}m²`;
+                        })()}
+                      </text>
+                    )}
                   </>
                 )}
 

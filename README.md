@@ -27,6 +27,11 @@ A comprehensive construction estimation and tender management platform for Austr
 - AI chatbot for assistance
 - Plan analysis with symbol detection
 - Fixture and opening summarization
+- **PDF-Extract-Kit Integration** (New!)
+  - Automatic layout detection using DocLayout-YOLO
+  - OCR text extraction with PaddleOCR
+  - Table parsing for BOQ/schedule data
+  - Dimension extraction from drawings
 
 ## Tech Stack
 
@@ -34,6 +39,7 @@ A comprehensive construction estimation and tender management platform for Austr
 - **Styling**: Tailwind CSS + shadcn/ui
 - **Backend**: Supabase (Auth, Database, Edge Functions)
 - **PDF**: PDF.js + Fabric.js for canvas
+- **AI Extraction**: FastAPI + PDF-Extract-Kit (Python)
 - **Charts**: Recharts
 
 ## Setup Instructions
@@ -105,7 +111,37 @@ npm run dev
 
 The app will be available at `http://localhost:5173`
 
-### 7. Build for Production
+### 7. Set Up PDF Extraction Backend (Optional)
+
+For AI-powered PDF analysis:
+
+```bash
+cd backend
+
+# Using setup script
+./setup.sh
+
+# Or manually:
+python3 -m venv venv
+source venv/bin/activate
+pip install -r requirements.txt
+python main.py
+```
+
+The API will run at `http://localhost:8000`.
+
+Add to your `.env`:
+```env
+VITE_PDF_API_URL="http://localhost:8000"
+```
+
+Or use Docker:
+```bash
+cd backend
+docker-compose up -d
+```
+
+### 8. Build for Production
 
 ```bash
 npm run build
@@ -123,9 +159,17 @@ src/
 ├── hooks/            # Custom React hooks
 ├── integrations/     # Supabase client
 ├── lib/              # Utilities and API clients
-│   └── api/          # API layer
+│   └── api/          # API layer (including pdfExtractionApi)
 ├── pages/            # Page components
 └── utils/            # Helper utilities
+
+backend/              # Python FastAPI backend
+├── main.py           # FastAPI application
+├── pdf_extractor.py  # PDF-Extract-Kit integration
+├── models.py         # Pydantic models
+├── requirements.txt  # Python dependencies
+├── Dockerfile        # Docker configuration
+└── docker-compose.yml
 
 supabase/
 ├── functions/        # Edge functions for AI
@@ -138,6 +182,7 @@ supabase/
 |-----------|-------------|
 | `PDFTakeoff` | Interactive PDF viewer with measurement tools |
 | `InteractiveCanvas` | Fabric.js canvas for drawing measurements |
+| `AIExtractionPanel` | AI-powered PDF content extraction |
 | `MarketInsights` | Labour rates, SOW rates, suppliers dashboard |
 | `CostEstimator` | Cost calculation with SOW rate linking |
 | `NCCCompliancePanel` | NCC compliance checking |
@@ -150,6 +195,7 @@ supabase/
 | `VITE_SUPABASE_URL` | Your Supabase project URL |
 | `VITE_SUPABASE_PUBLISHABLE_KEY` | Your Supabase anon/public key |
 | `VITE_SUPABASE_PROJECT_ID` | Your Supabase project ID |
+| `VITE_PDF_API_URL` | PDF extraction API URL (default: http://localhost:8000) |
 
 ## Deployment
 

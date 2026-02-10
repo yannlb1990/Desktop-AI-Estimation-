@@ -101,6 +101,30 @@ export type {
 } from './marketInsightsApi';
 
 // ==================================================
+// PDF EXTRACTION API
+// ==================================================
+export {
+  pdfExtractionApi,
+  isPDFExtractionAvailable,
+  getPageText,
+  getPageDimensions,
+  calculateTotalArea,
+} from './pdfExtractionApi';
+export type {
+  LayoutElementType,
+  BoundingBox,
+  LayoutElement,
+  OCRResult,
+  TableCell,
+  ExtractedTable,
+  DimensionExtraction,
+  PageAnalysis,
+  ExtractionResponse,
+  ExtractionOptions,
+  HealthStatus,
+} from './pdfExtractionApi';
+
+// ==================================================
 // GENERIC RESPONSE TYPE
 // ==================================================
 export interface ApiResponse<T> {
