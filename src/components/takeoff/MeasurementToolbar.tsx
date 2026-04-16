@@ -72,7 +72,7 @@ export const MeasurementToolbar = ({
               <Eraser className="h-4 w-4" />
             </Button>
           </TooltipTrigger>
-          <TooltipContent>Eraser - Click to delete last measurement (E)</TooltipContent>
+          <TooltipContent>Eraser - Click on any measurement to delete it (E)</TooltipContent>
         </Tooltip>
 
         <Separator orientation="vertical" className="h-6 mx-1" />

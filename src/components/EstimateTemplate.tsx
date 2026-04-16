@@ -138,6 +138,7 @@ export const EstimateTemplate = ({ projectId, estimateId }: EstimateTemplateProp
   const [items, setItems] = useState<EstimateItem[]>([]);
   const [consumables, setConsumables] = useState<ConsumableItem[]>([]);
   const [overheadTotal, setOverheadTotal] = useState(0);
+  const [recentlyTransferred, setRecentlyTransferred] = useState<EstimateItem[]>([]);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editValues, setEditValues] = useState<Partial<EstimateItem>>({});
   const [showCustomMaterialDialog, setShowCustomMaterialDialog] = useState(false);
@@ -200,13 +201,38 @@ export const EstimateTemplate = ({ projectId, estimateId }: EstimateTemplateProp
     if (projectId) loadItems();
   }, [projectId]);
 
-  const loadItems = () => {
-    // Load from localStorage
-    const projects = JSON.parse(localStorage.getItem('local_projects') || '[]');
-    const project = projects.find((p: any) => p.id === projectId);
+  // Reload when PDF Takeoff pushes items via custom event
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const detail = (e as CustomEvent).detail;
+      if (detail?.projectId === projectId) {
+        loadItems();
+        // Auto-clear the banner after 8 s so it doesn't linger
+        setTimeout(() => setRecentlyTransferred([]), 8_000);
+      }
+    };
+    window.addEventListener('estimate-updated', handler);
+    return () => window.removeEventListener('estimate-updated', handler);
+  }, [projectId]);
 
-    if (project && project.estimate_items && project.estimate_items.length > 0) {
+  const loadItems = () => {
+    // Load from localStorage — also ensure project entry exists so Takeoff can push items
+    const projects = JSON.parse(localStorage.getItem('local_projects') || '[]');
+    let project = projects.find((p: any) => p.id === projectId);
+
+    if (!project) {
+      // Create a stub entry so CostEstimator.transferItems can always find it
+      project = { id: projectId, estimate_items: [] };
+      projects.push(project);
+      localStorage.setItem('local_projects', JSON.stringify(projects));
+    }
+
+    if (project.estimate_items && project.estimate_items.length > 0) {
       setItems(project.estimate_items);
+      // Items transferred within the last 60 seconds get the highlight banner
+      const cutoff = Date.now() - 60_000;
+      const fresh = project.estimate_items.filter((i: any) => i._costItemId && i._transferredAt > cutoff);
+      setRecentlyTransferred(fresh);
     }
   };
 
@@ -590,6 +616,26 @@ export const EstimateTemplate = ({ projectId, estimateId }: EstimateTemplateProp
 
   return (
     <div className="space-y-6 p-6">
+      {/* Transfer banner — appears briefly after items arrive from PDF Takeoff */}
+      {recentlyTransferred.length > 0 && (
+        <div className="flex items-center justify-between gap-3 px-4 py-3 rounded-lg bg-accent/10 border border-accent/30 text-sm animate-in fade-in slide-in-from-top-2 duration-300">
+          <div className="flex items-center gap-2 text-accent-foreground font-medium">
+            <CheckCircle className="h-4 w-4 text-accent" />
+            {recentlyTransferred.length} item{recentlyTransferred.length > 1 ? 's' : ''} transferred from PDF Takeoff:&nbsp;
+            <span className="font-normal text-muted-foreground">
+              {recentlyTransferred.map(i => i.scope_of_work || i.trade).join(', ')}
+            </span>
+          </div>
+          <button
+            onClick={() => setRecentlyTransferred([])}
+            className="text-muted-foreground hover:text-foreground shrink-0"
+            aria-label="Dismiss"
+          >
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+      )}
+
       {/* 1. NCC Standards Research */}
       <NCCSearchBar />
       

@@ -43,9 +43,13 @@ const Hero = () => {
               Start Free Trial
               <ArrowRight className="ml-2 h-5 w-5" />
             </Button>
-            <Button 
-              size="lg" 
+            <Button
+              size="lg"
               className="bg-secondary text-secondary-foreground hover:bg-secondary/90 shadow-glow text-lg px-8 py-6 h-auto"
+              onClick={() => {
+                const el = document.getElementById("features");
+                el ? el.scrollIntoView({ behavior: "smooth" }) : window.location.href = "/auth";
+              }}
             >
               Watch Demo
             </Button>

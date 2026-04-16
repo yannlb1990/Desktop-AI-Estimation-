@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
+import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { toast } from "sonner";
@@ -13,20 +14,46 @@ const Dashboard = () => {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
   const [projects, setProjects] = useState<any[]>([]);
+  const [showAll, setShowAll] = useState(false);
+  const [userEmail, setUserEmail] = useState<string>("");
+
+  const completedProjects = projects.filter(p => p.status === "complete" || p.status === "completed");
+  const defaultRates = (() => { try { return JSON.parse(localStorage.getItem("default_rates") || "{}") } catch { return {} } })();
+  const avgMargin = defaultRates.margin ? `${defaultRates.margin}%` : "—";
+  const winRate = projects.length > 0 ? `${Math.round((completedProjects.length / projects.length) * 100)}%` : "—";
 
   useEffect(() => {
     loadProjects();
   }, []);
 
-  const loadProjects = () => {
-    // Load from localStorage (no auth required)
-    const localProjects = JSON.parse(localStorage.getItem('local_projects') || '[]');
-    setProjects(localProjects);
-    setLoading(false);
+  const loadProjects = async () => {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
+        navigate("/auth");
+        return;
+      }
+      setUserEmail(user.email || "");
+
+      const { data, error } = await supabase
+        .from("projects")
+        .select("*")
+        .eq("user_id", user.id)
+        .order("created_at", { ascending: false });
+
+      if (error) throw error;
+      setProjects(data || []);
+    } catch (error) {
+      console.error("Error loading projects:", error);
+      toast.error("Failed to load projects");
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const handleSignOut = () => {
-    toast.success("Signed out (local mode)");
+  const handleSignOut = async () => {
+    await supabase.auth.signOut();
+    toast.success("Signed out");
     navigate("/");
   };
 
@@ -69,7 +96,7 @@ const Dashboard = () => {
         {/* Header */}
         <div className="mb-8">
           <h1 className="font-display text-4xl font-bold mb-2">
-            Welcome back, Builder!
+            Welcome back{userEmail ? `, ${userEmail.split("@")[0]}` : ""}!
           </h1>
           <p className="text-muted-foreground">
             Manage your estimation projects and tenders
@@ -93,14 +120,10 @@ const Dashboard = () => {
               <div className="p-2 bg-accent/20 rounded-lg">
                 <DollarSign className="h-5 w-5 text-accent" />
               </div>
-              <span className="text-sm text-muted-foreground">Total Value</span>
+              <span className="text-sm text-muted-foreground">Completed</span>
             </div>
-            <div className="font-mono text-3xl font-bold">
-              ${projects.reduce((sum, p) => {
-                const estimateTotal = p.estimates?.[0]?.total_inc_gst || 0;
-                return sum + parseFloat(estimateTotal);
-              }, 0).toFixed(2)}
-            </div>
+            <div className="font-mono text-3xl font-bold">{completedProjects.length}</div>
+            <div className="text-xs text-muted-foreground mt-1">of {projects.length} project{projects.length !== 1 ? "s" : ""}</div>
           </Card>
 
           <Card className="p-6 bg-background border-border">
@@ -108,9 +131,10 @@ const Dashboard = () => {
               <div className="p-2 bg-secondary/10 rounded-lg">
                 <BarChart3 className="h-5 w-5 text-secondary" />
               </div>
-              <span className="text-sm text-muted-foreground">Avg. Margin</span>
+              <span className="text-sm text-muted-foreground">Target Margin</span>
             </div>
-            <div className="font-mono text-3xl font-bold">18.5%</div>
+            <div className="font-mono text-3xl font-bold">{avgMargin}</div>
+            <div className="text-xs text-muted-foreground mt-1">set in Settings</div>
           </Card>
 
           <Card className="p-6 bg-background border-border">
@@ -118,9 +142,10 @@ const Dashboard = () => {
               <div className="p-2 bg-accent/20 rounded-lg">
                 <TrendingUp className="h-5 w-5 text-accent" />
               </div>
-              <span className="text-sm text-muted-foreground">Win Rate</span>
+              <span className="text-sm text-muted-foreground">Completion Rate</span>
             </div>
-            <div className="font-mono text-3xl font-bold">--</div>
+            <div className="font-mono text-3xl font-bold">{winRate}</div>
+            <div className="text-xs text-muted-foreground mt-1">completed vs total</div>
           </Card>
         </div>
 
@@ -180,7 +205,9 @@ const Dashboard = () => {
         <Card className="p-6">
           <div className="flex items-center justify-between mb-6">
             <h2 className="font-display text-2xl font-bold">Recent Projects</h2>
-            <Button variant="ghost">View All</Button>
+            <Button variant="ghost" onClick={() => setShowAll(v => !v)}>
+              {showAll ? "Show Less" : `View All (${projects.length})`}
+            </Button>
           </div>
 
           {projects.length === 0 ? (
@@ -200,7 +227,7 @@ const Dashboard = () => {
             </div>
           ) : (
             <div className="space-y-3">
-              {projects.map((project) => (
+              {(showAll ? projects : projects.slice(0, 5)).map((project) => (
                 <div
                   key={project.id}
                   onClick={() => navigate(`/project/${project.id}`)}

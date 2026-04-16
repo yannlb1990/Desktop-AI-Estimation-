@@ -28,7 +28,7 @@ interface PDFTakeoffProps {
 }
 
 export const PDFTakeoff = ({ projectId, estimateId, onAddCostItems }: PDFTakeoffProps) => {
-  const { state, dispatch } = useTakeoffState();
+  const { state, dispatch } = useTakeoffState(projectId);
   const [activeTab, setActiveTab] = React.useState('upload');
   const [rotation, setRotation] = useState<0 | 90 | 180 | 270>(0);
   const [manualCalibrationPoints, setManualCalibrationPoints] = useState<[WorldPoint, WorldPoint] | null>(null);
@@ -76,11 +76,20 @@ export const PDFTakeoff = ({ projectId, estimateId, onAddCostItems }: PDFTakeoff
     URL.revokeObjectURL(url);
   };
 
-  // Auto-switch to measure tab after upload
+  // Auto-switch to measure tab after upload OR when PDF is restored from localStorage
+  const hasAutoSwitched = React.useRef(false);
   React.useEffect(() => {
     if (state.pdfFile && activeTab === 'upload') {
       setActiveTab('measure');
-      toast.success('PDF uploaded! Set scale to start measuring');
+      if (!hasAutoSwitched.current) {
+        hasAutoSwitched.current = true;
+        // Only show the toast on fresh uploads, not on restoration
+        if (state.pdfFile.file) {
+          toast.success('PDF uploaded! Set scale to start measuring');
+        } else {
+          toast.success(`Plan restored: ${state.pdfFile.name}`);
+        }
+      }
     }
   }, [state.pdfFile, activeTab]);
 
@@ -143,6 +152,11 @@ export const PDFTakeoff = ({ projectId, estimateId, onAddCostItems }: PDFTakeoff
 
   // FIX: Memoize callbacks to prevent infinite re-renders
   const handleMeasurementComplete = useCallback((measurement: Measurement) => {
+    // Guard: never store zero-length / zero-area measurements.
+    // These arise from accidental clicks (no drag) or double-clicks and clutter
+    // the sidebar with "0.00 m" entries that can't be meaningfully edited.
+    // Count measurements are exempt (their realValue is the item count ≥ 1).
+    if ((measurement as any).type !== 'count' && measurement.realValue === 0) return;
     dispatch({ type: 'ADD_MEASUREMENT', payload: measurement });
     toast.success('Measurement added');
   }, [dispatch]);
@@ -455,9 +469,9 @@ export const PDFTakeoff = ({ projectId, estimateId, onAddCostItems }: PDFTakeoff
     <div className="space-y-6">
       <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
         <TabsList>
-          <TabsTrigger value="upload">Upload</TabsTrigger>
-          <TabsTrigger value="measure" disabled={!state.pdfFile}>Measure</TabsTrigger>
-          <TabsTrigger value="costs" disabled={!state.measurements.length}>Costs</TabsTrigger>
+          <TabsTrigger value="upload">📁 Upload Plan</TabsTrigger>
+          <TabsTrigger value="measure" disabled={!state.pdfFile}>📐 Measure</TabsTrigger>
+          <TabsTrigger value="costs" disabled={!state.measurements.length}>💰 Costs</TabsTrigger>
         </TabsList>
 
         <TabsContent value="upload" className="space-y-4">
@@ -489,6 +503,23 @@ export const PDFTakeoff = ({ projectId, estimateId, onAddCostItems }: PDFTakeoff
         </TabsContent>
 
         <TabsContent value="measure" className="space-y-4">
+          {/* Plan info bar */}
+          {state.pdfFile && (
+            <div className="flex items-center justify-between px-3 py-2 bg-muted/40 border rounded-lg text-sm">
+              <span className="text-muted-foreground truncate max-w-xs">
+                <span className="font-medium text-foreground">Plan:</span> {state.pdfFile.name}
+                {state.pdfFile.pageCount > 1 && ` (${state.pdfFile.pageCount} pages)`}
+              </span>
+              <Button
+                variant="outline"
+                size="sm"
+                className="shrink-0 ml-2"
+                onClick={() => setActiveTab('upload')}
+              >
+                Change Plan
+              </Button>
+            </div>
+          )}
           {state.pdfFile && (
             <div className="grid grid-cols-1 lg:grid-cols-4 gap-4">
               {/* Left Sidebar - Calibration */}
@@ -586,7 +617,7 @@ export const PDFTakeoff = ({ projectId, estimateId, onAddCostItems }: PDFTakeoff
                     unitsPerMetre={state.currentScale?.unitsPerMetre || null}
                     calibrationMode={state.calibrationMode}
                     selectedColor={state.selectedColor}
-                    measurements={state.measurements}
+                    measurements={state.measurements.filter(m => m.pageIndex === state.currentPageIndex)}
                     onMeasurementComplete={handleMeasurementComplete}
                     onMeasurementUpdate={handleMeasurementUpdate}
                     onCalibrationPointsSet={handleCalibrationPointsSet}
@@ -759,6 +790,7 @@ export const PDFTakeoff = ({ projectId, estimateId, onAddCostItems }: PDFTakeoff
 
         <TabsContent value="costs">
           <CostEstimator
+            projectId={projectId}
             measurements={state.measurements}
             costItems={state.costItems}
             onAddCostItem={(item) => dispatch({ type: 'ADD_COST_ITEM', payload: item })}

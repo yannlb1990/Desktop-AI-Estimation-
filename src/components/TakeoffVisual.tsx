@@ -75,10 +75,20 @@ export const TakeoffVisual = () => {
             </div>
 
             <div className="flex gap-3">
-              <Button className="bg-secondary text-secondary-foreground hover:bg-secondary/90">
+              <Button
+                className="bg-secondary text-secondary-foreground hover:bg-secondary/90"
+                onClick={() => window.location.href = "/project/new"}
+              >
                 Start a takeoff
               </Button>
-              <Button variant="outline" className="gap-2">
+              <Button
+                variant="outline"
+                className="gap-2"
+                onClick={() => {
+                  const el = document.getElementById("features");
+                  el ? el.scrollIntoView({ behavior: "smooth" }) : window.location.href = "/auth";
+                }}
+              >
                 <Download className="h-4 w-4" />
                 Export preview
               </Button>

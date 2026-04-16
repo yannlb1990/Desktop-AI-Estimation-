@@ -63,6 +63,7 @@ const DEFAULT_CONSUMABLES: Omit<ConsumableItem, 'id' | 'total'>[] = [
 ];
 
 interface CostEstimatorProps {
+  projectId: string;
   measurements: Measurement[];
   costItems: CostItem[];
   onAddCostItem: (item: CostItem) => void;
@@ -73,7 +74,24 @@ interface CostEstimatorProps {
 
 type State = AustralianState;
 
+// Map CostItem category to nearest AU trade
+const CATEGORY_TO_TRADE: Record<string, string> = {
+  Framing: 'Carpenter', Lining: 'Plasterer', Insulation: 'Carpenter',
+  Flooring: 'Tiler', Painting: 'Painter', Waterproofing: 'Tiler',
+  Roofing: 'Roofer', Concrete: 'Concreter', Plumbing: 'Plumber',
+  Electrical: 'Electrician', Brickwork: 'Bricklayer', Landscaping: 'Landscaper',
+  General: 'Carpenter',
+};
+
+// Read / write the set of costItem IDs already transferred for this project
+const transferredKey = (projectId: string) => `transferred_cost_items_${projectId}`;
+const getTransferred = (projectId: string): Set<string> =>
+  new Set(JSON.parse(localStorage.getItem(transferredKey(projectId)) || '[]'));
+const saveTransferred = (projectId: string, ids: Set<string>) =>
+  localStorage.setItem(transferredKey(projectId), JSON.stringify([...ids]));
+
 export const CostEstimator = ({
+  projectId,
   measurements,
   costItems,
   onAddCostItem,
@@ -91,6 +109,94 @@ export const CostEstimator = ({
   const [consumables, setConsumables] = useState<ConsumableItem[]>(
     DEFAULT_CONSUMABLES.map(c => ({ ...c, id: crypto.randomUUID(), total: c.quantity * c.unitCost }))
   );
+  const [transferredIds, setTransferredIds] = useState<Set<string>>(() => getTransferred(projectId));
+
+  // Write a batch of CostItems into the Estimate (local_projects localStorage)
+  const transferItems = (items: CostItem[]) => {
+    if (items.length === 0) { toast.error('No items to transfer'); return; }
+
+    // Build EstimateItem objects from CostItems
+    const projects: any[] = JSON.parse(localStorage.getItem('local_projects') || '[]');
+    let projectIndex = projects.findIndex((p: any) => p.id === projectId);
+    if (projectIndex === -1) {
+      // Auto-create stub entry so user doesn't have to visit Estimate tab first
+      projects.push({ id: projectId, estimate_items: [] });
+      projectIndex = projects.length - 1;
+    }
+
+    const existing: any[] = projects[projectIndex].estimate_items || [];
+    const existingCostIds = new Set(existing.map((e: any) => e._costItemId).filter(Boolean));
+
+    const newEstimateItems: any[] = [];
+    const newTransferred = new Set(transferredIds);
+
+    items.forEach(item => {
+      if (existingCostIds.has(item.id)) return; // already transferred — skip
+      const { lineTotal } = calculateLineTotals(item);
+      const estimateItem = {
+        id: `ci-${item.id}`,
+        _costItemId: item.id,          // back-reference for undo/dedup
+        section_id: null,
+        area: item.area || '',
+        trade: CATEGORY_TO_TRADE[item.category] || item.trade || 'Carpenter',
+        scope_of_work: item.name || item.category,
+        material_type: item.customMaterial || item.material || item.name || '',
+        quantity: item.quantity,
+        unit: item.unit,
+        unit_price: item.unitCost,
+        labour_hours: item.laborHours ?? 0,
+        labour_rate: item.hourlyRate ?? 65,
+        material_wastage_pct: item.materialWastePercent ?? 5,
+        labour_wastage_pct: item.labourWastePercent ?? 10,
+        markup_pct: item.markupPercent ?? marginPercent,
+        notes: item.description || item.notes || '',
+        expanded: false,
+        item_number: `${existing.length + newEstimateItems.length + 1}`,
+        isEditing: false,
+        relatedMaterials: (item.relatedMaterials || []).filter(rm => rm.isAccepted),
+        _transferredAt: Date.now(),
+      };
+      newEstimateItems.push(estimateItem);
+      newTransferred.add(item.id);
+    });
+
+    if (newEstimateItems.length === 0) {
+      toast.info('All selected items already transferred');
+      return;
+    }
+
+    projects[projectIndex].estimate_items = [...existing, ...newEstimateItems];
+    localStorage.setItem('local_projects', JSON.stringify(projects));
+    saveTransferred(projectId, newTransferred);
+    setTransferredIds(new Set(newTransferred));
+
+    // Notify EstimateTemplate to reload
+    window.dispatchEvent(new CustomEvent('estimate-updated', { detail: { projectId } }));
+
+    const transferredItemIds = newEstimateItems.map((e: any) => e.id);
+    toast.success(`${newEstimateItems.length} item${newEstimateItems.length > 1 ? 's' : ''} sent to Estimate`, {
+      action: {
+        label: 'Undo',
+        onClick: () => {
+          const ps: any[] = JSON.parse(localStorage.getItem('local_projects') || '[]');
+          const pi = ps.findIndex((p: any) => p.id === projectId);
+          if (pi !== -1) {
+            ps[pi].estimate_items = (ps[pi].estimate_items || []).filter(
+              (e: any) => !transferredItemIds.includes(e.id)
+            );
+            localStorage.setItem('local_projects', JSON.stringify(ps));
+            // Remove from transferred set so they can be re-transferred
+            const undoSet = new Set(newTransferred);
+            newEstimateItems.forEach((e: any) => undoSet.delete(e._costItemId));
+            saveTransferred(projectId, undoSet);
+            setTransferredIds(undoSet);
+            window.dispatchEvent(new CustomEvent('estimate-updated', { detail: { projectId } }));
+            toast.success('Transfer undone');
+          }
+        },
+      },
+    });
+  };
 
   // Toggle expand/collapse
   const toggleExpand = (id: string) => {
@@ -386,6 +492,22 @@ export const CostEstimator = ({
             <FileDown className="h-4 w-4 mr-1" />
             CSV
           </Button>
+          {costItems.length > 0 && (
+            <Button
+              size="sm"
+              variant="outline"
+              className="border-blue-400 text-blue-700 hover:bg-blue-50"
+              onClick={() => transferItems(costItems.filter(i => !transferredIds.has(i.id)))}
+            >
+              <CheckCircle2 className="h-4 w-4 mr-1" />
+              Send All to Estimate
+              {costItems.filter(i => !transferredIds.has(i.id)).length > 0 && (
+                <span className="ml-1 bg-blue-100 text-blue-700 text-[9px] px-1 rounded-full">
+                  {costItems.filter(i => !transferredIds.has(i.id)).length}
+                </span>
+              )}
+            </Button>
+          )}
           <Button size="sm" onClick={() => setShowAddDialog(!showAddDialog)}>
             <Plus className="h-4 w-4 mr-1" />
             Add Item
@@ -649,11 +771,37 @@ export const CostEstimator = ({
                           </div>
                         </TableCell>
 
-                        {/* Delete */}
+                        {/* Transfer + Delete */}
                         <TableCell className="px-0.5 w-5">
-                          <Button variant="ghost" size="icon" className="h-5 w-5 text-destructive" onClick={() => onDeleteCostItem(item.id)}>
-                            <Trash2 className="h-3 w-3" />
-                          </Button>
+                          <div className="flex items-center gap-0.5">
+                            {transferredIds.has(item.id) ? (
+                              <TooltipProvider>
+                                <Tooltip>
+                                  <TooltipTrigger asChild>
+                                    <span className="h-5 w-5 flex items-center justify-center text-green-600">
+                                      <CheckCircle2 className="h-3 w-3" />
+                                    </span>
+                                  </TooltipTrigger>
+                                  <TooltipContent side="left" className="text-[10px]">In Estimate</TooltipContent>
+                                </Tooltip>
+                              </TooltipProvider>
+                            ) : (
+                              <TooltipProvider>
+                                <Tooltip>
+                                  <TooltipTrigger asChild>
+                                    <Button variant="ghost" size="icon" className="h-5 w-5 text-blue-600 hover:bg-blue-50"
+                                      onClick={() => transferItems([item])}>
+                                      <ExternalLink className="h-3 w-3" />
+                                    </Button>
+                                  </TooltipTrigger>
+                                  <TooltipContent side="left" className="text-[10px]">Send to Estimate</TooltipContent>
+                                </Tooltip>
+                              </TooltipProvider>
+                            )}
+                            <Button variant="ghost" size="icon" className="h-5 w-5 text-destructive" onClick={() => onDeleteCostItem(item.id)}>
+                              <Trash2 className="h-3 w-3" />
+                            </Button>
+                          </div>
                         </TableCell>
                       </TableRow>
 
@@ -664,29 +812,128 @@ export const CostEstimator = ({
                             <div className="grid grid-cols-2 gap-4">
                               {/* Related Materials / Fixings */}
                               <div>
-                                <div className="flex items-center gap-2 mb-2">
-                                  <Wrench className="h-4 w-4 text-amber-600" />
-                                  <span className="text-xs font-semibold">Related Materials (Suggestions)</span>
-                                </div>
-                                <div className="space-y-1">
-                                  {suggestions.map((s, idx) => (
-                                    <div key={idx} className="flex items-center justify-between text-[10px] bg-white dark:bg-background rounded p-2 border">
-                                      <div>
-                                        <span className="font-medium">{s.name}</span>
-                                        <span className="text-muted-foreground ml-2">{s.quantity} {s.unit} @ ${s.unitCost.toFixed(2)}</span>
+                                {/* ── Pending suggestions ── */}
+                                {(() => {
+                                  const acceptedNames = new Set((item.relatedMaterials || []).map(rm => rm.name));
+                                  const pending = suggestions.filter(s => !acceptedNames.has(s.name));
+                                  const accepted = item.relatedMaterials || [];
+
+                                  const acceptOne = (s: RelatedMaterial) => {
+                                    const updated = [...(item.relatedMaterials || []), { ...s, id: crypto.randomUUID(), isAccepted: true }];
+                                    onUpdateCostItem(item.id, { relatedMaterials: updated });
+                                    toast.success(`Added ${s.name}`);
+                                  };
+
+                                  const acceptAll = () => {
+                                    const updated = [
+                                      ...(item.relatedMaterials || []),
+                                      ...pending.map(s => ({ ...s, id: crypto.randomUUID(), isAccepted: true })),
+                                    ];
+                                    onUpdateCostItem(item.id, { relatedMaterials: updated });
+                                    toast.success(`Added ${pending.length} materials`);
+                                  };
+
+                                  const removeAccepted = (rmId: string) => {
+                                    const updated = (item.relatedMaterials || []).filter(rm => rm.id !== rmId);
+                                    onUpdateCostItem(item.id, { relatedMaterials: updated });
+                                  };
+
+                                  const updateAccepted = (rmId: string, field: keyof RelatedMaterial, value: any) => {
+                                    const updated = (item.relatedMaterials || []).map(rm =>
+                                      rm.id === rmId ? { ...rm, [field]: value } : rm
+                                    );
+                                    onUpdateCostItem(item.id, { relatedMaterials: updated });
+                                  };
+
+                                  return (
+                                    <>
+                                      {/* Header */}
+                                      <div className="flex items-center justify-between mb-2">
+                                        <div className="flex items-center gap-2">
+                                          <Wrench className="h-4 w-4 text-amber-600" />
+                                          <span className="text-xs font-semibold">Related Materials</span>
+                                          {accepted.length > 0 && (
+                                            <span className="text-[9px] bg-green-100 text-green-700 px-1.5 py-0.5 rounded-full font-medium">
+                                              {accepted.length} added
+                                            </span>
+                                          )}
+                                        </div>
+                                        {pending.length > 0 && (
+                                          <Button size="sm" variant="outline" className="h-6 text-[9px] border-green-400 text-green-700 hover:bg-green-50"
+                                            onClick={acceptAll}>
+                                            <CheckCircle2 className="h-3 w-3 mr-1" /> Accept All ({pending.length})
+                                          </Button>
+                                        )}
                                       </div>
-                                      <div className="flex items-center gap-2">
-                                        <span className="font-mono">${(s.quantity * s.unitCost).toFixed(2)}</span>
-                                        <Button size="sm" variant="outline" className="h-5 text-[9px]">
-                                          <Plus className="h-3 w-3 mr-1" /> Accept
-                                        </Button>
-                                      </div>
-                                    </div>
-                                  ))}
-                                  <Button size="sm" variant="ghost" className="h-6 text-[10px] w-full">
-                                    <Plus className="h-3 w-3 mr-1" /> Add Custom Material
-                                  </Button>
-                                </div>
+
+                                      {/* Pending suggestions */}
+                                      {pending.length > 0 && (
+                                        <div className="space-y-1 mb-2">
+                                          <p className="text-[9px] text-muted-foreground uppercase tracking-wide font-medium mb-1">Suggestions</p>
+                                          {pending.map((s, idx) => (
+                                            <div key={idx} className="flex items-center justify-between text-[10px] bg-amber-50 dark:bg-amber-950/20 rounded p-2 border border-amber-200">
+                                              <div>
+                                                <span className="font-medium">{s.name}</span>
+                                                <span className="text-muted-foreground ml-2">{s.quantity} {s.unit} @ ${s.unitCost.toFixed(2)}</span>
+                                              </div>
+                                              <div className="flex items-center gap-1">
+                                                <span className="font-mono text-amber-700">${(s.quantity * s.unitCost).toFixed(2)}</span>
+                                                <Button size="sm" variant="outline" className="h-6 text-[9px] border-green-400 text-green-700 hover:bg-green-50"
+                                                  onClick={() => acceptOne(s)}>
+                                                  <Plus className="h-3 w-3 mr-1" /> Accept
+                                                </Button>
+                                              </div>
+                                            </div>
+                                          ))}
+                                        </div>
+                                      )}
+
+                                      {/* Accepted materials — editable */}
+                                      {accepted.length > 0 && (
+                                        <div className="space-y-1 mb-2">
+                                          <p className="text-[9px] text-muted-foreground uppercase tracking-wide font-medium mb-1">Added</p>
+                                          {accepted.map(rm => (
+                                            <div key={rm.id} className="flex items-center gap-1 text-[10px] bg-green-50 dark:bg-green-950/20 rounded p-2 border border-green-200">
+                                              <CheckCircle2 className="h-3 w-3 text-green-600 shrink-0" />
+                                              <span className="font-medium flex-1 min-w-0 truncate">{rm.name}</span>
+                                              <input
+                                                type="number"
+                                                min="0"
+                                                value={rm.quantity}
+                                                onChange={e => updateAccepted(rm.id, 'quantity', parseFloat(e.target.value) || 0)}
+                                                className="w-12 h-5 border rounded px-1 text-[9px] text-center bg-white"
+                                              />
+                                              <span className="text-muted-foreground">{rm.unit}</span>
+                                              <span className="font-mono text-green-700">${(rm.quantity * rm.unitCost).toFixed(2)}</span>
+                                              <button onClick={() => removeAccepted(rm.id)}
+                                                className="text-red-400 hover:text-red-600 ml-1">
+                                                <Trash2 className="h-3 w-3" />
+                                              </button>
+                                            </div>
+                                          ))}
+                                          <div className="text-right text-[10px] font-mono font-semibold text-green-700 pr-1">
+                                            Materials total: ${accepted.reduce((s, rm) => s + rm.quantity * rm.unitCost, 0).toFixed(2)}
+                                          </div>
+                                        </div>
+                                      )}
+
+                                      {/* Add custom material row */}
+                                      <Button size="sm" variant="ghost" className="h-6 text-[10px] w-full border border-dashed"
+                                        onClick={() => {
+                                          const name = prompt('Material name:');
+                                          if (!name?.trim()) return;
+                                          const qty = parseFloat(prompt('Quantity:') || '1') || 1;
+                                          const cost = parseFloat(prompt('Unit cost ($):') || '0') || 0;
+                                          const unit = prompt('Unit (EA, m, box…):') || 'EA';
+                                          const custom: RelatedMaterial = { id: crypto.randomUUID(), name: name.trim(), quantity: qty, unit, unitCost: cost, isAccepted: true, isManual: true };
+                                          onUpdateCostItem(item.id, { relatedMaterials: [...(item.relatedMaterials || []), custom] });
+                                          toast.success(`Added ${name}`);
+                                        }}>
+                                        <Plus className="h-3 w-3 mr-1" /> Add Custom Material
+                                      </Button>
+                                    </>
+                                  );
+                                })()}
                               </div>
 
                               {/* Additional Info */}

@@ -7,8 +7,8 @@ import { WorldPoint, ViewPoint, Transform, PDFViewportData, Measurement, ToolTyp
 import { calculateLinearWorld, calculateRectangleAreaWorld, calculatePolygonAreaWorld, calculateCentroidWorld, calculateCircleAreaWorld } from '@/lib/takeoff/calculations';
 import { viewToWorld } from '@/lib/takeoff/coordinates';
 
-// Set up PDF.js worker
-pdfjsLib.GlobalWorkerOptions.workerSrc = `https://unpkg.com/pdfjs-dist@${pdfjsLib.version}/build/pdf.worker.min.mjs`;
+// PDF.js worker served from /public — no CDN, no Vite ?url magic
+pdfjsLib.GlobalWorkerOptions.workerSrc = '/pdf.worker.min.mjs';
 
 interface InteractiveCanvasProps {
   pdfUrl: string | null;
@@ -59,6 +59,14 @@ export const InteractiveCanvas = ({
   // Track measurement ID on each shape for resize handling
   const shapeToMeasurementIdRef = useRef<Map<any, string>>(new Map());
 
+  // Snap indicator for polygon first-point proximity
+  const snapIndicatorRef = useRef<Circle | null>(null);
+
+  // Map of measurement id → Measurement for the after:render label handler
+  const measurementMapRef = useRef<Map<string, Measurement>>(new Map());
+  // Preview label for live drawing feedback
+  const previewLabelRef = useRef<{ text: string; worldX: number; worldY: number; color: string } | null>(null);
+
   // Drawing state
   const [isDrawing, setIsDrawing] = useState(false);
   const [startPoint, setStartPoint] = useState<WorldPoint | null>(null);
@@ -69,7 +77,7 @@ export const InteractiveCanvas = ({
 
   // Count tool state - for grouped counting with numbered markers
   const [countPoints, setCountPoints] = useState<WorldPoint[]>([]);
-  const [countMarkers, setCountMarkers] = useState<(Circle | Text)[]>([]);
+  const [countMarkers, setCountMarkers] = useState<Circle[]>([]);
   const [countPreset, setCountPreset] = useState<string>('Custom'); // Preset name for count items
 
   // Count preset options
@@ -81,6 +89,10 @@ export const InteractiveCanvas = ({
   const [isCalibrationDragging, setIsCalibrationDragging] = useState(false);
   const [calibrationStartPoint, setCalibrationStartPoint] = useState<WorldPoint | null>(null);
   const [calibrationPreviewLine, setCalibrationPreviewLine] = useState<any>(null);
+  // Refs for synchronous access in event handlers (avoids stale closure bugs)
+  const isCalibrationDraggingRef = useRef(false);
+  const calibrationStartPointRef = useRef<WorldPoint | null>(null);
+  const calibrationPreviewLineRef = useRef<any>(null);
 
   // Pan state
   const [isPanning, setIsPanning] = useState(false);
@@ -184,7 +196,6 @@ export const InteractiveCanvas = ({
         const renderContext = {
           canvasContext: context,
           viewport: baseViewport,
-          canvas: tempCanvas,
         };
         await page.render(renderContext).promise;
 
@@ -208,7 +219,13 @@ export const InteractiveCanvas = ({
         setIsLoading(false);
       } catch (err) {
         console.error('Error loading PDF:', err);
-        setError('Failed to load PDF');
+        const message = err instanceof Error ? err.message : String(err);
+        const isExpiredBlob = pdfUrl.startsWith('blob:');
+        setError(
+          isExpiredBlob
+            ? 'Plan file is no longer available (session expired). Please re-upload your PDF.'
+            : `Failed to load PDF: ${message}`
+        );
         setIsLoading(false);
       }
     };
@@ -316,15 +333,28 @@ export const InteractiveCanvas = ({
     }
   }, [calibrationMode, calibrationObjects, calibrationPreviewLine]);
 
-  // Sync canvas objects with measurements state - remove objects for deleted measurements
+  // Zoom-aware sizes for consistent visual appearance
+  const getZoomAwareSize = useCallback((baseSize: number) => {
+    return baseSize / transform.zoom;
+  }, [transform.zoom]);
+
+  // Keep measurementMapRef in sync so the after:render label handler always has current data
+  useEffect(() => {
+    measurementMapRef.current = new Map(measurements.map(m => [m.id, m]));
+    fabricCanvasRef.current?.requestRenderAll();
+  }, [measurements]);
+
+  // Sync canvas objects with measurements state:
+  // 1. Remove canvas objects for deleted measurements
+  // 2. Draw measurements that are in state but not yet on canvas (reload / tab-restore)
   useEffect(() => {
     const canvas = fabricCanvasRef.current;
-    if (!canvas) return;
+    if (!canvas || !viewport) return;
 
     const measurementIds = new Set(measurements.map(m => m.id));
     const objectsMap = measurementObjectsRef.current;
 
-    // Find and remove objects for measurements that no longer exist
+    // Remove canvas objects for measurements that no longer exist in state
     const idsToRemove: string[] = [];
     objectsMap.forEach((objects, id) => {
       if (!measurementIds.has(id)) {
@@ -332,14 +362,167 @@ export const InteractiveCanvas = ({
         idsToRemove.push(id);
       }
     });
+    idsToRemove.forEach(id => {
+      objectsMap.delete(id);
+    });
 
-    // Clean up the map
-    idsToRemove.forEach(id => objectsMap.delete(id));
+    // Draw measurements that are in state but not yet on canvas (page restore / reload)
+    const strokeWidth = getZoomAwareSize(2);
 
-    if (idsToRemove.length > 0) {
-      canvas.requestRenderAll();
-    }
-  }, [measurements]);
+    measurements.forEach(measurement => {
+      if (objectsMap.has(measurement.id)) return; // already drawn
+      if (!measurement.worldPoints || measurement.worldPoints.length < 2) return;
+
+      const color = measurement.color || '#FF6B6B';
+      let shape: any = null;
+
+      if (measurement.type === 'line') {
+        const [s, e] = measurement.worldPoints;
+        shape = new Line([s.x, s.y, e.x, e.y], {
+          stroke: color, strokeWidth, selectable: false, evented: false,
+        });
+      } else if (measurement.type === 'rectangle') {
+        const [s, e] = measurement.worldPoints;
+        shape = new Rect({
+          left: Math.min(s.x, e.x),
+          top: Math.min(s.y, e.y),
+          width: Math.abs(e.x - s.x),
+          height: Math.abs(e.y - s.y),
+          fill: color + '4d', stroke: color, strokeWidth,
+          selectable: false, evented: false,
+        });
+      } else if (measurement.type === 'circle') {
+        const [center, edge] = measurement.worldPoints;
+        const dx = edge.x - center.x;
+        const dy = edge.y - center.y;
+        const radius = Math.sqrt(dx * dx + dy * dy);
+        shape = new Circle({
+          left: center.x - radius, top: center.y - radius, radius,
+          fill: color + '4d', stroke: color, strokeWidth,
+          selectable: false, evented: false,
+        });
+      } else if (measurement.type === 'polygon' && measurement.worldPoints.length >= 3) {
+        const pts = measurement.worldPoints.map(p => new FabricPoint(p.x, p.y));
+        shape = new Polygon(pts, {
+          fill: color + '4d', stroke: color, strokeWidth,
+          selectable: false, evented: false,
+        });
+      }
+
+      if (!shape) return;
+
+      canvas.add(shape);
+      objectsMap.set(measurement.id, [shape]);
+      shapeToMeasurementIdRef.current.set(shape, measurement.id);
+    });
+
+    canvas.requestRenderAll();
+  }, [viewport, measurements, getZoomAwareSize]);
+
+  // Draw measurement labels natively on the canvas after Fabric renders objects.
+  // This is more reliable than Fabric.js Text objects (which have v6 rendering quirks)
+  // and automatically follows shapes when they are moved/resized.
+  useEffect(() => {
+    const canvas = fabricCanvasRef.current;
+    if (!canvas) return;
+
+    const drawLabels = () => {
+      const ctx = (canvas as any).contextContainer as CanvasRenderingContext2D;
+      if (!ctx) return;
+      const vt = canvas.viewportTransform || [1, 0, 0, 1, 0, 0];
+      const zoom = vt[0] || 1;
+
+      // Establish a known, deterministic context state so labels always land on shapes:
+      // 1. Reset to identity (clears whatever Fabric left on the context)
+      // 2. Reapply DPR scale (Fabric applies this at init; we must match it)
+      // 3. Apply viewport transform (pan + zoom) — now context is in world space
+      // Drawing at raw world coordinates then correctly maps to screen via these transforms.
+      const dpr = window.devicePixelRatio || 1;
+      ctx.save();
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);          // baseline: DPR only
+      ctx.transform(vt[0], vt[1], vt[2], vt[3], vt[4], vt[5]); // apply viewport → world space
+
+      // Font/stroke sizes in world units so they appear consistent at all zoom levels
+      const worldFontSize = 12 / zoom;
+      const padX = 6 / zoom;
+      const labelH = 20 / zoom;
+
+      ctx.font = `bold ${worldFontSize}px system-ui, -apple-system, sans-serif`;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+
+      const drawLabel = (text: string, worldX: number, worldY: number, color: string) => {
+        const textW = ctx.measureText(text).width;
+        const boxX = worldX - textW / 2 - padX;
+        const boxY = worldY - labelH / 2; // centred on the shape midpoint
+        ctx.fillStyle = 'rgba(255,255,255,0.93)';
+        ctx.strokeStyle = color;
+        ctx.lineWidth = 1.5 / zoom;
+        ctx.fillRect(boxX, boxY, textW + padX * 2, labelH);
+        ctx.strokeRect(boxX, boxY, textW + padX * 2, labelH);
+        ctx.fillStyle = color;
+        ctx.fillText(text, worldX, boxY + labelH / 2);
+      };
+
+      measurementObjectsRef.current.forEach((objects, measurementId) => {
+        const measurement = measurementMapRef.current.get(measurementId);
+        if (!measurement?.label) return;
+        const shape = objects[0];
+        if (!shape) return;
+        // getCenterPoint() returns the object's centre in canvas (world) coordinates,
+        // which is exactly what we draw in after applying the viewport transform.
+        const center = shape.getCenterPoint();
+        let worldX = center.x;
+        let worldY = center.y;
+
+        if (shape.type === 'line') {
+          // For lines, offset label slightly to the left of the line (perpendicular)
+          // so it sits next to the line rather than obscuring it.
+          const mat = shape.calcTransformMatrix();
+          const p1 = fabricUtil.transformPoint({ x: (shape as any).x1, y: (shape as any).y1 }, mat);
+          const p2 = fabricUtil.transformPoint({ x: (shape as any).x2, y: (shape as any).y2 }, mat);
+          const dx = p2.x - p1.x;
+          const dy = p2.y - p1.y;
+          const len = Math.sqrt(dx * dx + dy * dy) || 1;
+          // Left-hand perpendicular (rotate 90° counter-clockwise)
+          const perpX = -dy / len;
+          const perpY = dx / len;
+          const offset = 14 / zoom; // ~14 CSS-px offset in world units
+          worldX += perpX * offset;
+          worldY += perpY * offset;
+        } else if (measurement.type === 'count') {
+          // For count groups, average the centres of all markers
+          let sx = 0, sy = 0;
+          objects.forEach(o => { const c = o.getCenterPoint(); sx += c.x; sy += c.y; });
+          worldX = sx / objects.length;
+          worldY = sy / objects.length;
+        }
+
+        drawLabel(measurement.label, worldX, worldY, measurement.color || '#FF6B6B');
+
+        // For count groups: draw the number inside each individual circle
+        if ((measurement as any).type === 'count') {
+          ctx.fillStyle = 'white';
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'middle';
+          objects.forEach((obj, i) => {
+            const c = obj.getCenterPoint();
+            ctx.fillText(String(i + 1), c.x, c.y);
+          });
+        }
+      });
+
+      if (previewLabelRef.current) {
+        const { text, worldX, worldY, color } = previewLabelRef.current;
+        drawLabel(text, worldX, worldY, color);
+      }
+
+      ctx.restore();
+    };
+
+    canvas.on('after:render', drawLabels);
+    return () => { canvas.off('after:render', drawLabels); };
+  }, []); // Reads only refs — no stale-closure risk, register once
 
   // Toggle selection mode on shapes when tool changes
   useEffect(() => {
@@ -348,16 +531,36 @@ export const InteractiveCanvas = ({
 
     const isSelectMode = activeTool === 'select';
 
-    // Update all measurement objects' selectability
+    // Update measurement objects' selectability.
+    // IMPORTANT: Skip Text labels entirely — calling .set() on Text with
+    // control-related properties (cornerSize, borderScaleFactor, etc.) can
+    // interfere with Fabric.js v6 text rendering and make labels invisible.
+    // Labels are always non-interactive; only primary shapes get resize handles.
     measurementObjectsRef.current.forEach((objects) => {
       objects.forEach(obj => {
-        if (obj && typeof obj.set === 'function') {
+        if (!obj || typeof obj.set !== 'function') return;
+        if (obj.type === 'text' || obj.type === 'i-text') return;
+
+        if ((obj as any)._isCountMarker) {
+          // Count markers: movable but NOT resizable
+          obj.set({
+            selectable: isSelectMode,
+            evented: isSelectMode,
+            hasControls: false,   // no resize handles
+            hasBorders: isSelectMode,
+            lockRotation: true,
+            lockScalingX: true,
+            lockScalingY: true,
+            borderColor: '#2563eb',
+            borderScaleFactor: 2,
+          });
+        } else {
           obj.set({
             selectable: isSelectMode,
             evented: isSelectMode,
             hasControls: isSelectMode,
             hasBorders: isSelectMode,
-            lockRotation: true, // Don't allow rotation for measurements
+            lockRotation: true,
             cornerColor: '#2563eb',
             cornerStyle: 'circle',
             cornerSize: 10,
@@ -393,6 +596,36 @@ export const InteractiveCanvas = ({
       const measurementId = shapeToMeasurementIdRef.current.get(target);
       if (!measurementId) return;
 
+      // Count marker moved — update its world position and re-emit measurement
+      if ((target as any)._isCountMarker) {
+        const objects = measurementObjectsRef.current.get(measurementId);
+        const measurement = measurementMapRef.current.get(measurementId);
+        if (!objects || !measurement) return;
+
+        const markerIndex = objects.indexOf(target);
+        if (markerIndex === -1) return;
+
+        const center = target.getCenterPoint();
+        const newWorldPoints = [...measurement.worldPoints] as WorldPoint[];
+        newWorldPoints[markerIndex] = { x: center.x, y: center.y };
+
+        const countName = (measurement as any).countName ?? 'Custom';
+        const labelName = countName === 'Custom' ? 'Items' : countName;
+        const labelText = `${newWorldPoints.length} × ${labelName}`;
+
+        onMeasurementUpdate(measurementId, {
+          worldPoints: newWorldPoints,
+          label: labelText,
+        });
+
+        // Snap position to exact center (remove any accidental scale drift)
+        const r = (target as any).radius || 0;
+        target.set({ left: center.x - r, top: center.y - r, scaleX: 1, scaleY: 1 });
+        target.setCoords();
+        canvas.requestRenderAll();
+        return;
+      }
+
       const effectiveUnits = unitsPerMetre || 1;
       const objects = measurementObjectsRef.current.get(measurementId);
 
@@ -417,27 +650,11 @@ export const InteractiveCanvas = ({
           label: labelText,
         });
 
-        // Update the label object position and text
-        if (objects && objects[1]) {
-          const midX = (p1.x + p2.x) / 2;
-          const midY = (p1.y + p2.y) / 2;
-          objects[1].set({
-            text: labelText,
-            left: midX,
-            top: midY - 10,
-          });
-          objects[1].setCoords();
-        }
-
-        // Keep line coordinates absolute after transform
-        target.set({
-          x1: p1.x - target.left,
-          y1: p1.y - target.top,
-          x2: p2.x - target.left,
-          y2: p2.y - target.top,
-          scaleX: 1,
-          scaleY: 1,
-        });
+        // Don't touch the line's internal x1/y1/x2/y2 — setting them triggers
+        // Fabric's _setWidthHeight() which treats them as absolute coords and
+        // collapses the line. Just refresh hit-testing coords and let Fabric
+        // render the scaled line correctly. calcTransformMatrix() always gives
+        // correct endpoint positions regardless of scale state.
         target.setCoords();
 
       } else if (target.type === 'rect') {
@@ -460,16 +677,6 @@ export const InteractiveCanvas = ({
           dimensions: result.dimensions,
           label: labelText,
         });
-
-        // Update the label object position and text
-        if (objects && objects[1]) {
-          objects[1].set({
-            text: labelText,
-            left: left + width / 2 - 30,
-            top: top + height / 2 - 10,
-          });
-          objects[1].setCoords();
-        }
 
         // Reset scale and apply size directly
         target.set({
@@ -499,16 +706,6 @@ export const InteractiveCanvas = ({
           label: labelText,
         });
 
-        // Update the label object position and text
-        if (objects && objects[1]) {
-          objects[1].set({
-            text: labelText,
-            left: centerX - 30,
-            top: centerY - 10,
-          });
-          objects[1].setCoords();
-        }
-
         // Reset scale and apply radius directly
         target.set({
           radius: radius,
@@ -520,19 +717,30 @@ export const InteractiveCanvas = ({
         target.setCoords();
 
       } else if (target.type === 'polygon') {
-        // For polygons, update the label position when moved
-        // Polygons can only be moved, not resized
+        // For polygons, update the label position when moved.
+        // Fabric.js stores polygon points relative to its origin, so get
+        // actual world positions by applying the transform matrix.
+        const matrix = target.calcTransformMatrix();
+        const rawPoints: { x: number; y: number }[] = (target as any).points || [];
+        const worldPts: WorldPoint[] = rawPoints.map((p: { x: number; y: number }) => {
+          const tp = fabricUtil.transformPoint({ x: p.x, y: p.y }, matrix);
+          return { x: tp.x, y: tp.y };
+        });
+
         const boundingRect = target.getBoundingRect();
         const centerX = boundingRect.left + boundingRect.width / 2;
         const centerY = boundingRect.top + boundingRect.height / 2;
 
-        // Update the label position
-        if (objects && objects[1]) {
-          objects[1].set({
-            left: centerX - 30,
-            top: centerY - 10,
+        if (worldPts.length >= 3) {
+          const result = calculatePolygonAreaWorld(worldPts, effectiveUnits);
+          const labelText = isCalibrated ? `${result.realValue.toFixed(2)} m²` : `${result.worldValue.toFixed(0)} px²`;
+
+          onMeasurementUpdate(measurementId, {
+            worldPoints: worldPts,
+            worldValue: result.worldValue,
+            realValue: isCalibrated ? result.realValue : result.worldValue,
+            label: labelText,
           });
-          objects[1].setCoords();
         }
       }
 
@@ -545,6 +753,62 @@ export const InteractiveCanvas = ({
       canvas.off('object:modified', handleObjectModified);
     };
   }, [onMeasurementUpdate, unitsPerMetre, isCalibrated]);
+
+  // Delete key — remove a single selected count marker and update the count
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key !== 'Delete' && e.key !== 'Backspace') return;
+      const canvas = fabricCanvasRef.current;
+      if (!canvas) return;
+
+      const active = canvas.getActiveObject() as any;
+      if (!active?._isCountMarker) return;
+
+      e.preventDefault();
+
+      const measurementId = shapeToMeasurementIdRef.current.get(active);
+      if (!measurementId) return;
+
+      const objects = measurementObjectsRef.current.get(measurementId);
+      const measurement = measurementMapRef.current.get(measurementId);
+      if (!objects || !measurement) return;
+
+      const markerIndex = objects.indexOf(active);
+
+      // Remove from canvas and tracking
+      canvas.remove(active);
+      canvas.discardActiveObject();
+      shapeToMeasurementIdRef.current.delete(active);
+
+      const newObjects = objects.filter(o => o !== active);
+
+      if (newObjects.length === 0) {
+        // Last marker removed — delete the whole measurement
+        measurementObjectsRef.current.delete(measurementId);
+        onDeleteMeasurement?.(measurementId);
+      } else {
+        measurementObjectsRef.current.set(measurementId, newObjects);
+
+        // Remove the corresponding worldPoint
+        const newWorldPoints = (measurement.worldPoints as WorldPoint[]).filter((_, i) => i !== markerIndex);
+        const countName = (measurement as any).countName ?? 'Custom';
+        const labelName = countName === 'Custom' ? 'Items' : countName;
+        const labelText = `${newWorldPoints.length} × ${labelName}`;
+
+        onMeasurementUpdate?.(measurementId, {
+          worldPoints: newWorldPoints,
+          worldValue: newWorldPoints.length,
+          realValue: newWorldPoints.length,
+          label: labelText,
+        });
+      }
+
+      canvas.requestRenderAll();
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [onDeleteMeasurement, onMeasurementUpdate]);
 
   // Handle mouse wheel zoom
   useEffect(() => {
@@ -569,17 +833,26 @@ export const InteractiveCanvas = ({
     };
   }, [onTransformChange, transform.zoom]);
 
-  // Zoom-aware sizes for consistent visual appearance
-  const getZoomAwareSize = useCallback((baseSize: number) => {
-    return baseSize / transform.zoom;
-  }, [transform.zoom]);
-
   // Handle calibration DRAG (new drag-to-calibrate)
   const handleCalibrationMouseDown = useCallback((worldPoint: WorldPoint) => {
     const canvas = fabricCanvasRef.current;
     if (!canvas || !viewport) return;
 
-    // Start drag - set start point
+    // Clear any previous calibration objects from canvas before starting fresh
+    setCalibrationObjects(prev => {
+      prev.forEach(obj => { try { canvas.remove(obj); } catch (_e) {} });
+      return [];
+    });
+    if (calibrationPreviewLineRef.current) {
+      try { canvas.remove(calibrationPreviewLineRef.current); } catch (_e) {}
+      calibrationPreviewLineRef.current = null;
+      setCalibrationPreviewLine(null);
+    }
+
+    // Set refs SYNCHRONOUSLY before React re-render so mousemove/mouseup can read them
+    isCalibrationDraggingRef.current = true;
+    calibrationStartPointRef.current = worldPoint;
+
     setIsCalibrationDragging(true);
     setCalibrationStartPoint(worldPoint);
 
@@ -618,19 +891,22 @@ export const InteractiveCanvas = ({
 
   const handleCalibrationMouseMove = useCallback((worldPoint: WorldPoint) => {
     const canvas = fabricCanvasRef.current;
-    if (!canvas || !isCalibrationDragging || !calibrationStartPoint) return;
+    // Use refs for synchronous values (state would be stale here)
+    if (!canvas || !isCalibrationDraggingRef.current || !calibrationStartPointRef.current) return;
 
-    // Remove previous preview line
-    if (calibrationPreviewLine) {
-      canvas.remove(calibrationPreviewLine);
+    // Remove previous preview line via ref (not stale state)
+    if (calibrationPreviewLineRef.current) {
+      canvas.remove(calibrationPreviewLineRef.current);
+      calibrationPreviewLineRef.current = null;
     }
 
     const strokeWidth = getZoomAwareSize(2);
     const dashSize = getZoomAwareSize(5);
+    const start = calibrationStartPointRef.current;
 
     // Draw preview line at WORLD positions
     const line = new Line([
-      calibrationStartPoint.x, calibrationStartPoint.y,
+      start.x, start.y,
       worldPoint.x, worldPoint.y
     ], {
       stroke: 'red',
@@ -640,17 +916,22 @@ export const InteractiveCanvas = ({
       evented: false,
     });
     canvas.add(line);
+    calibrationPreviewLineRef.current = line;
     setCalibrationPreviewLine(line);
     canvas.requestRenderAll();
-  }, [isCalibrationDragging, calibrationStartPoint, calibrationPreviewLine, getZoomAwareSize]);
+  }, [getZoomAwareSize]);
 
   const handleCalibrationMouseUp = useCallback((worldPoint: WorldPoint) => {
     const canvas = fabricCanvasRef.current;
-    if (!canvas || !isCalibrationDragging || !calibrationStartPoint || !viewport) return;
+    // Use refs for synchronous values (state would be stale here)
+    if (!canvas || !isCalibrationDraggingRef.current || !calibrationStartPointRef.current || !viewport) return;
 
-    // Clean up preview line
-    if (calibrationPreviewLine) {
-      canvas.remove(calibrationPreviewLine);
+    const start = calibrationStartPointRef.current;
+
+    // Clean up preview line via ref
+    if (calibrationPreviewLineRef.current) {
+      canvas.remove(calibrationPreviewLineRef.current);
+      calibrationPreviewLineRef.current = null;
       setCalibrationPreviewLine(null);
     }
 
@@ -661,7 +942,7 @@ export const InteractiveCanvas = ({
 
     // Draw final line at WORLD positions
     const line = new Line([
-      calibrationStartPoint.x, calibrationStartPoint.y,
+      start.x, start.y,
       worldPoint.x, worldPoint.y
     ], {
       stroke: 'red',
@@ -698,13 +979,91 @@ export const InteractiveCanvas = ({
 
     setCalibrationObjects(prev => [...prev, line, marker, label]);
 
+    // Reset refs synchronously
+    isCalibrationDraggingRef.current = false;
+    calibrationStartPointRef.current = null;
+
     // Complete calibration
-    onCalibrationPointsSet([calibrationStartPoint, worldPoint]);
+    onCalibrationPointsSet([start, worldPoint]);
 
     setIsCalibrationDragging(false);
     setCalibrationStartPoint(null);
     canvas.requestRenderAll();
-  }, [isCalibrationDragging, calibrationStartPoint, calibrationPreviewLine, viewport, onCalibrationPointsSet, getZoomAwareSize]);
+  }, [viewport, onCalibrationPointsSet, getZoomAwareSize]);
+
+  // Handle double click to close polygon (declared before handleMouseDown to avoid TDZ)
+  const handleDoubleClick = useCallback(() => {
+    const canvas = fabricCanvasRef.current;
+    if (!canvas || activeTool !== 'polygon' || polygonPoints.length < 3 || !viewport) return;
+
+    const effectiveUnits = unitsPerMetre || 1;
+    const result = calculatePolygonAreaWorld(polygonPoints, effectiveUnits);
+
+    const strokeWidth = getZoomAwareSize(2);
+
+    // Draw polygon at WORLD coordinates
+    const worldPointsFabric = polygonPoints.map(wp => new FabricPoint(wp.x, wp.y));
+    const polygon = new Polygon(worldPointsFabric, {
+      fill: isCalibrated ? 'rgba(76, 175, 80, 0.3)' : 'rgba(255, 152, 0, 0.3)',
+      stroke: isCalibrated ? 'green' : 'orange',
+      strokeWidth: strokeWidth,
+      selectable: false,
+      evented: false,
+      hasControls: true,
+      hasBorders: true,
+      lockRotation: true,
+      lockScalingX: true,
+      lockScalingY: true,
+      cornerColor: '#2563eb',
+      cornerStyle: 'circle',
+      cornerSize: 10,
+      transparentCorners: false,
+      borderColor: '#2563eb',
+    });
+    canvas.add(polygon);
+
+    const displayValue = isCalibrated ? result.realValue : result.worldValue;
+    const labelText = isCalibrated ? `${displayValue.toFixed(2)} m²` : `${displayValue.toFixed(0)} px²`;
+
+    // Clean up markers, lines, and snap indicator
+    polygonMarkers.forEach(marker => canvas.remove(marker));
+    polygonLines.forEach(line => canvas.remove(line));
+    if (snapIndicatorRef.current) {
+      canvas.remove(snapIndicatorRef.current);
+      snapIndicatorRef.current = null;
+    }
+    setPolygonMarkers([]);
+    setPolygonLines([]);
+
+    const measurementId = crypto.randomUUID();
+
+    // Register objects for sync with state
+    measurementObjectsRef.current.set(measurementId, [polygon]);
+
+    // Register shape for selection (polygon move only, no resize)
+    shapeToMeasurementIdRef.current.set(polygon, measurementId);
+
+    const measurement: Measurement = {
+      id: measurementId,
+      type: 'polygon',
+      worldPoints: polygonPoints,
+      worldValue: result.worldValue,
+      realValue: isCalibrated ? result.realValue : result.worldValue,
+      unit: 'M2',
+      color: isCalibrated ? '#4CAF50' : '#FF9800',
+      label: labelText,
+      pageIndex: pageIndex,
+      timestamp: new Date(),
+    };
+
+    onMeasurementComplete(measurement);
+    setPolygonPoints([]);
+    canvas.requestRenderAll();
+  }, [
+    viewport, transform, activeTool, polygonPoints, polygonMarkers, polygonLines,
+    isCalibrated, unitsPerMetre, pageIndex, onMeasurementComplete,
+    getZoomAwareSize
+  ]);
 
   // Handle mouse down
   const handleMouseDown = useCallback((e: any) => {
@@ -720,13 +1079,6 @@ export const InteractiveCanvas = ({
     // Convert to world coordinates for storage (applies inverse transform)
     const worldPoint = viewToWorld(viewPoint, transform, viewport);
 
-    console.log('Mouse down:', {
-      canvasPixel: pointer,
-      world: worldPoint,
-      zoom: transform.zoom,
-      pan: { x: transform.panX, y: transform.panY }
-    });
-
     // Handle calibration (drag-to-calibrate)
     if (calibrationMode === 'manual' && !isCalibrated) {
       handleCalibrationMouseDown(worldPoint);
@@ -741,48 +1093,99 @@ export const InteractiveCanvas = ({
       return;
     }
 
-    // Handle eraser - click on shape to delete, or delete last if no shape clicked
+    // Handle select mode — Fabric.js manages object selection natively, don't start drawing
+    if (activeTool === 'select') return;
+
+    // Handle eraser — click the specific shape you want to remove
     if (activeTool === 'eraser') {
-      // Check if user clicked on a measurement shape
-      const clickedObjects = canvas.getObjects().filter(obj => {
-        if (!obj.selectable && obj !== canvas.backgroundImage) {
-          // Check if point is within the object
-          const objBounds = obj.getBoundingRect();
-          const vt = canvas.viewportTransform || [1, 0, 0, 1, 0, 0];
-          // Convert world point to screen for bounds check
-          const screenX = worldPoint.x * vt[0] + vt[4];
-          const screenY = worldPoint.y * vt[3] + vt[5];
-          return (
-            screenX >= objBounds.left &&
-            screenX <= objBounds.left + objBounds.width &&
-            screenY >= objBounds.top &&
-            screenY <= objBounds.top + objBounds.height
-          );
-        }
-        return false;
+      // World-space pointer — getPointer(e, true) gives raw canvas px; viewToWorld converts to world coords
+      const rawPtr = canvas.getPointer(e.e, true);
+      const worldPtr = viewToWorld(rawPtr, transform, viewport!);
+      const hitThreshold = 20 / transform.zoom; // 20 screen-px expressed in world units
+
+      // ── Count markers: check by world-space distance (reliable for small circles) ──
+      let countHit: { marker: any; measurementId: string; markerIndex: number } | null = null;
+      measurementObjectsRef.current.forEach((objects, measurementId) => {
+        if (countHit) return;
+        objects.forEach((obj, idx) => {
+          if (countHit) return;
+          if (!(obj as any)._isCountMarker) return;
+          const c = obj.getCenterPoint(); // world coords
+          const r = ((obj as any).radius as number) || hitThreshold;
+          const dist = Math.hypot(worldPtr.x - c.x, worldPtr.y - c.y);
+          if (dist <= r + hitThreshold) {
+            countHit = { marker: obj, measurementId, markerIndex: idx };
+          }
+        });
       });
 
-      // Find which measurement this object belongs to
-      let deletedId: string | null = null;
-      for (const obj of clickedObjects) {
-        const measurementId = shapeToMeasurementIdRef.current.get(obj);
-        if (measurementId && onDeleteMeasurement) {
-          onDeleteMeasurement(measurementId);
-          deletedId = measurementId;
-          break;
+      if (countHit) {
+        const { marker, measurementId, markerIndex } = countHit as { marker: any; measurementId: string; markerIndex: number };
+        const objects = measurementObjectsRef.current.get(measurementId)!;
+        const measurement = measurementMapRef.current.get(measurementId);
+
+        canvas.remove(marker);
+        shapeToMeasurementIdRef.current.delete(marker);
+
+        const newObjects = objects.filter(o => o !== marker);
+
+        if (newObjects.length === 0) {
+          measurementObjectsRef.current.delete(measurementId);
+          onDeleteMeasurement?.(measurementId);
+        } else {
+          measurementObjectsRef.current.set(measurementId, newObjects);
+          if (measurement) {
+            const newWorldPoints = (measurement.worldPoints as WorldPoint[]).filter((_, i) => i !== markerIndex);
+            const countName = (measurement as any).countName ?? 'Custom';
+            const labelName = countName === 'Custom' ? 'Items' : countName;
+            onMeasurementUpdate?.(measurementId, {
+              worldPoints: newWorldPoints,
+              worldValue: newWorldPoints.length,
+              realValue: newWorldPoints.length,
+              label: `${newWorldPoints.length} × ${labelName}`,
+            });
+          }
+        }
+        canvas.requestRenderAll();
+        return;
+      }
+
+      // ── Other shapes: enable evented on ALL canvas objects so findTarget catches
+      //    both tracked measurements AND any orphaned shapes (zero-area accidents etc.)
+      const allObjs = canvas.getObjects().filter(
+        (o: any) => o.type !== 'text' && !o._isCountMarker
+      );
+      allObjs.forEach((o: any) => o.set({ evented: true }));
+
+      let target: any = canvas.findTarget(e.e);
+      allObjs.forEach((o: any) => o.set({ evented: false }));
+
+      // Proximity fallback — works for thin lines that findTarget misses
+      if (!target) {
+        let minDist = hitThreshold;
+        for (const obj of allObjs) {
+          const center = (obj as any).getCenterPoint();
+          const d = Math.hypot(worldPtr.x - center.x, worldPtr.y - center.y);
+          if (d < minDist) { minDist = d; target = obj; }
         }
       }
 
-      // If no specific shape was clicked, delete the last measurement
-      if (!deletedId && onDeleteLastMeasurement) {
-        onDeleteLastMeasurement();
+      if (target) {
+        const measurementId = shapeToMeasurementIdRef.current.get(target);
+        if (measurementId) {
+          // Known measurement — remove all its canvas objects immediately (don't wait
+          // for the sync effect, which only runs on state change)
+          const tracked = measurementObjectsRef.current.get(measurementId) || [];
+          tracked.forEach((o: any) => { canvas.remove(o); shapeToMeasurementIdRef.current.delete(o); });
+          measurementObjectsRef.current.delete(measurementId);
+          onDeleteMeasurement?.(measurementId);
+        } else {
+          // Orphaned / untracked shape — just remove it from canvas directly
+          canvas.remove(target);
+        }
+        canvas.requestRenderAll();
       }
       return;
-    }
-
-    // Allow measurements even without calibration
-    if (!isCalibrated) {
-      console.warn('Measurement made without calibration - values will be in pixels');
     }
 
     setIsDrawing(true);
@@ -790,38 +1193,26 @@ export const InteractiveCanvas = ({
 
     // Handle count tool - accumulate points with numbered markers
     if (activeTool === 'count') {
-      const newCount = countPoints.length + 1;
       const markerRadius = getZoomAwareSize(10);
       const strokeWidth = getZoomAwareSize(2);
-      const fontSize = getZoomAwareSize(12);
 
-      // Draw numbered marker at WORLD coordinates
+      // Circle marker — number drawn via after:render so it always follows the circle
       const marker = new Circle({
         left: worldPoint.x - markerRadius,
         top: worldPoint.y - markerRadius,
         radius: markerRadius,
         fill: '#FF9800',
         stroke: 'white',
-        strokeWidth: strokeWidth,
-        selectable: false,
-      });
-      canvas.add(marker);
-
-      // Add number label
-      const numberLabel = new Text(String(newCount), {
-        left: worldPoint.x - getZoomAwareSize(4),
-        top: worldPoint.y - getZoomAwareSize(6),
-        fontSize: fontSize,
-        fill: 'white',
-        fontWeight: 'bold',
+        strokeWidth,
         selectable: false,
         evented: false,
       });
-      canvas.add(numberLabel);
+      // Flag so select-mode and object:modified can identify these as individual count markers
+      (marker as any)._isCountMarker = true;
+      canvas.add(marker);
 
-      // Accumulate count points
       setCountPoints([...countPoints, worldPoint]);
-      setCountMarkers([...countMarkers, marker, numberLabel]);
+      setCountMarkers([...countMarkers, marker]);
 
       setIsDrawing(false);
       canvas.requestRenderAll();
@@ -830,6 +1221,23 @@ export const InteractiveCanvas = ({
 
     // Handle polygon tool
     if (activeTool === 'polygon') {
+      // Snap-to-close: if we have ≥3 points and click near the first point, complete the polygon
+      if (polygonPoints.length >= 3) {
+        const first = polygonPoints[0];
+        const snapThresholdWorld = 15 / transform.zoom;
+        const dx = worldPoint.x - first.x;
+        const dy = worldPoint.y - first.y;
+        if (Math.sqrt(dx * dx + dy * dy) < snapThresholdWorld) {
+          // Clean up snap indicator before completing
+          if (snapIndicatorRef.current) {
+            canvas.remove(snapIndicatorRef.current);
+            snapIndicatorRef.current = null;
+          }
+          handleDoubleClick();
+          return;
+        }
+      }
+
       const newPoints = [...polygonPoints, worldPoint];
       const markerRadius = getZoomAwareSize(3);
       const strokeWidth = getZoomAwareSize(2);
@@ -871,7 +1279,8 @@ export const InteractiveCanvas = ({
     viewport, transform, calibrationMode, isCalibrated, activeTool,
     polygonPoints, polygonMarkers, polygonLines, pageIndex,
     countPoints, countMarkers, onDeleteLastMeasurement,
-    handleCalibrationMouseDown, onMeasurementComplete, getZoomAwareSize
+    handleCalibrationMouseDown, onMeasurementComplete, getZoomAwareSize,
+    handleDoubleClick, onMeasurementUpdate, onDeleteMeasurement
   ]);
 
   // Handle mouse move
@@ -879,8 +1288,8 @@ export const InteractiveCanvas = ({
     const canvas = fabricCanvasRef.current;
     if (!canvas || !viewport) return;
 
-    // Handle calibration drag preview
-    if (calibrationMode === 'manual' && isCalibrationDragging && calibrationStartPoint) {
+    // Handle calibration drag preview (use refs to avoid stale closure)
+    if (calibrationMode === 'manual' && isCalibrationDraggingRef.current && calibrationStartPointRef.current) {
       const pointer = canvas.getPointer(e.e, true);
       const currentWorld = viewToWorld({ x: pointer.x, y: pointer.y }, transform, viewport);
       handleCalibrationMouseMove(currentWorld);
@@ -899,6 +1308,42 @@ export const InteractiveCanvas = ({
       
       setLastClientPos({ x: e.e.clientX, y: e.e.clientY });
       return;
+    }
+
+    // Polygon snap indicator — show green ring near first point when ≥2 points placed
+    if (activeTool === 'polygon' && polygonPoints.length >= 2) {
+      const snapPointer = canvas.getPointer(e.e, true);
+      const snapWorld: WorldPoint = viewToWorld({ x: snapPointer.x, y: snapPointer.y }, transform, viewport);
+      const first = polygonPoints[0];
+      const snapThreshold = 15 / transform.zoom;
+      const dx = snapWorld.x - first.x;
+      const dy = snapWorld.y - first.y;
+      const isNearFirst = Math.sqrt(dx * dx + dy * dy) < snapThreshold;
+
+      // Remove old indicator
+      if (snapIndicatorRef.current) {
+        canvas.remove(snapIndicatorRef.current);
+        snapIndicatorRef.current = null;
+      }
+
+      if (isNearFirst) {
+        const indicatorRadius = getZoomAwareSize(12);
+        const indicator = new Circle({
+          left: first.x - indicatorRadius,
+          top: first.y - indicatorRadius,
+          radius: indicatorRadius,
+          fill: 'rgba(0, 200, 0, 0.2)',
+          stroke: '#00CC00',
+          strokeWidth: getZoomAwareSize(2),
+          strokeDashArray: [getZoomAwareSize(3), getZoomAwareSize(3)],
+          selectable: false,
+          evented: false,
+        });
+        canvas.add(indicator);
+        snapIndicatorRef.current = indicator;
+      }
+
+      canvas.requestRenderAll();
     }
 
     // Allow preview even without calibration
@@ -967,12 +1412,32 @@ export const InteractiveCanvas = ({
       setPreviewShape(shape);
     }
 
+    // Update live measurement preview label
+    if (activeTool === 'line') {
+      const eu = unitsPerMetre || 1;
+      const r = calculateLinearWorld(startPoint, currentWorldPoint, eu);
+      const t = isCalibrated ? `${r.realValue.toFixed(2)} m` : `${r.worldValue.toFixed(0)} px`;
+      previewLabelRef.current = { text: t, worldX: (startPoint.x + currentWorldPoint.x) / 2, worldY: (startPoint.y + currentWorldPoint.y) / 2, color: isCalibrated ? 'red' : 'orange' };
+    } else if (activeTool === 'rectangle') {
+      const eu = unitsPerMetre || 1;
+      const r = calculateRectangleAreaWorld(startPoint, currentWorldPoint, eu);
+      const t = isCalibrated ? `${r.realValue.toFixed(2)} m²` : `${r.worldValue.toFixed(0)} px²`;
+      previewLabelRef.current = { text: t, worldX: (startPoint.x + currentWorldPoint.x) / 2, worldY: (startPoint.y + currentWorldPoint.y) / 2, color: isCalibrated ? 'green' : 'orange' };
+    } else if (activeTool === 'circle') {
+      const eu = unitsPerMetre || 1;
+      const r = calculateCircleAreaWorld(startPoint, currentWorldPoint, eu);
+      const t = isCalibrated ? `${r.realValue.toFixed(2)} m²` : `${r.worldValue.toFixed(0)} px²`;
+      previewLabelRef.current = { text: t, worldX: startPoint.x, worldY: startPoint.y, color: isCalibrated ? 'purple' : 'orange' };
+    } else {
+      previewLabelRef.current = null;
+    }
+
     canvas.requestRenderAll();
   }, [
     viewport, transform, isPanning, lastClientPos, isDrawing, startPoint,
-    previewShape, activeTool, isCalibrated, onTransformChange,
+    previewShape, activeTool, isCalibrated, unitsPerMetre, onTransformChange,
     calibrationMode, isCalibrationDragging, calibrationStartPoint, handleCalibrationMouseMove,
-    getZoomAwareSize
+    getZoomAwareSize, polygonPoints
   ]);
 
   // Handle mouse up
@@ -980,8 +1445,8 @@ export const InteractiveCanvas = ({
     const canvas = fabricCanvasRef.current;
     if (!canvas) return;
 
-    // Handle calibration drag end
-    if (calibrationMode === 'manual' && isCalibrationDragging && calibrationStartPoint) {
+    // Handle calibration drag end (use refs to avoid stale closure)
+    if (calibrationMode === 'manual' && isCalibrationDraggingRef.current && calibrationStartPointRef.current) {
       const pointer = canvas.getPointer(e.e, true);
       const worldEnd = viewToWorld({ x: pointer.x, y: pointer.y }, transform, viewport);
       handleCalibrationMouseUp(worldEnd);
@@ -1008,12 +1473,27 @@ export const InteractiveCanvas = ({
       setPreviewShape(null);
     }
 
+    // Helper: abort drawing cleanly (clears preview label + ghost state)
+    const abortDraw = () => {
+      previewLabelRef.current = null;
+      canvas.requestRenderAll();
+      setIsDrawing(false);
+      setStartPoint(null);
+    };
+
     // Zoom-aware sizes for final shapes
     const strokeWidth = getZoomAwareSize(2);
-    const fontSize = getZoomAwareSize(14);
 
     // Complete measurement based on tool
     if (activeTool === 'line') {
+      // Ignore accidental clicks — require at least 5 world units of drag
+      const minDist = 5 / transform.zoom;
+      const dx0 = worldEndPoint.x - startPoint.x;
+      const dy0 = worldEndPoint.y - startPoint.y;
+      if (Math.sqrt(dx0 * dx0 + dy0 * dy0) < minDist) {
+        abortDraw(); return;
+      }
+
       const effectiveUnits = unitsPerMetre || 1;
       const result = calculateLinearWorld(startPoint, worldEndPoint, effectiveUnits);
 
@@ -1034,26 +1514,13 @@ export const InteractiveCanvas = ({
       });
       canvas.add(line);
 
-      // Add label at WORLD position
-      const midX = (startPoint.x + worldEndPoint.x) / 2;
-      const midY = (startPoint.y + worldEndPoint.y) / 2;
       const displayValue = isCalibrated ? result.realValue : result.worldValue;
       const labelText = isCalibrated ? `${displayValue.toFixed(2)} m` : `${displayValue.toFixed(0)} px`;
-      const label = new Text(labelText, {
-        left: midX,
-        top: midY - getZoomAwareSize(10),
-        fontSize: fontSize,
-        fill: isCalibrated ? 'red' : 'orange',
-        backgroundColor: 'white',
-        selectable: false,
-        evented: false,
-      });
-      canvas.add(label);
 
       const measurementId = crypto.randomUUID();
 
       // Register objects for sync with state
-      measurementObjectsRef.current.set(measurementId, [line, label]);
+      measurementObjectsRef.current.set(measurementId, [line]);
 
       // Register shape for resize handling
       shapeToMeasurementIdRef.current.set(line, measurementId);
@@ -1073,6 +1540,12 @@ export const InteractiveCanvas = ({
 
       onMeasurementComplete(measurement);
     } else if (activeTool === 'rectangle') {
+      // Ignore accidental clicks — require minimum drag in both axes
+      const minDist = 5 / transform.zoom;
+      if (Math.abs(worldEndPoint.x - startPoint.x) < minDist || Math.abs(worldEndPoint.y - startPoint.y) < minDist) {
+        abortDraw(); return;
+      }
+
       const effectiveUnits = unitsPerMetre || 1;
       const result = calculateRectangleAreaWorld(startPoint, worldEndPoint, effectiveUnits);
 
@@ -1098,26 +1571,13 @@ export const InteractiveCanvas = ({
       });
       canvas.add(rect);
 
-      // Add label at WORLD position
-      const centerX = (startPoint.x + worldEndPoint.x) / 2;
-      const centerY = (startPoint.y + worldEndPoint.y) / 2;
-      const displayValue = isCalibrated ? result.realValue : result.worldValue;
-      const labelText = isCalibrated ? `${displayValue.toFixed(2)} m²` : `${displayValue.toFixed(0)} px²`;
-      const label = new Text(labelText, {
-        left: centerX - getZoomAwareSize(30),
-        top: centerY - getZoomAwareSize(10),
-        fontSize: fontSize,
-        fill: isCalibrated ? 'green' : 'orange',
-        backgroundColor: 'white',
-        selectable: false,
-        evented: false,
-      });
-      canvas.add(label);
+      const displayValueRect = isCalibrated ? result.realValue : result.worldValue;
+      const labelText = isCalibrated ? `${displayValueRect.toFixed(2)} m²` : `${displayValueRect.toFixed(0)} px²`;
 
       const measurementId = crypto.randomUUID();
 
       // Register objects for sync with state
-      measurementObjectsRef.current.set(measurementId, [rect, label]);
+      measurementObjectsRef.current.set(measurementId, [rect]);
 
       // Register shape for resize handling
       shapeToMeasurementIdRef.current.set(rect, measurementId);
@@ -1138,6 +1598,14 @@ export const InteractiveCanvas = ({
 
       onMeasurementComplete(measurement);
     } else if (activeTool === 'circle') {
+      // Ignore accidental clicks — require minimum drag radius
+      const minDist = 5 / transform.zoom;
+      const dxc = worldEndPoint.x - startPoint.x;
+      const dyc = worldEndPoint.y - startPoint.y;
+      if (Math.sqrt(dxc * dxc + dyc * dyc) < minDist) {
+        abortDraw(); return;
+      }
+
       const effectiveUnits = unitsPerMetre || 1;
       const result = calculateCircleAreaWorld(startPoint, worldEndPoint, effectiveUnits);
 
@@ -1168,24 +1636,13 @@ export const InteractiveCanvas = ({
       });
       canvas.add(circle);
 
-      // Add label at WORLD position
-      const displayValue = isCalibrated ? result.realValue : result.worldValue;
-      const labelText = isCalibrated ? `${displayValue.toFixed(2)} m²` : `${displayValue.toFixed(0)} px²`;
-      const label = new Text(labelText, {
-        left: startPoint.x - getZoomAwareSize(30),
-        top: startPoint.y - getZoomAwareSize(10),
-        fontSize: fontSize,
-        fill: isCalibrated ? 'purple' : 'orange',
-        backgroundColor: 'white',
-        selectable: false,
-        evented: false,
-      });
-      canvas.add(label);
+      const displayValueCircle = isCalibrated ? result.realValue : result.worldValue;
+      const labelText = isCalibrated ? `${displayValueCircle.toFixed(2)} m²` : `${displayValueCircle.toFixed(0)} px²`;
 
       const measurementId = crypto.randomUUID();
 
       // Register objects for sync with state
-      measurementObjectsRef.current.set(measurementId, [circle, label]);
+      measurementObjectsRef.current.set(measurementId, [circle]);
 
       // Register shape for resize handling
       shapeToMeasurementIdRef.current.set(circle, measurementId);
@@ -1206,6 +1663,7 @@ export const InteractiveCanvas = ({
       onMeasurementComplete(measurement);
     }
 
+    previewLabelRef.current = null;
     setIsDrawing(false);
     setStartPoint(null);
     canvas.requestRenderAll();
@@ -1216,97 +1674,19 @@ export const InteractiveCanvas = ({
     calibrationStartPoint, handleCalibrationMouseUp, getZoomAwareSize
   ]);
 
-  // Handle double click to close polygon
-  const handleDoubleClick = useCallback(() => {
-    const canvas = fabricCanvasRef.current;
-    if (!canvas || activeTool !== 'polygon' || polygonPoints.length < 3 || !viewport) return;
-
-    const effectiveUnits = unitsPerMetre || 1;
-    const result = calculatePolygonAreaWorld(polygonPoints, effectiveUnits);
-
-    const strokeWidth = getZoomAwareSize(2);
-    const fontSize = getZoomAwareSize(14);
-
-    // Draw polygon at WORLD coordinates
-    const worldPointsFabric = polygonPoints.map(wp => new FabricPoint(wp.x, wp.y));
-    const polygon = new Polygon(worldPointsFabric, {
-      fill: isCalibrated ? 'rgba(76, 175, 80, 0.3)' : 'rgba(255, 152, 0, 0.3)',
-      stroke: isCalibrated ? 'green' : 'orange',
-      strokeWidth: strokeWidth,
-      selectable: false,
-      evented: false,
-      hasControls: true,
-      hasBorders: true,
-      lockRotation: true,
-      lockScalingX: true, // Polygon scaling is complex, just allow moving
-      lockScalingY: true,
-      cornerColor: '#2563eb',
-      cornerStyle: 'circle',
-      cornerSize: 10,
-      transparentCorners: false,
-      borderColor: '#2563eb',
-    });
-    canvas.add(polygon);
-
-    // Add label at WORLD centroid
-    const worldCentroid = calculateCentroidWorld(polygonPoints);
-    const displayValue = isCalibrated ? result.realValue : result.worldValue;
-    const labelText = isCalibrated ? `${displayValue.toFixed(2)} m²` : `${displayValue.toFixed(0)} px²`;
-    const label = new Text(labelText, {
-      left: worldCentroid.x - getZoomAwareSize(30),
-      top: worldCentroid.y - getZoomAwareSize(10),
-      fontSize: fontSize,
-      fill: isCalibrated ? 'green' : 'orange',
-      backgroundColor: 'white',
-      selectable: false,
-      evented: false,
-    });
-    canvas.add(label);
-
-    // Clean up markers and lines
-    polygonMarkers.forEach(marker => canvas.remove(marker));
-    polygonLines.forEach(line => canvas.remove(line));
-    setPolygonMarkers([]);
-    setPolygonLines([]);
-
-    const measurementId = crypto.randomUUID();
-
-    // Register objects for sync with state
-    measurementObjectsRef.current.set(measurementId, [polygon, label]);
-
-    // Register shape for selection (polygon move only, no resize)
-    shapeToMeasurementIdRef.current.set(polygon, measurementId);
-
-    const measurement: Measurement = {
-      id: measurementId,
-      type: 'polygon',
-      worldPoints: polygonPoints,
-      worldValue: result.worldValue,
-      realValue: isCalibrated ? result.realValue : result.worldValue,
-      unit: 'M2',
-      color: isCalibrated ? '#4CAF50' : '#FF9800',
-      label: labelText,
-      pageIndex: pageIndex,
-      timestamp: new Date(),
-    };
-
-    onMeasurementComplete(measurement);
-    setPolygonPoints([]);
-    canvas.requestRenderAll();
-  }, [
-    viewport, transform, activeTool, polygonPoints, polygonMarkers, polygonLines,
-    isCalibrated, unitsPerMetre, pageIndex, onMeasurementComplete,
-    getZoomAwareSize
-  ]);
 
   // Cancel polygon drawing
   const handleCancelPolygon = useCallback(() => {
     const canvas = fabricCanvasRef.current;
     if (!canvas) return;
 
-    // Remove markers and lines
+    // Remove markers, lines, and snap indicator
     polygonMarkers.forEach(marker => canvas.remove(marker));
     polygonLines.forEach(line => canvas.remove(line));
+    if (snapIndicatorRef.current) {
+      canvas.remove(snapIndicatorRef.current);
+      snapIndicatorRef.current = null;
+    }
     setPolygonMarkers([]);
     setPolygonLines([]);
     setPolygonPoints([]);
@@ -1322,6 +1702,9 @@ export const InteractiveCanvas = ({
 
     // Register count markers for sync with state
     measurementObjectsRef.current.set(measurementId, [...countMarkers]);
+
+    // Register each marker so the eraser can find them
+    countMarkers.forEach(m => shapeToMeasurementIdRef.current.set(m, measurementId));
 
     // Generate label based on preset
     const labelName = countPreset === 'Custom' ? 'Items' : countPreset;

@@ -3,7 +3,7 @@ import * as pdfjsLib from 'pdfjs-dist';
 import { Loader2 } from 'lucide-react';
 
 // Set PDF.js worker
-pdfjsLib.GlobalWorkerOptions.workerSrc = `https://unpkg.com/pdfjs-dist@${pdfjsLib.version}/build/pdf.worker.min.mjs`;
+pdfjsLib.GlobalWorkerOptions.workerSrc = '/pdf.worker.min.mjs';
 
 interface PDFRendererProps {
   pdfUrl: string;

@@ -28,13 +28,61 @@ const Settings = () => {
   // Default Rates
   const [overheadPercentage, setOverheadPercentage] = useState("15");
   const [marginPercentage, setMarginPercentage] = useState("18");
+
+  // Notifications
+  const loadNotifPrefs = () => { try { return JSON.parse(localStorage.getItem("notif_prefs") || "{}") } catch { return {} } }
+  const [notifDueDate, setNotifDueDate] = useState(() => loadNotifPrefs().dueDate ?? true);
+  const [notifDaysBeforeStr, setNotifDaysBeforeStr] = useState(() => loadNotifPrefs().daysBefore ?? "3");
+  const [notifProjectUpdate, setNotifProjectUpdate] = useState(() => loadNotifPrefs().projectUpdate ?? false);
+  const [notifWeeklyDigest, setNotifWeeklyDigest] = useState(() => loadNotifPrefs().weeklyDigest ?? false);
+
+  const saveNotifPrefs = () => {
+    localStorage.setItem("notif_prefs", JSON.stringify({
+      dueDate: notifDueDate,
+      daysBefore: notifDaysBeforeStr,
+      projectUpdate: notifProjectUpdate,
+      weeklyDigest: notifWeeklyDigest,
+    }));
+    toast.success("Notification preferences saved");
+  };
   const [gstPercentage, setGstPercentage] = useState("10");
   const [materialMarkup, setMaterialMarkup] = useState("15");
   const [labourRate, setLabourRate] = useState("90");
 
   useEffect(() => {
     loadProfile();
+    loadRates();
   }, []);
+
+  const loadRates = () => {
+    const saved = localStorage.getItem('default_rates');
+    if (saved) {
+      const rates = JSON.parse(saved);
+      setOverheadPercentage(rates.overhead || "15");
+      setMarginPercentage(rates.margin || "18");
+      setGstPercentage(rates.gst || "10");
+      setMaterialMarkup(rates.materialMarkup || "15");
+      setLabourRate(rates.labourRate || "90");
+    }
+  };
+
+  const handleSaveRates = () => {
+    setSaving(true);
+    try {
+      localStorage.setItem('default_rates', JSON.stringify({
+        overhead: overheadPercentage,
+        margin: marginPercentage,
+        gst: gstPercentage,
+        materialMarkup,
+        labourRate,
+      }));
+      toast.success("Default rates saved");
+    } catch {
+      toast.error("Failed to save rates");
+    } finally {
+      setSaving(false);
+    }
+  };
 
   const loadProfile = async () => {
     try {
@@ -353,9 +401,11 @@ const Settings = () => {
                 </div>
 
                 <Button
+                  onClick={handleSaveRates}
+                  disabled={saving}
                   className="bg-accent text-accent-foreground hover:bg-accent/90"
                 >
-                  <Save className="mr-2 h-4 w-4" />
+                  {saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
                   Save Default Rates
                 </Button>
               </div>
@@ -406,14 +456,70 @@ const Settings = () => {
           <TabsContent value="notifications">
             <Card className="p-6">
               <h3 className="font-display text-xl font-bold mb-6">Notification Preferences</h3>
-              
-              <div className="space-y-4">
-                <div className="bg-muted/50 p-4 rounded-lg text-center">
-                  <Bell className="h-12 w-12 text-muted-foreground mx-auto mb-2" />
-                  <p className="text-sm text-muted-foreground">
-                    Notification settings coming soon
-                  </p>
+              <div className="space-y-6">
+
+                <div className="flex items-start justify-between gap-4 p-4 border border-border rounded-lg">
+                  <div>
+                    <div className="font-medium">Due Date Reminders</div>
+                    <p className="text-sm text-muted-foreground mt-0.5">
+                      Alert when a project estimate due date is approaching
+                    </p>
+                    {notifDueDate && (
+                      <div className="flex items-center gap-2 mt-2">
+                        <Label className="text-xs text-muted-foreground">Days before</Label>
+                        <Input
+                          type="number"
+                          value={notifDaysBeforeStr}
+                          onChange={e => setNotifDaysBeforeStr(e.target.value)}
+                          className="h-7 w-16 text-sm"
+                          min="1" max="30"
+                        />
+                        <span className="text-xs text-muted-foreground">days</span>
+                      </div>
+                    )}
+                  </div>
+                  <button
+                    onClick={() => setNotifDueDate((v: boolean) => !v)}
+                    className={`relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors ${notifDueDate ? "bg-secondary" : "bg-muted"}`}
+                  >
+                    <span className={`inline-block h-5 w-5 rounded-full bg-white shadow transform transition-transform ${notifDueDate ? "translate-x-5" : "translate-x-0"}`} />
+                  </button>
                 </div>
+
+                <div className="flex items-start justify-between gap-4 p-4 border border-border rounded-lg">
+                  <div>
+                    <div className="font-medium">Project Update Alerts</div>
+                    <p className="text-sm text-muted-foreground mt-0.5">
+                      Notify when a project status changes
+                    </p>
+                  </div>
+                  <button
+                    onClick={() => setNotifProjectUpdate((v: boolean) => !v)}
+                    className={`relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors ${notifProjectUpdate ? "bg-secondary" : "bg-muted"}`}
+                  >
+                    <span className={`inline-block h-5 w-5 rounded-full bg-white shadow transform transition-transform ${notifProjectUpdate ? "translate-x-5" : "translate-x-0"}`} />
+                  </button>
+                </div>
+
+                <div className="flex items-start justify-between gap-4 p-4 border border-border rounded-lg">
+                  <div>
+                    <div className="font-medium">Weekly Summary Digest</div>
+                    <p className="text-sm text-muted-foreground mt-0.5">
+                      Receive a weekly overview of active projects and upcoming deadlines
+                    </p>
+                  </div>
+                  <button
+                    onClick={() => setNotifWeeklyDigest((v: boolean) => !v)}
+                    className={`relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors ${notifWeeklyDigest ? "bg-secondary" : "bg-muted"}`}
+                  >
+                    <span className={`inline-block h-5 w-5 rounded-full bg-white shadow transform transition-transform ${notifWeeklyDigest ? "translate-x-5" : "translate-x-0"}`} />
+                  </button>
+                </div>
+
+                <Button onClick={saveNotifPrefs} className="bg-secondary text-secondary-foreground hover:bg-secondary/90">
+                  <Save className="h-4 w-4 mr-2" />
+                  Save Preferences
+                </Button>
               </div>
             </Card>
           </TabsContent>

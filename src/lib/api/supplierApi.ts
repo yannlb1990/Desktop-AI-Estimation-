@@ -390,8 +390,6 @@ export const supplierApi = {
 
       if (error) throw error;
 
-      // TODO: Send email notification to supplier
-
       return {
         success: true,
         data: mapQuoteRequestFromDb(data),

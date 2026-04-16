@@ -42,14 +42,14 @@ const Clients = () => {
       }
 
       const { data, error } = await supabase
-        .from("clients" as any)
+        .from("clients")
         .select("*")
         .eq("user_id", user.id)
         .order("created_at", { ascending: false });
 
       if (error) throw error;
 
-      setClients((data as any[]) || []);
+      setClients(data || []);
     } catch (error) {
       console.error("Error loading clients:", error);
       toast.error("Failed to load clients");

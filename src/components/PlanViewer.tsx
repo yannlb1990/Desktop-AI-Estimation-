@@ -16,7 +16,7 @@ import * as pdfjsLib from "pdfjs-dist";
 import { MeasurementsSidebar } from "./MeasurementsSidebar";
 
 // Configure PDF.js worker
-pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdn.jsdelivr.net/npm/pdfjs-dist@${pdfjsLib.version}/build/pdf.worker.min.mjs`;
+pdfjsLib.GlobalWorkerOptions.workerSrc = '/pdf.worker.min.mjs';
 
 type ToolType = "plan" | "calibrate" | "measure-lm" | "measure-m2" | "measure-m3" | "measure-ea" | "detect" | "extract";
 

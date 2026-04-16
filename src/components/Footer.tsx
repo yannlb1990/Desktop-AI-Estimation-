@@ -20,10 +20,10 @@ const Footer = () => {
           <div>
             <h4 className="font-display font-bold mb-4">Product</h4>
             <ul className="space-y-2 text-sm text-muted-foreground">
-              <li><a href="#" className="hover:text-foreground transition-smooth">Features</a></li>
-              <li><a href="#" className="hover:text-foreground transition-smooth">Pricing</a></li>
-              <li><a href="#" className="hover:text-foreground transition-smooth">Market Insights</a></li>
-              <li><a href="#" className="hover:text-foreground transition-smooth">Integrations</a></li>
+              <li><a href="#features" className="hover:text-foreground transition-smooth">Features</a></li>
+              <li><a href="#pricing" className="hover:text-foreground transition-smooth">Pricing</a></li>
+              <li><a href="#insights" className="hover:text-foreground transition-smooth">Market Insights</a></li>
+              <li><a href="#features" className="hover:text-foreground transition-smooth">Integrations</a></li>
             </ul>
           </div>
 
@@ -31,10 +31,10 @@ const Footer = () => {
           <div>
             <h4 className="font-display font-bold mb-4">Resources</h4>
             <ul className="space-y-2 text-sm text-muted-foreground">
-              <li><a href="#" className="hover:text-foreground transition-smooth">Documentation</a></li>
-              <li><a href="#" className="hover:text-foreground transition-smooth">API Reference</a></li>
-              <li><a href="#" className="hover:text-foreground transition-smooth">Support</a></li>
-              <li><a href="#" className="hover:text-foreground transition-smooth">Compliance</a></li>
+              <li><a href="#features" className="hover:text-foreground transition-smooth">Documentation</a></li>
+              <li><a href="#features" className="hover:text-foreground transition-smooth">API Reference</a></li>
+              <li><a href="mailto:support@buildamax.com.au" className="hover:text-foreground transition-smooth">Support</a></li>
+              <li><a href="#features" className="hover:text-foreground transition-smooth">Compliance</a></li>
             </ul>
           </div>
 
@@ -42,10 +42,10 @@ const Footer = () => {
           <div>
             <h4 className="font-display font-bold mb-4">Company</h4>
             <ul className="space-y-2 text-sm text-muted-foreground">
-              <li><a href="#" className="hover:text-foreground transition-smooth">About</a></li>
-              <li><a href="#" className="hover:text-foreground transition-smooth">Contact</a></li>
-              <li><a href="#" className="hover:text-foreground transition-smooth">Privacy</a></li>
-              <li><a href="#" className="hover:text-foreground transition-smooth">Terms</a></li>
+              <li><a href="#features" className="hover:text-foreground transition-smooth">About</a></li>
+              <li><a href="mailto:hello@buildamax.com.au" className="hover:text-foreground transition-smooth">Contact</a></li>
+              <li><a href="/auth" className="hover:text-foreground transition-smooth">Privacy</a></li>
+              <li><a href="/auth" className="hover:text-foreground transition-smooth">Terms</a></li>
             </ul>
           </div>
         </div>

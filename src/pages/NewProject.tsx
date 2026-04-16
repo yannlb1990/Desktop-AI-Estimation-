@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
+
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -123,60 +124,45 @@ const NewProject = () => {
     try {
       const validData = projectSchema.parse(formData);
 
-      // Generate a local project ID for testing (no auth required)
-      const projectId = `local-${Date.now()}`;
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
+        toast.error("You must be signed in to create a project");
+        navigate("/auth");
+        return;
+      }
 
-      // Convert EstimatedLineItem to project estimate format
-      const estimateItems = items.map((item, index) => ({
-        id: `item-${index + 1}`,
-        category: item.category,
-        name: item.description,
-        description: item.description,
-        unit: item.unit,
-        unitCost: item.unitRate,
-        quantity: item.quantity,
-        trade: item.trade,
-        materialCost: item.materialCost,
-        labourCost: item.labourCost,
-        labourHours: item.labourHours,
-        subtotal: item.totalCost,
-        source: item.source,
-        confidence: item.confidence,
-        linkedMeasurements: [],
-        wasteFactor: 1.05,
-      }));
+      const { data: project, error } = await supabase
+        .from("projects")
+        .insert({
+          user_id: user.id,
+          created_by: user.id,
+          name: validData.name,
+          client_name: validData.client_name || null,
+          site_address: validData.site_address || null,
+          address: validData.site_address || "TBD",
+          state: "NSW",
+          postcode: "0000",
+          plan_file_name: uploadedFile?.name || null,
+          status: "in_progress",
+        } as any)
+        .select()
+        .single();
 
-      // Store project in localStorage for testing
-      const projects = JSON.parse(localStorage.getItem('local_projects') || '[]');
-      const newProject = {
-        id: projectId,
-        name: validData.name,
-        client_name: validData.client_name || null,
-        site_address: validData.site_address || null,
-        plan_file_name: uploadedFile?.name,
-        status: "in_progress",
-        created_at: new Date().toISOString(),
-        estimate_items: estimateItems,
-        analysis_summary: analysisResult?.summary,
-        construction_type: analysisResult?.summary.constructionType,
-        total_estimate: items.reduce((sum, item) => sum + item.totalCost, 0),
-      };
-      projects.push(newProject);
-      localStorage.setItem('local_projects', JSON.stringify(projects));
+      if (error) throw error;
 
       setAnalysisStep('complete');
       toast.success("Project created with AI-generated estimate!");
 
-      // Navigate after short delay to show success
       setTimeout(() => {
-        navigate(`/project/${projectId}`);
+        navigate(`/project/${project.id}`);
       }, 500);
-    } catch (error) {
+    } catch (error: any) {
       if (error instanceof z.ZodError) {
         toast.error(error.errors[0].message);
       } else {
         console.error("Project creation error:", error);
-        toast.error("Failed to create project");
+        const msg = error?.message || error?.error_description || JSON.stringify(error);
+        toast.error(`Failed to create project: ${msg}`);
       }
     } finally {
       setIsLoading(false);
@@ -215,31 +201,40 @@ const NewProject = () => {
     try {
       const validData = projectSchema.parse(formData);
 
-      // Generate a local project ID for testing (no auth required)
-      const projectId = `local-${Date.now()}`;
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
+        toast.error("You must be signed in to create a project");
+        navigate("/auth");
+        return;
+      }
 
-      // Store project in localStorage for testing
-      const projects = JSON.parse(localStorage.getItem('local_projects') || '[]');
-      const newProject = {
-        id: projectId,
-        name: validData.name,
-        client_name: validData.client_name || null,
-        site_address: validData.site_address || null,
-        status: "in_progress",
-        created_at: new Date().toISOString(),
-        estimate_items: []
-      };
-      projects.push(newProject);
-      localStorage.setItem('local_projects', JSON.stringify(projects));
+      const { data: project, error } = await supabase
+        .from("projects")
+        .insert({
+          user_id: user.id,
+          created_by: user.id,
+          name: validData.name,
+          client_name: validData.client_name || null,
+          site_address: validData.site_address || null,
+          address: validData.site_address || "TBD",
+          state: "NSW",
+          postcode: "0000",
+          status: "in_progress",
+        } as any)
+        .select()
+        .single();
+
+      if (error) throw error;
 
       toast.success("Project created!");
-      navigate(`/project/${projectId}`);
-    } catch (error) {
+      navigate(`/project/${project.id}`);
+    } catch (error: any) {
       if (error instanceof z.ZodError) {
         toast.error(error.errors[0].message);
       } else {
         console.error("Project creation error:", error);
-        toast.error("Failed to create project");
+        const msg = error?.message || error?.error_description || JSON.stringify(error);
+        toast.error(`Failed to create project: ${msg}`);
       }
     } finally {
       setIsLoading(false);

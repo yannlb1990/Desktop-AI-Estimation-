@@ -1,4 +1,29 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, Component } from "react";
+import type { ReactNode } from "react";
+
+// Isolate takeoff crashes so they don't white-out the entire project page
+class TakeoffErrorBoundary extends Component<{ children: ReactNode }, { error: Error | null }> {
+  constructor(props: { children: ReactNode }) {
+    super(props);
+    this.state = { error: null };
+  }
+  static getDerivedStateFromError(error: Error) { return { error }; }
+  render() {
+    if (this.state.error) {
+      return (
+        <div className="p-8 border border-destructive/40 rounded-lg bg-destructive/5 text-destructive space-y-2">
+          <p className="font-semibold">Takeoff module failed to load</p>
+          <p className="text-sm font-mono">{this.state.error.message}</p>
+          <button
+            className="text-sm underline"
+            onClick={() => this.setState({ error: null })}
+          >Retry</button>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
 import { useParams, useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
@@ -15,6 +40,8 @@ import { OverheadManager } from "@/components/OverheadManager";
 import { EstimateTemplate } from "@/components/EstimateTemplate";
 import { PlanViewer } from "@/components/PlanViewer";
 import { TenderDocuments } from "@/components/TenderDocuments";
+import { QuoteGenerator } from "@/components/QuoteGenerator";
+import { FullTenderGenerator } from "@/components/FullTenderGenerator";
 import { ProjectInsightsTab } from "@/components/ProjectInsightsTab";
 import { NCCComplianceCard } from "@/components/NCCComplianceCard";
 import { PlanAnalysisWizard } from "@/components/PlanAnalysisWizard";
@@ -29,6 +56,37 @@ const ProjectDetail = () => {
   const [estimate, setEstimate] = useState<any>(null);
   const [dueDate, setDueDate] = useState<Date | undefined>();
 
+  const handleExportCSV = () => {
+    if (!project) return;
+    const items = estimate?.estimate_items || [];
+    const rows = [
+      ["Project", project.name],
+      ["Client", project.client_name || ""],
+      ["Address", project.site_address || project.address || ""],
+      ["Status", project.status || ""],
+      ["Exported", new Date().toLocaleDateString("en-AU")],
+      [],
+      ["Category", "Description", "Unit", "Qty", "Unit Price", "Total"],
+      ...items.map((item: any) => [
+        item.category || item.trade || "",
+        item.description || item.name || "",
+        item.unit || "",
+        item.quantity || "",
+        item.unit_price || item.unitCost || "",
+        item.total_price || item.subtotal || "",
+      ]),
+    ];
+    const csv = rows.map(r => r.map((c: any) => `"${String(c ?? "").replace(/"/g, '""')}"`).join(",")).join("\n");
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `${project.name.replace(/\s+/g, "_")}_estimate.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+    toast.success("Exported as CSV — open in Excel");
+  };
+
   useEffect(() => {
     loadProject();
   }, [projectId]);
@@ -37,12 +95,14 @@ const ProjectDetail = () => {
     if (!projectId) return;
     setDueDate(date);
 
-    // Update in localStorage
-    const projects = JSON.parse(localStorage.getItem('local_projects') || '[]');
-    const projectIndex = projects.findIndex((p: any) => p.id === projectId);
-    if (projectIndex !== -1) {
-      projects[projectIndex].due_date = date?.toISOString();
-      localStorage.setItem('local_projects', JSON.stringify(projects));
+    const { error } = await supabase
+      .from("projects")
+      .update({ due_date: date?.toISOString() || null } as any)
+      .eq("id", projectId);
+
+    if (error) {
+      console.error("Error updating due date:", error);
+    } else {
       toast.success("Due date updated");
     }
   };
@@ -52,16 +112,35 @@ const ProjectDetail = () => {
       toast.error("Please set a due date first");
       return;
     }
-    toast.success(`Reminder set for ${format(dueDate, "PPP")}`);
+    const reminders = JSON.parse(localStorage.getItem("project_reminders") || "{}");
+    reminders[projectId!] = { projectName: project?.name, dueDate: dueDate.toISOString() };
+    localStorage.setItem("project_reminders", JSON.stringify(reminders));
+    const daysLeft = Math.ceil((dueDate.getTime() - Date.now()) / 86400000);
+    if (daysLeft < 0) {
+      toast.warning(`Due date was ${Math.abs(daysLeft)} days ago — consider updating it`);
+    } else if (daysLeft === 0) {
+      toast.warning("Due today — make sure the estimate is complete");
+    } else {
+      toast.success(`Reminder saved — ${daysLeft} day${daysLeft !== 1 ? "s" : ""} until ${format(dueDate, "PPP")}`);
+    }
   };
 
   const loadProject = async () => {
     try {
-      // Load from localStorage (no auth required)
-      const projects = JSON.parse(localStorage.getItem('local_projects') || '[]');
-      const projectData = projects.find((p: any) => p.id === projectId);
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
+        navigate("/auth");
+        return;
+      }
 
-      if (!projectData) {
+      const { data: projectData, error } = await supabase
+        .from("projects")
+        .select("*")
+        .eq("id", projectId)
+        .eq("user_id", user.id)
+        .single();
+
+      if (error || !projectData) {
         toast.error("Project not found");
         navigate("/dashboard");
         return;
@@ -69,14 +148,7 @@ const ProjectDetail = () => {
 
       setProject(projectData);
       setAnalyses([]);
-
-      // Create a local estimate object
-      const localEstimate = {
-        id: `estimate-${projectId}`,
-        project_id: projectId,
-        estimate_items: projectData.estimate_items || []
-      };
-      setEstimate(localEstimate);
+      setEstimate({ id: `estimate-${projectId}`, project_id: projectId, estimate_items: [] });
 
       if (projectData.due_date) {
         setDueDate(new Date(projectData.due_date));
@@ -115,11 +187,9 @@ const ProjectDetail = () => {
               Back to Dashboard
             </Button>
             <div className="flex gap-2">
-              <Button variant="outline">
-                <FileText className="h-4 w-4 mr-2" />
-                Generate Tender
-              </Button>
-              <Button className="bg-accent text-accent-foreground hover:bg-accent/90">
+              <QuoteGenerator project={project} estimate={estimate} />
+              <FullTenderGenerator project={project} estimate={estimate} />
+              <Button onClick={handleExportCSV} className="bg-accent text-accent-foreground hover:bg-accent/90">
                 Export to Excel
               </Button>
             </div>
@@ -242,7 +312,9 @@ const ProjectDetail = () => {
           </TabsContent>
 
           <TabsContent value="takeoff">
-            <AIPlanAnalyzerEnhanced projectId={projectId!} estimateId={estimate?.id} />
+            <TakeoffErrorBoundary>
+              <AIPlanAnalyzerEnhanced projectId={projectId!} estimateId={estimate?.id} />
+            </TakeoffErrorBoundary>
           </TabsContent>
 
           <TabsContent value="pricing">
@@ -297,27 +369,24 @@ const ProjectDetail = () => {
             <TenderDocuments projectId={projectId!} />
             
             <Card className="p-6">
-              <h3 className="font-display text-xl font-bold mb-4">Generate Tender Document</h3>
+              <h3 className="font-display text-xl font-bold mb-2">Generate Quote or Tender</h3>
               <p className="text-muted-foreground mb-4">
-                Create a professional tender document based on your estimate and project details.
+                <strong>Quote</strong> — fast, branded proposal with scope, pricing and signature block.<br />
+                <strong>Tender</strong> — full corporate document with company profile, compliance, methodology, programme and legal terms.
               </p>
-              <Button className="bg-accent text-accent-foreground hover:bg-accent/90">
-                <FileText className="mr-2 h-4 w-4" />
-                Generate Tender PDF
-              </Button>
+              <div className="flex gap-3">
+                <QuoteGenerator project={project} estimate={estimate} />
+                <FullTenderGenerator project={project} estimate={estimate} />
+              </div>
             </Card>
           </TabsContent>
 
           <TabsContent value="insights">
-            <ProjectInsightsTab 
-              estimateItems={estimate?.estimate_items || []} 
-            />
+            <ProjectInsightsTab projectId={projectId!} />
           </TabsContent>
 
           <TabsContent value="compliance">
-            <NCCComplianceCard 
-              estimateItems={estimate?.estimate_items || []} 
-            />
+            <NCCComplianceCard projectId={projectId!} />
           </TabsContent>
         </Tabs>
       </div>
