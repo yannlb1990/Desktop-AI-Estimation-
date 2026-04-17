@@ -8,11 +8,13 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { Progress } from "@/components/ui/progress";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "sonner";
 import {
   ChevronDown, ChevronRight, CheckCircle2, XCircle, AlertTriangle,
   MinusCircle, FileText, RotateCcw, Building2, Zap, Droplets,
   Flame, Wind, Accessibility, ArrowUpDown, Thermometer, ShieldCheck,
+  BookOpen, Search, Copy, ClipboardList,
 } from "lucide-react";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -275,6 +277,139 @@ const SECTION_COLOR_MAP: Record<string, string> = {
   rose: "bg-rose-50 border-rose-200",
 };
 
+// ── Rules & AS Lookup Databases ───────────────────────────────────────────────
+
+interface RuleEntry {
+  id: string;
+  buildingType: "residential" | "commercial" | "both";
+  category: string;
+  rule: string;
+  requirement: string;
+  nccRef: string;
+  asRef: string;
+  asTitle: string;
+  notes: string;
+}
+
+interface ASEntry {
+  id: string;
+  asNumber: string;
+  title: string;
+  scope: string;
+  keywords: string[];
+  buildingType: "residential" | "commercial" | "both";
+  category: string;
+  nccLink: string;
+  practicalNote: string;
+}
+
+const RULE_CATEGORIES = [
+  "All","Structural","Electrical","Plumbing","Fire Safety",
+  "Waterproofing","Energy Efficiency","Accessibility","Glazing & Windows",
+  "Roofing","Mechanical & Ventilation","Gas","Hydraulic","Thermal",
+];
+
+const RULES_DB: RuleEntry[] = [
+  // ── RESIDENTIAL ──────────────────────────────────────────────────────────
+  { id:"r1",  buildingType:"residential", category:"Structural",      rule:"Timber framing — non-cyclonic",        requirement:"All timber framing must comply with span tables, species, grade and fixing requirements",   nccRef:"NCC Vol 2 — Part 3.4",      asRef:"AS 1684.2:2021",       asTitle:"Residential timber-framed construction (non-cyclonic)",               notes:"Use span tables for floor joists, rafters, ceiling joists and beams. Verify species and stress grade on timber delivery." },
+  { id:"r2",  buildingType:"residential", category:"Structural",      rule:"Timber framing — cyclonic areas",      requirement:"Cyclonic regions require enhanced tie-down, bracing and connection details",                  nccRef:"NCC Vol 2 — Part 3.4",      asRef:"AS 1684.3:2021",       asTitle:"Residential timber-framed construction (cyclonic areas)",             notes:"Required in Qld/WA/NT coastal areas — additional strapping, connections and wind classifications C1–C4 apply." },
+  { id:"r3",  buildingType:"residential", category:"Structural",      rule:"Steel light gauge framing",            requirement:"Cold-formed steel framing for residential must comply with design and connection rules",       nccRef:"NCC Vol 2 — Part 3.4",      asRef:"AS 4600:2018",         asTitle:"Cold-formed steel structures",                                        notes:"Used for steel stud walls and trusses — connection screws, track and stud sizes must match design." },
+  { id:"r4",  buildingType:"residential", category:"Structural",      rule:"Residential footings & slabs",         requirement:"Site classification (A/S/M/H/E/P) determines footing type and dimensions",                    nccRef:"NCC Vol 2 — Part 3.2.2",    asRef:"AS 2870:2011",         asTitle:"Residential slabs and footings — design and construction",            notes:"Get a site classification report before designing footings. Class H and E require engineer input." },
+  { id:"r5",  buildingType:"residential", category:"Structural",      rule:"Wind loads for housing",               requirement:"Wind region and terrain category determine design actions on structure and cladding",          nccRef:"NCC Vol 2 — Part 3.10.1",   asRef:"AS 4055:2012",         asTitle:"Wind loads for housing",                                              notes:"Wind classification N1–N6 (non-cyclonic) and C1–C4 (cyclonic). Higher classifications need stronger fixings." },
+  { id:"r6",  buildingType:"residential", category:"Structural",      rule:"Masonry walls",                        requirement:"Brick/block walls must meet stability, bond, coursing and control joint requirements",         nccRef:"NCC Vol 2 — Part 3.3",      asRef:"AS 3700:2018",         asTitle:"Masonry structures",                                                  notes:"Unreinforced masonry limited in height/length — control joints at max 6m. Mortar mix ratios matter." },
+  { id:"r7",  buildingType:"residential", category:"Structural",      rule:"Termite management",                   requirement:"Physical or chemical termite barrier required in all new Class 1 buildings",                  nccRef:"NCC Vol 2 — Part 3.1.3",    asRef:"AS 3660.1:2014",       asTitle:"Termite management — new building work",                              notes:"Install barrier before slab pour or at base of wall framing. Inspector must sign off on installation." },
+  { id:"r8",  buildingType:"residential", category:"Waterproofing",   rule:"Wet area waterproofing",               requirement:"Shower, bath, laundry floor and adjacent walls fully waterproofed to AS 3740",               nccRef:"NCC Vol 2 — Part 3.8.1",    asRef:"AS 3740:2021",         asTitle:"Waterproofing of domestic wet areas",                                 notes:"Shower walls: 1800mm min height. Floor: full membrane with 50mm upstand. Apply, cure, inspect before tiling." },
+  { id:"r9",  buildingType:"residential", category:"Waterproofing",   rule:"Above-ground deck membranes",          requirement:"Balconies and decks over habitable space need continuous waterproof membrane system",           nccRef:"NCC Vol 2 — Part 3.8.1",    asRef:"AS 4654.2:2012",       asTitle:"Waterproofing membranes for external above-ground use — design",     notes:"150mm upstand at walls, positive fall to drain, compatible membrane and primer required." },
+  { id:"r10", buildingType:"residential", category:"Roofing",         rule:"Metal roofing and wall cladding",      requirement:"Metal sheeting must be installed with correct laps, fixings and fastener spacing",              nccRef:"NCC Vol 2 — Part 3.5",      asRef:"AS 1562.1:2018",       asTitle:"Design and installation of sheet roof and wall cladding — metal",    notes:"Fastener pull-out must meet wind classification. Lap sealing at ridge, hips and valleys critical." },
+  { id:"r11", buildingType:"residential", category:"Roofing",         rule:"Roof tiles",                           requirement:"Concrete and terracotta tiles must be bedded, pointed and fixed to manufacturer's details",  nccRef:"NCC Vol 2 — Part 3.5",      asRef:"AS 2049:2018",         asTitle:"Roof tiles — selection and installation",                             notes:"Ridge and hip tiles: mechanically fix every tile in cyclonic areas. Batten size from AS 1684." },
+  { id:"r12", buildingType:"residential", category:"Fire Safety",     rule:"Smoke alarms",                         requirement:"Interconnected mains-powered smoke alarms on every storey and in/near every bedroom",         nccRef:"NCC Vol 2 — Part 3.7.2",    asRef:"AS 3786:2014",         asTitle:"Smoke alarms using scattered light, transmitted light or ionization", notes:"240V hardwired or 10-year lithium battery. Position on ceiling ≥300mm from walls, away from vents." },
+  { id:"r13", buildingType:"residential", category:"Fire Safety",     rule:"Bushfire construction",                requirement:"Construction details depend on BAL rating (12.5, 19, 29, 40, FZ) assessed for site",          nccRef:"NCC Vol 2 — Part 3.7.4",    asRef:"AS 3959:2018",         asTitle:"Construction of buildings in bushfire-prone areas",                   notes:"BAL assessment needed before design. Higher BAL = ember-proof vents, toughened glass, non-combustible cladding." },
+  { id:"r14", buildingType:"residential", category:"Electrical",      rule:"Electrical wiring rules",              requirement:"All fixed electrical wiring and equipment in dwellings must comply with the wiring rules",    nccRef:"NCC Vol 2 — Part 3.11",     asRef:"AS/NZS 3000:2018",     asTitle:"Wiring rules — electrical installations",                             notes:"RCDs required on all circuits. Separation of circuits for high-load appliances. Licensed electrician only." },
+  { id:"r15", buildingType:"residential", category:"Electrical",      rule:"Cable selection",                      requirement:"Correct cable type, size and installation method for each circuit application",              nccRef:"NCC Vol 2 — Part 3.11",     asRef:"AS/NZS 3008.1.1:2017", asTitle:"Electrical installations — selection of cables (low voltage AC)",     notes:"Cable rating depends on installation method (in roof, wall, conduit). Derating factors apply in conduit." },
+  { id:"r16", buildingType:"residential", category:"Plumbing",        rule:"Water supply services",                requirement:"Cold and hot water supply to comply with pressure, material and installation requirements",    nccRef:"NCC Vol 3 — AS/NZS 3500.1", asRef:"AS/NZS 3500.1:2021",   asTitle:"Plumbing and drainage — water services",                              notes:"Min 150 kPa at highest outlet, max 500 kPa (regulator required if higher). Copper, CPVC or PEX pipe types." },
+  { id:"r17", buildingType:"residential", category:"Plumbing",        rule:"Sanitary plumbing & drainage",         requirement:"Drainage fall, trap depths, vent sizing and inspection opening placement requirements",         nccRef:"NCC Vol 3 — AS/NZS 3500.2", asRef:"AS/NZS 3500.2:2021",   asTitle:"Plumbing and drainage — sanitary plumbing and drainage",              notes:"Minimum fall 1:40 (40mm/m). Every trap needs vent or air admittance valve. DN100 main drain." },
+  { id:"r18", buildingType:"residential", category:"Plumbing",        rule:"Stormwater drainage",                  requirement:"Roof runoff discharged to stormwater — no connection to sewer system permitted",             nccRef:"NCC Vol 3 — AS/NZS 3500.3", asRef:"AS/NZS 3500.3:2018",   asTitle:"Plumbing and drainage — stormwater drainage",                         notes:"Pits and pipes sized for local rainfall intensity (BOM data). No cross-connections ever." },
+  { id:"r19", buildingType:"residential", category:"Plumbing",        rule:"Heated water services",                requirement:"Storage at ≥60°C, delivered at ≤50°C to bathrooms via tempering valve",                     nccRef:"NCC Vol 3 — AS/NZS 3500.4", asRef:"AS/NZS 3500.4:2018",   asTitle:"Plumbing and drainage — heated water services",                       notes:"Solar, gas and electric HWS all require tempering valve at point of installation. Label all valves." },
+  { id:"r20", buildingType:"residential", category:"Gas",             rule:"Gas installations",                    requirement:"All gas appliance connections, pipe sizing, testing and ventilation requirements",            nccRef:"NCC Vol 3",                 asRef:"AS/NZS 5601.1:2013",   asTitle:"Gas installations — Part 1: General installations",                  notes:"Gas leak test at 1.5× working pressure. Ventilation required for all gas appliances. Licensed gasfitter only." },
+  { id:"r21", buildingType:"residential", category:"Energy Efficiency",rule:"Thermal insulation",                  requirement:"Insulation products must meet labelling, R-value and installation standard requirements",       nccRef:"NCC Vol 2 — H6D3",          asRef:"AS/NZS 4859.1:2018",   asTitle:"Materials for the thermal insulation of buildings — general criteria", notes:"Check R-value label matches spec. Install without gaps or compression. Critical at eaves junctions." },
+  { id:"r22", buildingType:"residential", category:"Glazing & Windows",rule:"Glass in buildings",                  requirement:"Glass type, thickness and location must meet human impact and wind load requirements",        nccRef:"NCC Vol 2 — Part 3.6",      asRef:"AS 1288:2006",         asTitle:"Glass in buildings — selection and installation",                     notes:"Safety glass required: doors, sidelights to 1500mm AFF, stairwell glazing. Toughened or laminated." },
+  { id:"r23", buildingType:"residential", category:"Glazing & Windows",rule:"Windows & external doors",            requirement:"Windows must meet performance requirements for structural, water and air infiltration",       nccRef:"NCC Vol 2 — Part 3.6",      asRef:"AS 2047:2014",         asTitle:"Windows in buildings — selection and installation",                   notes:"Window WERS rating for energy performance. Flashing installation critical — 80% of water ingress is at windows." },
+  { id:"r24", buildingType:"residential", category:"Accessibility",   rule:"Design for access",                   requirement:"Access and mobility requirements for door widths, circulation, ramps and fittings",           nccRef:"NCC 2022 — H9",             asRef:"AS 1428.1:2009",       asTitle:"Design for access and mobility — general requirements for new building work", notes:"820mm clear door opening, 1000mm circulation space, ≤5mm threshold. Applies to livable housing provisions." },
+  { id:"r25", buildingType:"residential", category:"Structural",      rule:"Permanent & imposed loads",            requirement:"Structural elements designed for dead loads + live loads as per the standard",               nccRef:"NCC Vol 2 — Part 3.4",      asRef:"AS 1170.1:2002",       asTitle:"Structural design actions — permanent, imposed and other actions",    notes:"Floor live load: 1.5 kPa residential, 3.0 kPa balconies. Roof: 0.25 kPa + concentrated 1.1 kN." },
+  { id:"r26", buildingType:"residential", category:"Structural",      rule:"Slip resistance — floors",             requirement:"Floor surfaces in wet areas must achieve minimum slip resistance classification",              nccRef:"NCC Vol 2 — Part 3.8",      asRef:"AS 4586:2013",         asTitle:"Slip resistance classification of new pedestrian surface materials",  notes:"Wet area floors: Class C minimum (R10+ pendulum). External paths: Class D/E. Get test certificate from tile supplier." },
+  { id:"r27", buildingType:"residential", category:"Mechanical & Ventilation", rule:"Natural ventilation — habitable rooms", requirement:"Each habitable room must have openable area ≥5% of floor area for natural ventilation", nccRef:"NCC Vol 2 — Part 3.8.4",    asRef:"NCC Vol 2 Part 3.8.4", asTitle:"NCC Volume 2 — Ventilation of buildings",                            notes:"Alternatively, mechanical ventilation at 10 L/s per person. Cross-ventilation preferred in hot climates." },
+
+  // ── COMMERCIAL ───────────────────────────────────────────────────────────
+  { id:"c1",  buildingType:"commercial",  category:"Structural",      rule:"Concrete structures",                  requirement:"Design of all reinforced and prestressed concrete elements including slabs, beams, columns",  nccRef:"NCC Vol 1 — B1",            asRef:"AS 3600:2018",         asTitle:"Concrete structures",                                                 notes:"Reinforcement cover, bar spacing and lap lengths must be documented on structural drawings. Certifier inspects." },
+  { id:"c2",  buildingType:"commercial",  category:"Structural",      rule:"Steel structures",                     requirement:"Structural steel design including connections, welds and bolted joints",                     nccRef:"NCC Vol 1 — B1",            asRef:"AS 4100:2020",         asTitle:"Steel structures",                                                    notes:"ITP required for fabrication and erection. Welder qualifications to AS 2980. NDT for critical welds." },
+  { id:"c3",  buildingType:"commercial",  category:"Structural",      rule:"Composite steel-concrete",             requirement:"Design of composite beams, slabs and columns in multi-storey construction",                   nccRef:"NCC Vol 1 — B1",            asRef:"AS 2327:2017",         asTitle:"Composite structures",                                                notes:"Shear connectors critical — spacing and weld size from design. Propping requirements during pour." },
+  { id:"c4",  buildingType:"commercial",  category:"Structural",      rule:"Timber structures",                    requirement:"Structural timber elements in commercial buildings — glulam, LVL, solid timber",             nccRef:"NCC Vol 1 — B1",            asRef:"AS 1720.1:2010",       asTitle:"Timber structures — design methods",                                  notes:"Mass timber increasingly common in commercial. Connection design critical — engineer required." },
+  { id:"c5",  buildingType:"commercial",  category:"Structural",      rule:"Wind actions — commercial",            requirement:"Wind pressure on facades, roof and structural elements of all commercial buildings",          nccRef:"NCC Vol 1 — B1",            asRef:"AS 1170.2:2021",       asTitle:"Structural design actions — wind actions",                            notes:"Regional wind speed × terrain × shielding factors. Façade and cladding pressures often govern design." },
+  { id:"c6",  buildingType:"commercial",  category:"Structural",      rule:"Seismic actions",                      requirement:"Earthquake design for commercial buildings depending on building importance level",           nccRef:"NCC Vol 1 — B1",            asRef:"AS 1170.4:2007",       asTitle:"Structural design actions — earthquake actions in Australia",         notes:"Most of Aus is low seismicity. Importance Level 3 and 4 buildings (hospitals, emergency) have stricter requirements." },
+  { id:"c7",  buildingType:"commercial",  category:"Fire Safety",     rule:"Automatic sprinkler systems",          requirement:"Class 2–9 buildings often require automatic sprinkler systems depending on rise and area",    nccRef:"NCC Vol 1 — E1",            asRef:"AS 2118.1:2017",       asTitle:"Automatic fire sprinkler systems — standard systems",                 notes:"Sprinkler heads: spacing, obstruction clearance and hydraulic design. Full hydraulic calculations required." },
+  { id:"c8",  buildingType:"commercial",  category:"Fire Safety",     rule:"Fire detection & warning",             requirement:"Addressable fire detection system with detectors, sounders, MCP and FACP required",          nccRef:"NCC Vol 1 — E1",            asRef:"AS 1670.1:2018",       asTitle:"Fire detection, warning, control and intercom — system design",      notes:"Zone layout, detector spacing and cable type on BAS drawings. Annual commissioning certification." },
+  { id:"c9",  buildingType:"commercial",  category:"Fire Safety",     rule:"Smoke control & fire control",         requirement:"Smoke exhaust and pressurisation systems for high-rise, atrium and carpark buildings",        nccRef:"NCC Vol 1 — E2",            asRef:"AS 1668.1:2015",       asTitle:"The use of ventilation and airconditioning in buildings — fire and smoke control", notes:"System must be tested and certified at practical completion. Mode matrix critical for BAS integration." },
+  { id:"c10", buildingType:"commercial",  category:"Fire Safety",     rule:"Portable fire equipment",              requirement:"Fire extinguishers and hose reels at required locations, type matched to fire class",          nccRef:"NCC Vol 1 — E1",            asRef:"AS 2444:2001",         asTitle:"Portable fire extinguishers and fire blankets — selection and location", notes:"Max 30m travel to extinguisher (15m hose reel). Annual service tag required. Signage mandatory." },
+  { id:"c11", buildingType:"commercial",  category:"Fire Safety",     rule:"Emergency lighting",                   requirement:"Emergency and exit lighting must operate for ≥90 minutes on battery backup",                  nccRef:"NCC Vol 1 — E4",            asRef:"AS 2293.1:2018",       asTitle:"Emergency escape lighting and exit signs — system design, installation and operation", notes:"Annual test + 90-min discharge test every 3 years. Self-contained or central battery system." },
+  { id:"c12", buildingType:"commercial",  category:"Fire Safety",     rule:"Fire-resistant doorsets",              requirement:"Fire doors must be tested, labelled, self-closing and not held open except by approved device",nccRef:"NCC Vol 1 — C3",            asRef:"AS 1905.1:2005",       asTitle:"Components for the protection of openings in fire-resistant walls — fire-resistant doorsets", notes:"Never wedge open fire doors. Inspect seals and closers monthly. Certification label must be visible." },
+  { id:"c13", buildingType:"commercial",  category:"Fire Safety",     rule:"Fire dampers",                         requirement:"Fire dampers in ducts penetrating fire-rated walls and floors — access required for testing", nccRef:"NCC Vol 1 — C3",            asRef:"AS 4428.1:2017",       asTitle:"Fire dampers",                                                        notes:"Access panels within 300mm of damper. Tested on installation, then annually. Inspection record kept." },
+  { id:"c14", buildingType:"commercial",  category:"Mechanical & Ventilation", rule:"Mechanical ventilation",       requirement:"Supply air rates, exhaust rates and filtration for occupant comfort and air quality",        nccRef:"NCC Vol 1 — F4",            asRef:"AS 1668.2:2012",       asTitle:"The use of ventilation and airconditioning — ventilation design for indoor air contaminant control", notes:"Min 10 L/s/person fresh air. CO2 sensors for demand-controlled ventilation (DCV)." },
+  { id:"c15", buildingType:"commercial",  category:"Electrical",      rule:"Commercial wiring rules",              requirement:"All fixed electrical wiring in commercial buildings must comply with the wiring rules",      nccRef:"NCC Vol 1 — F3",            asRef:"AS/NZS 3000:2018",     asTitle:"Wiring rules — electrical installations",                             notes:"Separation of ELV, LV and HV circuits. Cable management system documented on services drawings." },
+  { id:"c16", buildingType:"commercial",  category:"Electrical",      rule:"Switchgear assemblies",                requirement:"Main switchboards and distribution boards must comply with the switchgear standard",         nccRef:"NCC Vol 1 — F3",            asRef:"AS/NZS 61439:2016",    asTitle:"Low-voltage switchgear and controlgear assemblies",                   notes:"Type testing or verification required. IP rating appropriate for installation environment." },
+  { id:"c17", buildingType:"commercial",  category:"Electrical",      rule:"Lightning protection",                 requirement:"Tall and isolated structures may require external lightning protection system",             nccRef:"NCC Vol 1 — F3",            asRef:"AS 1768:2007",         asTitle:"Lightning protection",                                                notes:"Risk assessment determines if required. Air termination, down conductors and earth termination network." },
+  { id:"c18", buildingType:"commercial",  category:"Accessibility",   rule:"Access for people with disability",    requirement:"All Class 2–9 buildings must provide accessible path of travel to all areas open to public",  nccRef:"NCC Vol 1 — D3",            asRef:"AS 1428.1:2009",       asTitle:"Design for access and mobility — general requirements",               notes:"Continuous accessible path: 1000mm min clear, ≤1:20 grade, passing bays. Compliance certificate required." },
+  { id:"c19", buildingType:"commercial",  category:"Accessibility",   rule:"Enhanced access provisions",           requirement:"Sanitary facilities, signage, hearing augmentation and wayfinding requirements",             nccRef:"NCC Vol 1 — F2, D3",        asRef:"AS 1428.2:1992",       asTitle:"Design for access and mobility — enhanced and additional requirements", notes:"Applies to Class 3, 5, 6, 7, 8, 9 buildings. Includes tactile paths, hearing loops and Braille signage." },
+  { id:"c20", buildingType:"commercial",  category:"Accessibility",   rule:"Tactile ground surface indicators",    requirement:"Tactile hazard and directional indicators at stairs, ramps, crossings and platforms",        nccRef:"NCC Vol 1 — D3",            asRef:"AS 1428.4.1:2009",     asTitle:"Design for access and mobility — means to assist the orientation of people with vision impairment", notes:"Colour contrast 30% LRV difference. Install before practical completion — inspected by access consultant." },
+  { id:"c21", buildingType:"commercial",  category:"Hydraulic",       rule:"Hydraulic services — commercial",      requirement:"Water supply, drainage and hot water for commercial buildings",                            nccRef:"NCC Vol 3",                 asRef:"AS/NZS 3500.1:2021",   asTitle:"Plumbing and drainage — water services",                              notes:"Back-flow prevention critical in commercial. Legionella management plan required for cooling towers." },
+  { id:"c22", buildingType:"commercial",  category:"Energy Efficiency",rule:"Commercial energy efficiency",        requirement:"Building fabric, HVAC, lighting and hot water must meet Section J energy budget",          nccRef:"NCC Vol 1 — J",             asRef:"NCC Section J",        asTitle:"NCC Volume 1 — Section J Energy Efficiency",                         notes:"JV3 modelling or JV2 elemental provisions. NABERS commitment agreement increasingly required by councils." },
+  { id:"c23", buildingType:"commercial",  category:"Roofing",         rule:"Metal roof cladding — commercial",     requirement:"Profiled metal sheeting on commercial roofs — laps, fixings, sealing and drainage",         nccRef:"NCC Vol 1 — F1",            asRef:"AS 1562.1:2018",       asTitle:"Design and installation of sheet roof and wall cladding — metal",    notes:"Fastener spacing from manufacturer's pull-out test data matched to wind classification." },
+  { id:"c24", buildingType:"commercial",  category:"Structural",      rule:"Snow and ice loads",                   requirement:"Alpine and sub-alpine buildings must account for snow and ice loads",                      nccRef:"NCC Vol 1 — B1",            asRef:"AS 1170.3:2003",       asTitle:"Structural design actions — snow and ice actions",                    notes:"Applies above ~1200m in VIC/NSW/ACT/TAS. Roof slope and drainage critical for snow shed." },
+  { id:"c25", buildingType:"both",        category:"Glazing & Windows",rule:"Safety glazing — impact zones",       requirement:"Safety glass in all human impact zones regardless of building type",                       nccRef:"NCC Vol 1&2",               asRef:"AS 1288:2006",         asTitle:"Glass in buildings — selection and installation",                     notes:"Toughened or laminated safety glass at doors, sidelights, low windows and stairs. Mark with permanent etching." },
+];
+
+const AS_LOOKUP: ASEntry[] = [
+  { id:"as1",  asNumber:"AS 1684.2:2021",       title:"Residential timber-framed construction (non-cyclonic)",          scope:"Prescriptive standard for the design and construction of timber-framed residential buildings in non-cyclonic areas. Covers span tables, stress grades, connections and bracing.", keywords:["timber","framing","stud","joist","rafter","bearer","wall frame","roof frame","residential","bracing","tie-down"], buildingType:"residential", category:"Structural",      nccLink:"NCC Vol 2 — Part 3.4",      practicalNote:"Use span tables directly — confirm species and stress grade stamped on timber before use." },
+  { id:"as2",  asNumber:"AS 1684.3:2021",       title:"Residential timber-framed construction (cyclonic areas)",        scope:"As per AS 1684.2 but with enhanced requirements for wind regions C and D — cyclonic areas of Australia. Mandatory in coastal QLD, WA and NT above certain wind classifications.", keywords:["timber","cyclone","cyclonic","wind region C","wind region D","framing","tropical","queensland","northern territory","western australia"], buildingType:"residential", category:"Structural", nccLink:"NCC Vol 2 — Part 3.4", practicalNote:"Check wind classification first — C1 to C4 triggers AS 1684.3 requirements." },
+  { id:"as3",  asNumber:"AS 2870:2011",         title:"Residential slabs and footings — design and construction",       scope:"Site classification system (A, S, M, H1, H2, E, P) and footing design rules for reactive soils. Includes reinforced concrete slabs, strip footings and stump footings.", keywords:["slab","footing","foundation","reactive","soil","site classification","concrete","strip","ground","subsoil","pad"], buildingType:"residential", category:"Structural", nccLink:"NCC Vol 2 — Part 3.2.2", practicalNote:"Always get a soil report and site classification before selecting footing type." },
+  { id:"as4",  asNumber:"AS 4055:2012",         title:"Wind loads for housing",                                         scope:"Simplified method for determining wind classification (N1–N6, C1–C4) for housing, and the resultant design pressures for structural components and cladding.", keywords:["wind","housing","N1","N2","N3","N4","N5","N6","C1","C2","C3","C4","classification","pressure","cladding"], buildingType:"residential", category:"Structural", nccLink:"NCC Vol 2 — Part 3.10.1", practicalNote:"Confirm wind classification with local council or use AS 4055 tables for terrain, shielding and region." },
+  { id:"as5",  asNumber:"AS 3660.1:2014",       title:"Termite management — new building work",                         scope:"Requirements for physical and chemical termite management systems in new construction. Covers perimeter chemical treatment, physical barriers, steel mesh, graded granite and plastic sheeting.", keywords:["termite","white ant","barrier","chemical","physical","pest","infestation","protection"], buildingType:"residential", category:"Structural", nccLink:"NCC Vol 2 — Part 3.1.3", practicalNote:"Install before slab pour for best protection. Issue compliance certificate and lodge with council." },
+  { id:"as6",  asNumber:"AS 3740:2021",         title:"Waterproofing of domestic wet areas",                            scope:"Requirements for waterproofing in showers, bathrooms, ensuites, laundries and balconies. Specifies membrane types, heights, falls and substrate preparation.", keywords:["waterproofing","wet area","shower","bathroom","membrane","tanking","grout","tiles","laundry","ensuite","balcony"], buildingType:"residential", category:"Waterproofing", nccLink:"NCC Vol 2 — Part 3.8.1", practicalNote:"Apply membrane on dry substrate. Cure before tiling. Inspector must sign off before tile installation." },
+  { id:"as7",  asNumber:"AS 4654.2:2012",       title:"Waterproofing membranes for external above-ground use — design", scope:"Selection and design of waterproof membranes for external above-ground applications including balconies, decks, planter boxes and rooftop areas.", keywords:["membrane","balcony","deck","external","above ground","roof","planter","terrace","waterproof"], buildingType:"both", category:"Waterproofing", nccLink:"NCC Vol 2 — Part 3.8.1", practicalNote:"Match membrane to substrate. Upstand 150mm min at walls. Fall to outlet min 1:80." },
+  { id:"as8",  asNumber:"AS 3786:2014",         title:"Smoke alarms using scattered light, transmitted light or ionization", scope:"Performance requirements for smoke alarms. Specifies sensing technology, alarm characteristics, power supply and interconnection. Referenced by NCC for mandatory smoke alarm installation.", keywords:["smoke alarm","detector","fire","interconnected","hardwired","battery","bedroom","escape"], buildingType:"both", category:"Fire Safety", nccLink:"NCC Vol 2 — Part 3.7.2", practicalNote:"Test monthly. Replace unit every 10 years. Check interconnection works — one alarm triggers all." },
+  { id:"as9",  asNumber:"AS 3959:2018",         title:"Construction of buildings in bushfire-prone areas",              scope:"Construction requirements for buildings on sites with a determined Bushfire Attack Level (BAL). Covers materials, glazing, vents, decks, gutters and attachment details.", keywords:["bushfire","BAL","ember","attack level","fire zone","bush","defensible space","cladding","vent","gutter"], buildingType:"residential", category:"Fire Safety", nccLink:"NCC Vol 2 — Part 3.7.4", practicalNote:"Higher BAL requires progressively more ember protection, glazing upgrade and non-combustible cladding." },
+  { id:"as10", asNumber:"AS/NZS 3000:2018",     title:"Wiring rules — electrical installations",                        scope:"The fundamental standard for all electrical wiring work in Australia and New Zealand. Covers design, materials, installation methods, testing and inspection for low voltage installations.", keywords:["electrical","wiring","circuit","switchboard","RCD","safety switch","power point","GPO","lighting","cable","conduit","earthing"], buildingType:"both", category:"Electrical", nccLink:"NCC Vol 2 — Part 3.11 / Vol 1 — F3", practicalNote:"Licensed electrician only. All work tested and certified. Certificate of electrical safety (CES) issued." },
+  { id:"as11", asNumber:"AS/NZS 3500.1:2021",   title:"Plumbing and drainage — water services",                         scope:"Requirements for the design and installation of water supply systems including pipework, fittings, valves, pressure limiting and backflow prevention.", keywords:["water","supply","pipe","pressure","plumbing","cold water","hot water","backflow","copper","PEX","CPVC"], buildingType:"both", category:"Plumbing", nccLink:"NCC Vol 3", practicalNote:"Pressure test at 1.5× working pressure before covering. All fittings WaterMark certified." },
+  { id:"as12", asNumber:"AS/NZS 3500.2:2021",   title:"Plumbing and drainage — sanitary plumbing and drainage",        scope:"Installation requirements for sanitary drainage including pipe sizing, gradients, trap depths, vent pipe sizing and inspection opening locations.", keywords:["drainage","sewer","sanitary","trap","vent","fall","gradient","drain","toilet","basin","bath","shower waste"], buildingType:"both", category:"Plumbing", nccLink:"NCC Vol 3", practicalNote:"Min 1:40 fall. Vent every trap or use AAV in concealed locations. CCTV inspection before backfill." },
+  { id:"as13", asNumber:"AS/NZS 3500.3:2018",   title:"Plumbing and drainage — stormwater drainage",                   scope:"Requirements for stormwater drainage systems including pit sizing, pipe sizing, discharge points and connection to legal points of discharge.", keywords:["stormwater","rainwater","roof","gutter","downpipe","pit","drainage","overflow","runoff","rain"], buildingType:"both", category:"Plumbing", nccLink:"NCC Vol 3", practicalNote:"Size system to local rainfall intensity (ARI 20-year for residential). Separate from sewer always." },
+  { id:"as14", asNumber:"AS/NZS 3500.4:2018",   title:"Plumbing and drainage — heated water services",                 scope:"Requirements for hot water systems including storage temperature, tempering valves, solar and heat pump systems, relief valves and pressure management.", keywords:["hot water","HWS","tempering valve","solar","heat pump","storage","temperature","legionella","relief valve"], buildingType:"both", category:"Plumbing", nccLink:"NCC Vol 3", practicalNote:"Store at 60°C min. Temper to 50°C max at outlets. TPR valve to drain externally." },
+  { id:"as15", asNumber:"AS/NZS 5601.1:2013",   title:"Gas installations — general installations",                      scope:"Requirements for the design, installation, commissioning and testing of natural gas and LPG installations in domestic and commercial premises.", keywords:["gas","LPG","natural gas","appliance","burner","cooktop","heater","boiler","regulator","pipe","meter"], buildingType:"both", category:"Gas", nccLink:"NCC Vol 3", practicalNote:"Pressure test at 1.5 kPa. Ventilation mandatory for all gas appliances. Licensed gasfitter only." },
+  { id:"as16", asNumber:"AS/NZS 4859.1:2018",   title:"Materials for the thermal insulation of buildings",              scope:"Performance and labelling requirements for insulation products including bulk and reflective insulation. Defines how to calculate and declare R-values.", keywords:["insulation","R-value","thermal","batts","blanket","reflective","bulk","ceiling","wall","floor","energy","NatHERS"], buildingType:"both", category:"Energy Efficiency", nccLink:"NCC Vol 2 — H6D3", practicalNote:"Check R-value label before installation. Gaps > 2% of area can halve effectiveness — install carefully." },
+  { id:"as17", asNumber:"AS 1288:2006",         title:"Glass in buildings — selection and installation",                scope:"Selection, installation and glazing requirements for glass in buildings. Covers human impact safety, wind loads, and installation of different glass types.", keywords:["glass","glazing","window","safety glass","toughened","laminated","impact","door","sidelight","shower screen"], buildingType:"both", category:"Glazing & Windows", nccLink:"NCC Vol 2 — Part 3.6", practicalNote:"Safety glass required at human impact zones. Permanent etch or sticker marking mandatory." },
+  { id:"as18", asNumber:"AS 2047:2014",         title:"Windows in buildings — selection and installation",              scope:"Performance classification and installation requirements for windows and external glazed doors. Covers structural, water and air infiltration performance levels.", keywords:["window","door","frame","aluminium","timber","uPVC","flashing","sill","head","jamb","weather","draught"], buildingType:"both", category:"Glazing & Windows", nccLink:"NCC Vol 2 — Part 3.6", practicalNote:"Flash windows correctly — most water ingress occurs at window/wall junction. WERS label for energy rating." },
+  { id:"as19", asNumber:"AS 4586:2013",         title:"Slip resistance classification of new pedestrian surface materials", scope:"Test methods and classification of slip resistance for floor and stair surfaces. Classes P1–P5 for pedestrian areas, R9–R13 for industrial.", keywords:["slip","resistance","tiles","floor","wet","bathroom","ramp","stairs","external","path","pendulum test"], buildingType:"both", category:"Structural", nccLink:"NCC Vol 2 — Part 3.8", practicalNote:"Get slip resistance classification from tile supplier. Wet residential: Class C (P4). External paths: Class D/E." },
+  { id:"as20", asNumber:"AS 1428.1:2009",       title:"Design for access and mobility — general requirements",          scope:"Requirements for accessible building design including ramps, doorways, passages, parking, toilets and fittings for people with disabilities.", keywords:["accessibility","access","disability","wheelchair","ramp","door width","DDA","toilet","accessible","mobility","lever handle"], buildingType:"both", category:"Accessibility", nccLink:"NCC Vol 2 — H9 / Vol 1 — D3", practicalNote:"820mm clear door opening minimum. 1000mm unobstructed path. Accessible toilets require turning circle." },
+  { id:"as21", asNumber:"AS 3700:2018",         title:"Masonry structures",                                             scope:"Design and construction of unreinforced, reinforced and prestressed masonry including brick, block and stone. Covers bond, mortar, control joints and structural stability.", keywords:["masonry","brick","block","mortar","bond","wall","retaining","veneer","cavity","control joint","besser","column"], buildingType:"both", category:"Structural", nccLink:"NCC Vol 2 — Part 3.3 / Vol 1 — B1", practicalNote:"Control joints at max 6m. Mortar type M3 or M4 for exposure. Ties at 600×900mm spacing." },
+  { id:"as22", asNumber:"AS 3600:2018",         title:"Concrete structures",                                            scope:"Design standard for reinforced and prestressed concrete structures. Covers strength, serviceability, durability, fire resistance and construction requirements.", keywords:["concrete","reinforced","reo","rebar","slab","beam","column","footing","structural","formwork","cover","strength"], buildingType:"commercial", category:"Structural", nccLink:"NCC Vol 1 — B1", practicalNote:"Cover to reinforcement: 25mm internal, 40mm external, 65mm slab-on-ground. Concrete strength to drawings." },
+  { id:"as23", asNumber:"AS 4100:2020",         title:"Steel structures",                                              scope:"Design of structural steel members and connections. Covers beams, columns, bracing, bolted and welded connections, and stability requirements.", keywords:["steel","structural steel","beam","column","connection","weld","bolt","bracing","portal frame","gusset","rhs","ub","uc"], buildingType:"commercial", category:"Structural", nccLink:"NCC Vol 1 — B1", practicalNote:"Connection design critical — specify bolt grade (8.8), weld category and electrode type. ITP for fabrication." },
+  { id:"as24", asNumber:"AS 1170.2:2021",       title:"Structural design actions — wind actions",                       scope:"Determination of design wind speeds and wind pressures for structural design of buildings and structures. Supersedes the previous 2011 edition.", keywords:["wind","pressure","structural","facade","cladding","roof","commercial","actions","region","terrain","shielding"], buildingType:"both", category:"Structural", nccLink:"NCC Vol 1 — B1", practicalNote:"Wind region maps changed in 2021 — check latest version applies to your project." },
+  { id:"as25", asNumber:"AS 1170.4:2007",       title:"Structural design actions — earthquake actions in Australia",    scope:"Seismic hazard assessment and structural design requirements for buildings subject to earthquake actions. Provides hazard factor Z and design spectra.", keywords:["earthquake","seismic","zone","hazard","structural","ductility","importance","foundation","dynamic"], buildingType:"commercial", category:"Structural", nccLink:"NCC Vol 1 — B1", practicalNote:"Most Australian buildings low seismicity. Importance Level 3/4 (hospitals, emergency) apply stricter ductility." },
+  { id:"as26", asNumber:"AS 2118.1:2017",       title:"Automatic fire sprinkler systems — standard systems",            scope:"Design, installation, commissioning and maintenance of automatic fire sprinkler systems in Class 2–9 buildings.", keywords:["sprinkler","fire suppression","wet pipe","dry pipe","heads","hydraulic","pump","tank","riser","commercial"], buildingType:"commercial", category:"Fire Safety", nccLink:"NCC Vol 1 — E1", practicalNote:"Hydraulic calculations by licensed hydraulic engineer. Commissioning test with certifier present." },
+  { id:"as27", asNumber:"AS 1670.1:2018",       title:"Fire detection, warning, control and intercom — system design",  scope:"Design requirements for automatic fire detection and alarm systems including detector selection, zone layout, FACP requirements and cabling.", keywords:["fire alarm","detector","smoke","heat","FACP","panel","zone","sounder","strobe","detection","warning","commercial"], buildingType:"commercial", category:"Fire Safety", nccLink:"NCC Vol 1 — E1", practicalNote:"System integrated with BAS and mechanical for smoke mode operation. Annual service certification required." },
+  { id:"as28", asNumber:"AS 2293.1:2018",       title:"Emergency escape lighting and exit signs",                       scope:"Requirements for emergency lighting systems providing illumination for safe evacuation. Covers design, installation, testing and documentation.", keywords:["emergency lighting","exit sign","egress","evacuation","escape","battery","lux","maintained","non-maintained"], buildingType:"commercial", category:"Electrical", nccLink:"NCC Vol 1 — E4", practicalNote:"Maintained or non-maintained type per NCC. 90-minute duration test every 3 years. Monthly function test." },
+  { id:"as29", asNumber:"AS 1668.2:2012",       title:"Ventilation and airconditioning — ventilation design for indoor air contaminant control", scope:"Minimum ventilation rates and design requirements for HVAC systems to control indoor air quality in commercial buildings.", keywords:["ventilation","HVAC","fresh air","exhaust","supply","air quality","carbon dioxide","CO2","mechanical","airconditioning"], buildingType:"commercial", category:"Mechanical & Ventilation", nccLink:"NCC Vol 1 — F4", practicalNote:"Min 10 L/s/person fresh air. CO2 setpoint typically 800–1000 ppm for DCV control." },
+  { id:"as30", asNumber:"AS 1562.1:2018",       title:"Design and installation of sheet roof and wall cladding — metal", scope:"Requirements for the design and installation of profiled metal sheet cladding on roofs and walls. Covers fixings, laps, sealing, drainage and flashings.", keywords:["metal roof","colorbond","sheet","cladding","fastener","lap","flashing","corrugated","profiled","purlin","gutter"], buildingType:"both", category:"Roofing", nccLink:"NCC Vol 2 — Part 3.5", practicalNote:"Fastener pull-out capacity must exceed calculated wind uplift. Use manufacturer-tested fixing spacing." },
+  { id:"as31", asNumber:"AS 1905.1:2005",       title:"Components for the protection of openings in fire-resistant walls — fire-resistant doorsets", scope:"Performance requirements for fire-resistant door assemblies. Covers testing, marking, installation and maintenance of fire doors.", keywords:["fire door","FRL","fire resistant","doorset","self-closing","smoke seal","intumescent","hinges","rated"], buildingType:"both", category:"Fire Safety", nccLink:"NCC Vol 1 — C3 / Vol 2 — 3.7", practicalNote:"Never wedge open. Self-closer must function. Smoke seals intact. Label must be visible and legible." },
+  { id:"as32", asNumber:"AS 1720.1:2010",       title:"Timber structures — design methods",                             scope:"Design methods for structural timber members and connections in commercial and industrial buildings. Used for glulam, LVL and solid timber structures.", keywords:["timber structure","glulam","LVL","laminated","structural timber","commercial","mass timber","CLT","connection"], buildingType:"commercial", category:"Structural", nccLink:"NCC Vol 1 — B1", practicalNote:"Mass timber increasingly used in commercial — engineer design required for all connections and systems." },
+  { id:"as33", asNumber:"AS 1768:2007",         title:"Lightning protection",                                           scope:"Risk assessment and design requirements for external lightning protection systems for structures. Covers air termination, down conductors and earth termination networks.", keywords:["lightning","surge","protection","earthing","conductor","rod","mesh","tall","isolated","structure"], buildingType:"commercial", category:"Electrical", nccLink:"NCC Vol 1 — F3", practicalNote:"Risk assessment determines if system required. Bond all metallic services to same earth reference." },
+  { id:"as34", asNumber:"AS 1428.4.1:2009",     title:"Design for access and mobility — tactile ground surface indicators", scope:"Requirements for tactile hazard indicators and directional indicators used to assist people with vision impairment navigate built environments.", keywords:["tactile","TGSI","vision impairment","blind","indicator","path","hazard","directional","strip","dome"], buildingType:"commercial", category:"Accessibility", nccLink:"NCC Vol 1 — D3", practicalNote:"30% LRV contrast from surrounding surface. Install at stairs, ramps, platform edges and crossings." },
+  { id:"as35", asNumber:"AS 2049:2018",         title:"Roof tiles — selection and installation",                        scope:"Requirements for the selection and installation of concrete and terracotta roof tiles. Covers battens, bedding, pointing, ridge and hip tile fixing.", keywords:["roof tile","terracotta","concrete tile","batten","bedding","pointing","ridge","hip","mortar","tile"], buildingType:"residential", category:"Roofing", nccLink:"NCC Vol 2 — Part 3.5", practicalNote:"In cyclonic areas, mechanically fix every tile. Ridge and hip mortar must be polymer-modified." },
+  { id:"as36", asNumber:"AS/NZS 3012:2019",     title:"Electrical installations — construction and demolition sites",   scope:"Requirements for temporary electrical installations on construction and demolition sites including RCD protection, inspections and isolation.", keywords:["construction site","temporary","electrical","RCD","leads","tools","site","power","builder"], buildingType:"both", category:"Electrical", nccLink:"AS/NZS 3000:2018", practicalNote:"All portable tools and leads on site need RCD protection. Inspect before use daily. Leads max 25m." },
+  { id:"as37", asNumber:"AS/NZS 61439:2016",    title:"Low-voltage switchgear and controlgear assemblies",              scope:"Requirements for the design, testing and verification of LV switchboards and distribution boards used in electrical installations.", keywords:["switchboard","distribution board","MDB","DB","panel","main switch","meter","commercial","electrical"], buildingType:"commercial", category:"Electrical", nccLink:"NCC Vol 1 — F3", practicalNote:"Type test certificates from manufacturer required. As-built drawings inside every switchboard." },
+  { id:"as38", asNumber:"AS 1170.1:2002",       title:"Structural design actions — permanent, imposed and other actions", scope:"Loading requirements for structural design including dead loads, live loads, roof loads, balustrade loads and construction loads.", keywords:["load","dead load","live load","imposed","structural","balustrade","floor","roof","loading","action"], buildingType:"both", category:"Structural", nccLink:"NCC Vol 1 — B1 / Vol 2 — Part 3.4", practicalNote:"Floor: 1.5 kPa residential, 3.0 kPa commercial. Balustrade: 0.6 kN/m horizontal." },
+  { id:"as39", asNumber:"AS 4600:2018",         title:"Cold-formed steel structures",                                   scope:"Design of structural members fabricated from cold-formed steel strip including light gauge framing, purlins, girts and sheeting rails.", keywords:["light gauge","steel stud","steel framing","cold formed","purlin","girt","rhs","cee","zee","residential steel"], buildingType:"both", category:"Structural", nccLink:"NCC Vol 2 — Part 3.4 / Vol 1 — B1", practicalNote:"Connection screw size and spacing critical. Check corrosion class for coastal or wet environments." },
+  { id:"as40", asNumber:"AS 1170.3:2003",       title:"Structural design actions — snow and ice actions",              scope:"Requirements for determining snow and ice loads on roofs and structures in alpine and sub-alpine areas of Australia.", keywords:["snow","ice","alpine","load","mountain","roof","structure","high altitude"], buildingType:"commercial", category:"Structural", nccLink:"NCC Vol 1 — B1", practicalNote:"Applies above ~1200m AHD. Roof slope and drainage critical. Drift loading at parapets and steps." },
+];
+
 // ── Component ─────────────────────────────────────────────────────────────────
 
 interface NCCComplianceCardProps {
@@ -290,6 +425,13 @@ export const NCCComplianceCard = ({ projectId }: NCCComplianceCardProps) => {
   const [checkStates, setCheckStates] = useState<Record<string, CheckState>>({});
   const [openSections, setOpenSections] = useState<Set<string>>(new Set(["site", "waterproofing", "fire"]));
   const [showNotes, setShowNotes] = useState<string | null>(null);
+
+  // Rules Browser + AS Lookup state
+  const [activeMainTab, setActiveMainTab] = useState("checklist");
+  const [rulesBuildingType, setRulesBuildingType] = useState<"residential" | "commercial">("residential");
+  const [rulesCategory, setRulesCategory] = useState("All");
+  const [rulesSearch, setRulesSearch] = useState("");
+  const [lookupSearch, setLookupSearch] = useState("");
 
   // Load saved state
   useEffect(() => {
@@ -403,7 +545,38 @@ export const NCCComplianceCard = ({ projectId }: NCCComplianceCardProps) => {
     toast.success("Compliance report downloaded");
   };
 
+  // Filtered rules
+  const filteredRules = RULES_DB.filter(r => {
+    const matchType = r.buildingType === rulesBuildingType || r.buildingType === "both";
+    const matchCat = rulesCategory === "All" || r.category === rulesCategory;
+    const q = rulesSearch.toLowerCase();
+    const matchSearch = !q || r.rule.toLowerCase().includes(q) || r.requirement.toLowerCase().includes(q) || r.asRef.toLowerCase().includes(q) || r.notes.toLowerCase().includes(q);
+    return matchType && matchCat && matchSearch;
+  });
+
+  // Filtered AS standards
+  const filteredAS = AS_LOOKUP.filter(a => {
+    const q = lookupSearch.toLowerCase();
+    if (!q) return true;
+    return a.asNumber.toLowerCase().includes(q) || a.title.toLowerCase().includes(q) || a.scope.toLowerCase().includes(q) || a.keywords.some(k => k.toLowerCase().includes(q)) || a.practicalNote.toLowerCase().includes(q);
+  });
+
   return (
+    <Tabs value={activeMainTab} onValueChange={setActiveMainTab} className="space-y-4">
+      <TabsList className="grid w-full grid-cols-3">
+        <TabsTrigger value="checklist" className="gap-2">
+          <ClipboardList className="h-4 w-4" />Compliance Checklist
+        </TabsTrigger>
+        <TabsTrigger value="rules" className="gap-2">
+          <BookOpen className="h-4 w-4" />Rules Browser
+        </TabsTrigger>
+        <TabsTrigger value="aslookup" className="gap-2">
+          <Search className="h-4 w-4" />AS Lookup
+        </TabsTrigger>
+      </TabsList>
+
+      {/* ══ TAB 1: CHECKLIST ══ */}
+      <TabsContent value="checklist">
     <div className="space-y-6">
 
       {/* ── Project Setup ── */}
@@ -593,5 +766,232 @@ export const NCCComplianceCard = ({ projectId }: NCCComplianceCardProps) => {
       </div>
 
     </div>
+      </TabsContent>
+
+      {/* ══ TAB 2: RULES BROWSER ══ */}
+      <TabsContent value="rules">
+        <div className="space-y-4">
+          <Card>
+            <CardHeader className="pb-3">
+              <div className="flex items-center gap-2">
+                <BookOpen className="h-5 w-5 text-primary" />
+                <CardTitle>NCC Rules Browser</CardTitle>
+              </div>
+              <CardDescription>
+                Browse all NCC 2022 rules by building type and category. Each rule references the applicable Australian Standard.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              {/* Building type toggle */}
+              <div className="flex gap-2">
+                <Button
+                  size="sm"
+                  variant={rulesBuildingType === "residential" ? "default" : "outline"}
+                  onClick={() => setRulesBuildingType("residential")}
+                  className="gap-2"
+                >
+                  <Building2 className="h-4 w-4" />Residential
+                </Button>
+                <Button
+                  size="sm"
+                  variant={rulesBuildingType === "commercial" ? "default" : "outline"}
+                  onClick={() => setRulesBuildingType("commercial")}
+                  className="gap-2"
+                >
+                  <Building2 className="h-4 w-4" />Commercial
+                </Button>
+              </div>
+
+              {/* Category filter */}
+              <div className="flex flex-wrap gap-1.5">
+                {RULE_CATEGORIES.map(cat => (
+                  <button
+                    key={cat}
+                    onClick={() => setRulesCategory(cat)}
+                    className={`px-2.5 py-1 rounded-full text-xs font-medium border transition-colors ${
+                      rulesCategory === cat
+                        ? "bg-primary text-primary-foreground border-primary"
+                        : "bg-muted/50 text-muted-foreground border-border hover:bg-muted"
+                    }`}
+                  >
+                    {cat}
+                  </button>
+                ))}
+              </div>
+
+              {/* Search */}
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                <Input
+                  className="pl-9 h-9"
+                  placeholder="Search rules, requirements, standards…"
+                  value={rulesSearch}
+                  onChange={e => setRulesSearch(e.target.value)}
+                />
+              </div>
+
+              <p className="text-xs text-muted-foreground">{filteredRules.length} rule{filteredRules.length !== 1 ? "s" : ""} found</p>
+            </CardContent>
+          </Card>
+
+          {/* Rule cards */}
+          <div className="space-y-3">
+            {filteredRules.length === 0 ? (
+              <Card><CardContent className="pt-6 text-center text-muted-foreground">No rules match your search.</CardContent></Card>
+            ) : filteredRules.map(rule => (
+              <Card key={rule.id} className="border-l-4" style={{ borderLeftColor: rule.buildingType === "commercial" ? "#6366f1" : "#10b981" }}>
+                <CardContent className="pt-4 pb-4">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 flex-wrap mb-1">
+                        <Badge variant="outline" className="text-[10px] h-4 px-1.5">
+                          {rule.category}
+                        </Badge>
+                        <Badge
+                          className={`text-[10px] h-4 px-1.5 ${rule.buildingType === "commercial" ? "bg-indigo-100 text-indigo-700 border-indigo-200" : "bg-emerald-100 text-emerald-700 border-emerald-200"}`}
+                          variant="outline"
+                        >
+                          {rule.buildingType === "both" ? "Res + Comm" : rule.buildingType === "commercial" ? "Commercial" : "Residential"}
+                        </Badge>
+                      </div>
+                      <p className="text-sm font-semibold">{rule.rule}</p>
+                      <p className="text-xs text-muted-foreground mt-0.5 leading-relaxed">{rule.requirement}</p>
+
+                      <div className="mt-2 grid grid-cols-1 sm:grid-cols-2 gap-2">
+                        <div className="text-xs bg-muted/40 rounded px-2 py-1">
+                          <span className="font-semibold text-primary">NCC Ref: </span>
+                          <span className="font-mono">{rule.nccRef}</span>
+                        </div>
+                        <div className="text-xs bg-blue-50 border border-blue-100 rounded px-2 py-1">
+                          <span className="font-semibold text-blue-700">AS: </span>
+                          <span className="font-mono text-blue-800">{rule.asRef}</span>
+                          {rule.asTitle && <span className="text-blue-600"> — {rule.asTitle}</span>}
+                        </div>
+                      </div>
+
+                      {rule.notes && (
+                        <div className="mt-2 text-xs text-amber-800 bg-amber-50 border border-amber-100 rounded px-2 py-1.5">
+                          <span className="font-semibold">Practical note: </span>{rule.notes}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        </div>
+      </TabsContent>
+
+      {/* ══ TAB 3: AS LOOKUP ══ */}
+      <TabsContent value="aslookup">
+        <div className="space-y-4">
+          <Card>
+            <CardHeader className="pb-3">
+              <div className="flex items-center gap-2">
+                <Search className="h-5 w-5 text-primary" />
+                <CardTitle>Australian Standard Lookup</CardTitle>
+              </div>
+              <CardDescription>
+                Search by scope of work or keywords to find the correct Australian Standard for your trade. Includes practical notes for site application.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                <Input
+                  className="pl-9 h-10"
+                  placeholder="e.g. waterproofing, smoke alarm, timber framing, drainage…"
+                  value={lookupSearch}
+                  onChange={e => setLookupSearch(e.target.value)}
+                />
+              </div>
+              <p className="text-xs text-muted-foreground mt-2">{filteredAS.length} standard{filteredAS.length !== 1 ? "s" : ""} found — click <Copy className="inline h-3 w-3" /> to copy standard number</p>
+            </CardContent>
+          </Card>
+
+          {lookupSearch === "" && (
+            <Card className="border-blue-100 bg-blue-50/50">
+              <CardContent className="pt-4 pb-4 text-center text-sm text-blue-700">
+                Type a keyword above to find the right Australian Standard for your scope of work.
+                <div className="flex flex-wrap justify-center gap-2 mt-3">
+                  {["waterproof","timber frame","smoke alarm","drainage","electrical","insulation","balustrade","fire door"].map(kw => (
+                    <button
+                      key={kw}
+                      onClick={() => setLookupSearch(kw)}
+                      className="px-2.5 py-1 bg-blue-100 hover:bg-blue-200 text-blue-800 rounded-full text-xs border border-blue-200 transition-colors"
+                    >
+                      {kw}
+                    </button>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
+          <div className="space-y-3">
+            {filteredAS.length === 0 && lookupSearch !== "" ? (
+              <Card><CardContent className="pt-6 text-center text-muted-foreground">No standards match "{lookupSearch}". Try broader keywords.</CardContent></Card>
+            ) : filteredAS.map(as => (
+              <Card key={as.id} className="hover:shadow-md transition-shadow">
+                <CardContent className="pt-4 pb-4">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 flex-wrap mb-1">
+                        <span className="font-bold text-sm font-mono text-primary">{as.asNumber}</span>
+                        <Badge variant="outline" className="text-[10px] h-4 px-1.5">{as.category}</Badge>
+                        <Badge
+                          className={`text-[10px] h-4 px-1.5 ${as.buildingType === "commercial" ? "bg-indigo-100 text-indigo-700 border-indigo-200" : as.buildingType === "residential" ? "bg-emerald-100 text-emerald-700 border-emerald-200" : "bg-slate-100 text-slate-600 border-slate-200"}`}
+                          variant="outline"
+                        >
+                          {as.buildingType === "both" ? "Res + Comm" : as.buildingType === "commercial" ? "Commercial" : "Residential"}
+                        </Badge>
+                      </div>
+                      <p className="text-sm font-semibold leading-snug">{as.title}</p>
+                      <p className="text-xs text-muted-foreground mt-1 leading-relaxed">{as.scope}</p>
+
+                      <div className="mt-2 text-xs bg-muted/40 rounded px-2 py-1">
+                        <span className="font-semibold">NCC reference: </span>
+                        <span className="font-mono">{as.nccLink}</span>
+                      </div>
+
+                      {as.practicalNote && (
+                        <div className="mt-2 text-xs text-amber-800 bg-amber-50 border border-amber-100 rounded px-2 py-1.5">
+                          <span className="font-semibold">On-site: </span>{as.practicalNote}
+                        </div>
+                      )}
+
+                      <div className="mt-2 flex flex-wrap gap-1">
+                        {as.keywords.slice(0, 8).map(kw => (
+                          <button
+                            key={kw}
+                            onClick={() => setLookupSearch(kw)}
+                            className="px-1.5 py-0.5 bg-muted hover:bg-muted/80 text-muted-foreground rounded text-[10px] border border-border transition-colors"
+                          >
+                            {kw}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+
+                    <button
+                      onClick={() => {
+                        navigator.clipboard.writeText(as.asNumber);
+                        toast.success(`Copied ${as.asNumber}`);
+                      }}
+                      className="flex-shrink-0 p-2 rounded hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
+                      title={`Copy ${as.asNumber}`}
+                    >
+                      <Copy className="h-4 w-4" />
+                    </button>
+                  </div>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        </div>
+      </TabsContent>
+
+    </Tabs>
   );
 };
