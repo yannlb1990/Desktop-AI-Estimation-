@@ -503,8 +503,8 @@ export const EstimateTemplate = ({ projectId, estimateId }: EstimateTemplateProp
         });
       }
 
-      // Labour calculation with wastage
-      const labBase = (item.labour_hours || 0) * (item.labour_rate || config.defaultLabourRate);
+      // Labour calculation with wastage — always use current labourRates state so rate changes apply to existing items
+      const labBase = (item.labour_hours || 0) * (labourRates[item.trade] || item.labour_rate || config.defaultLabourRate);
       const labWaste = labBase * ((item.labour_wastage_pct || 0) / 100);
       totalLabour += labBase + labWaste;
     });
@@ -981,7 +981,7 @@ export const EstimateTemplate = ({ projectId, estimateId }: EstimateTemplateProp
               {items.map(item => {
                 const matBase = item.quantity * item.unit_price;
                 const matWaste = matBase * (item.material_wastage_pct / 100);
-                const labBase = item.labour_hours * item.labour_rate;
+                const labBase = item.labour_hours * (labourRates[item.trade] || item.labour_rate || config.defaultLabourRate);
                 const labWaste = labBase * (item.labour_wastage_pct / 100);
                 const subtotal = matBase + matWaste + labBase + labWaste;
                 const markup = subtotal * (item.markup_pct / 100);
