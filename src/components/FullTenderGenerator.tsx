@@ -1,4 +1,4 @@
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -274,6 +274,46 @@ export const FullTenderGenerator = ({ project, estimate }: FullTenderProps) => {
     { option: "Alternative B", description: "", saving: "" },
   ])
 
+  // ── Load estimate items from localStorage when dialog opens ──
+  const loadFromEstimate = () => {
+    const projects: any[] = JSON.parse(localStorage.getItem("local_projects") || "[]")
+    const proj = projects.find((p: any) => p.id === project?.id)
+    const estimateItems: any[] = proj?.estimate_items || estimate?.estimate_items || []
+    if (estimateItems.length === 0) return
+
+    const newBoqItems = estimateItems.map((item: any) => {
+      const qty = parseFloat(item.quantity) || 1
+      const unitPrice = parseFloat(item.unit_price) || 0
+      const labourHours = parseFloat(item.labour_hours) || 0
+      const labourRate = parseFloat(item.labour_rate) || 65
+      const matWaste = (item.material_wastage_pct ?? 5) / 100
+      const labWaste = (item.labour_wastage_pct ?? 10) / 100
+      const markup = (item.markup_pct ?? 0) / 100
+      const matTotal = qty * unitPrice * (1 + matWaste)
+      const labTotal = labourHours * labourRate * (1 + labWaste)
+      const lineTotal = Math.round((matTotal + labTotal) * (1 + markup) * 100) / 100
+      return {
+        trade: item.trade || "General",
+        description: [item.scope_of_work, item.material_type].filter(Boolean).join(" — ") || "Item",
+        qty: String(qty),
+        unit: item.unit || "m²",
+        rate: String(Math.round((lineTotal / Math.max(qty, 1)) * 100) / 100),
+        total: String(lineTotal),
+      }
+    })
+
+    const overheadFromStorage = proj?.overhead_total || 0
+    const itemsTotal = newBoqItems.reduce((s, b) => s + parseFloat(b.total || "0"), 0)
+    const exGstTotal = Math.round((itemsTotal + overheadFromStorage) * 100) / 100
+
+    setBoqItems(newBoqItems)
+    setSubtotal(String(exGstTotal))
+  }
+
+  useEffect(() => {
+    if (open) loadFromEstimate()
+  }, [open])
+
   // ── Derived ──
   const subtotalNum = parseFloat(subtotal) || 0
   const gstAmount = subtotalNum * 0.1
@@ -526,6 +566,12 @@ export const FullTenderGenerator = ({ project, estimate }: FullTenderProps) => {
                 {/* ── PRICING TAB ── */}
                 <TabsContent value="pricing" className="space-y-3 mt-0">
                   <p className="text-xs text-muted-foreground font-medium uppercase tracking-wide">Tender Sum</p>
+                  {subtotalNum > 0 && (
+                    <div className="flex items-center justify-between bg-accent/10 border border-accent/30 rounded px-3 py-2">
+                      <span className="text-xs text-accent font-medium">Auto-loaded from Estimate tab</span>
+                      <button className="text-xs text-muted-foreground underline" onClick={loadFromEstimate}>Reload</button>
+                    </div>
+                  )}
                   <div><Label className="text-xs">Subtotal (ex GST) — $</Label>
                     <Input type="number" value={subtotal} onChange={e => setSubtotal(e.target.value)} placeholder="0.00" className="h-8 text-sm font-mono" /></div>
                   {subtotalNum > 0 && (

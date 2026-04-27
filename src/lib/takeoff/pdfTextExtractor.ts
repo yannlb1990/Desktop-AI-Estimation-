@@ -571,18 +571,23 @@ export function findDoorWindowTags(texts: ExtractedText[]): ExtractedElement[] {
     /^W\d{1,2}$/i,     // W1, W2, W10
     /^D0\d$/i,         // D01, D02
     /^W0\d$/i,         // W01, W02
+    /^D-\d{1,2}$/i,    // D-1, D-01 (dash format)
+    /^W-\d{1,2}$/i,    // W-1, W-01 (dash format)
     /^SD\d{1,2}$/i,    // SD1 (sliding door)
     /^PD\d{1,2}$/i,    // PD1 (pivot door)
     /^BFD\d{1,2}$/i,   // BFD1 (bifold door)
     /^AW\d{1,2}$/i,    // AW1 (awning window)
     /^FW\d{1,2}$/i,    // FW1 (fixed window)
+    /^DG\d{1,2}$/i,    // DG1 (double-glazed)
+    /^CW\d{1,2}$/i,    // CW1 (cavity window)
+    /^GL\d{1,2}$/i,    // GL1 (glazing panel)
   ];
 
   return texts
     .filter(t => {
       const trimmed = t.text.trim();
-      // Must be short (tag-like)
-      if (trimmed.length < 2 || trimmed.length > 5) return false;
+      // Must be short (tag-like) — allow up to 6 chars for BFD01
+      if (trimmed.length < 2 || trimmed.length > 6) return false;
       return tagPatterns.some(p => p.test(trimmed));
     })
     .map(t => {
@@ -680,6 +685,146 @@ export async function extractAllElements(
     seen.add(key);
     return true;
   });
+}
+
+// ─── MULTI-PAGE OPENING DETECTION ────────────────────────────────────────────
+
+/** A window or door detected from the plan (merged from floor-plan tags + schedule rows). */
+export interface DetectedOpening {
+  ref: string;           // W01, D03, SD1
+  type: 'window' | 'door';
+  width?: number;        // mm
+  height?: number;       // mm
+  page: number;          // 0-indexed page where the tag was found on the floor plan
+  x: number;            // PDF coordinate x of the tag
+  y: number;            // PDF coordinate y of the tag
+  confidence: number;   // 0–1
+  source: 'floor_plan' | 'schedule' | 'merged';
+  description?: string; // e.g. "Sliding Door 820×2100mm"
+}
+
+/**
+ * Robust schedule parser — works on ANY page text (doesn't require "window schedule" header).
+ * Matches patterns like: W01 820 x 1210, W-01 900×2100, D01 2040 x 820
+ */
+export function parseOpeningScheduleRobust(
+  allText: string,
+  type: 'window' | 'door',
+  pageIndex: number,
+): ExtractedScheduleRow[] {
+  const results: ExtractedScheduleRow[] = [];
+  const prefix = type === 'window' ? 'W' : 'D';
+  const seen = new Set<string>();
+
+  // Match: prefix + optional dash/space + 1-2 digits, then within 30 chars: NNN x NNN
+  const pattern = new RegExp(
+    `\\b${prefix}[-\\s]?(\\d{1,2})\\b[^\\n]{0,30}?(\\d{3,4})\\s*[xX×*]\\s*(\\d{3,4})`,
+    'gi',
+  );
+
+  let match;
+  while ((match = pattern.exec(allText)) !== null) {
+    const ref = `${prefix}${match[1].padStart(2, '0')}`;
+    if (seen.has(ref)) continue;
+    seen.add(ref);
+
+    const n1 = parseInt(match[2]);
+    const n2 = parseInt(match[3]);
+
+    // Door dims in AU drawings are often stated HEIGHT × WIDTH; height > 1500 is a giveaway
+    let width: number, height: number;
+    if (type === 'door' && n1 > 1500) {
+      height = n1; width = n2;
+    } else {
+      width = n1; height = n2;
+    }
+
+    results.push({
+      type,
+      reference: ref,
+      description: `${type === 'window' ? 'Window' : 'Door'} ${width}×${height}mm`,
+      size: `${width}×${height}`,
+      width,
+      height,
+      quantity: 1,
+      pageIndex,
+    });
+  }
+
+  return results;
+}
+
+/**
+ * Scan every page of a PDF to build a merged list of detected openings.
+ * Combines floor-plan tag positions with schedule dimension data.
+ */
+export async function extractOpeningsAllPages(
+  pdfUrl: string,
+  totalPages: number,
+  onProgress?: (completedPages: number) => void,
+): Promise<DetectedOpening[]> {
+  const tagMap      = new Map<string, DetectedOpening>();
+  const scheduleMap = new Map<string, ExtractedScheduleRow>();
+
+  for (let pageIdx = 0; pageIdx < totalPages; pageIdx++) {
+    const texts   = await extractTextFromPDF(pdfUrl, pageIdx);
+    const allText = texts.map(t => t.text).join('\n');
+
+    // Floor-plan tags → position data
+    const tags = findDoorWindowTags(texts);
+    for (const tag of tags) {
+      const ref = tag.content;
+      if (!tagMap.has(ref)) {
+        tagMap.set(ref, {
+          ref,
+          type: tag.type as 'window' | 'door',
+          page: pageIdx,
+          x: tag.bounds.x,
+          y: tag.bounds.y,
+          confidence: tag.confidence ?? 0.8,
+          source: 'floor_plan',
+        });
+      }
+    }
+
+    // Schedule rows (any page) → dimension data
+    const windowRows = parseOpeningScheduleRobust(allText, 'window', pageIdx);
+    const doorRows   = parseOpeningScheduleRobust(allText, 'door',   pageIdx);
+    for (const row of [...windowRows, ...doorRows]) {
+      if (!scheduleMap.has(row.reference)) scheduleMap.set(row.reference, row);
+    }
+
+    onProgress?.(pageIdx + 1);
+  }
+
+  // Merge: tag position + schedule dimensions
+  const allRefs = new Set([...tagMap.keys(), ...scheduleMap.keys()]);
+  const result: DetectedOpening[] = [];
+
+  for (const ref of allRefs) {
+    const tag      = tagMap.get(ref);
+    const schedule = scheduleMap.get(ref);
+
+    if (tag && schedule) {
+      result.push({ ...tag, width: schedule.width, height: schedule.height, confidence: 0.95, source: 'merged', description: schedule.description });
+    } else if (tag) {
+      result.push(tag);
+    } else if (schedule) {
+      result.push({
+        ref: schedule.reference,
+        type: schedule.type as 'window' | 'door',
+        width: schedule.width,
+        height: schedule.height,
+        page: schedule.pageIndex,
+        x: 0, y: 0,
+        confidence: 0.65,
+        source: 'schedule',
+        description: schedule.description,
+      });
+    }
+  }
+
+  return result.sort((a, b) => a.ref.localeCompare(b.ref, undefined, { numeric: true }));
 }
 
 // Get element statistics for a page

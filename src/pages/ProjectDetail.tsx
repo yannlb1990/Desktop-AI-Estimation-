@@ -261,7 +261,7 @@ const ProjectDetail = () => {
         </Card>
 
         <Tabs defaultValue="estimate" className="space-y-6">
-          <TabsList className="grid w-full grid-cols-8 lg:grid-cols-8">
+          <TabsList className="flex w-full h-auto flex-wrap gap-0.5 p-1">
             <TabsTrigger value="estimate">
               <Calculator className="h-4 w-4 mr-2" />
               Estimate

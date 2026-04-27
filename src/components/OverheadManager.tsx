@@ -1,5 +1,4 @@
 import { useState, useEffect } from "react";
-import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -48,8 +47,22 @@ interface OverheadManagerProps {
   projectId: string;
 }
 
+const storageKey = (projectId: string) => `overhead_items_${projectId}`;
+
+const loadFromStorage = (projectId: string): OverheadItem[] => {
+  try {
+    return JSON.parse(localStorage.getItem(storageKey(projectId)) || "[]");
+  } catch {
+    return [];
+  }
+};
+
+const saveToStorage = (projectId: string, items: OverheadItem[]) => {
+  localStorage.setItem(storageKey(projectId), JSON.stringify(items));
+};
+
 export const OverheadManager = ({ projectId }: OverheadManagerProps) => {
-  const [items, setItems] = useState<OverheadItem[]>([]);
+  const [items, setItems] = useState<OverheadItem[]>(() => loadFromStorage(projectId));
   const [newItem, setNewItem] = useState({
     name: "",
     category: "",
@@ -58,71 +71,52 @@ export const OverheadManager = ({ projectId }: OverheadManagerProps) => {
     notes: ""
   });
 
+  // Reload when projectId changes
   useEffect(() => {
-    loadItems();
+    setItems(loadFromStorage(projectId));
   }, [projectId]);
 
-  const loadItems = async () => {
-    const { data, error } = await supabase
-      .from("overhead_items")
-      .select("*")
-      .eq("project_id", projectId)
-      .order("created_at");
+  const totalOverheads = items.reduce((sum, item) => sum + item.amount, 0);
 
-    if (error) {
-      toast.error("Failed to load overhead items");
-      return;
-    }
+  // Sync total to local_projects so EstimateTemplate and FullTenderGenerator can read it
+  useEffect(() => {
+    try {
+      const projects = JSON.parse(localStorage.getItem("local_projects") || "[]");
+      const updated = projects.map((p: any) =>
+        p.id === projectId ? { ...p, overhead_total: totalOverheads } : p
+      );
+      localStorage.setItem("local_projects", JSON.stringify(updated));
+    } catch (_) {}
+  }, [totalOverheads, projectId]);
 
-    setItems(data || []);
-  };
-
-  const addItem = async () => {
+  const addItem = () => {
     if (!newItem.name || !newItem.category || !newItem.amount) {
       toast.error("Please fill in all required fields");
       return;
     }
 
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return;
-
-    const { error } = await supabase.from("overhead_items").insert({
-      project_id: projectId,
-      user_id: user.id,
+    const item: OverheadItem = {
+      id: crypto.randomUUID(),
       name: newItem.name,
       category: newItem.category,
       amount: parseFloat(newItem.amount),
       frequency: newItem.frequency,
       notes: newItem.notes,
-    });
+    };
 
-    if (error) {
-      toast.error("Failed to add overhead item");
-      return;
-    }
-
+    const updated = [...items, item];
+    setItems(updated);
+    saveToStorage(projectId, updated);
     toast.success("Overhead item added");
-    setNewItem({
-      name: "",
-      category: "",
-      amount: "",
-      frequency: "one-time",
-      notes: ""
-    });
-    loadItems();
+    setNewItem({ name: "", category: "", amount: "", frequency: "one-time", notes: "" });
   };
 
-  const deleteItem = async (id: string) => {
-    const { error } = await supabase.from("overhead_items").delete().eq("id", id);
-    if (error) {
-      toast.error("Failed to delete");
-      return;
-    }
+  const deleteItem = (id: string) => {
+    const updated = items.filter(i => i.id !== id);
+    setItems(updated);
+    saveToStorage(projectId, updated);
     toast.success("Item deleted");
-    loadItems();
   };
-
-  const totalOverheads = items.reduce((sum, item) => sum + item.amount, 0);
 
   return (
     <div className="space-y-6">

@@ -239,24 +239,24 @@ export const LabourRatesSection = ({ rates, onRatesChange }: LabourRatesSectionP
                   {trade}
                   {isCustom && <span className="text-xs text-accent ml-1">*</span>}
                 </Label>
-                <div className="flex items-center gap-1">
-                  <span className="text-muted-foreground text-xs">$</span>
+                <div className="flex items-center gap-1.5">
+                  <span className="text-muted-foreground text-sm font-medium">$</span>
                   <Input
                     type="number"
                     min="0"
                     step="1"
                     value={rates[trade] || DEFAULT_RATES[trade] || 90}
                     onChange={(e) => handleRateChange(trade, e.target.value)}
-                    className="w-16 h-8 text-right text-sm"
+                    className="w-20 h-9 text-right text-sm font-mono"
                   />
                   {isCustom && (
                     <Button
                       variant="ghost"
                       size="sm"
                       onClick={() => deleteCustomTrade(trade)}
-                      className="h-6 w-6 p-0"
+                      className="h-8 w-8 p-0"
                     >
-                      <Trash2 className="h-3 w-3 text-destructive" />
+                      <Trash2 className="h-4 w-4 text-destructive" />
                     </Button>
                   )}
                 </div>

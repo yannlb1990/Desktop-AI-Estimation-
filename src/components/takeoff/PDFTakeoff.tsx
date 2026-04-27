@@ -11,6 +11,7 @@ import { Magnifier } from './Magnifier';
 import { TakeoffTable } from './TakeoffTable';
 import { CostEstimator } from './CostEstimator';
 import { AIExtractionPanel } from './AIExtractionPanel';
+import { DetectionResultsPanel } from './DetectionResultsPanel';
 import { useTakeoffState } from '@/hooks/useTakeoffState';
 import { WorldPoint, MeasurementUnit, Measurement, PDFViewportData, CostItem } from '@/lib/takeoff/types';
 import { fetchNCCCode } from '@/lib/takeoff/nccCodeFetcher';
@@ -489,7 +490,7 @@ export const PDFTakeoff = ({ projectId, estimateId, onAddCostItems }: PDFTakeoff
                 }}
               />
             </div>
-            <div className="lg:col-span-1">
+            <div className="lg:col-span-1 space-y-4">
               <AIExtractionPanel
                 pdfFile={uploadedFile}
                 pdfUrl={state.pdfFile?.url || null}
@@ -498,6 +499,16 @@ export const PDFTakeoff = ({ projectId, estimateId, onAddCostItems }: PDFTakeoff
                 onTablesExtracted={handleTablesExtracted}
                 onTextExtracted={handleTextExtracted}
               />
+              {state.pdfFile && (
+                <DetectionResultsPanel
+                  pdfUrl={state.pdfFile.url}
+                  totalPages={state.pdfFile.pageCount}
+                  onJumpToPage={(pageIndex) => {
+                    dispatch({ type: 'SET_CURRENT_PAGE', payload: pageIndex });
+                    setActiveTab('measure');
+                  }}
+                />
+              )}
             </div>
           </div>
         </TabsContent>

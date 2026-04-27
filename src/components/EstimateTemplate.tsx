@@ -774,37 +774,37 @@ export const EstimateTemplate = ({ projectId, estimateId }: EstimateTemplateProp
       
       {/* 3. Price Summary */}
       <Card className="p-6 bg-gradient-to-br from-primary/5 to-accent/5 border-accent/20">
-        <div className="grid grid-cols-2 md:grid-cols-8 gap-4 text-center">
+        <div className="grid grid-cols-2 sm:grid-cols-4 xl:grid-cols-8 gap-4 text-center">
           <div>
-            <p className="text-xs text-muted-foreground mb-1">Materials</p>
+            <p className="text-sm text-muted-foreground mb-1">Materials</p>
             <p className="text-lg font-bold">${totals.totalMaterials.toFixed(2)}</p>
           </div>
           <div>
-            <p className="text-xs text-muted-foreground mb-1">Labour</p>
+            <p className="text-sm text-muted-foreground mb-1">Labour</p>
             <p className="text-lg font-bold">${totals.totalLabour.toFixed(2)}</p>
           </div>
           <div>
-            <p className="text-xs text-muted-foreground mb-1">Supervision</p>
+            <p className="text-sm text-muted-foreground mb-1">Supervision</p>
             <p className="text-lg font-bold">${totals.supervision.toFixed(2)}</p>
           </div>
           <div>
-            <p className="text-xs text-muted-foreground mb-1">Overheads</p>
+            <p className="text-sm text-muted-foreground mb-1">Overheads</p>
             <p className="text-lg font-bold">${totals.totalOverheads.toFixed(2)}</p>
           </div>
           <div>
-            <p className="text-xs text-muted-foreground mb-1">Contingency</p>
+            <p className="text-sm text-muted-foreground mb-1">Contingency</p>
             <p className="text-lg font-bold">${totals.contingency.toFixed(2)}</p>
           </div>
           <div>
-            <p className="text-xs text-muted-foreground mb-1">Margin</p>
+            <p className="text-sm text-muted-foreground mb-1">Margin</p>
             <p className="text-lg font-bold">${totals.margin.toFixed(2)}</p>
           </div>
           <div>
-            <p className="text-xs text-muted-foreground mb-1">GST (10%)</p>
+            <p className="text-sm text-muted-foreground mb-1">GST (10%)</p>
             <p className="text-lg font-bold">${totals.gst.toFixed(2)}</p>
           </div>
-          <div className="bg-accent/10 rounded-lg p-2">
-            <p className="text-xs text-muted-foreground mb-1">TOTAL PRICE</p>
+          <div className="bg-accent/10 rounded-lg p-3">
+            <p className="text-sm text-muted-foreground mb-1 font-medium">TOTAL PRICE</p>
             <p className="text-2xl font-bold text-accent">${totals.totalPrice.toFixed(2)}</p>
           </div>
         </div>
@@ -961,20 +961,20 @@ export const EstimateTemplate = ({ projectId, estimateId }: EstimateTemplateProp
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead className="w-12"></TableHead>
-                <TableHead>Item #</TableHead>
-                <TableHead>Area</TableHead>
-                <TableHead>Trade</TableHead>
-                <TableHead>SOW</TableHead>
-                <TableHead>Material</TableHead>
-                <TableHead className="text-right">Qty</TableHead>
-                <TableHead>Unit</TableHead>
-                <TableHead className="text-right">$/Unit</TableHead>
-                <TableHead className="text-center">URL</TableHead>
-                <TableHead className="text-right">Labour Hrs</TableHead>
-                <TableHead className="text-right">Markup %</TableHead>
-                <TableHead className="text-right">Line Total</TableHead>
-                <TableHead></TableHead>
+                <TableHead className="w-10"></TableHead>
+                <TableHead className="w-16">Item #</TableHead>
+                <TableHead className="min-w-[100px]">Area</TableHead>
+                <TableHead className="min-w-[100px]">Trade</TableHead>
+                <TableHead className="min-w-[120px]">Scope of Work</TableHead>
+                <TableHead className="min-w-[140px]">Material</TableHead>
+                <TableHead className="text-right w-20">Qty</TableHead>
+                <TableHead className="w-16">Unit</TableHead>
+                <TableHead className="text-right w-24">$/Unit</TableHead>
+                <TableHead className="text-center w-12">URL</TableHead>
+                <TableHead className="text-right w-24">Labour Hrs</TableHead>
+                <TableHead className="text-right w-24">Markup %</TableHead>
+                <TableHead className="text-right w-28">Line Total</TableHead>
+                <TableHead className="w-20"></TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -997,7 +997,7 @@ export const EstimateTemplate = ({ projectId, estimateId }: EstimateTemplateProp
                           <Button
                             variant="ghost"
                             size="icon"
-                            className="h-6 w-6"
+                            className="h-8 w-8"
                             onClick={() => toggleExpanded(item.id)}
                           >
                             {item.expanded ? (
@@ -1008,7 +1008,7 @@ export const EstimateTemplate = ({ projectId, estimateId }: EstimateTemplateProp
                           </Button>
                         )}
                       </TableCell>
-                      <TableCell className="font-mono text-xs">{item.item_number}</TableCell>
+                      <TableCell className="font-mono text-sm font-medium">{item.item_number}</TableCell>
                       <TableCell>
                         {isEditing ? (
                           <Input
@@ -1036,7 +1036,7 @@ export const EstimateTemplate = ({ projectId, estimateId }: EstimateTemplateProp
                             step="0.01"
                             value={editValues.quantity}
                             onChange={(e) => setEditValues({ ...editValues, quantity: parseFloat(e.target.value) })}
-                            className="h-8 w-20 text-right"
+                            className="h-8 w-24 text-right"
                           />
                         ) : <span className="font-mono">{item.quantity}</span>}
                       </TableCell>
@@ -1056,10 +1056,10 @@ export const EstimateTemplate = ({ projectId, estimateId }: EstimateTemplateProp
                         <Button
                           variant="ghost"
                           size="icon"
-                          className="h-6 w-6"
+                          className="h-8 w-8"
                           onClick={() => openUrlDialog('item', item.id)}
                         >
-                          <Link className="h-3 w-3" />
+                          <Link className="h-4 w-4" />
                         </Button>
                       </TableCell>
                       <TableCell className="text-right">
@@ -1069,7 +1069,7 @@ export const EstimateTemplate = ({ projectId, estimateId }: EstimateTemplateProp
                             step="0.5"
                             value={editValues.labour_hours}
                             onChange={(e) => setEditValues({ ...editValues, labour_hours: parseFloat(e.target.value) })}
-                            className="h-8 w-20 text-right"
+                            className="h-8 w-24 text-right"
                           />
                         ) : <span className="font-mono">{item.labour_hours}</span>}
                       </TableCell>
@@ -1084,7 +1084,7 @@ export const EstimateTemplate = ({ projectId, estimateId }: EstimateTemplateProp
                               const value = e.target.value;
                               setEditValues({ ...editValues, markup_pct: value === '' ? 0 : parseFloat(value) });
                             }}
-                            className="h-8 w-16 text-right"
+                            className="h-8 w-20 text-right"
                           />
                         ) : <span className="font-mono">{item.markup_pct}%</span>}
                       </TableCell>
@@ -1208,10 +1208,10 @@ export const EstimateTemplate = ({ projectId, estimateId }: EstimateTemplateProp
                                       <Button
                                         variant="ghost"
                                         size="icon"
-                                        className="h-6 w-6"
+                                        className="h-8 w-8"
                                         onClick={() => openUrlDialog('related', item.id, rm.id)}
                                       >
-                                        <Link className="h-3 w-3" />
+                                        <Link className="h-4 w-4" />
                                       </Button>
                                       <Input
                                         value={rm.comment}
@@ -1226,9 +1226,9 @@ export const EstimateTemplate = ({ projectId, estimateId }: EstimateTemplateProp
                                         variant="ghost"
                                         size="icon"
                                         onClick={() => deleteRelatedMaterial(item.id, rm.id)}
-                                        className="h-6 w-6 text-destructive"
+                                        className="h-8 w-8 text-destructive"
                                       >
-                                        <Trash2 className="h-3 w-3" />
+                                        <Trash2 className="h-4 w-4" />
                                       </Button>
                                     </div>
                                     <div className="flex justify-end px-3">
@@ -1416,7 +1416,7 @@ export const EstimateTemplate = ({ projectId, estimateId }: EstimateTemplateProp
           {/* Breakdown by Section */}
           <div className="grid md:grid-cols-3 gap-4">
             <div className="bg-card p-4 rounded-lg border border-border">
-              <p className="text-xs text-muted-foreground mb-1">Estimate Lines</p>
+              <p className="text-sm text-muted-foreground mb-1">Estimate Lines</p>
               <p className="text-xl font-mono font-bold text-primary">
                 ${(() => {
                   let total = 0;
@@ -1434,7 +1434,7 @@ export const EstimateTemplate = ({ projectId, estimateId }: EstimateTemplateProp
             </div>
 
             <div className="bg-card p-4 rounded-lg border border-border">
-              <p className="text-xs text-muted-foreground mb-1">Related Materials</p>
+              <p className="text-sm text-muted-foreground mb-1">Related Materials</p>
               <p className="text-xl font-mono font-bold text-secondary">
                 ${(() => {
                   let total = 0;
@@ -1454,7 +1454,7 @@ export const EstimateTemplate = ({ projectId, estimateId }: EstimateTemplateProp
             </div>
 
             <div className="bg-card p-4 rounded-lg border border-border">
-              <p className="text-xs text-muted-foreground mb-1">Consumables</p>
+              <p className="text-sm text-muted-foreground mb-1">Consumables</p>
               <p className="text-xl font-mono font-bold text-accent">
                 ${consumables.reduce((sum, c) => sum + (c.quantity * c.unit_price), 0).toFixed(2)}
               </p>
