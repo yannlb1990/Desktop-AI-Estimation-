@@ -12,10 +12,10 @@ const CTA = () => {
             
             {/* Content */}
             <div className="relative z-10 px-8 py-16 md:px-16 md:py-20 text-center">
-              <h2 className="font-display text-4xl md:text-5xl font-bold text-primary-foreground mb-6">
+              <h2 className="font-display text-4xl md:text-5xl font-bold text-white mb-6">
                 Ready to Transform Your Estimation Process?
               </h2>
-              <p className="text-xl text-primary-foreground/90 mb-10 max-w-2xl mx-auto">
+              <p className="text-xl text-white/90 mb-10 max-w-2xl mx-auto">
                 Join hundreds of Australian builders who are saving time and winning more tenders with AI-powered estimation.
               </p>
 
@@ -27,7 +27,7 @@ const CTA = () => {
                   "Cancel anytime",
                   "Full feature access"
                 ].map((benefit, index) => (
-                  <div key={index} className="flex items-center gap-2 text-primary-foreground">
+                  <div key={index} className="flex items-center gap-2 text-white">
                     <CheckCircle className="h-5 w-5 text-accent" />
                     <span className="font-medium">{benefit}</span>
                   </div>
@@ -37,14 +37,14 @@ const CTA = () => {
               {/* CTA Button */}
               <Button 
                 size="lg" 
-                onClick={() => window.location.href = "/auth"}
+                onClick={() => window.location.href = "/dashboard"}
                 className="bg-accent text-accent-foreground hover:bg-accent/90 shadow-glow text-lg px-10 py-7 h-auto"
               >
                 Start Your Free Trial
                 <ArrowRight className="ml-2 h-5 w-5" />
               </Button>
 
-              <p className="mt-6 text-sm text-primary-foreground/70">
+              <p className="mt-6 text-sm text-white/70">
                 Trusted by builders across QLD, NSW, VIC, and WA
               </p>
             </div>

@@ -43,7 +43,7 @@ export interface PDFViewportData {
 
 // === MEASUREMENT TYPES ===
 export type MeasurementType = 'line' | 'rectangle' | 'polygon' | 'circle';
-export type MeasurementUnit = 'LM' | 'M2' | 'M3' | 'count';
+export type MeasurementUnit = string;
 export type ToolType = 'select' | 'pan' | 'eraser' | 'line' | 'rectangle' | 'polygon' | 'circle' | 'count' | null;
 
 // Area options for measurements
@@ -209,18 +209,22 @@ export const TRADE_OPTIONS = [
   'Brickwork',
   'Roofing',
   'Windows & Doors',
+  'Waterproofing',
   'Plasterboard',
   'Joinery',
   'Painting',
   'Tiling',
   'Floor Coverings',
+  'Epoxy Flooring',
   'Plumbing',
   'Electrical',
   'HVAC',
   'Fire Services',
   'Landscaping',
+  'Crane / Lifting',
   'External Works',
   'Certifications',
+  'General',
   'Other',
 ] as const;
 

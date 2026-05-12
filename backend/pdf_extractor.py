@@ -5,14 +5,15 @@ import uuid
 import time
 import logging
 from pathlib import Path
-from typing import List, Optional, Tuple, Dict, Any
+from typing import List, Optional, Tuple, Dict, Any, Set
 from PIL import Image
 import fitz  # PyMuPDF
 
 from models import (
     BoundingBox, LayoutElement, LayoutElementType, OCRResult,
     TableCell, ExtractedTable, DimensionExtraction, PageAnalysis,
-    ExtractionResponse, ExtractionOptions
+    ExtractionResponse, ExtractionOptions,
+    OpeningCode, RoomArea, DrawingInfo, ConstructionData, ConstructionExtractionResponse
 )
 
 logger = logging.getLogger(__name__)
@@ -300,7 +301,7 @@ class PDFExtractor:
                             ))
 
         # If no text found or document appears to be scanned, use OCR
-        if len(results) < 5 and self.ocr_engine is not None:
+        if len(results) < 5 and self.ocr_engine is not None and img is not None:
             try:
                 import numpy as np
                 img_array = np.array(img)
@@ -511,3 +512,181 @@ class PDFExtractor:
             tables=[],
             dimensions=dimensions
         )
+
+    # ─── Construction-domain extraction ──────────────────────────────────────
+
+    # Australian window/door type codes → (element_type, label)
+    _OPENING_TYPES: Dict[str, Tuple[str, str]] = {
+        'SW': ('window', 'Sliding Window'),
+        'HW': ('window', 'Hinged Window (Awning)'),
+        'FW': ('window', 'Fixed Window'),
+        'CW': ('window', 'Corner Window'),
+        'DG': ('window', 'Double Glazed Window'),
+        'GL': ('window', 'Glazed Fixed Panel'),
+        'HD': ('door',   'Hinged Door'),
+        'SD': ('door',   'Sliding Door'),
+        'BD': ('door',   'Bifold Door'),
+        'FD': ('door',   'Fire Door'),
+        'AD': ('door',   'Automatic Door'),
+    }
+
+    # Regex patterns (compiled once)
+    _FULL_CODE   = re.compile(r'\b(\d{2})(\d{2})\s*(SW|HW|FW|HD|SD|BD|GL|DG|CW|FD|AD)\b', re.I)
+    _REF_CODE    = re.compile(r'\b([WD])[-–]?(\d{1,3})\b')
+    _ROOM_AREA   = re.compile(r'([A-Z][A-Z /]{2,25})\s{0,5}(\d{1,4}\.?\d{0,2})\s*m[²2]', re.I)
+    _SCALE       = re.compile(r'(?:SCALE\s+)?1\s*[:/]\s*(\d+)', re.I)
+    _DRAWING_NO  = re.compile(r'(?:DWG\s*NO\.?\s*)?([A-Z]{1,2}-\d{2,3}(?:-\w+)?)', re.I)
+    _REVISION    = re.compile(r'REV(?:ISION)?\s*[:\-]?\s*([A-Z0-9]{1,3})', re.I)
+
+    async def extract_construction_data(
+        self,
+        pdf_path: str,
+        options: ExtractionOptions
+    ) -> ConstructionExtractionResponse:
+        """Extract construction-specific data from a PDF (windows, rooms, scales, drawing refs)."""
+        start = time.time()
+        errors: List[str] = []
+        all_openings: List[OpeningCode] = []
+        all_room_areas: List[RoomArea] = []
+        all_drawing_info: List[DrawingInfo] = []
+
+        try:
+            doc = fitz.open(pdf_path)
+            total_pages = len(doc)
+            pages_to_process = options.pages if options.pages else list(range(total_pages))
+
+            for page_num in pages_to_process:
+                if page_num >= total_pages:
+                    continue
+                try:
+                    page = doc[page_num]
+                    # Use native text first; fall back to OCR if page looks scanned
+                    ocr_results = await self._extract_text(doc, page, page_num, None, options)  # type: ignore[arg-type]
+                    full_text_blocks = [(r.text, r.bbox) for r in ocr_results]
+
+                    openings, rooms, drawing = self._parse_construction(full_text_blocks, page_num)
+                    all_openings.extend(openings)
+                    all_room_areas.extend(rooms)
+                    if drawing:
+                        all_drawing_info.append(drawing)
+                except Exception as e:
+                    errors.append(f"Page {page_num}: {e}")
+
+            doc.close()
+        except Exception as e:
+            errors.append(str(e))
+            total_pages = 0
+
+        # Deduplicate openings by ref (keep first occurrence)
+        seen_refs: set = set()
+        unique_openings: List[OpeningCode] = []
+        for o in all_openings:
+            if o.ref not in seen_refs:
+                seen_refs.add(o.ref)
+                unique_openings.append(o)
+
+        total_area = sum(r.area_m2 for r in all_room_areas) or None
+
+        construction_data = ConstructionData(
+            openings=unique_openings,
+            room_areas=all_room_areas,
+            drawing_info=all_drawing_info,
+            total_floor_area_m2=round(total_area, 2) if total_area else None,
+        )
+
+        return ConstructionExtractionResponse(
+            filename=Path(pdf_path).name,
+            total_pages=total_pages,
+            construction_data=construction_data,
+            processing_time_ms=(time.time() - start) * 1000,
+            errors=errors,
+        )
+
+    def _parse_construction(
+        self,
+        text_blocks: List[Tuple[str, Any]],
+        page_num: int
+    ) -> Tuple[List[OpeningCode], List[RoomArea], Optional[DrawingInfo]]:
+        """Parse construction-specific entities from a list of (text, bbox) tuples."""
+        openings: List[OpeningCode] = []
+        room_areas: List[RoomArea] = []
+        drawing_number: Optional[str] = None
+        scale_str: Optional[str] = None
+        scale_ratio: Optional[float] = None
+        revision: Optional[str] = None
+
+        for text, bbox in text_blocks:
+            t = text.strip()
+            if not t:
+                continue
+
+            # ── Full opening codes: "1218 SW" ────────────────────────────────
+            for m in self._FULL_CODE.finditer(t):
+                w_units, h_units, code = m.group(1), m.group(2), m.group(3).upper()
+                elem_type, label = self._OPENING_TYPES.get(code, ('window', code))
+                openings.append(OpeningCode(
+                    ref=m.group(0).strip(),
+                    element_type=elem_type,
+                    width_mm=float(w_units) * 100,
+                    height_mm=float(h_units) * 100,
+                    opening_type=label,
+                    page=page_num,
+                    bbox=bbox if hasattr(bbox, 'x') else None,
+                ))
+
+            # ── Reference codes: "W-01", "D3" ────────────────────────────────
+            for m in self._REF_CODE.finditer(t):
+                letter, num = m.group(1).upper(), m.group(2)
+                elem_type = 'window' if letter == 'W' else 'door'
+                ref = f"{letter}-{num.zfill(2)}"
+                openings.append(OpeningCode(
+                    ref=ref,
+                    element_type=elem_type,
+                    page=page_num,
+                    bbox=bbox if hasattr(bbox, 'x') else None,
+                ))
+
+            # ── Room areas ────────────────────────────────────────────────────
+            for m in self._ROOM_AREA.finditer(t):
+                name = m.group(1).strip().title()
+                area = float(m.group(2))
+                if 1.0 < area < 2000.0:   # sanity range
+                    room_areas.append(RoomArea(
+                        name=name,
+                        area_m2=area,
+                        page=page_num,
+                        bbox=bbox if hasattr(bbox, 'x') else None,
+                    ))
+
+            # ── Scale ─────────────────────────────────────────────────────────
+            if scale_str is None:
+                sm = self._SCALE.search(t)
+                if sm:
+                    ratio = float(sm.group(1))
+                    if 10 <= ratio <= 5000:
+                        scale_str = f"1:{int(ratio)}"
+                        scale_ratio = ratio
+
+            # ── Drawing number ────────────────────────────────────────────────
+            if drawing_number is None:
+                dm = self._DRAWING_NO.search(t)
+                if dm:
+                    drawing_number = dm.group(1).upper()
+
+            # ── Revision ──────────────────────────────────────────────────────
+            if revision is None:
+                rm = self._REVISION.search(t)
+                if rm:
+                    revision = rm.group(1).upper()
+
+        drawing: Optional[DrawingInfo] = None
+        if drawing_number or scale_str or revision:
+            drawing = DrawingInfo(
+                drawing_number=drawing_number,
+                scale=scale_str,
+                scale_ratio=scale_ratio,
+                revision=revision,
+                page=page_num,
+            )
+
+        return openings, room_areas, drawing

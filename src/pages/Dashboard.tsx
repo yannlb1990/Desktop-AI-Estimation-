@@ -1,21 +1,16 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { toast } from "sonner";
 import {
-  LogOut, Plus, FileText, DollarSign, TrendingUp, BarChart3,
-  Upload, Zap, Settings
+  Plus, FileText, DollarSign, TrendingUp, BarChart3,
+  Upload, Zap, Settings, Package
 } from "lucide-react";
-import { Loader2 } from "lucide-react";
 
 const Dashboard = () => {
   const navigate = useNavigate();
-  const [loading, setLoading] = useState(true);
   const [projects, setProjects] = useState<any[]>([]);
   const [showAll, setShowAll] = useState(false);
-  const [userEmail, setUserEmail] = useState<string>("");
 
   const completedProjects = projects.filter(p => p.status === "complete" || p.status === "completed");
   const defaultRates = (() => { try { return JSON.parse(localStorage.getItem("default_rates") || "{}") } catch { return {} } })();
@@ -23,47 +18,13 @@ const Dashboard = () => {
   const winRate = projects.length > 0 ? `${Math.round((completedProjects.length / projects.length) * 100)}%` : "—";
 
   useEffect(() => {
-    loadProjects();
-  }, []);
-
-  const loadProjects = async () => {
-    try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) {
-        navigate("/auth");
-        return;
-      }
-      setUserEmail(user.email || "");
-
-      const { data, error } = await supabase
-        .from("projects")
-        .select("*")
-        .eq("user_id", user.id)
-        .order("created_at", { ascending: false });
-
-      if (error) throw error;
-      setProjects(data || []);
-    } catch (error) {
-      console.error("Error loading projects:", error);
-      toast.error("Failed to load projects");
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleSignOut = async () => {
-    await supabase.auth.signOut();
-    toast.success("Signed out");
-    navigate("/");
-  };
-
-  if (loading) {
-    return (
-      <div className="flex min-h-screen items-center justify-center">
-        <Loader2 className="h-8 w-8 animate-spin text-secondary" />
-      </div>
+    const raw = localStorage.getItem("local_projects");
+    const loaded = raw ? JSON.parse(raw) : [];
+    loaded.sort((a: any, b: any) =>
+      new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime()
     );
-  }
+    setProjects(loaded);
+  }, []);
 
   return (
     <div className="min-h-screen bg-muted/30">
@@ -73,19 +34,19 @@ const Dashboard = () => {
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
               <div className="w-8 h-8 bg-gradient-accent rounded-lg flex items-center justify-center">
-                <span className="font-display font-bold text-primary">E</span>
+                <span className="font-display font-bold text-primary-foreground">E</span>
               </div>
               <span className="font-display text-xl font-bold">Esti-mate</span>
             </div>
 
             <div className="flex items-center gap-4">
+              <Button variant="ghost" size="sm" onClick={() => navigate("/materials")}>
+                <Package className="h-4 w-4 mr-2" />
+                Materials
+              </Button>
               <Button variant="ghost" size="sm" onClick={() => navigate("/settings")}>
                 <Settings className="h-4 w-4 mr-2" />
                 Settings
-              </Button>
-              <Button variant="ghost" size="sm" onClick={handleSignOut}>
-                <LogOut className="h-4 w-4 mr-2" />
-                Sign Out
               </Button>
             </div>
           </div>
@@ -96,7 +57,7 @@ const Dashboard = () => {
         {/* Header */}
         <div className="mb-8">
           <h1 className="font-display text-4xl font-bold mb-2">
-            Welcome back{userEmail ? `, ${userEmail.split("@")[0]}` : ""}!
+            Welcome back, Yann!
           </h1>
           <p className="text-muted-foreground">
             Manage your estimation projects and tenders
@@ -107,8 +68,8 @@ const Dashboard = () => {
         <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
           <Card className="p-6 bg-background border-border">
             <div className="flex items-center gap-3 mb-2">
-              <div className="p-2 bg-secondary/10 rounded-lg">
-                <FileText className="h-5 w-5 text-secondary" />
+              <div className="p-2 bg-primary/10 rounded-lg">
+                <FileText className="h-5 w-5 text-primary" />
               </div>
               <span className="text-sm text-muted-foreground">Active Projects</span>
             </div>
@@ -128,8 +89,8 @@ const Dashboard = () => {
 
           <Card className="p-6 bg-background border-border">
             <div className="flex items-center gap-3 mb-2">
-              <div className="p-2 bg-secondary/10 rounded-lg">
-                <BarChart3 className="h-5 w-5 text-secondary" />
+              <div className="p-2 bg-primary/10 rounded-lg">
+                <BarChart3 className="h-5 w-5 text-primary" />
               </div>
               <span className="text-sm text-muted-foreground">Target Margin</span>
             </div>
@@ -149,17 +110,17 @@ const Dashboard = () => {
           </Card>
         </div>
 
-          {/* Quick Actions */}
+        {/* Quick Actions */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-          <Card 
+          <Card
             onClick={() => navigate("/project/new")}
-            className="p-6 bg-gradient-primary text-primary-foreground hover:shadow-lg transition-smooth cursor-pointer group"
+            className="p-6 bg-gradient-primary hover:shadow-lg transition-smooth cursor-pointer group"
           >
             <div className="mb-4">
               <Upload className="h-10 w-10 text-accent group-hover:scale-110 transition-smooth" />
             </div>
-            <h3 className="font-display text-xl font-bold mb-2">Upload Plans</h3>
-            <p className="text-primary-foreground/80 mb-4">
+            <h3 className="font-display text-xl font-bold mb-2 text-white">Upload Plans</h3>
+            <p className="text-white/70 mb-4">
               Upload PDF or DWG files for AI-powered takeoff
             </p>
             <Button className="bg-accent text-accent-foreground hover:bg-accent/90">
@@ -168,12 +129,12 @@ const Dashboard = () => {
             </Button>
           </Card>
 
-          <Card 
+          <Card
             onClick={() => navigate("/project/new?mode=manual")}
             className="p-6 bg-background border-border hover:shadow-lg transition-smooth cursor-pointer"
           >
             <div className="mb-4">
-              <Zap className="h-10 w-10 text-secondary" />
+              <Zap className="h-10 w-10 text-primary" />
             </div>
             <h3 className="font-display text-xl font-bold mb-2">Quick Estimate</h3>
             <p className="text-muted-foreground mb-4">
@@ -184,7 +145,7 @@ const Dashboard = () => {
             </Button>
           </Card>
 
-          <Card 
+          <Card
             onClick={() => navigate("/insights")}
             className="p-6 bg-background border-border hover:shadow-lg transition-smooth cursor-pointer"
           >
@@ -197,6 +158,22 @@ const Dashboard = () => {
             </p>
             <Button variant="outline">
               View Insights
+            </Button>
+          </Card>
+
+          <Card
+            onClick={() => navigate("/materials")}
+            className="p-6 bg-background border-border hover:shadow-lg transition-smooth cursor-pointer"
+          >
+            <div className="mb-4">
+              <Package className="h-10 w-10 text-primary" />
+            </div>
+            <h3 className="font-display text-xl font-bold mb-2">Materials Library</h3>
+            <p className="text-muted-foreground mb-4">
+              Your supplier catalogue with custom pricing
+            </p>
+            <Button variant="outline">
+              Manage Materials
             </Button>
           </Card>
         </div>
@@ -217,7 +194,7 @@ const Dashboard = () => {
               <p className="text-muted-foreground mb-6">
                 Get started by uploading your first plan
               </p>
-              <Button 
+              <Button
                 onClick={() => navigate("/project/new")}
                 className="bg-accent text-accent-foreground hover:bg-accent/90"
               >
@@ -241,11 +218,11 @@ const Dashboard = () => {
                   </div>
                   <div className="flex items-center gap-4">
                     <div className={`px-3 py-1 rounded-full text-xs font-medium ${
-                      project.status === "complete"
-                        ? "bg-accent/20 text-accent-foreground"
-                        : "bg-secondary/10 text-secondary"
+                      project.status === "complete" || project.status === "completed"
+                        ? "bg-accent/20 text-accent"
+                        : "bg-primary/10 text-primary"
                     }`}>
-                      {project.status}
+                      {project.status || "active"}
                     </div>
                     <Button size="sm" variant="ghost">View</Button>
                   </div>

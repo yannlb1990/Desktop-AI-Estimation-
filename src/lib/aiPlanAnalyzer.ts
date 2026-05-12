@@ -33,6 +33,8 @@ import {
   parseWindowScheduleTable,
   parseDoorScheduleTable,
   countSymbolReferences,
+  extractBuildingContext,
+  BuildingContext,
 } from './takeoff/pdfTextExtractor';
 
 // === TYPES ===
@@ -263,6 +265,11 @@ function classifyDrawingType(texts: ExtractedText[]): { type: DrawingType; confi
     }
   }
 
+  // Filter out PDF metadata artifacts (gspublisher version strings, etc.)
+  if (matchedTitle && /gspublish|version\s*\d+\.\d+|\d{4,}\.\d+\.\d+/i.test(matchedTitle)) {
+    matchedTitle = undefined;
+  }
+
   return {
     type: bestMatch,
     confidence: Math.min(bestScore / 5, 1),
@@ -397,8 +404,8 @@ const SYMBOL_PATTERNS: Record<string, { regex: RegExp; type: DetectedSymbol['typ
     { regex: /\b(KITCHENETTE)\b/gi, type: 'other', subType: 'kitchenette' },
     { regex: /\b(CLEANERS?)\b/gi, type: 'other', subType: 'cleaners' },
     { regex: /\b(STORAGE)\b/gi, type: 'other', subType: 'storage' },
-    // Room number patterns (4.28A, G.01, L1.05)
-    { regex: /\b(\d+\.\d+[A-Z]?)\b/g, type: 'other', subType: 'room_number' },
+    // Room number patterns (4.28A, G.01) — letter suffix required to avoid matching dimension values
+    { regex: /\b(\d{1,2}\.\d{2}[A-Z])\b/g, type: 'other', subType: 'room_number' },
     { regex: /\b([GBLP]\d*\.\d+[A-Z]?)\b/gi, type: 'other', subType: 'room_number' },
   ],
   electrical: [
@@ -531,45 +538,33 @@ function parseWindowSchedule(texts: ExtractedText[], pageIndex: number): Extende
   const items: ExtendedScheduleItem[] = [];
   const allText = texts.map(t => t.text).join('\n');
   const allTextLower = allText.toLowerCase();
-
-  // Check if this page contains a window schedule
-  if (!allTextLower.includes('window schedule') && !allTextLower.includes('window sch')) {
-    // Still try to find window references even without explicit schedule
-    const windowRefRegex = /\bW(\d{1,2})\b/g;
-    let match;
-    const seen = new Set<string>();
-    while ((match = windowRefRegex.exec(allText)) !== null) {
-      const ref = `W${match[1]}`;
-      if (!seen.has(ref)) {
-        seen.add(ref);
-        // Basic detection without full schedule details
-      }
-    }
-    return items;
-  }
-
-  // Pattern 1: Table format with TYPE, SIZE, HEAD HT, QTY columns
-  // Example: W01    820 x 1210    2100    1    FIG 1    6.38 LAMINATED    ALUMINIUM POWDERCOATED
-  const tablePattern1 = /W(\d{1,2})\s+(\d+)\s*[xX×]\s*(\d+)\s+(\d+)?\s+(\d+)?\s*(FIG\s*\d+)?[^\n]*(LAMINATED|TOUGHENED|CLEAR|OBSCURE)?[^\n]*(ALUMINIUM|TIMBER|UPVC)?/gi;
+  const hasScheduleHeader = allTextLower.includes('window schedule') || allTextLower.includes('window sch') ||
+    allTextLower.includes('glazing schedule') || allTextLower.includes('joinery schedule');
   let match;
-  while ((match = tablePattern1.exec(allText)) !== null) {
-    items.push({
-      type: 'window',
-      reference: `W${match[1]}`,
-      description: `Window ${match[1]}`,
-      size: `${match[2]}x${match[3]}`,
-      width: parseInt(match[2]),
-      height: parseInt(match[3]),
-      headHeight: match[4] ? parseInt(match[4]) : undefined,
-      quantity: match[5] ? parseInt(match[5]) : 1,
-      figure: match[6]?.trim(),
-      glazing: match[7]?.trim(),
-      frame: match[8]?.trim(),
-      pageIndex,
-    });
+
+  // Pattern 1: Full table format (only when schedule header detected)
+  // Example: W01    820 x 1210    2100    1    FIG 1    6.38 LAMINATED    ALUMINIUM POWDERCOATED
+  if (hasScheduleHeader) {
+    const tablePattern1 = /W(\d{1,2})\s+(\d+)\s*[xX×]\s*(\d+)\s+(\d+)?\s+(\d+)?\s*(FIG\s*\d+)?[^\n]*(LAMINATED|TOUGHENED|CLEAR|OBSCURE)?[^\n]*(ALUMINIUM|TIMBER|UPVC)?/gi;
+    while ((match = tablePattern1.exec(allText)) !== null) {
+      items.push({
+        type: 'window',
+        reference: `W${match[1]}`,
+        description: `Window ${match[1]}`,
+        size: `${match[2]}x${match[3]}`,
+        width: parseInt(match[2]),
+        height: parseInt(match[3]),
+        headHeight: match[4] ? parseInt(match[4]) : undefined,
+        quantity: match[5] ? parseInt(match[5]) : 1,
+        figure: match[6]?.trim(),
+        glazing: match[7]?.trim(),
+        frame: match[8]?.trim(),
+        pageIndex,
+      });
+    }
   }
 
-  // Pattern 2: Simpler format W01 820x1210
+  // Pattern 2: Simpler format W01 820x1210 (always try)
   const simplePattern = /W(\d{1,2})\s+(\d+)\s*[xX×]\s*(\d+)/gi;
   const seenRefs = new Set(items.map(i => i.reference));
   while ((match = simplePattern.exec(allText)) !== null) {
@@ -589,7 +584,7 @@ function parseWindowSchedule(texts: ExtractedText[], pageIndex: number): Extende
     }
   }
 
-  // Pattern 3: Descriptive format "AWNING WINDOW 820 x 1210"
+  // Pattern 3: Descriptive format "AWNING WINDOW 820 x 1210" (always try)
   const descriptivePattern = /(SLIDING|AWNING|FIXED|CASEMENT|DOUBLE\s*HUNG|LOUVRE)\s+WINDOW\s+(\d+)\s*[xX×]\s*(\d+)/gi;
   while ((match = descriptivePattern.exec(allText)) !== null) {
     items.push({
@@ -604,6 +599,23 @@ function parseWindowSchedule(texts: ExtractedText[], pageIndex: number): Extende
     });
   }
 
+  // Pattern 4: Window type tags without dimensions (AW1, SW1, FW1 etc.) (always try)
+  const typedWindowPattern = /\b(AW|SW|FW|DH|CW)(\d{1,2})\b/gi;
+  while ((match = typedWindowPattern.exec(allText)) !== null) {
+    const ref = `${match[1].toUpperCase()}${match[2]}`;
+    if (!seenRefs.has(ref)) {
+      seenRefs.add(ref);
+      const typeMap: Record<string, string> = { AW: 'Awning Window', SW: 'Sliding Window', FW: 'Fixed Window', DH: 'Double Hung', CW: 'Curtain Wall' };
+      items.push({
+        type: 'window',
+        reference: ref,
+        description: typeMap[match[1].toUpperCase()] || `Window ${ref}`,
+        quantity: 1,
+        pageIndex,
+      });
+    }
+  }
+
   return items;
 }
 
@@ -612,35 +624,32 @@ function parseDoorSchedule(texts: ExtractedText[], pageIndex: number): ExtendedS
   const items: ExtendedScheduleItem[] = [];
   const allText = texts.map(t => t.text).join('\n');
   const allTextLower = allText.toLowerCase();
-
-  // Check if this page contains a door schedule
-  if (!allTextLower.includes('door schedule') && !allTextLower.includes('door sch')) {
-    return items;
-  }
-
-  // Pattern 1: Full door schedule format
-  // Example: D01    2040 x 820    HINGED SOLID CORE    LEVER SET    PAINT FINISH
-  const tablePattern = /D(\d{1,2})\s+(\d+)\s*[xX×]\s*(\d+)[^\n]*(HINGED|SLIDING|BIFOLD|PIVOT|CAVITY|ROLLER|SECTIONAL)?[^\n]*(SOLID\s*CORE|HOLLOW\s*CORE|FLUSH|GLAZED|PANEL|ROBES?)?[^\n]*(LEVER|KNOB|PULL|PANIC)?/gi;
+  const hasScheduleHeader = allTextLower.includes('door schedule') || allTextLower.includes('door sch') ||
+    allTextLower.includes('joinery schedule') || allTextLower.includes('joinery sch');
   let match;
-  while ((match = tablePattern.exec(allText)) !== null) {
-    const doorType = match[4] || '';
-    const doorStyle = match[5] || '';
-    const hardware = match[6] || '';
 
-    items.push({
-      type: 'door',
-      reference: `D${match[1]}`,
-      description: `${doorType} ${doorStyle}`.trim() || `Door ${match[1]}`,
-      size: `${match[2]}x${match[3]}`,
-      width: parseInt(match[3]),  // Width is second dimension for doors
-      height: parseInt(match[2]), // Height is first dimension for doors
-      hardware: hardware || undefined,
-      quantity: 1,
-      pageIndex,
-    });
+  // Pattern 1: Full door schedule format (only when schedule header detected)
+  if (hasScheduleHeader) {
+    const tablePattern = /D(\d{1,2})\s+(\d+)\s*[xX×]\s*(\d+)[^\n]*(HINGED|SLIDING|BIFOLD|PIVOT|CAVITY|ROLLER|SECTIONAL)?[^\n]*(SOLID\s*CORE|HOLLOW\s*CORE|FLUSH|GLAZED|PANEL|ROBES?)?[^\n]*(LEVER|KNOB|PULL|PANIC)?/gi;
+    while ((match = tablePattern.exec(allText)) !== null) {
+      const doorType = match[4] || '';
+      const doorStyle = match[5] || '';
+      const hardware = match[6] || '';
+      items.push({
+        type: 'door',
+        reference: `D${match[1]}`,
+        description: `${doorType} ${doorStyle}`.trim() || `Door ${match[1]}`,
+        size: `${match[2]}x${match[3]}`,
+        width: parseInt(match[3]),
+        height: parseInt(match[2]),
+        hardware: hardware || undefined,
+        quantity: 1,
+        pageIndex,
+      });
+    }
   }
 
-  // Pattern 2: Garage door format
+  // Pattern 2: Garage/roller/sectional doors (always try — these appear anywhere)
   const garageDoorPattern = /(GARAGE\s*DOOR|SECTIONAL\s*DOOR|ROLLER\s*DOOR)\s+(\d+)\s*[xX×]\s*(\d+)/gi;
   while ((match = garageDoorPattern.exec(allText)) !== null) {
     items.push({
@@ -655,7 +664,7 @@ function parseDoorSchedule(texts: ExtractedText[], pageIndex: number): ExtendedS
     });
   }
 
-  // Pattern 3: Simple door refs D01, D02 with dimensions
+  // Pattern 3: Simple door refs D01, D02 with dimensions (always try)
   const simpleDoorPattern = /D(\d{1,2})\s+(\d+)\s*[xX×]\s*(\d+)/gi;
   const seenRefs = new Set(items.map(i => i.reference));
   while ((match = simpleDoorPattern.exec(allText)) !== null) {
@@ -675,13 +684,63 @@ function parseDoorSchedule(texts: ExtractedText[], pageIndex: number): ExtendedS
     }
   }
 
+  // Pattern 4: Door refs with type annotation but no dimensions (SD1, PD1, BFD1 etc.)
+  const typedDoorPattern = /\b(SD|PD|BFD|FD|GD)(\d{1,2})\b/gi;
+  while ((match = typedDoorPattern.exec(allText)) !== null) {
+    const ref = `${match[1].toUpperCase()}${match[2]}`;
+    if (!seenRefs.has(ref)) {
+      seenRefs.add(ref);
+      const typeMap: Record<string, string> = { SD: 'Sliding Door', PD: 'Pivot Door', BFD: 'Bifold Door', FD: 'Fire Door', GD: 'Glazed Door' };
+      items.push({
+        type: 'door',
+        reference: ref,
+        description: typeMap[match[1].toUpperCase()] || `Door ${ref}`,
+        quantity: 1,
+        pageIndex,
+      });
+    }
+  }
+
   return items;
+}
+
+// Join PDF text elements line-by-line: elements at similar y are on the same line
+// This prevents mid-sentence truncation caused by joining every element with \n
+function joinTextsByLine(texts: ExtractedText[]): string {
+  if (texts.length === 0) return '';
+  const sorted = [...texts].sort((a, b) => b.y - a.y || a.x - b.x);
+  const lines: string[] = [];
+  let currentLineY = sorted[0].y;
+  let currentLineWords: string[] = [];
+  const lineThreshold = sorted[0].height > 0 ? sorted[0].height * 0.8 : 6;
+
+  for (const t of sorted) {
+    if (Math.abs(t.y - currentLineY) > lineThreshold) {
+      if (currentLineWords.length) lines.push(currentLineWords.join(' '));
+      currentLineY = t.y;
+      currentLineWords = [t.text];
+    } else {
+      currentLineWords.push(t.text);
+    }
+  }
+  if (currentLineWords.length) lines.push(currentLineWords.join(' '));
+  return lines.join('\n');
+}
+
+// Returns true for selections that look like mid-sentence fragments
+function isFragment(s: string): boolean {
+  if (/^[&]/.test(s)) return true;
+  if (/^[a-z]/.test(s)) return true;
+  if (/^(AND|OF|TO|THE|WITH|WITHIN|OR|IN|FOR|A|AT)\s/i.test(s)) return true;
+  if (/\s(AND|&|OF|TO|WITH)\s*$/i.test(s)) return true;
+  if (s.split(/\s+/).length < 2 && s.length < 12) return true;
+  return false;
 }
 
 // Parse material selections table
 function parseMaterialSelections(texts: ExtractedText[], pageIndex: number): MaterialSelection[] {
   const materials: MaterialSelection[] = [];
-  const allText = texts.map(t => t.text).join('\n');
+  const allText = joinTextsByLine(texts);
   const allTextLower = allText.toLowerCase();
 
   // Check for material selection section
@@ -693,7 +752,7 @@ function parseMaterialSelections(texts: ExtractedText[], pageIndex: number): Mat
   // Common material categories in Australian residential construction
   const materialPatterns = [
     { category: 'BRICKWORK', regex: /(?:brick(?:work)?|face\s*brick)\s*[:=]?\s*([^\n]+)/gi },
-    { category: 'CLADDING', regex: /(?:cladding|weatherboard|hebel|aac)\s*[:=]?\s*([^\n]+)/gi },
+    { category: 'CLADDING', regex: /(?:cladding|weatherboard|hebel|aac|linea|knotwood|weathertex)\s*[:=]?\s*([^\n]+)/gi },
     { category: 'ROOF', regex: /(?:roof(?:ing)?|roof\s*(?:tiles?|sheets?))\s*[:=]?\s*([^\n]+)/gi },
     { category: 'GUTTERS', regex: /(?:gutters?|downpipes?|fascia)\s*[:=]?\s*([^\n]+)/gi },
     { category: 'WINDOWS', regex: /(?:window\s*frames?|glazing)\s*[:=]?\s*([^\n]+)/gi },
@@ -704,13 +763,20 @@ function parseMaterialSelections(texts: ExtractedText[], pageIndex: number): Mat
     { category: 'CARPET', regex: /(?:carpet|floor\s*covering)\s*[:=]?\s*([^\n]+)/gi },
     { category: 'BENCHTOP', regex: /(?:bench\s*top|benchtop|kitchen\s*bench)\s*[:=]?\s*([^\n]+)/gi },
     { category: 'GARAGE DOOR', regex: /(?:garage\s*door)\s*[:=]?\s*([^\n]+)/gi },
+    { category: 'WALL FRAMING', regex: /(\d+mm\s*(?:wall\s*)?frames?(?:\s*to\s*have\s*R\d+\.\d+\s*(?:wall\s*)?batts?)?)/gi },
+    { category: 'INSULATION', regex: /(R\d+\.\d+\s*(?:wall|ceiling|roof)\s*batts?)/gi },
+    { category: 'INTERNAL LINING', regex: /(?:plasterboard|villaboard|fibro|blue\s*board|scyon)\s*[:=]?\s*([^\n]+)/gi },
+    { category: 'RENDER', regex: /(?:render(?:ed|ing)?|acrylic\s*render|texture\s*coat)\s*[:=]?\s*([^\n]+)/gi },
+    { category: 'WATERPROOFING', regex: /(?:waterproof(?:ing)?|emerproof|tanking)\s*[:=]?\s*([^\n]+)/gi },
+    { category: 'FLOORING', regex: /(?:engineered\s*timber|hybrid\s*floor|vinyl\s*plank|timber\s*floor(?:ing)?)\s*[:=]?\s*([^\n]+)/gi },
+    { category: 'BALUSTRADE', regex: /(?:balustrad(?:e|ing)|glass\s*balustr)\s*[:=]?\s*([^\n]+)/gi },
   ];
 
   for (const { category, regex } of materialPatterns) {
     let match;
     while ((match = regex.exec(allText)) !== null) {
-      const selection = match[1].trim();
-      if (selection.length > 2 && selection.length < 100) {
+      const selection = match[1]?.trim() || match[0]?.trim();
+      if (selection && selection.length > 8 && selection.length < 300 && !selection.endsWith('-') && !isFragment(selection)) {
         // Extract colour if present
         const colourMatch = selection.match(/(?:colour|color)\s*[:=]?\s*([^\s,]+)/i);
         materials.push({
@@ -907,41 +973,58 @@ function parseSchedules(texts: ExtractedText[], pageIndex: number): ScheduleItem
   const doorItems = parseDoorSchedule(texts, pageIndex);
   items.push(...doorItems);
 
-  // Finish schedule parsing (existing)
+  // Finish schedule parsing — filter out scale notes and dimension strings
   const finishRegex = /(floor|wall|ceiling|skirting)\s*(?:finish)?[\s:]+([^\n]+)/gi;
   let match;
   while ((match = finishRegex.exec(allText)) !== null) {
+    const description = match[2].trim();
+    // Skip scale notations (e.g., "1:100", "1:200")
+    if (/^\d+\s*:\s*\d+/.test(description)) continue;
+    // Skip entries that start with a number and have no real words
+    if (/^\d/.test(description) && !/[a-zA-Z]{3,}/.test(description)) continue;
+    // Skip short entries (< 3 chars)
+    if (description.length < 3) continue;
+    // Skip entries that are just scale keywords
+    if (/^(COVERING|FIRST|SECOND|THIRD|LEVEL|PLAN|SECOND\s*FLOOR|GROUND\s*FLOOR)/i.test(description)) continue;
     items.push({
       type: 'finish',
       reference: match[1].toUpperCase(),
-      description: match[2].trim(),
+      description,
       quantity: 1,
       pageIndex,
     });
   }
 
-  // Parse appliance schedule
-  const appliancePatterns = [
-    /\b(dishwasher|DW)\b/gi,
-    /\b(washing\s*machine|WM)\b/gi,
-    /\b(dryer)\b/gi,
-    /\b(cooktop|rangehood|oven)\b/gi,
-    /\b(fridge|refrigerator)\b/gi,
-    /\b(microwave|MW)\b/gi,
+  // Parse appliance schedule — one entry per type per page (deduplicated by reference)
+  const appliancePatterns: Array<[RegExp, string]> = [
+    [/\b(dishwasher|DW)\b/gi, 'DISHWASHER'],
+    [/\b(washing\s*machine|WM)\b/gi, 'WASHING_MACHINE'],
+    [/\b(dryer)\b/gi, 'DRYER'],
+    [/\b(cooktop)\b/gi, 'COOKTOP'],
+    [/\b(rangehood)\b/gi, 'RANGEHOOD'],
+    [/\b(oven)\b/gi, 'OVEN'],
+    [/\b(fridge|refrigerator)\b/gi, 'FRIDGE'],
+    [/\b(microwave|MW)\b/gi, 'MICROWAVE'],
   ];
 
-  for (const pattern of appliancePatterns) {
+  for (const [pattern, ref] of appliancePatterns) {
+    pattern.lastIndex = 0;
     if (pattern.test(allText)) {
+      // Count occurrences
       pattern.lastIndex = 0;
+      let qty = 0;
+      let firstLabel = ref;
       while ((match = pattern.exec(allText)) !== null) {
-        items.push({
-          type: 'appliance',
-          reference: match[1].toUpperCase().replace(/\s+/g, '_'),
-          description: match[1],
-          quantity: 1,
-          pageIndex,
-        });
+        qty++;
+        if (qty === 1) firstLabel = match[1];
       }
+      items.push({
+        type: 'appliance',
+        reference: ref,
+        description: firstLabel,
+        quantity: qty,
+        pageIndex,
+      });
     }
   }
 
@@ -1126,9 +1209,16 @@ function generateEstimation(
   const items: EstimatedLineItem[] = [];
   let itemId = 1;
 
-  // === EXTRACT KEY QUANTITIES FROM PDF ===
+  // === BUILDING CONTEXT: detect duplex, multi-storey, pool, materials ===
+  const allPageTexts = pages.flatMap(p => p.textContent);
+  const ctx = extractBuildingContext(allPageTexts);
+  const { isDuplex, unitCount, isMultiStorey, storeyCount, hasPool, hasCarport,
+    hasEngineeredTimber, hasLouvreWindows, hasFeatureWeatherboard,
+    hasAluminiumBattens, hasRender, hasBreezeBlock } = ctx;
 
-  // Get total floor area (most important quantity for estimation)
+  console.log(`[AIAnalyzer] Building context:`, ctx);
+
+  // === FLOOR AREA DETECTION ===
   let totalFloorArea = 0;
   let floorAreaSource: 'detected' | 'inferred' = 'inferred';
 
@@ -1137,46 +1227,46 @@ function generateEstimation(
     console.log(`[AIAnalyzer] Floor areas:`, floorAreas.map(a => `${a.name}: ${a.area}m²`).join(', '));
   }
 
-  // First, look for explicit TOTAL area
+  // Look for explicit TOTAL area first
   const totalArea = floorAreas.find(a =>
     /TOTAL|GROSS|FLOOR\s*AREA/i.test(a.name) && a.area > 50
   );
 
-  if (totalArea && totalArea.area > 50 && totalArea.area < 1000) {
+  if (totalArea && totalArea.area > 50 && totalArea.area < 10000) {
     totalFloorArea = totalArea.area;
     floorAreaSource = 'detected';
     console.log(`[AIAnalyzer] Using TOTAL area: ${totalFloorArea}m²`);
-  } else {
-    // Look for living area (usually the main floor area)
-    const livingArea = floorAreas.find(a =>
-      /GF\s*LIVING|LIVING|GROUND\s*FLOOR/i.test(a.name) && a.area > 50
-    );
+  } else if (floorAreas.length > 0) {
+    // Sum ALL valid individual room/space areas (cap per area, not total)
+    const summed = floorAreas
+      .filter(a => a.area > 1 && a.area < 1000)
+      .reduce((sum, a) => sum + a.area, 0);
 
-    if (livingArea && livingArea.area > 50) {
-      // Add typical garage (~25m²) and alfresco (~15m²) if living area found
-      totalFloorArea = livingArea.area + 40; // Living + garage/outdoor
+    if (summed > 50) {
+      totalFloorArea = summed;
       floorAreaSource = 'detected';
-    } else if (floorAreas.length > 0) {
-      // Sum up individual areas, but cap at 500m²
-      const summed = floorAreas
-        .filter(a => a.area > 1 && a.area < 500) // Filter out bogus values
-        .reduce((sum, a) => sum + a.area, 0);
-
-      if (summed > 80 && summed < 500) {
-        totalFloorArea = summed;
-        floorAreaSource = 'detected';
-      }
+      console.log(`[AIAnalyzer] Summed floor areas: ${totalFloorArea}m² from ${floorAreas.length} items`);
     }
   }
 
-  // If still no floor area, use a reasonable default
-  if (totalFloorArea < 80 || totalFloorArea > 800) {
-    totalFloorArea = 175; // Default ~175m² typical Australian 4-bed house
-    floorAreaSource = 'inferred';
+  // Context-derived fallback: use context-detected areas if area extraction failed
+  if (totalFloorArea < 80 && ctx.totalGrossArea > 80) {
+    totalFloorArea = ctx.totalGrossArea;
+    floorAreaSource = 'detected';
+    console.log(`[AIAnalyzer] Using context-derived area: ${totalFloorArea}m²`);
   }
 
-  // Round to reasonable precision
+  // Final fallback: use reasonable default based on building type
+  if (totalFloorArea < 80 || totalFloorArea > 8000) {
+    totalFloorArea = isDuplex ? 400 : 175;
+    floorAreaSource = 'inferred';
+    console.log(`[AIAnalyzer] Using default area: ${totalFloorArea}m² (isDuplex=${isDuplex})`);
+  }
+
   totalFloorArea = Math.round(totalFloorArea);
+
+  // Per-unit floor area for kitchens, bathrooms, etc.
+  const floorAreaPerUnit = Math.round(totalFloorArea / unitCount);
 
   // Count symbols across all pages
   const symbolCounts: Record<string, number> = {};
@@ -1211,12 +1301,21 @@ function generateEstimation(
   const smokeDetectors = Math.min(electricalSummary['smokeDetectors'] || symbolCounts['smoke_detector'] || 0, 10) || Math.ceil(totalFloorArea / 50) + 1;
   const exhaustFans = Math.min(electricalSummary['exhaustFans'] || symbolCounts['exhaust_fan'] || 0, 6) || 3;
 
-  // Count wet rooms for plumbing/tiling
-  const wetRoomCount = Math.max(
-    pages.flatMap(p => p.rooms)
-      .filter(r => /bathroom|ensuite|laundry|toilet|wc|powder/i.test(r.name)).length,
-    2 // minimum 2 wet rooms
-  );
+  // Count rooms from extracted labels
+  const allRooms = pages.flatMap(p => p.rooms);
+  const detectedWetRooms = allRooms
+    .filter(r => /bathroom|ensuite|laundry|toilet|wc|powder/i.test(r.name)).length;
+  const detectedBedrooms = allRooms
+    .filter(r => /\bbed\b|\bbedroom\b|\bmaster\b|\bguest\s*bed/i.test(r.name)).length;
+  const detectedBathrooms = allRooms
+    .filter(r => /\bbath\b|\bbathroom\b|\bensuite\b/i.test(r.name)).length;
+
+  // Minimum: 2 per unit (ensuite + main), plus laundry
+  const minWetRooms = unitCount * 3;
+  const wetRoomCount = Math.max(detectedWetRooms, minWetRooms);
+  // Bedroom and bathroom counts with realistic minimums per unit
+  const bedroomCount = Math.max(detectedBedrooms, unitCount * 3); // min 3-bed per unit
+  const bathroomCount = Math.max(detectedBathrooms, unitCount * 2); // min 2 bathrooms per unit
 
   // Determine construction type
   const constructionType = pages.reduce((acc, p) => {
@@ -1225,12 +1324,49 @@ function generateEstimation(
   }, 'timber_frame' as ConstructionType);
 
   // Calculate derived quantities
-  const wallPerimeter = Math.sqrt(totalFloorArea) * 4 * 1.3; // Approx wall perimeter
-  const externalWallArea = wallPerimeter * 2.7; // 2.7m wall height
-  const internalWallArea = totalFloorArea * 2.5; // Internal walls ~2.5x floor area
-  const roofArea = totalFloorArea * 1.15; // Roof ~15% more than floor area
-  const wetAreaFloor = wetRoomCount * 8; // ~8m² per wet room
-  const wetAreaWall = wetRoomCount * 25; // ~25m² walls per wet room
+  // Footprint = ground floor area only (for roof, external perimeter, etc.)
+  const footprintArea = isMultiStorey ? Math.round(totalFloorArea / storeyCount) : totalFloorArea;
+  // External wall perimeter: based on footprint per unit, accounting for party walls in duplex
+  const wallPerimeter = Math.round(Math.sqrt(footprintArea / unitCount) * 3.8 * unitCount);
+  // External wall area: perimeter × full building height (all storeys)
+  const externalWallArea = Math.round(wallPerimeter * 2.7 * storeyCount);
+  // Garage/carport area excluded from internal finishes
+  const garageArea = Math.round(totalFloorArea * (isDuplex ? 0.14 : 0.11));
+  const habitableArea = totalFloorArea - garageArea;
+  const roofArea = Math.round(footprintArea * 1.15);
+  const wetAreaFloor = wetRoomCount * 8;
+  const wetAreaWall = wetRoomCount * 25;
+
+  // === WALL ASSEMBLY PATHWAY ===
+  // All framing, insulation, cladding, lining, and painting quantities trace back to these
+  // source measurements so every component of each wall type is internally consistent.
+
+  // windowCount is needed here for opening fraction; also referenced in WINDOWS section below
+  const windowCount = schedules.windows.length > 0
+    ? schedules.windows.reduce((sum, w) => sum + w.quantity, 0)
+    : Math.ceil(totalFloorArea / 12);
+
+  // External wall gross face area — full perimeter × full height × all storeys, before any deductions
+  const extWallGross = externalWallArea;
+  // Opening fraction: 32% standard residential, 38% for louvre-heavy or high-glazing designs
+  const extWallOpeningFraction = (hasLouvreWindows || windowCount > totalFloorArea / 8) ? 0.38 : 0.32;
+  // External wall NET — openings deducted; used for cladding (outside) AND internal lining (inside)
+  const extWallNet = Math.round(extWallGross * (1 - extWallOpeningFraction));
+  // Internal partitions single-face area across all floors
+  const intWallSingleFace = Math.round(totalFloorArea * 0.9);
+  // Total framing area = external (gross) + internal partitions; both use the same stud frame
+  const totalFramingArea = extWallGross + intWallSingleFace;
+  // Wall insulation: external cavity batts (gross area) + acoustic batts in ~25% of internal walls
+  const totalWallInsulation = extWallGross + Math.round(intWallSingleFace * 0.25);
+  // Wall plasterboard: ext wall internal face (net) + BOTH sides of internal partitions − wet areas
+  const wallPlasterboard = Math.round(extWallNet + intWallSingleFace * 2 - wetAreaWall);
+
+  console.log('[Assembly Pathway]', {
+    extWallGross, extWallNet,
+    intWallSingleFace, totalFramingArea,
+    totalWallInsulation, wallPlasterboard,
+    habitableArea, wetAreaWall,
+  });
 
   // Helper to add line item with proper SOW categorization
   const addItem = (
@@ -1305,9 +1441,11 @@ function generateEstimation(
 
   // === GENERATE ESTIMATE BY SOW CATEGORY ===
 
-  // --- PRELIMINARIES ---
-  addItem('PRELIM-01', 1, 'inferred', 0.9, 'Site establishment');
-  addItem('PRELIM-02', 1, 'inferred', 0.8, 'Site amenities');
+  // --- PRELIMINARIES --- (rate is per m² of GFA; scales automatically with project size)
+  addItem('PRELIM-01', totalFloorArea, 'inferred', 0.9,
+    `Site establishment, supervision & temporary facilities (${totalFloorArea}m² project)`);
+  addItem('PRELIM-02', totalFloorArea, 'inferred', 0.8,
+    `Site office, amenities & perimeter fencing (${totalFloorArea}m²)`);
 
   // --- SITE WORKS ---
   addItem('SITE-01', totalFloorArea * 1.5, floorAreaSource, 0.7,
@@ -1315,123 +1453,262 @@ function generateEstimation(
     `Floor area ${totalFloorArea}m² × 1.5 for site coverage`);
 
   // --- STRUCTURE ---
-  // Slab - use actual floor area
+  // Ground floor slab
   if (elementCounts['floor-concrete'] > 0 || constructionType !== 'unknown') {
     addItem('STRUCT-01', totalFloorArea, floorAreaSource, 0.85,
-      `Waffle pod slab (${totalFloorArea.toFixed(0)}m²)`,
-      `Total floor area: ${totalFloorArea}m²`);
+      `Waffle pod slab on ground (${totalFloorArea.toFixed(0)}m²)`,
+      `Total ground floor area: ${totalFloorArea}m²`);
+  }
+
+  // First floor structure (cassette/floor joists) for multi-storey
+  if (isMultiStorey) {
+    // Estimate upper floor area — typically ~45–55% of total for 2-storey with garages on ground
+    const upperFloorArea = ctx.firstFloorArea > 0
+      ? ctx.firstFloorArea
+      : Math.round(totalFloorArea * 0.45);
+    addItem('STRUCT-05', upperFloorArea, ctx.firstFloorArea > 0 ? 'detected' : 'inferred', 0.85,
+      `First floor structure — cassette/floor joists (${upperFloorArea}m²)`,
+      `Upper level floor framing`);
   }
 
   // --- FRAMING & TRUSS ---
   if (constructionType === 'timber_frame' || constructionType === 'brick_veneer' || constructionType === 'unknown') {
-    addItem('FRAME-01', internalWallArea, floorAreaSource === 'detected' ? 'detected' : 'inferred', 0.8,
-      `Timber wall framing (${internalWallArea.toFixed(0)}m²)`,
-      `Internal walls: floor area × 2.5 = ${internalWallArea.toFixed(0)}m²`);
+    addItem('FRAME-01', totalFramingArea, floorAreaSource === 'detected' ? 'detected' : 'inferred', 0.8,
+      `Timber wall framing (${totalFramingArea}m²: ${extWallGross}m² ext + ${intWallSingleFace}m² int)`,
+      `External wall gross ${extWallGross}m² + internal partitions single-face ${intWallSingleFace}m²`);
   }
 
-  addItem('FRAME-03', totalFloorArea, floorAreaSource, 0.85,
-    `Roof trusses (${totalFloorArea.toFixed(0)}m² coverage)`,
-    `Based on floor area`);
+  // Roof trusses only cover the roof footprint (ground floor for 2-storey)
+  const roofCoverageArea = isMultiStorey ? Math.round(totalFloorArea / storeyCount) : totalFloorArea;
+  addItem('FRAME-03', roofCoverageArea, floorAreaSource, 0.85,
+    `Roof trusses (${roofCoverageArea}m² coverage)`,
+    `Based on roof footprint`);
 
   addItem('FRAME-04', totalFloorArea, floorAreaSource, 0.85,
     `Ceiling battens (${totalFloorArea.toFixed(0)}m²)`,
     `Based on floor area`);
 
-  // --- ROOFING ---
+  // --- ROOFING --- (roofArea already = footprint × 1.15, computed above)
   addItem('ROOF-01', roofArea, floorAreaSource === 'detected' ? 'detected' : 'inferred', 0.8,
-    `Colorbond roofing (${roofArea.toFixed(0)}m²)`,
-    `Roof area: floor area × 1.15 = ${roofArea.toFixed(0)}m²`);
+    `Colorbond roofing (${roofArea}m²)`,
+    `Roof footprint ${footprintArea}m² × 1.15 pitch factor`);
 
-  addItem('ROOF-03', roofArea, 'inferred', 0.85, `Sarking/building wrap (${roofArea.toFixed(0)}m²)`);
-  addItem('ROOF-04', wallPerimeter, 'inferred', 0.8, `Fascia and barge (${wallPerimeter.toFixed(0)}lm)`);
-  addItem('ROOF-05', wallPerimeter, 'inferred', 0.8, `Gutters (${wallPerimeter.toFixed(0)}lm)`);
-  addItem('ROOF-06', 8, 'inferred', 0.8, 'Downpipes (8 typical)');
+  addItem('ROOF-03', roofArea, 'inferred', 0.85, `Sarking/building wrap (${roofArea}m²)`);
+  addItem('ROOF-04', wallPerimeter, 'inferred', 0.8, `Fascia and barge (${wallPerimeter}lm)`);
+  addItem('ROOF-05', wallPerimeter, 'inferred', 0.8, `Gutters (${wallPerimeter}lm)`);
+  const downpipeCount = Math.max(6, Math.round(wallPerimeter / 9));
+  addItem('ROOF-06', downpipeCount * 3, 'inferred', 0.8, `Downpipes (${downpipeCount} × 3lm avg)`);
 
-  // --- EXTERNAL ---
-  if (constructionType === 'brick_veneer' || elementCounts['wall-brick_veneer'] > 0) {
-    addItem('EXT-01', externalWallArea * 0.7, 'inferred', 0.75,
-      `Brick veneer (${(externalWallArea * 0.7).toFixed(0)}m²)`,
-      `External walls minus windows/doors`);
+  // --- CARPORT STRUCTURE (if detected) ---
+  if (hasCarport) {
+    const carportArea = 36 * unitCount; // ~18m² per unit carport
+    addItem('EXTW-07', carportArea, 'detected', 0.85,
+      `Carport structure (${unitCount} × 18m²)`,
+      'Carport detected in plans — posts, beams, Colorbond roof');
+  }
+
+  // --- EXTERNAL CLADDING ---
+  // extWallNet from wall assembly pathway already deducts openings — use directly for cladding
+  const claddingNet = extWallNet;
+
+  const claddingDetected = hasFeatureWeatherboard || hasAluminiumBattens || hasRender || hasBreezeBlock;
+
+  if (claddingDetected) {
+    // Distribute across detected cladding types
+    const typesFound = [hasFeatureWeatherboard, hasAluminiumBattens, hasRender, hasBreezeBlock].filter(Boolean).length;
+    const brickVeneerPresent = constructionType === 'brick_veneer' || elementCounts['wall-brick_veneer'] > 0;
+    const brickShare = brickVeneerPresent ? 0.25 : 0;
+    const remaining = 1 - brickShare;
+    const sharePerType = remaining / (typesFound || 1);
+
+    if (brickVeneerPresent) {
+      addItem('EXT-01', claddingNet * brickShare, 'detected', 0.8,
+        `Brick veneer (${(claddingNet * brickShare).toFixed(0)}m²)`);
+    }
+    if (hasFeatureWeatherboard) {
+      addItem('EXT-05', claddingNet * sharePerType, 'detected', 0.85,
+        `Feature weatherboard — Linea/Weathertex (${(claddingNet * sharePerType).toFixed(0)}m²)`);
+    }
+    if (hasAluminiumBattens) {
+      addItem('EXT-06', claddingNet * sharePerType * 0.6, 'detected', 0.85,
+        `Aluminium feature battens — Knotwood (${(claddingNet * sharePerType * 0.6).toFixed(0)}m²)`);
+    }
+    if (hasRender) {
+      addItem('EXT-04', claddingNet * sharePerType, 'detected', 0.85,
+        `Acrylic render to FC sheeting (${(claddingNet * sharePerType).toFixed(0)}m²)`);
+    }
+    if (hasBreezeBlock) {
+      addItem('EXT-07', claddingNet * 0.08, 'detected', 0.8,
+        `Besser/breeze block feature wall (${(claddingNet * 0.08).toFixed(0)}m²)`);
+    }
+  } else if (constructionType === 'brick_veneer' || elementCounts['wall-brick_veneer'] > 0) {
+    addItem('EXT-01', claddingNet, 'inferred', 0.75,
+      `Brick veneer (${claddingNet.toFixed(0)}m²)`, `External walls minus windows/doors`);
   } else {
-    addItem('EXT-02', externalWallArea * 0.7, 'inferred', 0.75,
-      `Hebel cladding (${(externalWallArea * 0.7).toFixed(0)}m²)`,
-      `External walls minus windows/doors`);
+    addItem('EXT-02', claddingNet, 'inferred', 0.75,
+      `Hebel cladding (${claddingNet.toFixed(0)}m²)`, `External walls minus windows/doors`);
   }
 
   // --- WINDOWS & DOORS ---
-  // From schedule if available
-  const windowCount = schedules.windows.length > 0
-    ? schedules.windows.reduce((sum, w) => sum + w.quantity, 0)
-    : Math.ceil(totalFloorArea / 15); // ~1 window per 15m²
+  // windowCount already computed in wall assembly pathway above
 
   const doorCount = schedules.doors.length > 0
     ? schedules.doors.reduce((sum, d) => sum + d.quantity, 0)
-    : Math.ceil(totalFloorArea / 20); // ~1 door per 20m²
+    : Math.ceil(totalFloorArea / 15);
 
   if (schedules.windows.length > 0) {
     for (const win of schedules.windows) {
-      const isLarge = win.size && parseInt(win.size.split('x')[0]) > 1500;
-      addItem(isLarge ? 'WD-03' : 'WD-01', win.quantity, 'schedule', 0.95,
-        `${win.reference}: ${win.description}`,
-        'From window schedule');
+      const isLouvre = /louv(?:re|er)/i.test(win.description);
+      const isLargeSlider = win.size && parseInt(win.size.split('x')[0]) > 1800;
+      const isCurved = /curved|feature|arch/i.test(win.description);
+      let rateCode = 'WD-01';
+      if (isLouvre) rateCode = 'WD-11';
+      else if (isCurved) rateCode = 'WD-12';
+      else if (isLargeSlider) rateCode = 'WD-03';
+      addItem(rateCode, win.quantity, 'schedule', 0.95,
+        `${win.reference}: ${win.description}`, 'From window schedule');
     }
+  } else if (hasLouvreWindows) {
+    const louvreCount = Math.ceil(windowCount * 0.5);
+    const stdCount = windowCount - louvreCount;
+    addItem('WD-11', louvreCount, 'inferred', 0.7, `Louvre windows (${louvreCount} estimated)`);
+    addItem('WD-01', stdCount, 'inferred', 0.7, `Standard windows (${stdCount} estimated)`);
   } else {
     addItem('WD-01', windowCount, 'inferred', 0.7,
-      `Windows - standard (${windowCount} estimated)`,
-      `Estimated ~1 per 15m² of floor area`);
+      `Windows — standard (${windowCount} estimated)`,
+      `~1 per 12m² of floor area`);
   }
 
   if (schedules.doors.length > 0) {
-    let hasEntry = false;
-    let hasGarage = false;
-    for (const door of schedules.doors) {
-      const isExternal = /external|entry|front/i.test(door.description);
-      const isGarage = /garage|sectional|roller/i.test(door.description);
+    let garageDoorCount = 0;
+    let stackerDoorCount = 0;
+    let entryDoorCount = 0;
+    let robeDoorCount = 0;
+    let cavityCount = 0;
+    let internalCount = 0;
 
-      if (isGarage && !hasGarage) {
-        addItem('WD-07', 1, 'schedule', 0.95, `${door.reference}: Garage door`, 'From door schedule');
-        hasGarage = true;
-      } else if (isExternal && !hasEntry) {
-        addItem('WD-06', door.quantity, 'schedule', 0.95,
-          `${door.reference}: ${door.description}`, 'From door schedule');
-        hasEntry = true;
-      } else if (!isGarage) {
+    for (const door of schedules.doors) {
+      const isGarage = /garage|sectional|roller|overhead/i.test(door.description);
+      const isStacker = /stacker|sliding\s*stack/i.test(door.description);
+      const isRobe = /robe|wardrobe|sliding\s*robe/i.test(door.description);
+      const isCavity = /cavity\s*slid/i.test(door.description);
+      const isExternal = /external|entry|front|main\s*entry/i.test(door.description);
+
+      if (isGarage) {
+        garageDoorCount += door.quantity;
+      } else if (isStacker) {
+        stackerDoorCount += door.quantity;
+        addItem('WD-10', door.quantity, 'schedule', 0.95,
+          `${door.reference}: Sliding stacker door (${door.quantity})`, 'From door schedule');
+      } else if (isRobe) {
+        robeDoorCount += door.quantity;
+        addItem('WD-09', door.quantity * 1.5, 'schedule', 0.9,
+          `${door.reference}: Sliding robe doors (${door.quantity})`, 'From door schedule');
+      } else if (isCavity) {
+        cavityCount += door.quantity;
         addItem('WD-04', door.quantity, 'schedule', 0.95,
-          `${door.reference}: Internal door`, 'From door schedule');
+          `${door.reference}: Cavity sliding door (${door.quantity})`, 'From door schedule');
+      } else if (isExternal) {
+        entryDoorCount += door.quantity;
+        addItem('WD-06', door.quantity, 'schedule', 0.95,
+          `${door.reference}: Entry door (${door.quantity})`, 'From door schedule');
+      } else {
+        internalCount += door.quantity;
+        addItem('WD-04', door.quantity, 'schedule', 0.95,
+          `${door.reference}: Internal door (${door.quantity})`, 'From door schedule');
       }
     }
+
+    if (garageDoorCount > 0) {
+      addItem('WD-07', garageDoorCount, 'schedule', 0.95,
+        `Overhead garage doors (${garageDoorCount})`, 'From door schedule');
+    }
+    // If no entry door in schedule, add one per unit
+    if (entryDoorCount === 0) {
+      addItem('WD-06', unitCount, 'inferred', 0.85, `Entry doors (${unitCount} units)`);
+    }
   } else {
-    addItem('WD-06', 1, 'inferred', 0.8, 'Entry door');
-    addItem('WD-04', doorCount - 1, 'inferred', 0.7,
-      `Internal doors (${doorCount - 1} estimated)`,
-      'Estimated from floor area');
-    addItem('WD-07', 1, 'inferred', 0.8, 'Garage door (single)');
+    // No schedule — estimate from floor area
+    const garageDoorsEstimated = unitCount; // 1 per unit
+    const entryDoorsEstimated = unitCount;
+    const internalDoorsEstimated = Math.max(1, doorCount - garageDoorsEstimated - entryDoorsEstimated);
+    addItem('WD-06', entryDoorsEstimated, 'inferred', 0.8, `Entry doors (${entryDoorsEstimated})`);
+    addItem('WD-04', internalDoorsEstimated, 'inferred', 0.7,
+      `Internal doors (${internalDoorsEstimated} estimated)`, 'Estimated from floor area');
+    addItem('WD-07', garageDoorsEstimated, 'inferred', 0.8,
+      `Garage doors (${garageDoorsEstimated})`, '1 per unit');
   }
 
   // --- INTERNAL LININGS ---
-  addItem('INT-01', internalWallArea, 'inferred', 0.8,
-    `Plasterboard walls (${internalWallArea.toFixed(0)}m²)`,
-    'Internal wall area');
-  addItem('INT-02', totalFloorArea, floorAreaSource, 0.85,
-    `Plasterboard ceiling (${totalFloorArea.toFixed(0)}m²)`,
-    'Total floor area');
+  addItem('INT-01', wallPlasterboard, 'inferred', 0.8,
+    `Plasterboard walls (${wallPlasterboard}m²: ${extWallNet}m² ext + ${intWallSingleFace * 2}m² int both sides)`,
+    `Ext wall net ${extWallNet}m² + internal partitions ×2 ${intWallSingleFace * 2}m² − wet areas ${wetAreaWall}m²`);
+  addItem('INT-02', habitableArea, floorAreaSource, 0.85,
+    `Plasterboard ceiling (${habitableArea}m² habitable)`,
+    `Total area minus garage (${garageArea}m²)`);
   addItem('INT-03', wetAreaWall, 'inferred', 0.8,
-    `Villaboard wet areas (${wetAreaWall.toFixed(0)}m²)`,
+    `Villaboard wet areas (${wetAreaWall}m²)`,
     `${wetRoomCount} wet rooms × ~25m² walls`);
   addItem('INT-04', wetAreaFloor + wetAreaWall * 0.5, 'inferred', 0.8,
-    `Waterproofing (${(wetAreaFloor + wetAreaWall * 0.5).toFixed(0)}m²)`,
-    'Wet area floors and splashbacks');
-  addItem('INT-05', totalFloorArea, 'inferred', 0.85,
-    `Ceiling insulation R4.0 (${totalFloorArea.toFixed(0)}m²)`);
+    `Waterproofing membrane AS 3740 (${(wetAreaFloor + wetAreaWall * 0.5).toFixed(0)}m²)`,
+    'Wet area floors + shower/bath splashbacks');
+  addItem('INT-05', habitableArea, 'inferred', 0.85,
+    `Ceiling insulation R4.0 (${habitableArea}m² habitable area)`);
+  addItem('INT-06', totalWallInsulation, 'inferred', 0.8,
+    `Wall insulation R2.5 batts (${totalWallInsulation}m²: ${extWallGross}m² ext cavity + ${Math.round(intWallSingleFace * 0.25)}m² acoustic)`,
+    `External cavity insulation ${extWallGross}m² + acoustic batts in 25% of internal partitions`);
+
+  // --- STAIRS & BALUSTRADE (multi-storey) ---
+  if (isMultiStorey) {
+    addItem('FIT-10', unitCount, 'detected', 0.9,
+      `Staircase — timber with balustrade (${unitCount} stair${unitCount > 1 ? 's' : ''})`,
+      `${unitCount} staircase per unit, 2-storey building`);
+    const balustradeLm = Math.round(Math.sqrt(totalFloorArea / storeyCount) * 1.5 * unitCount);
+    addItem('FIT-11', balustradeLm, 'inferred', 0.75,
+      `Glass balustrade — upper landings/balcony (${balustradeLm}lm)`,
+      'Upper floor landing and balcony edges');
+  }
 
   // --- INTERNAL FIT-OUT ---
-  addItem('FIT-01', 6, 'inferred', 0.8, 'Kitchen cabinetry (6lm typical)');
-  addItem('FIT-02', 4, 'inferred', 0.8, 'Stone benchtop (4lm typical)');
-  addItem('FIT-03', wetRoomCount, 'inferred', 0.8, `Bathroom vanities (${wetRoomCount})`);
-  addItem('FIT-04', 1, 'inferred', 0.85, 'Laundry trough and cabinet');
-  addItem('FIT-06', wallPerimeter * 2, 'inferred', 0.8,
-    `Skirting (${(wallPerimeter * 2).toFixed(0)}lm)`,
-    'Approx internal perimeter');
+  // Kitchens: 1 per unit, 6.5lm average run
+  addItem('FIT-01', 6.5 * unitCount, 'inferred', 0.85,
+    `Kitchen cabinetry (${unitCount} kitchen${unitCount > 1 ? 's' : ''} × 6.5lm)`,
+    `${unitCount} unit${unitCount > 1 ? 's' : ''} — 1 kitchen each`);
+  addItem('FIT-02', 4.5 * unitCount, 'inferred', 0.85,
+    `Stone benchtop 20mm (${unitCount} kitchen${unitCount > 1 ? 's' : ''} × 4.5lm)`,
+    `${unitCount} unit${unitCount > 1 ? 's' : ''}`);
+
+  // Bathrooms: detected count + powder room per unit
+  const pdrCount = unitCount;
+  addItem('FIT-03', bathroomCount + pdrCount, bathroomCount > unitCount * 2 ? 'detected' : 'inferred', 0.85,
+    `Bathroom vanities (${bathroomCount} full + ${pdrCount} PDR)`,
+    `${bathroomCount} bathrooms/ensuites + powder rooms`);
+
+  // Freestanding baths: 1 per unit (ensuite or master bath)
+  addItem('FIT-08', unitCount, 'inferred', 0.8,
+    `Freestanding bath (${unitCount} — one per unit ensuite)`,
+    'Premium bath per ensuite');
+
+  // Frameless shower screens: 1 per bathroom/ensuite
+  addItem('FIT-09', bathroomCount, 'inferred', 0.8,
+    `Frameless shower screens (${bathroomCount})`,
+    `${bathroomCount} bathrooms/ensuites`);
+
+  // Laundry: 1 per unit
+  addItem('FIT-04', unitCount, 'inferred', 0.85,
+    `Laundry trough and cabinet (${unitCount})`,
+    `1 per unit`);
+
+  // Wardrobes: detected bedrooms × 2.4lm average
+  addItem('FIT-05', bedroomCount * 2.4, bedroomCount > unitCount * 3 ? 'detected' : 'inferred', 0.8,
+    `Built-in wardrobe shelving (${bedroomCount} bedrooms × 2.4lm)`,
+    `${bedroomCount} bedrooms detected/estimated`);
+
+  // Skirting: ~2× internal perimeter across all floors
+  const skirtingLm = Math.round(Math.sqrt(habitableArea / unitCount) * 3.8 * unitCount * 2);
+  addItem('FIT-06', skirtingLm, 'inferred', 0.8,
+    `Skirting (${skirtingLm}lm all habitable floors)`,
+    'Approx internal perimeter across all habitable floors');
 
   // --- ELECTRICAL ---
   // Use the capped realistic values calculated above
@@ -1462,19 +1739,27 @@ function generateEstimation(
     `Exhaust fans (${exhaustFans})`,
     `${wetRoomCount} wet rooms`);
 
-  addItem('ELEC-09', 1, 'inferred', 0.95, 'Switchboard');
-  addItem('ELEC-10', 1, 'inferred', 0.95, 'Electrical fit-off and testing');
+  addItem('ELEC-09', unitCount, 'inferred', 0.95,
+    `Switchboard (${unitCount} — one per unit)`,
+    `Separate metering per unit for duplex`);
+  addItem('ELEC-10', unitCount, 'inferred', 0.95,
+    `Electrical fit-off and testing (${unitCount} units)`);
 
   // --- PLUMBING ---
-  const toilets = symbolCounts['toilet'] || wetRoomCount;
-  const basins = symbolCounts['sink'] || wetRoomCount + 1;
-  const showers = symbolCounts['shower'] || wetRoomCount;
+  // Minimum fixtures: toilets = 2 per unit (ensuite + main + PDR), basins similar, showers = 2 per unit
+  const minToilets = unitCount * 3;
+  const minShowers = unitCount * 2;
+  const minBasins = unitCount * 3;
+  const toilets = Math.max(symbolCounts['toilet'] || 0, minToilets);
+  const showers = Math.max(symbolCounts['shower'] || 0, minShowers);
+  const basins = Math.max(symbolCounts['sink'] || 0, minBasins);
+  const fixtureCount = toilets + basins + showers + unitCount * 2; // +2 per unit for kitchen/laundry
 
-  addItem('PLUMB-01', toilets + basins + showers + 2, 'inferred', 0.8,
-    `Water supply rough-in (${toilets + basins + showers + 2} fixtures)`,
+  addItem('PLUMB-01', fixtureCount, 'inferred', 0.8,
+    `Water supply rough-in (${fixtureCount} fixtures across ${unitCount} unit${unitCount > 1 ? 's' : ''})`,
     'All plumbing fixtures');
-  addItem('PLUMB-02', toilets + basins + showers + 2, 'inferred', 0.8,
-    `Drainage rough-in (${toilets + basins + showers + 2} fixtures)`);
+  addItem('PLUMB-02', fixtureCount, 'inferred', 0.8,
+    `Drainage rough-in (${fixtureCount} fixtures)`);
 
   addItem('PLUMB-03', toilets, symbolCounts['toilet'] > 0 ? 'detected' : 'inferred', 0.85,
     `Toilet suites (${toilets})`);
@@ -1482,59 +1767,110 @@ function generateEstimation(
     `Shower mixer and rose (${showers})`);
   addItem('PLUMB-05', basins, symbolCounts['sink'] > 0 ? 'detected' : 'inferred', 0.85,
     `Basin mixer taps (${basins})`);
-  addItem('PLUMB-06', 1, 'inferred', 0.9, 'Kitchen sink');
-  addItem('PLUMB-07', 1, 'inferred', 0.9, 'Kitchen mixer tap');
-  addItem('PLUMB-08', 1, 'inferred', 0.9, 'Hot water system (gas)');
-  addItem('PLUMB-09', 1, 'inferred', 0.85, 'Stormwater drainage');
-  addItem('PLUMB-10', 1, 'inferred', 0.85, 'Sewer connection');
+  addItem('PLUMB-06', unitCount, 'inferred', 0.9,
+    `Kitchen sink (${unitCount} — one per unit)`);
+  addItem('PLUMB-07', unitCount, 'inferred', 0.9,
+    `Kitchen mixer tap (${unitCount})`);
+  addItem('PLUMB-08', unitCount, 'inferred', 0.9,
+    `Hot water system (${unitCount} — one per unit)`);
+  addItem('PLUMB-09', unitCount, 'inferred', 0.85,
+    `Stormwater drainage (${unitCount} connections)`);
+  addItem('PLUMB-10', unitCount, 'inferred', 0.85,
+    `Sewer connection (${unitCount} — separate per unit)`);
 
   // --- HVAC ---
   const acUnits = symbolCounts['air_conditioning'] || 0;
-  if (acUnits > 0) {
-    addItem('HVAC-01', acUnits, 'detected', 0.9, `Split system AC (${acUnits} detected)`);
-  } else {
-    // Allow for either split or ducted
-    addItem('HVAC-01', 3, 'inferred', 0.7, 'Split system AC (3 typical)', 'Or ducted alternative');
-  }
+  const minAcUnits = unitCount * 3; // ~3 splits per unit (living, master, open plan)
+  const finalAcCount = acUnits > 0 ? acUnits : minAcUnits;
+  addItem('HVAC-01', finalAcCount, acUnits > 0 ? 'detected' : 'inferred', acUnits > 0 ? 0.9 : 0.7,
+    `Split system AC (${finalAcCount} — ~3 per unit)`,
+    `${unitCount} unit${unitCount > 1 ? 's' : ''} × 3 splits`);
 
   // --- PAINTING ---
-  addItem('PAINT-01', internalWallArea, 'inferred', 0.85,
-    `Internal walls painting (${internalWallArea.toFixed(0)}m²)`);
-  addItem('PAINT-02', totalFloorArea, 'inferred', 0.85,
-    `Ceiling painting (${totalFloorArea.toFixed(0)}m²)`);
+  addItem('PAINT-01', wallPlasterboard, 'inferred', 0.85,
+    `Internal walls painting (${wallPlasterboard}m² — matches plasterboard area)`,
+    `Same area as INT-01 wall plasterboard`);
+  addItem('PAINT-02', habitableArea, 'inferred', 0.85,
+    `Ceiling painting (${habitableArea}m² habitable)`,
+    `Excluding garage (${garageArea}m²)`);
   addItem('PAINT-03', doorCount, 'inferred', 0.85,
     `Door and frame painting (${doorCount})`);
-  addItem('PAINT-04', externalWallArea * 0.3, 'inferred', 0.8,
-    `External painting (${(externalWallArea * 0.3).toFixed(0)}m²)`,
-    'Rendered/painted areas only');
+  addItem('PAINT-04', extWallGross * 0.35, 'inferred', 0.8,
+    `External painting — rendered/painted surfaces (${Math.round(extWallGross * 0.35)}m²)`);
 
-  // --- FLOOR COVERINGS ---
-  const livingArea = totalFloorArea * 0.5; // ~50% hard flooring
-  const carpetArea = totalFloorArea * 0.3; // ~30% carpet (bedrooms)
+  // --- FLOOR COVERINGS --- (garage excluded from all finish areas)
+  const tileArea = wetAreaFloor;                           // wet rooms only
+  const hardFloorArea = Math.round(habitableArea * 0.52); // living, hall, kitchen, dining
+  const carpetArea = Math.round(habitableArea * 0.30);    // bedrooms only
 
-  addItem('FLOOR-01', wetAreaFloor, 'inferred', 0.85,
-    `Floor tiles - wet areas (${wetAreaFloor.toFixed(0)}m²)`);
-  addItem('FLOOR-02', wetAreaWall * 0.4, 'inferred', 0.8,
-    `Wall tiles - wet areas (${(wetAreaWall * 0.4).toFixed(0)}m²)`,
-    'Splashbacks and shower walls');
-  addItem('FLOOR-05', livingArea, 'inferred', 0.75,
-    `Vinyl plank flooring (${livingArea.toFixed(0)}m²)`,
-    'Living areas');
+  addItem('FLOOR-01', tileArea, 'inferred', 0.85,
+    `Floor tiles (porcelain) — wet areas (${tileArea}m²)`,
+    `${wetRoomCount} wet rooms × 8m²`);
+  addItem('FLOOR-02', Math.round(wetAreaWall * 0.5), 'inferred', 0.8,
+    `Wall tiles — shower walls & splashbacks (${Math.round(wetAreaWall * 0.5)}m²)`);
+
+  if (hasEngineeredTimber) {
+    addItem('FLOOR-04', hardFloorArea, 'detected', 0.85,
+      `Engineered timber flooring (${hardFloorArea}m²)`,
+      'Detected from plan notes — living and main areas');
+  } else {
+    addItem('FLOOR-05', hardFloorArea, 'inferred', 0.75,
+      `Vinyl plank flooring (${hardFloorArea}m²)`,
+      `52% of habitable area (${habitableArea}m²)`);
+  }
+
   addItem('FLOOR-03', carpetArea, 'inferred', 0.75,
-    `Carpet (${carpetArea.toFixed(0)}m²)`,
-    'Bedrooms');
+    `Carpet with underlay (${carpetArea}m²)`,
+    `30% of habitable area — bedrooms, approx ${bedroomCount} rooms`);
 
   // --- EXTERNAL WORKS ---
-  addItem('EXTW-01', 25, 'inferred', 0.7, 'Concrete paths (25m² typical)');
-  addItem('EXTW-05', 1, 'inferred', 0.9, 'Letterbox');
-  addItem('EXTW-06', 1, 'inferred', 0.9, 'Clothesline');
+  const pathArea = 25 * unitCount;
+  addItem('EXTW-01', pathArea, 'inferred', 0.7,
+    `Concrete paths and driveways (${pathArea}m²)`,
+    `${unitCount} units`);
+  addItem('EXTW-05', unitCount, 'inferred', 0.9,
+    `Letterbox (${unitCount})`, `1 per unit`);
+  addItem('EXTW-06', unitCount, 'inferred', 0.9,
+    `Clothesline (${unitCount})`, `1 per unit`);
+
+  // Pool (if detected in plans)
+  if (hasPool) {
+    addItem('POOL-01', 1, 'detected', 0.9,
+      'Inground concrete pool — complete package (6×3m, excavation, shell, tiling, filtration, pump)',
+      'Swimming pool detected in site/floor plans');
+    addItem('POOL-02', 24, 'inferred', 0.8,
+      'Glass pool fencing — frameless toughened (~24lm)',
+      'Pool perimeter fencing to QDC/NCC requirements');
+    addItem('EXTW-09', 30, 'inferred', 0.75,
+      'Pool surrounds / paved area (30m²)',
+      'Paving around pool area');
+  }
+
+  // Gate and intercom (detected via breeze block wall or duplex)
+  if (hasBreezeBlock || isDuplex) {
+    addItem('EXTW-08', unitCount, 'detected', 0.8,
+      `Gate and intercom system (${unitCount} units)`,
+      'Detected entry wall/gate in plans');
+  }
+
+  // Termite management (NCC mandatory for all new class 1 dwellings)
+  addItem('EXTW-10', unitCount, 'inferred', 0.95,
+    `Termite management AS 3660 chemical soil treatment (${unitCount} dwelling${unitCount > 1 ? 's' : ''})`,
+    'NCC mandatory — chemical soil treatment + physical barriers');
 
   // --- CERTIFICATIONS ---
-  addItem('CERT-01', 1, 'inferred', 0.95, 'Building permit and inspections');
-  addItem('CERT-02', 1, 'inferred', 0.95, 'Engineering certification');
-  addItem('CERT-03', 1, 'inferred', 0.95, 'Energy rating (NatHERS)');
-  addItem('CERT-04', 1, 'inferred', 0.95, 'Survey and setout');
-  addItem('CERT-05', 1, 'inferred', 0.95, 'Final inspection');
+  // Duplex requires dual occupancy DA, separate OCs, higher fees
+  const certMultiplier = isDuplex ? 1.8 : 1;
+  addItem('CERT-01', certMultiplier, 'inferred', 0.95,
+    isDuplex ? 'Building permit — dual occupancy DA (inc. separate OC per unit)' : 'Building permit and inspections',
+    'Includes DA/CDC application, mandatory progress inspections');
+  addItem('CERT-02', certMultiplier, 'inferred', 0.95,
+    'Engineering certification (structural + geotechnical)');
+  addItem('CERT-03', unitCount, 'inferred', 0.95,
+    `Energy rating NatHERS (${unitCount} dwelling${unitCount > 1 ? 's' : ''})`);
+  addItem('CERT-04', 1, 'inferred', 0.95, 'Survey and setout (registered surveyor)');
+  addItem('CERT-05', unitCount, 'inferred', 0.95,
+    `Final inspection and occupancy certificate (${unitCount})`);
 
   // === SANITY CHECK ===
   const totalEstimate = items.reduce((sum, item) => sum + item.totalCost, 0);
@@ -1542,17 +1878,20 @@ function generateEstimation(
 
   console.log(`[AIAnalyzer] Estimate Summary:
     - Floor area: ${totalFloorArea}m² (source: ${floorAreaSource})
+    - Building: ${isDuplex ? `Duplex — ${unitCount} units` : 'Single dwelling'}, ${storeyCount}-storey
+    - Pool: ${hasPool}, Carport: ${hasCarport}
+    - Cladding: weatherboard=${hasFeatureWeatherboard}, battens=${hasAluminiumBattens}, render=${hasRender}, breezeblock=${hasBreezeBlock}
     - Total items: ${items.length}
     - Total cost: $${totalEstimate.toLocaleString()}
-    - Expected range: $${low.toLocaleString()} - $${high.toLocaleString()}
+    - Expected range: $${low.toLocaleString()} - $${high.toLocaleString()} (× ${unitCount} units)
   `);
 
-  // If estimate is unreasonably high (>3x high end) or low (<0.5x low end), warn
-  if (totalEstimate > high * 3) {
-    console.warn(`[AIAnalyzer] WARNING: Estimate is ${(totalEstimate / high).toFixed(1)}x higher than expected high end.`);
-    console.warn(`[AIAnalyzer] Check floor area (${totalFloorArea}m²) and electrical counts.`);
-  } else if (totalEstimate < low * 0.5) {
-    console.warn(`[AIAnalyzer] WARNING: Estimate is ${(totalEstimate / low).toFixed(1)}x lower than expected low end.`);
+  // Allow higher ratios for duplex/multi-unit builds
+  const maxRatio = isDuplex ? 6 : 3;
+  if (totalEstimate > high * maxRatio) {
+    console.warn(`[AIAnalyzer] WARNING: Estimate ${(totalEstimate / high).toFixed(1)}x above expected high — check floor area (${totalFloorArea}m²) and electrical.`);
+  } else if (totalEstimate < low * 0.4) {
+    console.warn(`[AIAnalyzer] WARNING: Estimate ${(totalEstimate / low).toFixed(1)}x below expected low — likely missing items.`);
   }
 
   return items;
@@ -1692,12 +2031,39 @@ export async function analyzePDF(file: File): Promise<PlanAnalysisResult> {
       });
     }
 
-    // Aggregate schedules
+    // Aggregate schedules — deduplicate windows/doors by reference, appliances by reference (sum qty)
+    const dedupeByRef = (items: ScheduleItem[]) => {
+      const map = new Map<string, ScheduleItem>();
+      for (const item of items) {
+        const existing = map.get(item.reference);
+        if (!existing) {
+          map.set(item.reference, { ...item });
+        } else {
+          existing.quantity = Math.max(existing.quantity, item.quantity);
+        }
+      }
+      return Array.from(map.values());
+    };
+
+    const dedupeAppliances = (items: ScheduleItem[]) => {
+      const map = new Map<string, ScheduleItem>();
+      for (const item of items) {
+        const existing = map.get(item.reference);
+        if (!existing) {
+          map.set(item.reference, { ...item });
+        } else {
+          // Use max quantity seen across pages (not sum — same appliance appears on multiple pages)
+          existing.quantity = Math.max(existing.quantity, item.quantity);
+        }
+      }
+      return Array.from(map.values());
+    };
+
     const schedules = {
-      windows: allScheduleItems.filter(s => s.type === 'window'),
-      doors: allScheduleItems.filter(s => s.type === 'door'),
+      windows: dedupeByRef(allScheduleItems.filter(s => s.type === 'window')),
+      doors: dedupeByRef(allScheduleItems.filter(s => s.type === 'door')),
       finishes: allScheduleItems.filter(s => s.type === 'finish'),
-      appliances: allScheduleItems.filter(s => s.type === 'appliance'),
+      appliances: dedupeAppliances(allScheduleItems.filter(s => s.type === 'appliance')),
     };
 
     // Deduplicate standards references
@@ -1732,10 +2098,14 @@ export async function analyzePDF(file: File): Promise<PlanAnalysisResult> {
       projectType = 'Addition/Renovation';
     }
 
-    // Count unique items
+    // Count items — prefer schedule totals (most accurate), fall back to symbol count
     const allSymbols = pages.flatMap(p => p.symbols);
-    const uniqueDoors = new Set(allSymbols.filter(s => s.type === 'door').map(s => s.label)).size || schedules.doors.reduce((sum, d) => sum + d.quantity, 0);
-    const uniqueWindows = new Set(allSymbols.filter(s => s.type === 'window').map(s => s.label)).size || schedules.windows.reduce((sum, w) => sum + w.quantity, 0);
+    const scheduleDoorTotal = schedules.doors.reduce((sum, d) => sum + d.quantity, 0);
+    const scheduleWindowTotal = schedules.windows.reduce((sum, w) => sum + w.quantity, 0);
+    const symbolDoorCount = allSymbols.filter(s => s.type === 'door').length;
+    const symbolWindowCount = allSymbols.filter(s => s.type === 'window').length;
+    const uniqueDoors = scheduleDoorTotal > 0 ? scheduleDoorTotal : symbolDoorCount;
+    const uniqueWindows = scheduleWindowTotal > 0 ? scheduleWindowTotal : symbolWindowCount;
     const uniqueRooms = new Set(pages.flatMap(p => p.rooms.map(r => r.name))).size;
 
     // Calculate total floor area from extracted areas

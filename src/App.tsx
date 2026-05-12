@@ -13,6 +13,7 @@ import MarketInsights from "./pages/MarketInsights";
 import Pricing from "./pages/Pricing";
 import Clients from "./pages/Clients";
 import Settings from "./pages/Settings";
+import MaterialsLibrary from "./pages/MaterialsLibrary";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -27,6 +28,7 @@ const App = () => (
         <Routes>
           <Route path="/" element={<Index />} />
           <Route path="/auth" element={<Auth />} />
+          <Route path="/app" element={<Dashboard />} />
           <Route path="/pricing" element={<Pricing />} />
           <Route path="/dashboard" element={<Dashboard />} />
           <Route path="/project/new" element={<NewProject />} />
@@ -34,6 +36,7 @@ const App = () => (
           <Route path="/insights" element={<MarketInsights />} />
           <Route path="/clients" element={<Clients />} />
           <Route path="/settings" element={<Settings />} />
+          <Route path="/materials" element={<MaterialsLibrary />} />
           {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
           <Route path="*" element={<NotFound />} />
         </Routes>

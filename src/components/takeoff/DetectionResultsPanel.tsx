@@ -25,6 +25,8 @@ interface DetectionResultsPanelProps {
   totalPages: number;
   /** Called when the user clicks "View" on a specific opening — jump to that page */
   onJumpToPage?: (pageIndex: number) => void;
+  /** Called when scan finishes — passes all detected openings to parent */
+  onScanComplete?: (openings: DetectedOpening[]) => void;
 }
 
 interface SymbolTotals {
@@ -55,6 +57,7 @@ export const DetectionResultsPanel: React.FC<DetectionResultsPanelProps> = ({
   pdfUrl,
   totalPages,
   onJumpToPage,
+  onScanComplete,
 }) => {
   const [scanning, setScanning]         = useState(false);
   const [progress, setProgress]         = useState(0);
@@ -94,6 +97,7 @@ export const DetectionResultsPanel: React.FC<DetectionResultsPanelProps> = ({
       }
 
       setResult({ openings, symbols });
+      onScanComplete?.(openings);
       const w = openings.filter(o => o.type === 'window').length;
       const d = openings.filter(o => o.type === 'door').length;
       toast.success(`Scan complete — ${w} window${w !== 1 ? 's' : ''}, ${d} door${d !== 1 ? 's' : ''} found across ${totalPages} page${totalPages !== 1 ? 's' : ''}`);

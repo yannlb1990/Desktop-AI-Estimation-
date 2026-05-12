@@ -1,5 +1,5 @@
-import React, { useCallback, useMemo, useRef, useState } from 'react';
-import { Download, ZoomIn, ZoomOut, RotateCw, Maximize2, ChevronLeft, ChevronRight, Trash2 } from 'lucide-react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Download, ZoomIn, ZoomOut, RotateCw, Maximize2, ChevronLeft, ChevronRight, Trash2, FileText, SlidersHorizontal } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { PDFUploadManager } from './PDFUploadManager';
@@ -14,13 +14,24 @@ import { AIExtractionPanel } from './AIExtractionPanel';
 import { DetectionResultsPanel } from './DetectionResultsPanel';
 import { useTakeoffState } from '@/hooks/useTakeoffState';
 import { WorldPoint, MeasurementUnit, Measurement, PDFViewportData, CostItem } from '@/lib/takeoff/types';
+import { DetectedOpening } from '@/lib/takeoff/pdfTextExtractor';
 import { fetchNCCCode } from '@/lib/takeoff/nccCodeFetcher';
 import { toast } from 'sonner';
 import { Input } from '@/components/ui/input';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { exportMeasurementsToCSV, exportMeasurementsToJSON } from '@/lib/takeoff/export';
+import { Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { exportMeasurementsToJSON } from '@/lib/takeoff/export';
+import { ledgerToCsv } from '@/lib/takeoff/ledger';
+import { shortcutToTool, shouldHandleShortcut } from '@/lib/takeoff/shortcuts';
+import { TAKEOFF_UNITS, UNIT_GROUPS } from '@/lib/takeoff/units';
+import { generateTakeoffPdf } from '@/lib/takeoff/pdfReport';
+import { GroupLegend } from './GroupLegend';
+import { MaterialExtractorPanel } from './MaterialExtractorPanel';
+import { PlanIntelligencePanel } from './PlanIntelligencePanel';
+import { SOWGeneratorDialog } from './SOWGeneratorDialog';
+import { ProfileConfigDialog } from './ProfileConfigDialog';
 import { Card } from '@/components/ui/card';
-import { DimensionExtraction, ExtractedTable } from '@/lib/api/pdfExtractionApi';
+import { DimensionExtraction, ExtractedTable, RoomArea } from '@/lib/api/pdfExtractionApi';
+import { AppProfile, loadProfile } from '@/lib/takeoff/profile';
 
 interface PDFTakeoffProps {
   projectId: string;
@@ -40,6 +51,10 @@ export const PDFTakeoff = ({ projectId, estimateId, onAddCostItems }: PDFTakeoff
   const [uploadedFile, setUploadedFile] = useState<File | null>(null);
   const [extractedDimensions, setExtractedDimensions] = useState<DimensionExtraction[]>([]);
   const [extractedTables, setExtractedTables] = useState<ExtractedTable[]>([]);
+  const [detectedOpenings, setDetectedOpenings] = useState<DetectedOpening[]>([]);
+  const [showSOWDialog, setShowSOWDialog] = useState(false);
+  const [showProfileDialog, setShowProfileDialog] = useState(false);
+  const [appProfile, setAppProfile] = useState<AppProfile>(() => loadProfile());
   const canvasContainerRef = useRef<HTMLDivElement | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const initialFitDoneRef = useRef(false);
@@ -59,7 +74,7 @@ export const PDFTakeoff = ({ projectId, estimateId, onAddCostItems }: PDFTakeoff
 
   // Calculate totals by unit type
   const totalsByUnit = useMemo(() => {
-    return filteredMeasurements.reduce<Record<MeasurementUnit, number>>((acc, measurement) => {
+    return filteredMeasurements.reduce<Record<string, number>>((acc, measurement) => {
       const current = acc[measurement.unit] || 0;
       acc[measurement.unit] = current + measurement.realValue;
       return acc;
@@ -94,10 +109,25 @@ export const PDFTakeoff = ({ projectId, estimateId, onAddCostItems }: PDFTakeoff
     }
   }, [state.pdfFile, activeTab]);
 
+  // Keyboard shortcuts: V=select H=pan E=eraser L=line R=rect P=polygon C=circle N=count Esc=select
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (!shouldHandleShortcut(e.target)) return;
+      if (e.key === 'Escape') {
+        dispatch({ type: 'SET_ACTIVE_TOOL', payload: 'select' });
+        return;
+      }
+      const tool = shortcutToTool(e.key);
+      if (tool !== null) dispatch({ type: 'SET_ACTIVE_TOOL', payload: tool });
+    };
+    document.addEventListener('keydown', handleKeyDown);
+    return () => document.removeEventListener('keydown', handleKeyDown);
+  }, [dispatch]);
+
   const handleZoomIn = () => {
-    dispatch({ 
-      type: 'SET_TRANSFORM', 
-      payload: { zoom: Math.min(state.transform.zoom + 0.25, 4) } 
+    dispatch({
+      type: 'SET_TRANSFORM',
+      payload: { zoom: Math.min(state.transform.zoom + 0.25, 4) }
     });
   };
 
@@ -271,6 +301,28 @@ export const PDFTakeoff = ({ projectId, estimateId, onAddCostItems }: PDFTakeoff
     // Text can be used for drawing title detection, notes, etc.
     console.log('Extracted text:', text.substring(0, 200));
   }, []);
+
+  const handleRoomAreasImported = useCallback((areas: RoomArea[]) => {
+    areas.forEach((area) => {
+      const measurement: Measurement = {
+        id: crypto.randomUUID(),
+        type: 'rectangle',
+        worldPoints: [],
+        worldValue: 0,
+        realValue: area.area_m2,
+        unit: 'm²',
+        label: area.name,
+        color: '#6366f1',
+        pageIndex: area.page,
+        timestamp: new Date(),
+        validated: false,
+        addedToEstimate: false,
+        measurementType: 'Floor',
+        comments: `Imported from plan text: ${area.name} ${area.area_m2} m²`,
+      };
+      dispatch({ type: 'ADD_MEASUREMENT', payload: measurement });
+    });
+  }, [dispatch]);
 
   const handleAddToEstimate = useCallback((measurementIds: string[]) => {
     let itemsCreated = 0;
@@ -461,19 +513,29 @@ export const PDFTakeoff = ({ projectId, estimateId, onAddCostItems }: PDFTakeoff
     });
 
     if (itemsCreated > 0) {
-      toast.success(`Added ${itemsCreated} cost items to estimate`);
-      setActiveTab('costs'); // Switch to costs tab
+      toast.success(`${itemsCreated} cost item${itemsCreated !== 1 ? 's' : ''} added — continue validating or switch to Costs tab`);
     }
   }, [state.measurements, dispatch]);
 
   return (
     <div className="space-y-6">
       <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-        <TabsList>
-          <TabsTrigger value="upload">📁 Upload Plan</TabsTrigger>
-          <TabsTrigger value="measure" disabled={!state.pdfFile}>📐 Measure</TabsTrigger>
-          <TabsTrigger value="costs" disabled={!state.measurements.length}>💰 Costs</TabsTrigger>
-        </TabsList>
+        <div className="flex items-center justify-between">
+          <TabsList>
+            <TabsTrigger value="upload">1. Upload Plan</TabsTrigger>
+            <TabsTrigger value="measure" disabled={!state.pdfFile}>2. Measure</TabsTrigger>
+            <TabsTrigger value="costs" disabled={!state.measurements.length}>3. Costs</TabsTrigger>
+          </TabsList>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setShowProfileDialog(true)}
+            className="gap-1.5 text-xs h-8"
+          >
+            <SlidersHorizontal className="h-3.5 w-3.5" />
+            {appProfile.projectType.charAt(0).toUpperCase() + appProfile.projectType.slice(1)}
+          </Button>
+        </div>
 
         <TabsContent value="upload" className="space-y-4">
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
@@ -498,6 +560,22 @@ export const PDFTakeoff = ({ projectId, estimateId, onAddCostItems }: PDFTakeoff
                 onDimensionsExtracted={handleDimensionsExtracted}
                 onTablesExtracted={handleTablesExtracted}
                 onTextExtracted={handleTextExtracted}
+                onRoomAreasImported={handleRoomAreasImported}
+              />
+              <MaterialExtractorPanel
+                pdfUrl={state.pdfFile?.url || null}
+                pageCount={state.pdfFile?.pageCount || 1}
+                projectName={state.pdfFile?.name?.replace(/\.pdf$/i, '') || undefined}
+                onImport={(measurements) => {
+                  measurements.forEach((m) =>
+                    dispatch({ type: 'ADD_MEASUREMENT', payload: m })
+                  );
+                }}
+              />
+              <PlanIntelligencePanel
+                pdfUrl={state.pdfFile?.url || null}
+                pageCount={state.pdfFile?.pageCount || 1}
+                projectName={state.pdfFile?.name?.replace(/\.pdf$/i, '') || undefined}
               />
               {state.pdfFile && (
                 <DetectionResultsPanel
@@ -507,10 +585,22 @@ export const PDFTakeoff = ({ projectId, estimateId, onAddCostItems }: PDFTakeoff
                     dispatch({ type: 'SET_CURRENT_PAGE', payload: pageIndex });
                     setActiveTab('measure');
                   }}
+                  onScanComplete={setDetectedOpenings}
                 />
               )}
             </div>
           </div>
+          {state.pdfFile && (
+            <div className="flex justify-end pt-2">
+              <Button
+                onClick={() => setActiveTab('measure')}
+                className="bg-primary text-primary-foreground hover:bg-primary/90"
+              >
+                Plan uploaded — Start Measuring
+                <span className="ml-2">→</span>
+              </Button>
+            </div>
+          )}
         </TabsContent>
 
         <TabsContent value="measure" className="space-y-4">
@@ -629,6 +719,7 @@ export const PDFTakeoff = ({ projectId, estimateId, onAddCostItems }: PDFTakeoff
                     calibrationMode={state.calibrationMode}
                     selectedColor={state.selectedColor}
                     measurements={state.measurements.filter(m => m.pageIndex === state.currentPageIndex)}
+                    detectedOpenings={detectedOpenings}
                     onMeasurementComplete={handleMeasurementComplete}
                     onMeasurementUpdate={handleMeasurementUpdate}
                     onCalibrationPointsSet={handleCalibrationPointsSet}
@@ -671,7 +762,7 @@ export const PDFTakeoff = ({ projectId, estimateId, onAddCostItems }: PDFTakeoff
                       onClick={() =>
                         downloadFile(
                           'measurements.csv',
-                          exportMeasurementsToCSV(filteredMeasurements),
+                          ledgerToCsv(filteredMeasurements),
                           'text/csv'
                         )
                       }
@@ -696,7 +787,24 @@ export const PDFTakeoff = ({ projectId, estimateId, onAddCostItems }: PDFTakeoff
                       <Download className="h-4 w-4 mr-2" />
                       JSON
                     </Button>
+                    <Button
+                      variant="outline"
+                      className="flex-1"
+                      size="sm"
+                      onClick={() =>
+                        generateTakeoffPdf({
+                          projectName: state.pdfFile?.name?.replace(/\.pdf$/i, '') || 'Takeoff',
+                          measurements: filteredMeasurements,
+                        })
+                      }
+                      disabled={!filteredMeasurements.length}
+                    >
+                      <Download className="h-4 w-4 mr-2" />
+                      PDF
+                    </Button>
                   </div>
+
+                  <GroupLegend measurements={filteredMeasurements} />
 
                   {/* Takeoff Table Button - Opens detailed table sheet */}
                   <TakeoffTable
@@ -738,7 +846,7 @@ export const PDFTakeoff = ({ projectId, estimateId, onAddCostItems }: PDFTakeoff
                             <span className="font-semibold">{m.realValue.toFixed(2)}</span>
                             <Select
                               value={m.unit}
-                              onValueChange={(unit: MeasurementUnit) =>
+                              onValueChange={(unit: string) =>
                                 dispatch({
                                   type: 'UPDATE_MEASUREMENT',
                                   payload: { id: m.id, updates: { unit } }
@@ -749,10 +857,16 @@ export const PDFTakeoff = ({ projectId, estimateId, onAddCostItems }: PDFTakeoff
                                 <SelectValue />
                               </SelectTrigger>
                               <SelectContent>
-                                <SelectItem value="LM">LM</SelectItem>
-                                <SelectItem value="M2">M²</SelectItem>
-                                <SelectItem value="M3">M³</SelectItem>
-                                <SelectItem value="count">Count</SelectItem>
+                                {UNIT_GROUPS.map((group) => (
+                                  <SelectGroup key={group}>
+                                    <SelectLabel className="text-xs text-muted-foreground">{group}</SelectLabel>
+                                    {TAKEOFF_UNITS.filter((u) => u.group === group).map((u) => (
+                                      <SelectItem key={u.value} value={u.value} className="text-xs">
+                                        {u.value}
+                                      </SelectItem>
+                                    ))}
+                                  </SelectGroup>
+                                ))}
                               </SelectContent>
                             </Select>
                             <div className="ml-auto flex items-center gap-2">
@@ -797,22 +911,67 @@ export const PDFTakeoff = ({ projectId, estimateId, onAddCostItems }: PDFTakeoff
               </div>
             </div>
           )}
+          {state.measurements.length > 0 && (
+            <div className="flex items-center justify-between pt-2 px-1">
+              <span className="text-sm text-muted-foreground">
+                {state.measurements.length} measurement{state.measurements.length !== 1 ? "s" : ""} recorded
+              </span>
+              <Button
+                onClick={() => setActiveTab('costs')}
+                className="bg-primary text-primary-foreground hover:bg-primary/90"
+              >
+                Done Measuring — Go to Costs
+                <span className="ml-2">→</span>
+              </Button>
+            </div>
+          )}
         </TabsContent>
 
         <TabsContent value="costs">
-          <CostEstimator
-            projectId={projectId}
-            measurements={state.measurements}
-            costItems={state.costItems}
-            onAddCostItem={(item) => dispatch({ type: 'ADD_COST_ITEM', payload: item })}
-            onUpdateCostItem={(id, updates) => dispatch({ type: 'UPDATE_COST_ITEM', payload: { id, updates } })}
-            onDeleteCostItem={(id) => dispatch({ type: 'DELETE_COST_ITEM', payload: id })}
-            onLinkMeasurement={(measurementId, costItemId) => {
-              dispatch({ type: 'UPDATE_MEASUREMENT', payload: { id: measurementId, updates: { linkedCostItem: costItemId } } });
-            }}
-          />
+          <div className="space-y-3">
+            <div className="flex items-center justify-between">
+              <Button variant="ghost" size="sm" onClick={() => setActiveTab('measure')}>
+                ← Back to Measure
+              </Button>
+              <Button
+                size="sm"
+                onClick={() => setShowSOWDialog(true)}
+                disabled={state.costItems.length === 0}
+                className="gap-2"
+              >
+                <FileText className="h-4 w-4" />
+                Generate SOW PDF
+              </Button>
+            </div>
+            <CostEstimator
+              projectId={projectId}
+              measurements={state.measurements}
+              costItems={state.costItems}
+              enabledTrades={appProfile.enabledTrades}
+              onAddCostItem={(item) => dispatch({ type: 'ADD_COST_ITEM', payload: item })}
+              onUpdateCostItem={(id, updates) => dispatch({ type: 'UPDATE_COST_ITEM', payload: { id, updates } })}
+              onDeleteCostItem={(id) => dispatch({ type: 'DELETE_COST_ITEM', payload: id })}
+              onLinkMeasurement={(measurementId, costItemId) => {
+                dispatch({ type: 'UPDATE_MEASUREMENT', payload: { id: measurementId, updates: { linkedCostItem: costItemId } } });
+              }}
+            />
+          </div>
         </TabsContent>
       </Tabs>
+
+      <SOWGeneratorDialog
+        open={showSOWDialog}
+        onOpenChange={setShowSOWDialog}
+        costItems={state.costItems}
+        defaultProjectName={state.pdfFile?.name?.replace(/\.pdf$/i, '') || ''}
+      />
+
+      <ProfileConfigDialog
+        open={showProfileDialog}
+        onOpenChange={setShowProfileDialog}
+        profile={appProfile}
+        onSave={setAppProfile}
+      />
     </div>
   );
 };

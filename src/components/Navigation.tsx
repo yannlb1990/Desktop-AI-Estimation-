@@ -17,7 +17,7 @@ const Navigation = () => {
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
             <div className="w-8 h-8 bg-gradient-accent rounded-lg flex items-center justify-center">
-              <span className="font-display font-bold text-primary">B</span>
+              <span className="font-display font-bold text-primary-foreground">B</span>
             </div>
             <span className="font-display text-xl font-bold text-foreground">Buildamax</span>
           </div>
@@ -28,8 +28,8 @@ const Navigation = () => {
                 {l.label}
               </a>
             ))}
-            <Button variant="ghost" size="sm" onClick={() => window.location.href = "/auth"}>Sign In</Button>
-            <Button size="sm" onClick={() => window.location.href = "/auth"} className="bg-accent text-accent-foreground hover:bg-accent/90">
+            <Button variant="ghost" size="sm" onClick={() => window.location.href = "/dashboard"}>Sign In</Button>
+            <Button size="sm" onClick={() => window.location.href = "/dashboard"} className="bg-accent text-accent-foreground hover:bg-accent/90">
               Start Free Trial
             </Button>
           </div>
@@ -48,8 +48,8 @@ const Navigation = () => {
               </a>
             ))}
             <div className="flex gap-2 pt-2">
-              <Button variant="outline" size="sm" className="flex-1" onClick={() => window.location.href = "/auth"}>Sign In</Button>
-              <Button size="sm" className="flex-1 bg-accent text-accent-foreground hover:bg-accent/90" onClick={() => window.location.href = "/auth"}>
+              <Button variant="outline" size="sm" className="flex-1" onClick={() => window.location.href = "/dashboard"}>Sign In</Button>
+              <Button size="sm" className="flex-1 bg-accent text-accent-foreground hover:bg-accent/90" onClick={() => window.location.href = "/dashboard"}>
                 Start Free Trial
               </Button>
             </div>

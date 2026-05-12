@@ -1,5 +1,5 @@
-import React, { useState, useCallback } from 'react';
-import { Loader2, Sparkles, FileSearch, Table2, Ruler, AlertCircle, CheckCircle2, ChevronDown, ChevronUp } from 'lucide-react';
+import React, { useState, useCallback, useEffect } from 'react';
+import { Loader2, Sparkles, FileSearch, Table2, Ruler, AlertCircle, CheckCircle2, ChevronDown, ChevronUp, DoorOpen, LayoutDashboard } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -15,6 +15,8 @@ import {
   DimensionExtraction,
   ExtractedTable,
   OCRResult,
+  ConstructionExtractionResponse,
+  RoomArea,
 } from '@/lib/api/pdfExtractionApi';
 
 interface AIExtractionPanelProps {
@@ -24,6 +26,7 @@ interface AIExtractionPanelProps {
   onDimensionsExtracted?: (dimensions: DimensionExtraction[]) => void;
   onTablesExtracted?: (tables: ExtractedTable[]) => void;
   onTextExtracted?: (text: string) => void;
+  onRoomAreasImported?: (areas: RoomArea[]) => void;
 }
 
 type ExtractionStatus = 'idle' | 'checking' | 'extracting' | 'success' | 'error';
@@ -35,6 +38,7 @@ export const AIExtractionPanel: React.FC<AIExtractionPanelProps> = ({
   onDimensionsExtracted,
   onTablesExtracted,
   onTextExtracted,
+  onRoomAreasImported,
 }) => {
   const [status, setStatus] = useState<ExtractionStatus>('idle');
   const [apiAvailable, setApiAvailable] = useState<boolean | null>(null);
@@ -46,6 +50,9 @@ export const AIExtractionPanel: React.FC<AIExtractionPanelProps> = ({
   const [dimensionsOpen, setDimensionsOpen] = useState(true);
   const [tablesOpen, setTablesOpen] = useState(true);
   const [textOpen, setTextOpen] = useState(false);
+  const [constructionOpen, setConstructionOpen] = useState(true);
+  const [constructionResult, setConstructionResult] = useState<ConstructionExtractionResponse | null>(null);
+  const [constructionLoading, setConstructionLoading] = useState(false);
 
   // Check API availability
   const checkAPIAvailability = useCallback(async () => {
@@ -59,6 +66,11 @@ export const AIExtractionPanel: React.FC<AIExtractionPanelProps> = ({
     }
     return available;
   }, []);
+
+  // Auto-check on mount so users see offline state immediately
+  useEffect(() => {
+    checkAPIAvailability();
+  }, [checkAPIAvailability]);
 
   // Perform extraction
   const handleExtract = useCallback(async () => {
@@ -106,6 +118,22 @@ export const AIExtractionPanel: React.FC<AIExtractionPanelProps> = ({
       toast.error(result.error || 'Extraction failed');
     }
   }, [pdfFile, apiAvailable, currentPage, checkAPIAvailability, onDimensionsExtracted, onTablesExtracted, onTextExtracted]);
+
+  // Extract construction-specific data (windows, rooms, scales)
+  const handleExtractConstruction = useCallback(async () => {
+    if (!pdfFile) { toast.error('No PDF file loaded'); return; }
+    if (!apiAvailable) { toast.error('PDF extraction API not available'); return; }
+    setConstructionLoading(true);
+    const result = await pdfExtractionApi.extractConstruction(pdfFile);
+    setConstructionLoading(false);
+    if (result.success && result.data) {
+      setConstructionResult(result.data);
+      const cd = result.data.construction_data;
+      toast.success(`Found ${cd.openings.length} openings, ${cd.room_areas.length} rooms`);
+    } else {
+      toast.error(result.error || 'Construction extraction failed');
+    }
+  }, [pdfFile, apiAvailable]);
 
   // Get current page data
   const currentPageData: PageAnalysis | undefined = extractionResult?.pages.find(
@@ -158,16 +186,16 @@ export const AIExtractionPanel: React.FC<AIExtractionPanelProps> = ({
           </Badge>
         )}
         {apiAvailable === false && (
-          <Badge variant="outline" className="text-red-600">
+          <Badge variant="outline" className="text-muted-foreground border-muted-foreground/30">
             <AlertCircle className="h-3 w-3 mr-1" />
-            API Offline
+            Optional — offline
           </Badge>
         )}
       </div>
 
-      {error && (
-        <div className="p-3 bg-destructive/10 border border-destructive/20 rounded-md text-sm text-destructive">
-          {error}
+      {error && apiAvailable === false && (
+        <div className="p-2 bg-muted/50 border border-border rounded-md text-xs text-muted-foreground">
+          AI extraction is optional. Manual takeoff works without it — upload your plan and start measuring.
         </div>
       )}
 
@@ -336,6 +364,149 @@ export const AIExtractionPanel: React.FC<AIExtractionPanelProps> = ({
           </CollapsibleContent>
         </Collapsible>
       )}
+
+      {/* Construction Intelligence Section */}
+      <div className="border-t pt-3 space-y-2">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <LayoutDashboard className="h-4 w-4 text-primary" />
+            <span className="font-medium text-sm">Construction Intelligence</span>
+          </div>
+          <Button
+            size="sm"
+            variant="outline"
+            className="h-7 text-xs"
+            disabled={!pdfFile || !apiAvailable || constructionLoading}
+            onClick={handleExtractConstruction}
+          >
+            {constructionLoading ? <Loader2 className="h-3 w-3 animate-spin mr-1" /> : null}
+            {constructionResult ? 'Re-scan' : 'Scan Plan'}
+          </Button>
+        </div>
+
+        {constructionResult && (() => {
+          const cd = constructionResult.construction_data;
+          const windows = cd.openings.filter(o => o.element_type === 'window');
+          const doors = cd.openings.filter(o => o.element_type === 'door');
+          return (
+            <Collapsible open={constructionOpen} onOpenChange={setConstructionOpen}>
+              <CollapsibleTrigger className="flex items-center justify-between w-full py-1.5 hover:bg-muted/50 rounded px-2">
+                <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                  <span>{windows.length} windows · {doors.length} doors · {cd.room_areas.length} rooms</span>
+                  {cd.total_floor_area_m2 && (
+                    <Badge variant="secondary" className="text-xs">{cd.total_floor_area_m2} m² total</Badge>
+                  )}
+                </div>
+                {constructionOpen ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
+              </CollapsibleTrigger>
+              <CollapsibleContent>
+                <ScrollArea className="h-56 pt-1">
+                  <div className="space-y-3 pr-2">
+
+                    {/* Drawing info */}
+                    {cd.drawing_info.length > 0 && (
+                      <div className="space-y-1">
+                        <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Drawing Sheets</p>
+                        {cd.drawing_info.map((d, i) => (
+                          <div key={i} className="flex flex-wrap gap-1 text-xs">
+                            {d.drawing_number && <Badge variant="outline">{d.drawing_number}</Badge>}
+                            {d.scale && <Badge variant="secondary">{d.scale}</Badge>}
+                            {d.revision && <Badge variant="secondary">Rev {d.revision}</Badge>}
+                          </div>
+                        ))}
+                      </div>
+                    )}
+
+                    {/* Windows */}
+                    {windows.length > 0 && (
+                      <div className="space-y-1">
+                        <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Windows ({windows.length})</p>
+                        <div className="flex flex-wrap gap-1">
+                          {windows.map((w, i) => (
+                            <div key={i} className="text-xs border rounded px-1.5 py-0.5 bg-blue-50 dark:bg-blue-950/20">
+                              <span className="font-mono font-medium">{w.ref}</span>
+                              {w.width_mm && <span className="text-muted-foreground ml-1">{w.width_mm}×{w.height_mm}</span>}
+                              {w.opening_type && <span className="text-muted-foreground block leading-tight">{w.opening_type}</span>}
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Doors */}
+                    {doors.length > 0 && (
+                      <div className="space-y-1">
+                        <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Doors ({doors.length})</p>
+                        <div className="flex flex-wrap gap-1">
+                          {doors.map((d, i) => (
+                            <div key={i} className="text-xs border rounded px-1.5 py-0.5 bg-amber-50 dark:bg-amber-950/20">
+                              <span className="font-mono font-medium">{d.ref}</span>
+                              {d.width_mm && <span className="text-muted-foreground ml-1">{d.width_mm}×{d.height_mm}</span>}
+                              {d.opening_type && <span className="text-muted-foreground block leading-tight">{d.opening_type}</span>}
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Room areas */}
+                    {cd.room_areas.length > 0 && (
+                      <div className="space-y-1">
+                        <div className="flex items-center justify-between">
+                          <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Room Areas ({cd.room_areas.length})</p>
+                          {onRoomAreasImported && (
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="h-6 text-xs px-2"
+                              onClick={() => {
+                                onRoomAreasImported(cd.room_areas);
+                                toast.success(`Imported ${cd.room_areas.length} room areas as measurements`);
+                              }}
+                            >
+                              Import All
+                            </Button>
+                          )}
+                        </div>
+                        <div className="space-y-0.5">
+                          {cd.room_areas.map((r, i) => (
+                            <div key={i} className="flex justify-between items-center text-xs group">
+                              <span>{r.name}</span>
+                              <div className="flex items-center gap-1">
+                                <span className="font-mono text-muted-foreground">{r.area_m2} m²</span>
+                                {onRoomAreasImported && (
+                                  <Button
+                                    size="sm"
+                                    variant="ghost"
+                                    className="h-4 w-4 p-0 opacity-0 group-hover:opacity-100"
+                                    onClick={() => {
+                                      onRoomAreasImported([r]);
+                                      toast.success(`Imported ${r.name} (${r.area_m2} m²)`);
+                                    }}
+                                  >
+                                    +
+                                  </Button>
+                                )}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                        {cd.total_floor_area_m2 && (
+                          <div className="flex justify-between text-xs font-semibold border-t pt-1">
+                            <span>Total Floor Area</span>
+                            <span className="font-mono">{cd.total_floor_area_m2} m²</span>
+                          </div>
+                        )}
+                      </div>
+                    )}
+
+                  </div>
+                </ScrollArea>
+              </CollapsibleContent>
+            </Collapsible>
+          );
+        })()}
+      </div>
 
       {/* No data message */}
       {extractionResult && !currentPageData && (

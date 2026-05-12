@@ -1435,7 +1435,7 @@ export const EstimateTemplate = ({ projectId, estimateId }: EstimateTemplateProp
 
             <div className="bg-card p-4 rounded-lg border border-border">
               <p className="text-sm text-muted-foreground mb-1">Related Materials</p>
-              <p className="text-xl font-mono font-bold text-secondary">
+              <p className="text-xl font-mono font-bold text-primary">
                 ${(() => {
                   let total = 0;
                   items.forEach(item => {

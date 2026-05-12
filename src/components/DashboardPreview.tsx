@@ -9,7 +9,7 @@ const DashboardPreview = () => {
         <div className="max-w-3xl mx-auto text-center mb-16">
           <h2 className="font-display text-4xl md:text-5xl font-bold mb-6">
             Your Command Center for
-            <span className="block mt-2 text-secondary">Construction Estimates</span>
+            <span className="block mt-2 text-primary">Construction Estimates</span>
           </h2>
           <p className="text-lg text-muted-foreground">
             A modern dashboard that gives you complete visibility and control over all your projects.
@@ -23,8 +23,8 @@ const DashboardPreview = () => {
             <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
               <Card className="p-6 bg-background border-border">
                 <div className="flex items-center gap-3 mb-2">
-                  <div className="p-2 bg-secondary/10 rounded-lg">
-                    <FileText className="h-5 w-5 text-secondary" />
+                  <div className="p-2 bg-primary/10 rounded-lg">
+                    <FileText className="h-5 w-5 text-primary" />
                   </div>
                   <span className="text-sm text-muted-foreground">Active Projects</span>
                 </div>
@@ -43,8 +43,8 @@ const DashboardPreview = () => {
 
               <Card className="p-6 bg-background border-border">
                 <div className="flex items-center gap-3 mb-2">
-                  <div className="p-2 bg-secondary/10 rounded-lg">
-                    <BarChart3 className="h-5 w-5 text-secondary" />
+                  <div className="p-2 bg-primary/10 rounded-lg">
+                    <BarChart3 className="h-5 w-5 text-primary" />
                   </div>
                   <span className="text-sm text-muted-foreground">Avg. Margin</span>
                 </div>
@@ -79,9 +79,9 @@ const DashboardPreview = () => {
                     <div className="flex items-center gap-4">
                       <div className="font-mono font-semibold text-foreground">{project.value}</div>
                       <div className={`px-3 py-1 rounded-full text-xs font-medium ${
-                        project.status === "Complete" 
-                          ? "bg-accent/20 text-accent-foreground" 
-                          : "bg-secondary/10 text-secondary"
+                        project.status === "Complete"
+                          ? "bg-accent/20 text-accent"
+                          : "bg-primary/10 text-primary"
                       }`}>
                         {project.status}
                       </div>
@@ -89,7 +89,7 @@ const DashboardPreview = () => {
                   </div>
                 ))}
               </div>
-              <Button className="w-full mt-6 bg-secondary text-secondary-foreground hover:bg-secondary/90">
+              <Button className="w-full mt-6 bg-primary text-primary-foreground hover:bg-primary/90">
                 View All Projects
               </Button>
             </Card>

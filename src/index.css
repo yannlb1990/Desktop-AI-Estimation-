@@ -2,94 +2,106 @@
 @tailwind components;
 @tailwind utilities;
 
-/* Definition of the design system. All colors, gradients, fonts, etc should be defined here. 
-All colors MUST be HSL.
+/* Design system — all colors in HSL.
+   Palette: dark steel-navy backgrounds, bright cyan (#00c8ff) primary accent.
+   Inspired by professional aviation/tech dark UI.
 */
 
 @layer base {
+  /* ── LIGHT MODE (fallback, rarely used) ───────────────────────────────── */
   :root {
-    --background: 0 0% 100%;
-    --foreground: 210 11% 15%;
+    --background: 215 30% 97%;
+    --foreground: 215 40% 10%;
 
     --card: 0 0% 100%;
-    --card-foreground: 210 11% 15%;
+    --card-foreground: 215 40% 10%;
 
     --popover: 0 0% 100%;
-    --popover-foreground: 210 11% 15%;
+    --popover-foreground: 215 40% 10%;
 
-    /* Deep Navy Primary */
-    --primary: 210 50% 10%;
-    --primary-foreground: 0 0% 98%;
+    --primary: 199 100% 40%;
+    --primary-foreground: 0 0% 100%;
 
-    /* Electric Blue */
-    --secondary: 211 100% 50%;
-    --secondary-foreground: 0 0% 98%;
+    --secondary: 215 20% 92%;
+    --secondary-foreground: 215 40% 15%;
 
-    /* Soft Grey */
-    --muted: 210 14% 97%;
-    --muted-foreground: 210 8% 45%;
+    --muted: 215 20% 94%;
+    --muted-foreground: 215 15% 45%;
 
-    /* Lime Green Accent */
-    --accent: 76 61% 67%;
-    --accent-foreground: 210 50% 10%;
+    --accent: 199 100% 40%;
+    --accent-foreground: 0 0% 100%;
 
     --destructive: 0 84% 60%;
     --destructive-foreground: 0 0% 98%;
 
-    --border: 210 14% 89%;
-    --input: 210 14% 89%;
-    --ring: 211 100% 50%;
+    --border: 215 20% 82%;
+    --input: 215 20% 82%;
+    --ring: 199 100% 40%;
 
     --radius: 0.75rem;
 
-    /* Custom Gradients */
-    --gradient-primary: linear-gradient(135deg, hsl(210 50% 10%) 0%, hsl(211 100% 30%) 100%);
-    --gradient-hero: linear-gradient(180deg, hsl(210 50% 10%) 0%, hsl(211 40% 20%) 100%);
-    --gradient-accent: linear-gradient(90deg, hsl(211 100% 50%) 0%, hsl(195 100% 50%) 100%);
-    
-    /* Shadows */
-    --shadow-sm: 0 2px 8px hsl(210 50% 10% / 0.04);
-    --shadow-md: 0 4px 16px hsl(210 50% 10% / 0.08);
-    --shadow-lg: 0 8px 32px hsl(210 50% 10% / 0.12);
-    --shadow-glow: 0 0 40px hsl(211 100% 50% / 0.2);
+    --gradient-primary: linear-gradient(135deg, hsl(215 40% 12%) 0%, hsl(199 100% 30%) 100%);
+    --gradient-hero: linear-gradient(180deg, hsl(215 40% 10%) 0%, hsl(215 50% 20%) 100%);
+    --gradient-accent: linear-gradient(90deg, hsl(199 100% 40%) 0%, hsl(185 100% 40%) 100%);
 
-    /* Animations */
+    --shadow-sm: 0 2px 8px hsl(215 40% 10% / 0.06);
+    --shadow-md: 0 4px 16px hsl(215 40% 10% / 0.10);
+    --shadow-lg: 0 8px 32px hsl(215 40% 10% / 0.14);
+    --shadow-glow: 0 0 40px hsl(199 100% 50% / 0.20);
+
     --transition-smooth: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   }
 
+  /* ── DARK MODE (default — applied via <html class="dark">) ────────────── */
   .dark {
-    --background: 210 50% 10%;
-    --foreground: 0 0% 98%;
+    /* Backgrounds — very dark steel navy */
+    --background: 215 42% 7%;          /* #09111f */
+    --foreground: 210 25% 93%;         /* #e3eaf2 near-white */
 
-    --card: 210 45% 12%;
-    --card-foreground: 0 0% 98%;
+    /* Card surfaces — one step lighter than bg */
+    --card: 215 38% 11%;               /* #0f1c2e */
+    --card-foreground: 210 25% 93%;
 
-    --popover: 210 45% 12%;
-    --popover-foreground: 0 0% 98%;
+    /* Popovers / dropdowns */
+    --popover: 215 38% 11%;
+    --popover-foreground: 210 25% 93%;
 
-    --primary: 0 0% 98%;
-    --primary-foreground: 210 50% 10%;
+    /* Primary — bright cyan, the brand accent */
+    --primary: 199 100% 50%;           /* #00c8ff */
+    --primary-foreground: 215 42% 7%;  /* dark text on cyan button */
 
-    --secondary: 211 100% 50%;
-    --secondary-foreground: 0 0% 98%;
+    /* Secondary — dark steel surface (used for secondary buttons, badges) */
+    --secondary: 215 32% 19%;          /* #1e2f47 */
+    --secondary-foreground: 210 20% 88%;
 
-    --muted: 210 30% 18%;
-    --muted-foreground: 210 8% 65%;
+    /* Muted backgrounds (table rows, hover states) */
+    --muted: 215 28% 15%;              /* #162030 */
+    --muted-foreground: 215 18% 58%;   /* #7f93ad */
 
-    --accent: 76 61% 67%;
-    --accent-foreground: 210 50% 10%;
+    /* Accent = same bright cyan (for hover highlights) */
+    --accent: 199 100% 50%;
+    --accent-foreground: 215 42% 7%;
 
     --destructive: 0 84% 60%;
     --destructive-foreground: 0 0% 98%;
 
-    --border: 210 30% 18%;
-    --input: 210 30% 18%;
-    --ring: 211 100% 50%;
+    /* Borders — visible steel-blue lines, critical for outline button legibility */
+    --border: 215 30% 26%;             /* #283f58 — clearly visible on dark navy */
+    --input: 215 30% 26%;              /* same — outline buttons use border-input */
+    --ring: 199 100% 50%;              /* cyan focus ring */
 
-    --shadow-sm: 0 2px 8px hsl(0 0% 0% / 0.3);
-    --shadow-md: 0 4px 16px hsl(0 0% 0% / 0.4);
-    --shadow-lg: 0 8px 32px hsl(0 0% 0% / 0.5);
-    --shadow-glow: 0 0 40px hsl(211 100% 50% / 0.3);
+    /* Gradients */
+    --gradient-primary: linear-gradient(135deg, hsl(215 42% 9%) 0%, hsl(215 60% 18%) 100%);
+    --gradient-hero: linear-gradient(180deg, hsl(215 42% 7%) 0%, hsl(215 50% 13%) 100%);
+    --gradient-accent: linear-gradient(90deg, hsl(199 100% 50%) 0%, hsl(185 100% 45%) 100%);
+
+    /* Shadows — stronger in dark mode */
+    --shadow-sm: 0 2px 8px hsl(0 0% 0% / 0.4);
+    --shadow-md: 0 4px 20px hsl(0 0% 0% / 0.50);
+    --shadow-lg: 0 8px 40px hsl(0 0% 0% / 0.60);
+    --shadow-glow: 0 0 40px hsl(199 100% 50% / 0.25);
+
+    --transition-smooth: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   }
 }
 
@@ -103,6 +115,7 @@ All colors MUST be HSL.
     font-feature-settings: "rlig" 1, "calt" 1;
   }
 
+  /* ── Typography ─────────────────────────────────────────────────────────── */
   h1, h2, h3, h4, h5, h6 {
     font-family: 'Poppins', system-ui, sans-serif;
     font-weight: 700;
@@ -116,17 +129,33 @@ All colors MUST be HSL.
   .font-mono {
     font-family: 'Space Grotesk', 'Roboto Mono', monospace;
   }
+
+  /* ── Scrollbars — themed for dark UI ─────────────────────────────────── */
+  ::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+  ::-webkit-scrollbar-track {
+    background: hsl(var(--muted));
+  }
+  ::-webkit-scrollbar-thumb {
+    background: hsl(var(--border));
+    border-radius: 3px;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: hsl(199 100% 50% / 0.5);
+  }
 }
 
 @layer utilities {
   .gradient-primary {
     background: var(--gradient-primary);
   }
-  
+
   .gradient-hero {
     background: var(--gradient-hero);
   }
-  
+
   .gradient-accent {
     background: var(--gradient-accent);
   }
@@ -137,5 +166,15 @@ All colors MUST be HSL.
 
   .transition-smooth {
     transition: var(--transition-smooth);
+  }
+
+  /* Cyan glow effect — use on hero elements */
+  .glow-cyan {
+    box-shadow: 0 0 20px hsl(199 100% 50% / 0.3), 0 0 60px hsl(199 100% 50% / 0.15);
+  }
+
+  /* Subtle card border highlight — top edge only, like the image */
+  .card-highlight {
+    border-top: 1px solid hsl(199 100% 50% / 0.4);
   }
 }

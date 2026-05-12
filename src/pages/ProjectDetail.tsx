@@ -1,4 +1,4 @@
-import { useState, useEffect, Component } from "react";
+import React, { useState, useEffect, Component } from "react";
 import type { ReactNode } from "react";
 
 // Isolate takeoff crashes so they don't white-out the entire project page
@@ -30,7 +30,7 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "sonner";
-import { ArrowLeft, FileText, DollarSign, Ruler, Loader2, Sparkles, Settings, Calculator, TrendingUp, ShieldCheck, MapPin, User, Calendar as CalendarIcon, Clock, Bell } from "lucide-react";
+import { ArrowLeft, FileText, DollarSign, Ruler, Loader2, Settings, Calculator, TrendingUp, ShieldCheck, MapPin, User, Calendar as CalendarIcon, Clock, Bell } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Lightbulb } from "lucide-react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -55,6 +55,7 @@ const ProjectDetail = () => {
   const [analyses, setAnalyses] = useState<any[]>([]);
   const [estimate, setEstimate] = useState<any>(null);
   const [dueDate, setDueDate] = useState<Date | undefined>();
+  const [activeMainTab, setActiveMainTab] = useState("takeoff");
 
   const handleExportCSV = () => {
     if (!project) return;
@@ -91,20 +92,22 @@ const ProjectDetail = () => {
     loadProject();
   }, [projectId]);
 
-  const handleDueDateChange = async (date: Date | undefined) => {
+  useEffect(() => {
+    const handler = () => setActiveMainTab("estimate");
+    window.addEventListener("go-to-estimate-tab", handler);
+    return () => window.removeEventListener("go-to-estimate-tab", handler);
+  }, []);
+
+  const handleDueDateChange = (date: Date | undefined) => {
     if (!projectId) return;
     setDueDate(date);
-
-    const { error } = await supabase
-      .from("projects")
-      .update({ due_date: date?.toISOString() || null } as any)
-      .eq("id", projectId);
-
-    if (error) {
-      console.error("Error updating due date:", error);
-    } else {
-      toast.success("Due date updated");
+    const projects = JSON.parse(localStorage.getItem("local_projects") || "[]");
+    const idx = projects.findIndex((p: any) => p.id === projectId);
+    if (idx !== -1) {
+      projects[idx].due_date = date?.toISOString() || null;
+      localStorage.setItem("local_projects", JSON.stringify(projects));
     }
+    toast.success("Due date updated");
   };
 
   const sendReminder = () => {
@@ -127,20 +130,10 @@ const ProjectDetail = () => {
 
   const loadProject = async () => {
     try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) {
-        navigate("/auth");
-        return;
-      }
+      const projects = JSON.parse(localStorage.getItem("local_projects") || "[]");
+      const projectData = projects.find((p: any) => p.id === projectId);
 
-      const { data: projectData, error } = await supabase
-        .from("projects")
-        .select("*")
-        .eq("id", projectId)
-        .eq("user_id", user.id)
-        .single();
-
-      if (error || !projectData) {
+      if (!projectData) {
         toast.error("Project not found");
         navigate("/dashboard");
         return;
@@ -165,7 +158,7 @@ const ProjectDetail = () => {
   if (loading) {
     return (
       <div className="flex min-h-screen items-center justify-center">
-        <Loader2 className="h-8 w-8 animate-spin text-secondary" />
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
       </div>
     );
   }
@@ -204,11 +197,11 @@ const ProjectDetail = () => {
               <div className="flex items-center gap-3">
                 <h1 className="font-display text-4xl font-bold">{project.name}</h1>
                 <div className={`px-3 py-1 rounded-full text-xs font-medium ${
-                  project.status === "complete"
-                    ? "bg-accent/20 text-accent-foreground"
-                    : "bg-secondary/10 text-secondary"
+                  project.status === "complete" || project.status === "completed"
+                    ? "bg-accent/20 text-accent"
+                    : "bg-primary/10 text-primary"
                 }`}>
-                  {project.status}
+                  {project.status || "active"}
                 </div>
               </div>
               <div className="text-muted-foreground space-y-1">
@@ -260,114 +253,149 @@ const ProjectDetail = () => {
           </div>
         </Card>
 
-        <Tabs defaultValue="estimate" className="space-y-6">
-          <TabsList className="flex w-full h-auto flex-wrap gap-0.5 p-1">
-            <TabsTrigger value="estimate">
-              <Calculator className="h-4 w-4 mr-2" />
-              Estimate
-            </TabsTrigger>
-            {project.plan_file_url && (
-              <TabsTrigger value="plans">
-                <FileText className="h-4 w-4 mr-2" />
-                Plans
-              </TabsTrigger>
-            )}
-            <TabsTrigger value="takeoff">
-              <Ruler className="h-4 w-4 mr-2" />
-              PDF Takeoff
-            </TabsTrigger>
-            <TabsTrigger value="pricing">
-              <DollarSign className="h-4 w-4 mr-2" />
-              AI Pricing
-            </TabsTrigger>
-            <TabsTrigger value="insights">
-              <TrendingUp className="h-4 w-4 mr-2" />
-              Insights
-            </TabsTrigger>
-            <TabsTrigger value="compliance">
-              <ShieldCheck className="h-4 w-4 mr-2" />
-              NCC
-            </TabsTrigger>
-            <TabsTrigger value="overheads">
-              <Settings className="h-4 w-4 mr-2" />
-              Overheads
-            </TabsTrigger>
-            <TabsTrigger value="tender">
-              <FileText className="h-4 w-4 mr-2" />
-              Tender
-            </TabsTrigger>
+        {/* Workflow progress strip */}
+        <div className="flex items-center gap-0 rounded-xl border border-border bg-card p-1 mb-2">
+          {[
+            { key: "takeoff", label: "1. Takeoff", icon: Ruler },
+            { key: "estimate", label: "2. Estimate", icon: Calculator },
+            { key: "tender", label: "3. Tender", icon: FileText },
+          ].map((step, i) => {
+            const Icon = step.icon;
+            const isActive = activeMainTab === step.key;
+            const isPast =
+              (step.key === "takeoff" && (activeMainTab === "estimate" || activeMainTab === "tender")) ||
+              (step.key === "estimate" && activeMainTab === "tender");
+            return (
+              <React.Fragment key={step.key}>
+                <button
+                  onClick={() => setActiveMainTab(step.key)}
+                  className={`flex items-center gap-2 px-5 py-2.5 rounded-lg text-sm font-semibold transition-all flex-1 justify-center ${
+                    isActive
+                      ? "bg-primary text-primary-foreground shadow"
+                      : isPast
+                      ? "text-primary/80 hover:bg-primary/10"
+                      : "text-muted-foreground hover:bg-muted"
+                  }`}
+                >
+                  <Icon className="h-4 w-4" />
+                  {step.label}
+                  {isPast && <span className="ml-1 text-xs opacity-70">✓</span>}
+                </button>
+                {i < 2 && (
+                  <span className="text-muted-foreground/40 text-lg select-none px-1">›</span>
+                )}
+              </React.Fragment>
+            );
+          })}
+          <div className="w-px bg-border mx-2 self-stretch" />
+          {[
+            { key: "overheads", label: "Overheads", icon: Settings },
+            { key: "insights", label: "Insights", icon: TrendingUp },
+            { key: "compliance", label: "NCC", icon: ShieldCheck },
+          ].map((tool) => {
+            const Icon = tool.icon;
+            return (
+              <button
+                key={tool.key}
+                onClick={() => setActiveMainTab(tool.key)}
+                className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium transition-all ${
+                  activeMainTab === tool.key
+                    ? "bg-muted text-foreground"
+                    : "text-muted-foreground hover:bg-muted/60"
+                }`}
+              >
+                <Icon className="h-3.5 w-3.5" />
+                {tool.label}
+              </button>
+            );
+          })}
+        </div>
+
+        <Tabs value={activeMainTab} onValueChange={setActiveMainTab} className="space-y-6">
+          <TabsList className="hidden">
+            <TabsTrigger value="takeoff" />
+            <TabsTrigger value="estimate" />
+            <TabsTrigger value="tender" />
+            <TabsTrigger value="overheads" />
+            <TabsTrigger value="insights" />
+            <TabsTrigger value="compliance" />
+            <TabsTrigger value="pricing" />
+            {project.plan_file_url && <TabsTrigger value="plans" />}
           </TabsList>
 
-          <TabsContent value="estimate">
+          {/* Step 1 — PDF Takeoff — forceMount keeps PDF alive when switching to Estimate/Tender */}
+          <TabsContent value="takeoff" forceMount className="space-y-4">
+            <TakeoffErrorBoundary>
+              <AIPlanAnalyzerEnhanced projectId={projectId!} estimateId={estimate?.id} />
+            </TakeoffErrorBoundary>
+            <Card className="p-4 border-dashed border-primary/30 bg-primary/5">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm font-semibold text-foreground">Done measuring and costing?</p>
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    Use "Send All to Estimate" in the Costs tab above, then review your full estimate.
+                  </p>
+                </div>
+                <Button
+                  onClick={() => setActiveMainTab("estimate")}
+                  className="bg-primary text-primary-foreground hover:bg-primary/90 shrink-0 ml-4"
+                >
+                  View Estimate
+                  <ArrowLeft className="h-4 w-4 ml-2 rotate-180" />
+                </Button>
+              </div>
+            </Card>
+          </TabsContent>
+
+          {/* Step 2 — Estimate */}
+          <TabsContent value="estimate" className="space-y-4">
+            <div className="flex items-center justify-between">
+              <Button variant="ghost" size="sm" onClick={() => setActiveMainTab("takeoff")}>
+                <ArrowLeft className="h-4 w-4 mr-1" />
+                Back to Takeoff
+              </Button>
+              <Button
+                onClick={() => setActiveMainTab("tender")}
+                className="bg-primary text-primary-foreground hover:bg-primary/90"
+                size="sm"
+              >
+                Estimate looks good? Generate Tender
+                <ArrowLeft className="h-4 w-4 ml-2 rotate-180" />
+              </Button>
+            </div>
             {estimate ? (
               <EstimateTemplate projectId={projectId!} estimateId={estimate.id} />
             ) : (
               <Card className="p-6">
                 <div className="text-center py-12">
-                  <Loader2 className="h-12 w-12 animate-spin text-secondary mx-auto mb-4" />
+                  <Loader2 className="h-12 w-12 animate-spin text-primary mx-auto mb-4" />
                   <p className="text-muted-foreground">Loading estimate...</p>
                 </div>
               </Card>
             )}
-          </TabsContent>
-
-          <TabsContent value="takeoff">
-            <TakeoffErrorBoundary>
-              <AIPlanAnalyzerEnhanced projectId={projectId!} estimateId={estimate?.id} />
-            </TakeoffErrorBoundary>
-          </TabsContent>
-
-          <TabsContent value="pricing">
-            <Alert className="mb-6 bg-accent/5 border-accent/20">
-              <DollarSign className="h-4 w-4" />
-              <AlertTitle>What is AI Pricing?</AlertTitle>
-              <AlertDescription>
-                Our AI matches your takeoff quantities to current Australian market rates (materials + labour). 
-                Pricing is based on your region and includes overheads, margins, and GST.
-                <br/><br/>
-                <strong>Requirement:</strong> Complete "AI Takeoff" first, or manually add items to the estimate tab.
-              </AlertDescription>
-            </Alert>
-            
-            <Card className="p-6">
-              <h2 className="font-display text-2xl font-bold mb-4">Cost Estimate</h2>
-              {pricingAnalysis ? (
-                <div className="space-y-4">
-                  <div className="bg-muted/50 p-4 rounded-lg">
-                    <div className="flex items-center gap-2 mb-2">
-                      <Sparkles className="h-5 w-5 text-accent" />
-                      <h3 className="font-semibold">AI Pricing Analysis</h3>
-                    </div>
-                    <div className="whitespace-pre-wrap text-sm font-mono bg-background p-4 rounded border border-border max-h-96 overflow-y-auto">
-                      {JSON.stringify(pricingAnalysis.results, null, 2)}
-                    </div>
-                  </div>
-                  <p className="text-xs text-muted-foreground">
-                    Generated: {new Date(pricingAnalysis.created_at).toLocaleString()}
-                  </p>
+            <Card className="p-4 border-dashed border-primary/30 bg-primary/5">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm font-semibold text-foreground">Ready to send this to the client?</p>
+                  <p className="text-xs text-muted-foreground mt-0.5">Generate a professional Quote or full Tender document.</p>
                 </div>
-              ) : (
-                <div className="text-center py-12">
-                  <Loader2 className="h-12 w-12 animate-spin text-secondary mx-auto mb-4" />
-                  <p className="text-muted-foreground">AI pricing analysis in progress...</p>
-                </div>
-              )}
+                <Button
+                  onClick={() => setActiveMainTab("tender")}
+                  className="bg-primary text-primary-foreground hover:bg-primary/90 shrink-0 ml-4"
+                >
+                  Generate Tender
+                  <ArrowLeft className="h-4 w-4 ml-2 rotate-180" />
+                </Button>
+              </div>
             </Card>
           </TabsContent>
 
-          {project.plan_file_url && (
-            <TabsContent value="plans">
-              <PlanAnalysisWizard planUrl={project.plan_file_url} projectId={projectId!} />
-            </TabsContent>
-          )}
-
-          <TabsContent value="overheads">
-            <OverheadManager projectId={projectId!} />
-          </TabsContent>
-
+          {/* Step 3 — Tender */}
           <TabsContent value="tender" className="space-y-6">
-            <TenderDocuments projectId={projectId!} />
-            
+            <Button variant="ghost" size="sm" onClick={() => setActiveMainTab("estimate")}>
+              <ArrowLeft className="h-4 w-4 mr-1" />
+              Back to Estimate
+            </Button>
             <Card className="p-6">
               <h3 className="font-display text-xl font-bold mb-2">Generate Quote or Tender</h3>
               <p className="text-muted-foreground mb-4">
@@ -379,6 +407,16 @@ const ProjectDetail = () => {
                 <FullTenderGenerator project={project} estimate={estimate} />
               </div>
             </Card>
+            <TenderDocuments projectId={projectId!} />
+          </TabsContent>
+
+          {/* Tools */}
+          <TabsContent value="overheads">
+            <Button variant="ghost" size="sm" className="mb-4" onClick={() => setActiveMainTab("estimate")}>
+              <ArrowLeft className="h-4 w-4 mr-1" />
+              Back to Estimate
+            </Button>
+            <OverheadManager projectId={projectId!} />
           </TabsContent>
 
           <TabsContent value="insights">
@@ -388,6 +426,19 @@ const ProjectDetail = () => {
           <TabsContent value="compliance">
             <NCCComplianceCard projectId={projectId!} />
           </TabsContent>
+
+          <TabsContent value="pricing">
+            <Card className="p-6">
+              <h2 className="font-display text-2xl font-bold mb-4">AI Pricing</h2>
+              <p className="text-muted-foreground">AI pricing analysis in progress...</p>
+            </Card>
+          </TabsContent>
+
+          {project.plan_file_url && (
+            <TabsContent value="plans">
+              <PlanAnalysisWizard planUrl={project.plan_file_url} projectId={projectId!} />
+            </TabsContent>
+          )}
         </Tabs>
       </div>
     </div>

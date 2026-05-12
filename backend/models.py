@@ -113,3 +113,51 @@ class HealthResponse(BaseModel):
     status: str
     version: str
     models_loaded: Dict[str, bool]
+
+
+# ─── Construction-domain models ─────────────────────────────────────────────
+
+class OpeningCode(BaseModel):
+    """Decoded window or door from Australian plan notation (e.g. 1218 SW)"""
+    ref: str                          # e.g. "1218 SW" or "W-01"
+    element_type: str                 # "window" | "door"
+    width_mm: Optional[float] = None
+    height_mm: Optional[float] = None
+    opening_type: Optional[str] = None  # "Sliding Window", "Hinged Door", etc.
+    page: int
+    bbox: Optional[BoundingBox] = None
+
+
+class RoomArea(BaseModel):
+    """Room name + stated floor area parsed from plan (e.g. 'GF LIVING 136.37 m²')"""
+    name: str
+    area_m2: float
+    page: int
+    bbox: Optional[BoundingBox] = None
+
+
+class DrawingInfo(BaseModel):
+    """Title block data extracted from a plan sheet"""
+    drawing_number: Optional[str] = None   # e.g. "A-02"
+    title: Optional[str] = None
+    scale: Optional[str] = None            # e.g. "1:100"
+    scale_ratio: Optional[float] = None    # 100.0
+    revision: Optional[str] = None
+    page: int
+
+
+class ConstructionData(BaseModel):
+    """All construction-specific data extracted across all pages"""
+    openings: List[OpeningCode] = []
+    room_areas: List[RoomArea] = []
+    drawing_info: List[DrawingInfo] = []
+    total_floor_area_m2: Optional[float] = None
+
+
+class ConstructionExtractionResponse(BaseModel):
+    """Response for /extract/construction endpoint"""
+    filename: str
+    total_pages: int
+    construction_data: ConstructionData
+    processing_time_ms: float
+    errors: List[str] = []

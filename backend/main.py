@@ -17,7 +17,7 @@ from pydantic_settings import BaseSettings
 
 from models import (
     ExtractionResponse, ExtractionOptions, HealthResponse,
-    PageAnalysis
+    PageAnalysis, ConstructionExtractionResponse
 )
 from pdf_extractor import PDFExtractor
 
@@ -259,6 +259,70 @@ async def extract_image(
     except Exception as e:
         logger.error(f"Image extraction failed: {e}")
         raise HTTPException(status_code=500, detail=f"Extraction failed: {str(e)}")
+
+
+@app.post("/extract/construction", response_model=ConstructionExtractionResponse)
+async def extract_construction(
+    background_tasks: BackgroundTasks,
+    file: UploadFile = File(...),
+    pages: Optional[str] = None,
+    dpi: int = 200
+):
+    """
+    Extract construction-specific data from a PDF plan.
+
+    Returns: window/door codes (1218 SW decoded), room areas (m²),
+    drawing numbers, scales, and revision marks.
+    """
+    if not extractor:
+        raise HTTPException(status_code=503, detail="Extractor not initialized")
+
+    if not file.filename:
+        raise HTTPException(status_code=400, detail="No filename provided")
+
+    file_ext = Path(file.filename).suffix.lower()
+    if file_ext not in ['.pdf', '.PDF']:
+        raise HTTPException(status_code=400, detail="Only PDF files are supported")
+
+    file.file.seek(0, 2)
+    file_size = file.file.tell()
+    file.file.seek(0)
+    if file_size > settings.max_file_size_mb * 1024 * 1024:
+        raise HTTPException(status_code=400, detail=f"File too large (max {settings.max_file_size_mb}MB)")
+
+    file_id = str(uuid.uuid4())
+    file_path = Path(settings.upload_dir) / f"{file_id}{file_ext}"
+
+    try:
+        with open(file_path, "wb") as buffer:
+            shutil.copyfileobj(file.file, buffer)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to save file: {e}")
+
+    background_tasks.add_task(cleanup_file, str(file_path))
+
+    page_list = None
+    if pages:
+        try:
+            page_list = [int(p.strip()) for p in pages.split(",")]
+        except ValueError:
+            raise HTTPException(status_code=400, detail="Invalid page numbers format")
+
+    options = ExtractionOptions(
+        extract_layout=False,
+        extract_text=True,
+        extract_tables=False,
+        extract_dimensions=False,
+        pages=page_list,
+        dpi=dpi,
+    )
+
+    try:
+        result = await extractor.extract_construction_data(str(file_path), options)
+        return result
+    except Exception as e:
+        logger.error(f"Construction extraction failed: {e}")
+        raise HTTPException(status_code=500, detail=f"Construction extraction failed: {e}")
 
 
 @app.post("/extract/batch")

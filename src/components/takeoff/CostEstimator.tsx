@@ -7,11 +7,17 @@ import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Calculator, DollarSign, Plus, Trash2, FileDown, Percent, Clock, ExternalLink, ChevronDown, ChevronRight, Wrench, CheckCircle2, Package, Link2, Unlink } from 'lucide-react';
 import { Measurement, CostItem, MeasurementArea, TRADE_OPTIONS, RelatedMaterial, ConsumableItem } from '@/lib/takeoff/types';
 import { cn } from '@/lib/utils';
 import { SCOPE_OF_WORK_RATES, type AustralianState } from '@/data/scopeOfWorkRates';
+import { exportToBOQCsv } from '@/lib/takeoff/export';
+import { RATE_TRADE_TO_OPTION } from '@/lib/takeoff/profile';
 import { toast } from 'sonner';
+import { MaterialPickerDialog } from './MaterialPickerDialog';
+import { MaterialEntry } from '@/lib/materials/types';
+import { findLabourRate, getCustomRates, setCustomRate, clearCustomRate, LABOUR_MULT } from '@/data/labourRates';
 
 // Area options
 const AREA_OPTIONS: MeasurementArea[] = [
@@ -66,6 +72,7 @@ interface CostEstimatorProps {
   projectId: string;
   measurements: Measurement[];
   costItems: CostItem[];
+  enabledTrades?: string[];
   onAddCostItem: (item: CostItem) => void;
   onUpdateCostItem: (id: string, updates: Partial<CostItem>) => void;
   onDeleteCostItem: (id: string) => void;
@@ -83,6 +90,120 @@ const CATEGORY_TO_TRADE: Record<string, string> = {
   General: 'Carpenter',
 };
 
+// Labour rate popover — click the $/Hr cell to see market benchmarks and quick-apply
+interface LabourRateCellProps {
+  item: CostItem;
+  selectedState: string;
+  onUpdateCostItem: (id: string, updates: Partial<CostItem>) => void;
+}
+
+const LabourRateCell = ({ item, selectedState, onUpdateCostItem }: LabourRateCellProps) => {
+  const [open, setOpen] = useState(false);
+  const [savedDefault, setSavedDefault] = useState<number | null>(() => {
+    const cr = getCustomRates();
+    const tradeName = item.trade || CATEGORY_TO_TRADE[item.category] || 'General Labour';
+    return cr[tradeName] ?? null;
+  });
+
+  const tradeName = item.trade || CATEGORY_TO_TRADE[item.category] || 'General Labour';
+  const rateInfo = findLabourRate(tradeName);
+  const mult = LABOUR_MULT[selectedState] ?? 1;
+  const adj = (rate: number) => Math.round(rate * mult);
+
+  const handleOpenChange = (next: boolean) => {
+    if (next) {
+      const cr = getCustomRates();
+      setSavedDefault(cr[tradeName] ?? null);
+    }
+    setOpen(next);
+  };
+
+  const applyRate = (rate: number) => {
+    onUpdateCostItem(item.id, { hourlyRate: rate });
+    setOpen(false);
+  };
+
+  const saveDefault = () => {
+    const rate = item.hourlyRate ?? (rateInfo ? adj(rateInfo.typical) : 65);
+    setCustomRate(tradeName, rate);
+    setSavedDefault(rate);
+    toast.success(`$${rate}/hr saved as default for ${tradeName}`);
+  };
+
+  const resetDefault = () => {
+    clearCustomRate(tradeName);
+    setSavedDefault(null);
+    toast.success(`${tradeName} reset to market rate`);
+  };
+
+  return (
+    <Popover open={open} onOpenChange={handleOpenChange}>
+      <PopoverTrigger asChild>
+        <Input
+          type="number"
+          value={item.hourlyRate ?? 65}
+          onChange={(e) => onUpdateCostItem(item.id, { hourlyRate: Number(e.target.value) })}
+          className="h-8 text-xs text-right font-mono border-border px-2 w-full"
+          onFocus={() => setOpen(true)}
+        />
+      </PopoverTrigger>
+      <PopoverContent className="w-72 p-3" align="end" side="top">
+        {!rateInfo ? (
+          <p className="text-xs text-muted-foreground">No benchmark data for "{tradeName}"</p>
+        ) : (
+          <div className="space-y-3">
+            {/* Header */}
+            <div className="flex items-center gap-2">
+              <span className="text-xl">{rateInfo.icon}</span>
+              <div>
+                <p className="text-sm font-semibold">{rateInfo.trade}</p>
+                <p className="text-xs text-muted-foreground">{rateInfo.desc}</p>
+              </div>
+            </div>
+
+            {/* Rate tiles */}
+            <p className="text-[11px] text-muted-foreground">{selectedState} market rates — click to apply</p>
+            <div className="grid grid-cols-4 gap-1">
+              {([
+                { label: 'Award', rate: rateInfo.award, cls: 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-200' },
+                { label: 'Low', rate: adj(rateInfo.low), cls: 'bg-green-100 text-green-800 dark:bg-green-900/50 dark:text-green-200' },
+                { label: 'Typical', rate: adj(rateInfo.typical), cls: 'bg-amber-100 text-amber-800 dark:bg-amber-900/50 dark:text-amber-200' },
+                { label: 'High', rate: adj(rateInfo.high), cls: 'bg-red-100 text-red-800 dark:bg-red-900/50 dark:text-red-200' },
+              ] as const).map(({ label, rate, cls }) => (
+                <button
+                  key={label}
+                  className={`${cls} rounded p-1.5 text-center hover:opacity-75 transition-opacity`}
+                  onClick={() => applyRate(rate)}
+                >
+                  <div className="text-sm font-bold">${rate}</div>
+                  <div className="text-[10px] opacity-70">{label}</div>
+                </button>
+              ))}
+            </div>
+
+            {/* Save / reset */}
+            <div className="flex items-center gap-1 pt-1 border-t border-border">
+              <Button size="sm" variant="outline" className="h-7 text-xs flex-1" onClick={saveDefault}>
+                Save ${item.hourlyRate ?? adj(rateInfo.typical)}/hr as default
+              </Button>
+              {savedDefault !== null && (
+                <Button size="sm" variant="ghost" className="h-7 text-xs text-muted-foreground shrink-0" onClick={resetDefault}>
+                  Reset
+                </Button>
+              )}
+            </div>
+            {savedDefault !== null && (
+              <p className="text-[11px] text-muted-foreground">
+                My default: <span className="font-semibold text-foreground">${savedDefault}/hr</span>
+              </p>
+            )}
+          </div>
+        )}
+      </PopoverContent>
+    </Popover>
+  );
+};
+
 // Read / write the set of costItem IDs already transferred for this project
 const transferredKey = (projectId: string) => `transferred_cost_items_${projectId}`;
 const getTransferred = (projectId: string): Set<string> =>
@@ -94,6 +215,7 @@ export const CostEstimator = ({
   projectId,
   measurements,
   costItems,
+  enabledTrades,
   onAddCostItem,
   onUpdateCostItem,
   onDeleteCostItem,
@@ -103,6 +225,7 @@ export const CostEstimator = ({
   const [marginPercent, setMarginPercent] = useState(15);
   const [gstEnabled, setGstEnabled] = useState(true);
   const [showAddDialog, setShowAddDialog] = useState(false);
+  const [showLibraryPicker, setShowLibraryPicker] = useState(false);
   const [selectedSOW, setSelectedSOW] = useState<string>('');
   const [selectedMeasurement, setSelectedMeasurement] = useState<string>('');
   const [expandedItems, setExpandedItems] = useState<Set<string>>(new Set());
@@ -110,6 +233,24 @@ export const CostEstimator = ({
     DEFAULT_CONSUMABLES.map(c => ({ ...c, id: crypto.randomUUID(), total: c.quantity * c.unitCost }))
   );
   const [transferredIds, setTransferredIds] = useState<Set<string>>(() => getTransferred(projectId));
+
+  // Filtered trade list based on profile
+  const visibleTrades = useMemo(
+    () => enabledTrades?.length ? TRADE_OPTIONS.filter(t => enabledTrades.includes(t)) : TRADE_OPTIONS,
+    [enabledTrades]
+  );
+
+  // Filtered SOW rates: only show rates whose trade maps to an enabled trade option
+  const visibleSOWRates = useMemo(
+    () => enabledTrades?.length
+      ? SCOPE_OF_WORK_RATES.filter(r => {
+          if (!r.trade) return true;
+          const mapped = RATE_TRADE_TO_OPTION[r.trade] ?? r.trade;
+          return enabledTrades.includes(mapped);
+        })
+      : SCOPE_OF_WORK_RATES,
+    [enabledTrades]
+  );
 
   // Write a batch of CostItems into the Estimate (local_projects localStorage)
   const transferItems = (items: CostItem[]) => {
@@ -170,11 +311,12 @@ export const CostEstimator = ({
     saveTransferred(projectId, newTransferred);
     setTransferredIds(new Set(newTransferred));
 
-    // Notify EstimateTemplate to reload
+    // Notify EstimateTemplate to reload and switch to Estimate tab
     window.dispatchEvent(new CustomEvent('estimate-updated', { detail: { projectId } }));
+    window.dispatchEvent(new CustomEvent('go-to-estimate-tab'));
 
     const transferredItemIds = newEstimateItems.map((e: any) => e.id);
-    toast.success(`${newEstimateItems.length} item${newEstimateItems.length > 1 ? 's' : ''} sent to Estimate`, {
+    toast.success(`${newEstimateItems.length} item${newEstimateItems.length > 1 ? 's' : ''} sent to Estimate — click "View Estimate" above`, {
       action: {
         label: 'Undo',
         onClick: () => {
@@ -311,6 +453,7 @@ export const CostEstimator = ({
       effectiveUnit = 'M3';
     }
 
+    const sowTrade = CATEGORY_TO_TRADE[sowItem.category] || 'General Labour';
     const newItem: CostItem = {
       id: crypto.randomUUID(),
       category: sowItem.category,
@@ -328,7 +471,7 @@ export const CostEstimator = ({
       laborHours: measurement.labourHours,
       materialWastePercent: 5,
       labourWastePercent: 10,
-      hourlyRate: 65,
+      hourlyRate: getEffectiveRate(sowTrade, selectedState),
     };
 
     onAddCostItem(newItem);
@@ -359,7 +502,7 @@ export const CostEstimator = ({
       area: measurement?.area,
       materialWastePercent: 5,
       labourWastePercent: 10,
-      hourlyRate: 65,
+      hourlyRate: getEffectiveRate('Carpenter', selectedState),
     };
 
     onAddCostItem(newItem);
@@ -367,6 +510,30 @@ export const CostEstimator = ({
       onLinkMeasurement(measurementId, newItem.id);
     }
     toast.success('Manual item added');
+  };
+
+  const handleAddFromLibrary = (material: MaterialEntry) => {
+    const newItem: CostItem = {
+      id: crypto.randomUUID(),
+      category: material.trade,
+      name: material.name,
+      description: [material.productCode, material.supplierName, material.notes].filter(Boolean).join(' · ') || material.name,
+      unit: material.unit,
+      unitCost: material.unitCost,
+      quantity: 1,
+      linkedMeasurements: [],
+      wasteFactor: 1.0,
+      subtotal: material.unitCost,
+      trade: material.trade,
+      materialWastePercent: 5,
+      labourWastePercent: 10,
+      hourlyRate: getEffectiveRate(CATEGORY_TO_TRADE[material.trade] || material.trade || 'Carpenter', selectedState),
+    };
+    onAddCostItem(newItem);
+    toast.success(`Added "${material.name}" from library`);
+    if (material.leadTimeWeeks && material.leadTimeWeeks >= 8) {
+      toast.warning(`Long lead time: ${material.leadTimeWeeks} weeks — order early`, { duration: 5000 });
+    }
   };
 
   // Update consumable
@@ -433,6 +600,27 @@ export const CostEstimator = ({
     toast.success('Estimate exported to CSV');
   };
 
+  // Export in professional BOQ format (matches TCA/Rawlinsons QS structure)
+  const exportToBOQ = () => {
+    const csv = exportToBOQCsv({
+      projectName: 'Project',
+      projectLocation: '',
+      state: selectedState,
+      costItems,
+      contingencyPercent: 0,
+      marginPercent,
+      includeGST: gstEnabled,
+    });
+    const blob = new Blob([csv], { type: 'text/csv' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `BOQ_${new Date().toISOString().split('T')[0]}.csv`;
+    link.click();
+    URL.revokeObjectURL(url);
+    toast.success('BOQ exported — open in Excel for best formatting');
+  };
+
   if (measurements.length === 0) {
     return (
       <Card className="p-8 text-center">
@@ -492,28 +680,42 @@ export const CostEstimator = ({
             <FileDown className="h-4 w-4 mr-1" />
             CSV
           </Button>
+          <Button variant="outline" size="sm" onClick={exportToBOQ} disabled={costItems.length === 0}>
+            <FileDown className="h-4 w-4 mr-1" />
+            BOQ
+          </Button>
           {costItems.length > 0 && (
             <Button
               size="sm"
-              variant="outline"
-              className="border-blue-400 text-blue-700 hover:bg-blue-50"
+              className="bg-primary text-primary-foreground hover:bg-primary/90 font-semibold"
               onClick={() => transferItems(costItems.filter(i => !transferredIds.has(i.id)))}
+              disabled={costItems.filter(i => !transferredIds.has(i.id)).length === 0}
             >
               <CheckCircle2 className="h-4 w-4 mr-1" />
-              Send All to Estimate
+              Send to Estimate
               {costItems.filter(i => !transferredIds.has(i.id)).length > 0 && (
-                <span className="ml-1 bg-blue-100 text-blue-700 text-xs px-1 rounded-full">
+                <span className="ml-1.5 bg-white/20 text-white text-xs px-1.5 py-0.5 rounded-full">
                   {costItems.filter(i => !transferredIds.has(i.id)).length}
                 </span>
               )}
             </Button>
           )}
+          <Button variant="outline" size="sm" onClick={() => setShowLibraryPicker(true)}>
+            <Package className="h-4 w-4 mr-1" />
+            From Library
+          </Button>
           <Button size="sm" onClick={() => setShowAddDialog(!showAddDialog)}>
             <Plus className="h-4 w-4 mr-1" />
             Add Item
           </Button>
         </div>
       </div>
+
+      <MaterialPickerDialog
+        open={showLibraryPicker}
+        onOpenChange={setShowLibraryPicker}
+        onSelect={handleAddFromLibrary}
+      />
 
       {/* Add Dialog */}
       {showAddDialog && (
@@ -544,7 +746,7 @@ export const CostEstimator = ({
                   <SelectValue placeholder="Select rate..." />
                 </SelectTrigger>
                 <SelectContent className="max-h-60">
-                  {SCOPE_OF_WORK_RATES.slice(0, 50).map(sow => (
+                  {visibleSOWRates.slice(0, 50).map(sow => (
                     <SelectItem key={sow.id} value={sow.id}>
                       {sow.sow} (${sow[selectedState]?.toFixed(2)}/{sow.unit})
                     </SelectItem>
@@ -629,7 +831,7 @@ export const CostEstimator = ({
                               <SelectValue placeholder="-" />
                             </SelectTrigger>
                             <SelectContent className="bg-popover max-h-48">
-                              {TRADE_OPTIONS.map(t => <SelectItem key={t} value={t} className="text-xs">{t}</SelectItem>)}
+                              {visibleTrades.map(t => <SelectItem key={t} value={t} className="text-xs">{t}</SelectItem>)}
                             </SelectContent>
                           </Select>
                         </TableCell>
@@ -733,13 +935,12 @@ export const CostEstimator = ({
                           />
                         </TableCell>
 
-                        {/* Hourly Rate */}
+                        {/* Hourly Rate — click to see market benchmarks */}
                         <TableCell className="px-1 w-20">
-                          <Input
-                            type="number"
-                            value={item.hourlyRate ?? 65}
-                            onChange={(e) => onUpdateCostItem(item.id, { hourlyRate: Number(e.target.value) })}
-                            className="h-8 text-xs text-right font-mono border-border px-2 w-full"
+                          <LabourRateCell
+                            item={item}
+                            selectedState={selectedState}
+                            onUpdateCostItem={onUpdateCostItem}
                           />
                         </TableCell>
 

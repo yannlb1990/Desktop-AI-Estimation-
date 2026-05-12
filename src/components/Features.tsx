@@ -6,7 +6,7 @@ const features = [
     icon: Upload,
     title: "AI Plan Upload",
     description: "Upload PDF, DWG, or IFC files. AI automatically detects elements, scales, and compliance requirements.",
-    color: "text-secondary"
+    color: "text-primary"
   },
   {
     icon: Layers,
@@ -18,7 +18,7 @@ const features = [
     icon: Calculator,
     title: "Live Pricing",
     description: "Real-time material and labour costs from Australian suppliers, updated fortnightly.",
-    color: "text-secondary"
+    color: "text-primary"
   },
   {
     icon: FileText,
@@ -30,7 +30,7 @@ const features = [
     icon: TrendingUp,
     title: "Market Insights",
     description: "Premium dashboard with regional price trends, trade availability, and cost forecasts.",
-    color: "text-secondary"
+    color: "text-primary"
   },
   {
     icon: Shield,
@@ -47,7 +47,7 @@ const Features = () => {
         <div className="max-w-3xl mx-auto text-center mb-16">
           <h2 className="font-display text-4xl md:text-5xl font-bold mb-6">
             Everything You Need for
-            <span className="block mt-2 text-secondary">Accurate Estimates</span>
+            <span className="block mt-2 text-primary">Accurate Estimates</span>
           </h2>
           <p className="text-lg text-muted-foreground">
             From plan upload to tender generation, Buildamax streamlines your entire estimation workflow with AI precision.

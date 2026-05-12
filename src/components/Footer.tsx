@@ -7,7 +7,7 @@ const Footer = () => {
           <div className="col-span-1">
             <div className="flex items-center gap-2 mb-4">
               <div className="w-8 h-8 bg-gradient-accent rounded-lg flex items-center justify-center">
-                <span className="font-display font-bold text-primary">B</span>
+                <span className="font-display font-bold text-primary-foreground">B</span>
               </div>
               <span className="font-display text-xl font-bold">Buildamax</span>
             </div>

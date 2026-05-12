@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button';
 import { WorldPoint, ViewPoint, Transform, PDFViewportData, Measurement, ToolType } from '@/lib/takeoff/types';
 import { calculateLinearWorld, calculateRectangleAreaWorld, calculatePolygonAreaWorld, calculateCentroidWorld, calculateCircleAreaWorld } from '@/lib/takeoff/calculations';
 import { viewToWorld } from '@/lib/takeoff/coordinates';
+import { DetectedOpening } from '@/lib/takeoff/pdfTextExtractor';
 
 // PDF.js worker served from /public — no CDN, no Vite ?url magic
 pdfjsLib.GlobalWorkerOptions.workerSrc = '/pdf.worker.min.mjs';
@@ -19,14 +20,15 @@ interface InteractiveCanvasProps {
   unitsPerMetre: number | null;
   calibrationMode: 'preset' | 'manual' | null;
   selectedColor?: string;
-  measurements?: Measurement[]; // Pass measurements to sync canvas with state
+  measurements?: Measurement[];
+  detectedOpenings?: DetectedOpening[];
   onMeasurementComplete: (measurement: Measurement) => void;
-  onMeasurementUpdate?: (id: string, updates: Partial<Measurement>) => void; // Update measurement after resize
+  onMeasurementUpdate?: (id: string, updates: Partial<Measurement>) => void;
   onCalibrationPointsSet: (points: [WorldPoint, WorldPoint]) => void;
   onTransformChange: (transform: Partial<Transform>) => void;
   onViewportReady: (viewport: PDFViewportData) => void;
   onDeleteLastMeasurement?: () => void;
-  onDeleteMeasurement?: (id: string) => void; // Delete specific measurement by ID
+  onDeleteMeasurement?: (id: string) => void;
 }
 
 export const InteractiveCanvas = ({
@@ -38,6 +40,7 @@ export const InteractiveCanvas = ({
   unitsPerMetre,
   calibrationMode,
   measurements = [],
+  detectedOpenings,
   onMeasurementComplete,
   onMeasurementUpdate,
   onCalibrationPointsSet,
@@ -66,6 +69,8 @@ export const InteractiveCanvas = ({
   const measurementMapRef = useRef<Map<string, Measurement>>(new Map());
   // Preview label for live drawing feedback
   const previewLabelRef = useRef<{ text: string; worldX: number; worldY: number; color: string } | null>(null);
+  // Canvas objects for detected-opening overlay (separate from measurements)
+  const openingOverlayObjectsRef = useRef<any[]>([]);
 
   // Drawing state
   const [isDrawing, setIsDrawing] = useState(false);
@@ -418,6 +423,54 @@ export const InteractiveCanvas = ({
 
     canvas.requestRenderAll();
   }, [viewport, measurements, getZoomAwareSize]);
+
+  // Draw colored markers on the canvas for detected openings (windows=blue, doors=amber).
+  // PDF text coordinates have y=0 at the page bottom; canvas world space has y=0 at the top,
+  // so we flip: worldY = viewport.height - opening.y. Only renders at rotation=0.
+  useEffect(() => {
+    const canvas = fabricCanvasRef.current;
+    if (!canvas || !viewport) return;
+
+    // Remove previous overlay objects
+    openingOverlayObjectsRef.current.forEach(obj => {
+      try { canvas.remove(obj); } catch (_) {}
+    });
+    openingOverlayObjectsRef.current = [];
+
+    const pageOpenings = (detectedOpenings ?? []).filter(
+      o => o.page === pageIndex && !(o.x === 0 && o.y === 0),
+    );
+
+    if (pageOpenings.length === 0) {
+      canvas.requestRenderAll();
+      return;
+    }
+
+    const RADIUS = 14; // fixed world-space radius — scales naturally with viewport zoom
+
+    for (const opening of pageOpenings) {
+      const worldX = opening.x;
+      const worldY = viewport.height - opening.y;
+      const isWindow = opening.type === 'window';
+      const color = isWindow ? '#3B82F6' : '#F59E0B';
+
+      const circle = new Circle({
+        left: worldX - RADIUS,
+        top: worldY - RADIUS,
+        radius: RADIUS,
+        fill: color + '33',
+        stroke: color,
+        strokeWidth: 2,
+        selectable: false,
+        evented: false,
+      });
+
+      canvas.add(circle);
+      openingOverlayObjectsRef.current.push(circle);
+    }
+
+    canvas.requestRenderAll();
+  }, [detectedOpenings, pageIndex, viewport]);
 
   // Draw measurement labels natively on the canvas after Fabric renders objects.
   // This is more reliable than Fabric.js Text objects (which have v6 rendering quirks)

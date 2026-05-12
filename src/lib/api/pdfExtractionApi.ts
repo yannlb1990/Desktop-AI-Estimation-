@@ -106,6 +106,49 @@ export interface HealthStatus {
   models_loaded: Record<string, boolean>;
 }
 
+// ── Construction-domain types ────────────────────────────────────────────────
+
+export interface OpeningCode {
+  ref: string;               // "1218 SW" or "W-01"
+  element_type: 'window' | 'door';
+  width_mm?: number;
+  height_mm?: number;
+  opening_type?: string;     // "Sliding Window", "Hinged Door", etc.
+  page: number;
+  bbox?: BoundingBox;
+}
+
+export interface RoomArea {
+  name: string;
+  area_m2: number;
+  page: number;
+  bbox?: BoundingBox;
+}
+
+export interface DrawingInfo {
+  drawing_number?: string;   // "A-02"
+  title?: string;
+  scale?: string;            // "1:100"
+  scale_ratio?: number;      // 100
+  revision?: string;
+  page: number;
+}
+
+export interface ConstructionData {
+  openings: OpeningCode[];
+  room_areas: RoomArea[];
+  drawing_info: DrawingInfo[];
+  total_floor_area_m2?: number;
+}
+
+export interface ConstructionExtractionResponse {
+  filename: string;
+  total_pages: number;
+  construction_data: ConstructionData;
+  processing_time_ms: number;
+  errors: string[];
+}
+
 export interface ApiResponse<T> {
   success: boolean;
   data?: T;
@@ -236,6 +279,37 @@ export const pdfExtractionApi = {
         success: false,
         error: `Image extraction failed: ${message}`
       };
+    }
+  },
+
+  /**
+   * Extract construction-specific data from a PDF plan.
+   * Returns decoded window/door codes, room areas, drawing numbers and scales.
+   */
+  async extractConstruction(
+    file: File,
+    pages?: number[]
+  ): Promise<ApiResponse<ConstructionExtractionResponse>> {
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+
+      const params = new URLSearchParams();
+      if (pages && pages.length > 0) params.append('pages', pages.join(','));
+
+      const url = `${PDF_EXTRACTION_API_URL}/extract/construction?${params.toString()}`;
+      const response = await fetch(url, { method: 'POST', body: formData });
+
+      if (!response.ok) {
+        const error = await response.json().catch(() => ({ detail: 'Unknown error' }));
+        throw new Error(error.detail || `API returned ${response.status}`);
+      }
+
+      const data = await response.json();
+      return { success: true, data };
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : 'Unknown error';
+      return { success: false, error: `Construction extraction failed: ${message}` };
     }
   },
 

@@ -26,7 +26,7 @@ const measurementCards = [
     title: "Wall Run",
     value: "18.4 LM",
     detail: "Internal walls",
-    color: "text-secondary"
+    color: "text-primary"
   },
   {
     title: "Living Room",
@@ -67,7 +67,7 @@ export const TakeoffVisual = () => {
                     key={item}
                     className="flex items-center gap-2 rounded-lg border border-border bg-background px-4 py-3 shadow-sm"
                   >
-                    <div className="h-2 w-2 rounded-full bg-secondary" />
+                    <div className="h-2 w-2 rounded-full bg-primary" />
                     <span className="text-sm font-medium text-foreground">{item}</span>
                   </div>
                 )
@@ -76,7 +76,7 @@ export const TakeoffVisual = () => {
 
             <div className="flex gap-3">
               <Button
-                className="bg-secondary text-secondary-foreground hover:bg-secondary/90"
+                className="bg-primary text-primary-foreground hover:bg-primary/90"
                 onClick={() => window.location.href = "/project/new"}
               >
                 Start a takeoff
@@ -132,7 +132,7 @@ export const TakeoffVisual = () => {
                         <div
                           key={card.title}
                           className={`rounded-lg border border-border bg-background/90 px-4 py-3 shadow-sm ${
-                            index === 0 ? "ring-2 ring-secondary/40" : ""
+                            index === 0 ? "ring-2 ring-primary/40" : ""
                           }`}
                         >
                           <div className="flex items-center justify-between gap-3">
@@ -150,10 +150,10 @@ export const TakeoffVisual = () => {
                     </div>
 
                     <div className="absolute inset-0 pointer-events-none">
-                      <div className="absolute left-16 top-24 h-40 w-48 rounded-xl border-2 border-secondary/80 bg-secondary/10 shadow-lg" />
+                      <div className="absolute left-16 top-24 h-40 w-48 rounded-xl border-2 border-primary/80 bg-primary/10 shadow-lg" />
                       <div className="absolute left-40 top-36 h-24 w-20 rounded-xl border-2 border-accent/80 bg-accent/10 rotate-3 shadow-lg" />
                       <div className="absolute right-16 bottom-20 h-28 w-28 rounded-full border-2 border-foreground/70 bg-foreground/5 shadow-lg" />
-                      <div className="absolute left-10 bottom-16 h-12 w-24 rounded-full bg-secondary/80 text-secondary-foreground text-xs font-semibold flex items-center justify-center shadow-md">
+                      <div className="absolute left-10 bottom-16 h-12 w-24 rounded-full bg-primary text-primary-foreground text-xs font-semibold flex items-center justify-center shadow-md">
                         Snap enabled
                       </div>
                       <div className="absolute right-10 top-24 flex items-center gap-3 bg-background/90 border border-border px-3 py-2 rounded-md shadow-sm">
@@ -169,7 +169,7 @@ export const TakeoffVisual = () => {
 
                 <div className="flex items-center justify-between text-sm text-muted-foreground">
                   <div className="flex items-center gap-3">
-                    <div className="h-2 w-2 rounded-full bg-secondary" /> Measurements stay in world space
+                    <div className="h-2 w-2 rounded-full bg-primary" /> Measurements stay in world space
                   </div>
                   <div className="flex items-center gap-3">
                     <div className="h-2 w-2 rounded-full bg-accent" /> Exportable as CSV / JSON / XLSX

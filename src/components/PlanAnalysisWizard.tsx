@@ -239,7 +239,7 @@ export const PlanAnalysisWizard = ({ projectId, planUrl }: PlanAnalysisWizardPro
               </Button>
             </Card>
             
-            <FixturesSummary projectId={projectId} />
+            <FixturesSummary projectId={projectId} pdfUrl={planUrl} />
           </div>
         )}
       </Card>

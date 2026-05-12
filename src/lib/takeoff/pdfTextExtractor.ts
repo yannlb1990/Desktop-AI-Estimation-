@@ -129,7 +129,7 @@ export function extractFloorAreas(texts: ExtractedText[], pageIndex: number): Ex
   const excludeKeywords = /roof|plan area|site|colorbond|single|double|storey|house|actual|building|coverage|setback|boundary|lot|block|structure/i;
 
   // Pattern 1: Residential format - "GF LIVING" or "BEDROOM 1" followed by number
-  const residentialPattern = /\b((?:GF|FF|UF|GROUND|FIRST|UPPER|LOWER)?\s*(?:LIVING|BED(?:ROOM)?|BATH(?:ROOM)?|KITCHEN|GARAGE|ALFRESCO|PORCH|ENTRY|LOUNGE|DINING|STUDY|LAUNDRY|STORE|WIR|BIR|ENS(?:UITE)?|MEALS|FAMILY|RUMPUS|THEATRE|PANTRY|FOYER|HALL|NOOK|RETREAT|MASTER|GUEST|POWDER|TOILET|UTILITY|MUD|SCULLERY)(?:\s*\d)?)\s+(\d+\.?\d*)\s*(?:m²|m2|sqm)?/gi;
+  const residentialPattern = /\b((?:GF|FF|UF|GROUND|FIRST|UPPER|LOWER|UNIT\s*\d)?\s*(?:LIVING|BED(?:ROOM)?|BATH(?:ROOM)?|KITCHEN|GARAGE|CARPORT|ALFRESCO|BALCONY|DECK|OUTDOOR|VERANDAH|PERGOLA|PORCH|ENTRY|LOUNGE|DINING|STUDY|LAUNDRY|STORE|WIR|BIR|ENS(?:UITE)?|MEALS|FAMILY|RUMPUS|THEATRE|PANTRY|FOYER|HALL|NOOK|RETREAT|MASTER|GUEST|POWDER|TOILET|UTILITY|MUD|SCULLERY|WORKSHOP|MEDIA|GAMES|SITTING|PDR)(?:\s*\d)?)\s+(\d+\.?\d*)\s*(?:m²|m2|sqm)?/gi;
 
   // Pattern 2: Commercial format - "OFFICE 7P", "CORRIDOR", "MEETING ROOM 1" followed by area
   const commercialPattern = /\b((?:OFFICE|CORRIDOR|MEETING|CONFERENCE|BOARDROOM|RECEPTION|LOBBY|LIFT|STAIR|PLANT|AC\s*PLANT|COMMS|SERVER|ELECTRICAL|MECHANICAL|AMENITIES|BREAKOUT|KITCHENETTE|CLEANERS?|STORAGE|FIRE\s*STAIR|SERVICE\s*LIFT)(?:\s*(?:ROOM)?)?(?:\s*\d+)?[A-Z]?)\s+(\d+\.?\d*)\s*(?:m²|m2|sqm)?/gi;
@@ -142,18 +142,18 @@ export function extractFloorAreas(texts: ExtractedText[], pageIndex: number): Ex
 
   let match;
 
-  // Extract residential areas
+  // Extract residential areas — key includes area so Unit 1/Unit 2 same-name rooms aren't deduped
   while ((match = residentialPattern.exec(allText)) !== null) {
     const name = match[1].trim().toUpperCase();
     const area = parseFloat(match[2]);
 
-    if (area < 1 || area > 500) continue;
+    if (area < 1 || area > 1500) continue;
     if (excludeKeywords.test(name)) continue;
 
-    const key = name.replace(/\s+/g, ' ');
+    const key = `${name.replace(/\s+/g, ' ')}|${Math.round(area)}`;
     if (!seen.has(key)) {
       seen.add(key);
-      areas.push({ name: key, area, unit: 'm²', pageIndex });
+      areas.push({ name: name.replace(/\s+/g, ' '), area, unit: 'm²', pageIndex });
     }
   }
 
@@ -206,6 +206,17 @@ export function extractFloorAreas(texts: ExtractedText[], pageIndex: number): Ex
 
     // Commercial buildings can be much larger
     if (area >= 10 && area <= 50000 && !seen.has(name)) {
+      seen.add(name);
+      areas.push({ name, area, unit: 'm²', pageIndex });
+    }
+  }
+
+  // Handle "TOTAL FLOOR AREA FOR UNIT 1 & 2 = 640.10 m2" format (duplex/multi-unit)
+  const totalForUnitPattern = /TOTAL\s+FLOOR\s+AREA\s+FOR[^\n]{0,60}?(\d{3,}\.?\d*)\s*m[²2]/gi;
+  while ((match = totalForUnitPattern.exec(allText)) !== null) {
+    const name = 'TOTAL FLOOR AREA';
+    const area = parseFloat(match[1]);
+    if (area >= 100 && area <= 50000 && !seen.has(name)) {
       seen.add(name);
       areas.push({ name, area, unit: 'm²', pageIndex });
     }
@@ -530,8 +541,8 @@ export function findRoomLabels(texts: ExtractedText[]): ExtractedElement[] {
     /^floor\s*\d+$/i,                // FLOOR 1
     /^zone\s*\d+$/i,                 // ZONE 1
     /^area\s*\d+$/i,                 // AREA 1
-    // Room number patterns (e.g., 4.28A, 4.28D, G.01, L1.05)
-    /^\d+\.\d+[a-z]?$/i,             // 4.28A, 4.28, 1.05B
+    // Room number patterns (e.g., 4.28A, G.01) — require letter suffix to avoid matching dimension values like 3.400
+    /^\d{1,2}\.\d{2}[a-z]$/i,        // 4.28A, 1.05B (letter suffix required)
     /^[gbl]\d*\.\d+[a-z]?$/i,        // G.01, B.02, L1.05 (Ground, Basement, Level)
     /^rm\s*\d+$/i,                   // RM 1, RM 101
     /^room\s*\d+$/i,                 // ROOM 1
@@ -545,9 +556,15 @@ export function findRoomLabels(texts: ExtractedText[]): ExtractedElement[] {
 
   return texts
     .filter(t => {
-      const lower = t.text.toLowerCase().trim();
-      // Skip if too long (not a room label)
-      if (lower.length > 50 || lower.length < 2) return false;
+      const text = t.text.trim();
+      const lower = text.toLowerCase();
+      // Skip if too long (room labels are short) or too short
+      if (lower.length > 30 || lower.length < 2) return false;
+      // Skip annotation/note prefixes
+      if (/^\d+[.)]\s/.test(text)) return false;        // "2. WRITTEN..." or "1) NOTE..."
+      if (/^[-©*•]/.test(text)) return false;           // "- NOTE..." or "© 2023..."
+      // Skip strings with technical metadata keywords
+      if (/posi[\s-]?strut|ncc\s*\d|rpeq|gspublish|version\s*\d/i.test(text)) return false;
       // Check keywords
       if (roomKeywords.some(k => lower.includes(k))) return true;
       // Check patterns for numbered rooms
@@ -825,6 +842,92 @@ export async function extractOpeningsAllPages(
   }
 
   return result.sort((a, b) => a.ref.localeCompare(b.ref, undefined, { numeric: true }));
+}
+
+// ─── BUILDING CONTEXT DETECTION ──────────────────────────────────────────────
+
+export interface BuildingContext {
+  isDuplex: boolean;
+  unitCount: number;
+  isMultiStorey: boolean;
+  storeyCount: number;
+  hasPool: boolean;
+  hasCarport: boolean;
+  hasEngineeredTimber: boolean;
+  hasLouvreWindows: boolean;
+  hasFeatureWeatherboard: boolean;
+  hasAluminiumBattens: boolean;
+  hasRender: boolean;
+  hasBreezeBlock: boolean;
+  groundFloorArea: number;
+  firstFloorArea: number;
+  totalGrossArea: number;
+}
+
+/**
+ * Scan all page text content to determine building type, storeys, pool, materials, etc.
+ * Called once per analysis run with all pages' textContent concatenated.
+ */
+export function extractBuildingContext(allPageTexts: string[]): BuildingContext {
+  const fullText = allPageTexts.join('\n');
+  const upper = fullText.toUpperCase();
+
+  // Duplex / multi-unit detection
+  const isDuplex = /DUPLEX|DUAL\s*OCC(?:UPANCY)?|\bUNIT\s+[12]\b|\bUNIT\s+ONE\b|\bUNIT\s+TWO\b/i.test(fullText);
+  const unitMatches = upper.match(/\bUNIT\s+(\d+)\b/g) || [];
+  const unitNumbers = new Set(unitMatches.map(m => m.replace(/\D/g, '')));
+  const unitCount = isDuplex ? Math.max(2, unitNumbers.size) : 1;
+
+  // Multi-storey detection
+  const isMultiStorey = /FIRST\s*FLOOR|FF\s*(?:FLOOR|PLAN)|UPPER\s*FLOOR|LEVEL\s*[12]|2\s*STOREY|TWO\s*STOREY|\bFF\b/i.test(fullText);
+  const storeyCount = isMultiStorey ? 2 : 1;
+
+  // Pool
+  const hasPool = /SWIM(?:MING)?\s*POOL|POOL\s*FENCE|POOL\s*AREA|INGROUND\s*POOL|CONCRETE\s*POOL/i.test(fullText);
+
+  // Carport
+  const hasCarport = /CARPORT/i.test(fullText);
+
+  // Floor coverings
+  const hasEngineeredTimber = /ENGINEERED\s*TIMBER|TIMBER\s*FLOOR(?:ING)?|HARDWOOD\s*FLOOR|HYBRID\s*FLOOR/i.test(fullText);
+
+  // Window types
+  const hasLouvreWindows = /LOUV(?:RE|ER)\s*WINDOW|LOUVRE/i.test(fullText);
+
+  // Cladding types
+  const hasFeatureWeatherboard = /LINEA|WEATHERTEX|JAMES\s*HARDIE|HARDIPLANK|WEATHERBOARD/i.test(fullText);
+  const hasAluminiumBattens = /KNOTWOOD|ALUM(?:INIUM)?\s*BATTEN|FEATURE\s*BATTEN/i.test(fullText);
+  const hasRender = /RENDER(?:ED|ING)?|ACRYLIC\s*RENDER|TEXTURE\s*COAT/i.test(fullText);
+  const hasBreezeBlock = /BREEZE\s*BLOCK|BESSER\s*BLOCK|DECORATIVE\s*BLOCK/i.test(fullText);
+
+  // Extract floor areas from all text — sum ground and first floor separately
+  let groundFloorArea = 0;
+  let firstFloorArea = 0;
+
+  // Ground floor patterns
+  const gfPattern = /\b(?:GF|GROUND\s*FLOOR|GROUND\s*LEVEL)?\s*(?:LIVING|GARAGE|ALFRESCO|OUTDOOR|DECK|BALCONY|CARPORT|PORCH|KITCHEN|DINING|LOUNGE|FAMILY|MEALS|ENTRY|FOYER)\s+(\d+\.?\d*)\s*(?:m²|m2)?/gi;
+  let m;
+  while ((m = gfPattern.exec(fullText)) !== null) {
+    const val = parseFloat(m[1]);
+    if (val > 1 && val < 500) groundFloorArea += val;
+  }
+
+  // First floor patterns
+  const ffPattern = /\b(?:FF|FIRST\s*FLOOR|UPPER\s*FLOOR|UPPER\s*LEVEL)\s*(?:LIVING|BED(?:ROOM)?|BATH(?:ROOM)?|ENSUITE|ROBE|STUDY|SITTING|RETREAT|HALL|BALCONY|LANDING)?\s+(\d+\.?\d*)\s*(?:m²|m2)?/gi;
+  while ((m = ffPattern.exec(fullText)) !== null) {
+    const val = parseFloat(m[1]);
+    if (val > 1 && val < 500) firstFloorArea += val;
+  }
+
+  const totalGrossArea = groundFloorArea + firstFloorArea;
+
+  return {
+    isDuplex, unitCount, isMultiStorey, storeyCount,
+    hasPool, hasCarport,
+    hasEngineeredTimber, hasLouvreWindows,
+    hasFeatureWeatherboard, hasAluminiumBattens, hasRender, hasBreezeBlock,
+    groundFloorArea, firstFloorArea, totalGrossArea,
+  };
 }
 
 // Get element statistics for a page

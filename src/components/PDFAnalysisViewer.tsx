@@ -2,6 +2,7 @@
 // Includes Computer Vision detection for walls, doors, windows
 // Includes Scale Calibration for real-world measurements
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
+import { createPortal } from 'react-dom';
 import * as pdfjsLib from 'pdfjs-dist';
 import { loadPDFFromArrayBuffer, renderPageToCanvas, PDFLoadResult } from '@/lib/pdfService';
 import { Button } from '@/components/ui/button';
@@ -37,6 +38,7 @@ import {
   ZoomIn,
   ZoomOut,
   Maximize2,
+  Minimize2,
   RotateCw,
   Layers,
   Eye,
@@ -70,6 +72,7 @@ import {
   Building,
   Hand,
   GripHorizontal,
+  MousePointer2,
 } from 'lucide-react';
 import { PageAnalysis, PlanAnalysisResult, StandardsReference, MaterialSelection, FloorArea } from '@/lib/aiPlanAnalyzer';
 import { analyzePageImage, CVAnalysisResult, DetectedShape } from '@/lib/cvDetector';
@@ -134,6 +137,8 @@ interface PDFAnalysisViewerProps {
   onMarkupClick?: (markup: DetectionMarkup) => void;
   highlightedItemId?: string | null;
   showMarkups?: boolean;
+  targetPage?: number;      // External page navigation
+  targetPageVersion?: number; // Incremented on every nav request so effect always fires
   // Callbacks for project integration
   onRoomCreated?: (room: MeasuredRoom) => void;
   onCalibrationChanged?: (calibration: ScaleCalibration | null) => void;
@@ -205,6 +210,8 @@ export function PDFAnalysisViewer({
   onMarkupClick,
   highlightedItemId,
   showMarkups = true,
+  targetPage,
+  targetPageVersion,
   onRoomCreated,
   onCalibrationChanged,
   onCalibrationsChanged,
@@ -273,6 +280,17 @@ export function PDFAnalysisViewer({
   const [dragStartPoint, setDragStartPoint] = useState<CalibrationPoint | null>(null);
   const [dragCurrentPoint, setDragCurrentPoint] = useState<CalibrationPoint | null>(null);
 
+  // External page navigation: fires on every version bump so re-clicking same page still works.
+  // Also bumps renderKey so the canvas re-renders even if it was hidden (display:none) when
+  // setCurrentPage fired.
+  useEffect(() => {
+    if (targetPage && targetPage >= 1) {
+      setCurrentPage(targetPage);
+      // Defer renderKey bump so the new page renders once the tab is visible
+      requestAnimationFrame(() => setRenderKey(k => k + 1));
+    }
+  }, [targetPageVersion, targetPage]); // eslint-disable-line react-hooks/exhaustive-deps
+
   // Get calibration for current page
   const currentCalibration = calibrations[currentPage] || null;
 
@@ -287,6 +305,18 @@ export function PDFAnalysisViewer({
 
   // Extraction summary panel state
   const [showExtractionSummary, setShowExtractionSummary] = useState(true);
+
+  // Fullscreen takeoff mode
+  const [isFullscreen, setIsFullscreen] = useState(false);
+
+  // Escape exits fullscreen
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && isFullscreen) setIsFullscreen(false);
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [isFullscreen]);
 
   // Load PDF document using centralized service
   useEffect(() => {
@@ -946,10 +976,15 @@ export function PDFAnalysisViewer({
   // Get current page analysis
   const currentPageAnalysis = pages.find(p => p.pageNumber === currentPage);
 
-  return (
-    <div className="flex flex-col w-full">
+  const mainContent = (
+    <div className={isFullscreen
+      ? 'fixed inset-0 z-[9999] flex flex-col bg-gray-950 text-white'
+      : 'flex flex-col w-full'
+    }>
       {/* Toolbar */}
-      <div className="flex items-center justify-between p-3 border-b bg-muted/30 flex-wrap gap-2">
+      <div className={`flex items-center justify-between p-3 border-b flex-wrap gap-2 ${
+        isFullscreen ? 'bg-gray-900 border-gray-700' : 'bg-muted/30'
+      }`}>
         <div className="flex items-center gap-2 flex-wrap">
           {/* Page Navigation */}
           <div className="flex items-center gap-1 bg-background rounded-md border px-1">
@@ -1162,11 +1197,30 @@ export function PDFAnalysisViewer({
               {currentPageAnalysis.drawingType.replace('_', ' ')}
             </Badge>
           )}
+
+          {/* Fullscreen Toggle */}
+          <div className="h-6 w-px bg-border mx-1" />
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                variant={isFullscreen ? 'secondary' : 'outline'}
+                size="sm"
+                onClick={() => setIsFullscreen(f => !f)}
+                className={`h-8 font-medium ${isFullscreen ? 'bg-blue-600 hover:bg-blue-700 text-white border-0' : 'border-blue-300 text-blue-600 hover:bg-blue-50'}`}
+              >
+                {isFullscreen ? <Minimize2 className="h-4 w-4 mr-1" /> : <Maximize2 className="h-4 w-4 mr-1" />}
+                {isFullscreen ? 'Exit' : 'Full Screen'}
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>
+              <p>{isFullscreen ? 'Exit fullscreen takeoff mode' : 'Enter fullscreen for takeoff — tools float over the plan'}</p>
+            </TooltipContent>
+          </Tooltip>
         </div>
       </div>
 
-      {/* CV Analysis Progress */}
-      {isCvAnalyzing && (
+      {/* CV Analysis Progress — hidden in fullscreen (status shown in floating bar) */}
+      {isCvAnalyzing && !isFullscreen && (
         <div className="px-4 py-2 border-b bg-blue-50 dark:bg-blue-950">
           <div className="flex items-center gap-3">
             <Scan className="h-4 w-4 text-blue-600 animate-pulse" />
@@ -1179,8 +1233,8 @@ export function PDFAnalysisViewer({
         </div>
       )}
 
-      {/* Measurement Mode Instructions */}
-      {measurementMode !== 'none' && measurementMode !== 'pan' && (
+      {/* Measurement Mode Instructions — hidden in fullscreen (shown as floating chip instead) */}
+      {!isFullscreen && measurementMode !== 'none' && measurementMode !== 'pan' && (
         <div className={`px-4 py-2 border-b ${
           measurementMode === 'calibrate' ? 'bg-amber-50 dark:bg-amber-950 border-amber-200 dark:border-amber-800' :
           measurementMode === 'distance' ? 'bg-blue-50 dark:bg-blue-950 border-blue-200 dark:border-blue-800' :
@@ -1241,15 +1295,171 @@ export function PDFAnalysisViewer({
       {/* PDF Canvas Container - Full Width with pan support */}
       <div
         ref={containerRef}
-        className={`overflow-auto bg-gray-200 dark:bg-gray-800 ${
-          measurementMode === 'pan' ? (isPanning ? 'cursor-grabbing' : 'cursor-grab') : ''
-        }`}
-        style={{ maxHeight: '70vh' }}
+        className={`relative overflow-auto ${
+          isFullscreen ? 'flex-1 bg-gray-900' : 'bg-gray-200 dark:bg-gray-800'
+        } ${measurementMode === 'pan' ? (isPanning ? 'cursor-grabbing' : 'cursor-grab') : ''}`}
+        style={isFullscreen ? undefined : { maxHeight: '70vh' }}
         onMouseDown={handlePanStart}
         onMouseMove={handlePanMove}
         onMouseUp={handlePanEnd}
         onMouseLeave={handlePanEnd}
       >
+        {/* ── FULLSCREEN FLOATING TOOL PALETTE ── */}
+        {isFullscreen && (
+          <div className="absolute left-3 top-1/2 -translate-y-1/2 flex flex-col gap-1 bg-gray-800/95 backdrop-blur-sm rounded-2xl p-2 shadow-2xl border border-white/10 z-30 select-none">
+            {/* Pointer */}
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <button
+                  onClick={() => setMeasurementMode('none')}
+                  className={`w-10 h-10 rounded-xl flex items-center justify-center transition-all ${
+                    measurementMode === 'none' ? 'bg-blue-600 text-white shadow-lg' : 'text-gray-300 hover:bg-gray-700 hover:text-white'
+                  }`}
+                >
+                  <MousePointer2 className="h-5 w-5" />
+                </button>
+              </TooltipTrigger>
+              <TooltipContent side="right"><p>Select / View</p></TooltipContent>
+            </Tooltip>
+
+            {/* Pan */}
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <button
+                  onClick={() => setMeasurementMode(measurementMode === 'pan' ? 'none' : 'pan')}
+                  className={`w-10 h-10 rounded-xl flex items-center justify-center transition-all ${
+                    measurementMode === 'pan' ? 'bg-blue-600 text-white shadow-lg' : 'text-gray-300 hover:bg-gray-700 hover:text-white'
+                  }`}
+                >
+                  <Hand className="h-5 w-5" />
+                </button>
+              </TooltipTrigger>
+              <TooltipContent side="right"><p>Pan / Move (drag)</p></TooltipContent>
+            </Tooltip>
+
+            <div className="h-px bg-white/10 mx-1 my-0.5" />
+
+            {/* Calibrate */}
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <button
+                  onClick={() => setMeasurementMode(measurementMode === 'calibrate' ? 'none' : 'calibrate')}
+                  className={`w-10 h-10 rounded-xl flex items-center justify-center transition-all relative ${
+                    measurementMode === 'calibrate' ? 'bg-amber-500 text-white shadow-lg' :
+                    currentCalibration ? 'text-green-400 hover:bg-gray-700' : 'text-amber-400 hover:bg-gray-700 hover:text-amber-300'
+                  }`}
+                >
+                  <Ruler className="h-5 w-5" />
+                  {!currentCalibration && (
+                    <span className="absolute -top-1 -right-1 w-3 h-3 bg-amber-500 rounded-full border border-gray-800" />
+                  )}
+                </button>
+              </TooltipTrigger>
+              <TooltipContent side="right">
+                <p>{currentCalibration ? `Calibrated: ${currentCalibration.scale}` : 'Set scale (required first)'}</p>
+              </TooltipContent>
+            </Tooltip>
+
+            {/* Distance */}
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <button
+                  onClick={() => currentCalibration && setMeasurementMode(measurementMode === 'distance' ? 'none' : 'distance')}
+                  disabled={!currentCalibration}
+                  className={`w-10 h-10 rounded-xl flex items-center justify-center transition-all ${
+                    measurementMode === 'distance' ? 'bg-blue-600 text-white shadow-lg' :
+                    currentCalibration ? 'text-gray-300 hover:bg-gray-700 hover:text-white' : 'text-gray-600 cursor-not-allowed'
+                  }`}
+                >
+                  <Move className="h-5 w-5" />
+                </button>
+              </TooltipTrigger>
+              <TooltipContent side="right"><p>{currentCalibration ? 'Measure distance' : 'Calibrate first'}</p></TooltipContent>
+            </Tooltip>
+
+            {/* Area */}
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <button
+                  onClick={() => currentCalibration && setMeasurementMode(measurementMode === 'area' ? 'none' : 'area')}
+                  disabled={!currentCalibration}
+                  className={`w-10 h-10 rounded-xl flex items-center justify-center transition-all ${
+                    measurementMode === 'area' ? 'bg-green-600 text-white shadow-lg' :
+                    currentCalibration ? 'text-gray-300 hover:bg-gray-700 hover:text-white' : 'text-gray-600 cursor-not-allowed'
+                  }`}
+                >
+                  <PenTool className="h-5 w-5" />
+                </button>
+              </TooltipTrigger>
+              <TooltipContent side="right"><p>{currentCalibration ? 'Measure area (m²)' : 'Calibrate first'}</p></TooltipContent>
+            </Tooltip>
+
+            <div className="h-px bg-white/10 mx-1 my-0.5" />
+
+            {/* Zoom In */}
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <button onClick={zoomIn} className="w-10 h-10 rounded-xl flex items-center justify-center text-gray-300 hover:bg-gray-700 hover:text-white transition-all">
+                  <ZoomIn className="h-5 w-5" />
+                </button>
+              </TooltipTrigger>
+              <TooltipContent side="right"><p>Zoom in</p></TooltipContent>
+            </Tooltip>
+
+            {/* Zoom Out */}
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <button onClick={zoomOut} className="w-10 h-10 rounded-xl flex items-center justify-center text-gray-300 hover:bg-gray-700 hover:text-white transition-all">
+                  <ZoomOut className="h-5 w-5" />
+                </button>
+              </TooltipTrigger>
+              <TooltipContent side="right"><p>Zoom out</p></TooltipContent>
+            </Tooltip>
+
+            {/* Reset zoom */}
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <button onClick={resetZoom} className="w-10 h-10 rounded-xl flex items-center justify-center text-gray-300 hover:bg-gray-700 hover:text-white transition-all text-[10px] font-bold">
+                  {Math.round(zoom * 100)}%
+                </button>
+              </TooltipTrigger>
+              <TooltipContent side="right"><p>Reset zoom ({Math.round(zoom * 100)}%)</p></TooltipContent>
+            </Tooltip>
+          </div>
+        )}
+
+        {/* ── FULLSCREEN FLOATING STATUS BAR (bottom-center, when tool active) ── */}
+        {isFullscreen && measurementMode !== 'none' && (
+          <div className={`absolute bottom-4 left-1/2 -translate-x-1/2 z-30 flex items-center gap-3 px-4 py-2 rounded-full shadow-2xl border text-sm font-medium backdrop-blur-sm ${
+            measurementMode === 'calibrate' ? 'bg-amber-600/90 border-amber-400 text-white' :
+            measurementMode === 'distance' ? 'bg-blue-600/90 border-blue-400 text-white' :
+            measurementMode === 'area' ? 'bg-green-600/90 border-green-400 text-white' :
+            'bg-gray-800/90 border-gray-600 text-gray-200'
+          }`}>
+            {measurementMode === 'calibrate' && <><Ruler className="h-4 w-4" />{calibrationPoints.length === 0 ? 'Click first point' : calibrationPoints.length === 1 ? 'Click second point' : 'Enter distance'}</>}
+            {measurementMode === 'distance' && <><Move className="h-4 w-4" />{isDragging ? 'Release to complete' : 'Click and drag to measure'}</>}
+            {measurementMode === 'area' && <><PenTool className="h-4 w-4" />{isDragging ? 'Release to complete area' : 'Click and drag to draw area'}</>}
+            {measurementMode === 'pan' && <><Hand className="h-4 w-4" />Drag to pan · Double-click to reset</>}
+            <button onClick={cancelMeasurement} className="ml-1 opacity-70 hover:opacity-100">
+              <X className="h-3.5 w-3.5" />
+            </button>
+          </div>
+        )}
+
+        {/* ── FULLSCREEN PAGE NAV (bottom-right) ── */}
+        {isFullscreen && (
+          <div className="absolute bottom-4 right-4 z-30 flex items-center gap-1 bg-gray-800/95 backdrop-blur-sm rounded-full px-2 py-1 shadow-xl border border-white/10">
+            <button onClick={() => goToPage(currentPage - 1)} disabled={currentPage <= 1} className="w-7 h-7 flex items-center justify-center rounded-full text-gray-300 hover:bg-gray-700 disabled:opacity-30 transition-all">
+              <ChevronLeft className="h-4 w-4" />
+            </button>
+            <span className="text-xs text-gray-200 font-medium min-w-[70px] text-center">
+              {currentPage} / {totalPages}
+            </span>
+            <button onClick={() => goToPage(currentPage + 1)} disabled={currentPage >= totalPages} className="w-7 h-7 flex items-center justify-center rounded-full text-gray-300 hover:bg-gray-700 disabled:opacity-30 transition-all">
+              <ChevronRight className="h-4 w-4" />
+            </button>
+          </div>
+        )}
         <div className="relative p-4 flex justify-center">
           {/* Loading state */}
           {isLoading && !loadError && (
@@ -1702,8 +1912,8 @@ export function PDFAnalysisViewer({
         </div>
       </div>
 
-      {/* Adaptive Legend - Shows detected types from both Text and CV */}
-      {(showTextMarkups || showCvMarkups) && (
+      {/* Adaptive Legend - hidden in fullscreen */}
+      {!isFullscreen && (showTextMarkups || showCvMarkups) && (
         <div className="p-3 border-t bg-muted/30">
           <div className="flex items-center justify-between mb-2 flex-wrap gap-2">
             <div className="flex items-center gap-2">
@@ -1954,8 +2164,8 @@ export function PDFAnalysisViewer({
         </div>
       )}
 
-      {/* Page Thumbnails - Only if multiple pages */}
-      {totalPages > 1 && (
+      {/* Page Thumbnails - Only if multiple pages, hidden in fullscreen */}
+      {totalPages > 1 && !isFullscreen && (
         <div className="border-t p-3 bg-background">
           <ScrollArea className="w-full">
             <div className="flex gap-2">
@@ -2016,8 +2226,8 @@ export function PDFAnalysisViewer({
         </div>
       )}
 
-      {/* Measurements Panel - Shows completed measurements */}
-      {(measuredLines.length > 0 || measuredRooms.length > 0) && (
+      {/* Measurements Panel - Shows completed measurements, hidden in fullscreen */}
+      {!isFullscreen && (measuredLines.length > 0 || measuredRooms.length > 0) && (
         <div className="border-t p-3 bg-muted/30">
           <div className="flex items-center justify-between mb-2">
             <div className="flex items-center gap-2">
@@ -2312,6 +2522,7 @@ export function PDFAnalysisViewer({
       </Dialog>
     </div>
   );
+  return isFullscreen ? createPortal(mainContent, document.body) : mainContent;
 }
 
 export default PDFAnalysisViewer;

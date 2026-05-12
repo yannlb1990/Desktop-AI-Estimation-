@@ -1,15 +1,20 @@
 import { useState, useEffect } from "react";
+import * as pdfjs from "pdfjs-dist";
 import { Card } from "./ui/card";
 import { Badge } from "./ui/badge";
-import { AlertCircle, CheckCircle2, DoorOpen, Trash2, Droplets, ShowerHead } from "lucide-react";
-import { supabase } from "@/integrations/supabase/client";
+import { AlertCircle, DoorOpen, Droplets, ShowerHead } from "lucide-react";
 import { toast } from "sonner";
 import { Skeleton } from "./ui/skeleton";
 import { Alert, AlertDescription } from "./ui/alert";
+import {
+  extractOpeningsAllPages,
+  extractTextFromPDF,
+  countSymbolReferences,
+} from "@/lib/takeoff/pdfTextExtractor";
 
 interface FixturesSummaryProps {
   projectId?: string;
-  planPageId?: string;
+  pdfUrl?: string;
 }
 
 interface DoorSummary {
@@ -42,38 +47,79 @@ interface Summary {
   issues: string[];
 }
 
-export const FixturesSummary = ({ projectId, planPageId }: FixturesSummaryProps) => {
+export const FixturesSummary = ({ pdfUrl }: FixturesSummaryProps) => {
   const [summary, setSummary] = useState<Summary | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
 
   useEffect(() => {
     loadSummary();
-  }, [projectId, planPageId]);
+  }, [pdfUrl]);
 
   const loadSummary = async () => {
-    if (!projectId && !planPageId) {
+    if (!pdfUrl) {
+      setSummary(null);
       setLoading(false);
       return;
     }
 
+    setLoading(true);
     try {
-      setLoading(true);
-      const { data, error } = await supabase.functions.invoke('summarise-fixtures-openings', {
-        body: { projectId, planPageId }
-      });
+      const pdf = await pdfjs.getDocument(pdfUrl).promise;
+      const pageCount = pdf.numPages;
 
-      if (error) throw error;
+      const openings = await extractOpeningsAllPages(pdfUrl, pageCount);
 
-      if (data?.success) {
-        setSummary(data.summary);
+      const fixtures: FixtureCounts = { toilet: 0, basin: 0, shower: 0, sink: 0 };
+      for (let p = 0; p < pageCount; p++) {
+        const texts = await extractTextFromPDF(pdfUrl, p);
+        const refs = countSymbolReferences(texts);
+        fixtures.toilet += refs.toilets || 0;
+        fixtures.basin += refs.basins || 0;
+        fixtures.shower += refs.showers || 0;
       }
+
+      const doors: DoorSummary[] = openings
+        .filter(o => o.type === "door")
+        .map(o => ({
+          schedule_id: o.ref,
+          type: "Door",
+          count: 1,
+          width_mm: o.width ?? null,
+          height_mm: o.height ?? null,
+        }));
+
+      const windows: WindowSummary[] = openings
+        .filter(o => o.type === "window")
+        .map(o => ({
+          schedule_id: o.ref,
+          type: "Window",
+          count: 1,
+          width_mm: o.width ?? null,
+          height_mm: o.height ?? null,
+        }));
+
+      const issues: string[] = [];
+      const noDims = openings.filter(o => !o.width && !o.height);
+      if (noDims.length > 0) {
+        issues.push(`${noDims.length} opening(s) detected without dimensions`);
+      }
+
+      setSummary({ doors, windows, fixtures, issues });
     } catch (error) {
-      console.error('Error loading fixtures summary:', error);
-      toast.error('Failed to load fixtures summary');
+      console.error("Error loading fixtures summary:", error);
+      toast.error("Failed to detect fixtures");
     } finally {
       setLoading(false);
     }
   };
+
+  if (!pdfUrl) {
+    return (
+      <Card className="p-6">
+        <p className="text-muted-foreground">Upload a plan to detect fixtures and openings.</p>
+      </Card>
+    );
+  }
 
   if (loading) {
     return (
@@ -104,7 +150,7 @@ export const FixturesSummary = ({ projectId, planPageId }: FixturesSummaryProps)
       <div className="space-y-6">
         <div>
           <h3 className="text-lg font-semibold mb-4">Fixtures & Openings Summary</h3>
-          
+
           {summary.issues.length > 0 && (
             <Alert className="mb-4">
               <AlertCircle className="h-4 w-4" />
@@ -119,7 +165,6 @@ export const FixturesSummary = ({ projectId, planPageId }: FixturesSummaryProps)
           )}
         </div>
 
-        {/* Doors */}
         {summary.doors.length > 0 && (
           <div>
             <div className="flex items-center gap-2 mb-3">
@@ -134,10 +179,9 @@ export const FixturesSummary = ({ projectId, planPageId }: FixturesSummaryProps)
                       {door.schedule_id || "Unscheduled"}
                     </Badge>
                     <span className="text-sm">
-                      {door.width_mm && door.height_mm 
+                      {door.width_mm && door.height_mm
                         ? `${door.width_mm}mm × ${door.height_mm}mm`
-                        : "No dimensions"
-                      }
+                        : "No dimensions"}
                     </span>
                   </div>
                   <Badge variant="outline">{door.count} ea</Badge>
@@ -147,7 +191,6 @@ export const FixturesSummary = ({ projectId, planPageId }: FixturesSummaryProps)
           </div>
         )}
 
-        {/* Windows */}
         {summary.windows.length > 0 && (
           <div>
             <div className="flex items-center gap-2 mb-3">
@@ -162,10 +205,9 @@ export const FixturesSummary = ({ projectId, planPageId }: FixturesSummaryProps)
                       {window.schedule_id || "Unscheduled"}
                     </Badge>
                     <span className="text-sm">
-                      {window.width_mm && window.height_mm 
+                      {window.width_mm && window.height_mm
                         ? `${window.width_mm}mm × ${window.height_mm}mm`
-                        : "No dimensions"
-                      }
+                        : "No dimensions"}
                     </span>
                   </div>
                   <Badge variant="outline">{window.count} ea</Badge>
@@ -175,7 +217,6 @@ export const FixturesSummary = ({ projectId, planPageId }: FixturesSummaryProps)
           </div>
         )}
 
-        {/* Fixtures */}
         {totalFixtures > 0 && (
           <div>
             <div className="flex items-center gap-2 mb-3">
@@ -201,19 +242,13 @@ export const FixturesSummary = ({ projectId, planPageId }: FixturesSummaryProps)
                   <div className="text-sm font-medium">{summary.fixtures.shower} Showers</div>
                 </div>
               )}
-              {summary.fixtures.sink > 0 && (
-                <div className="p-3 bg-muted/50 rounded-lg text-center">
-                  <div className="text-2xl mb-1">🔧</div>
-                  <div className="text-sm font-medium">{summary.fixtures.sink} Sinks</div>
-                </div>
-              )}
             </div>
           </div>
         )}
 
         {summary.doors.length === 0 && summary.windows.length === 0 && totalFixtures === 0 && (
           <div className="text-center py-8 text-muted-foreground">
-            No symbols detected yet. Run symbol detection on your plan pages.
+            No symbols detected. Check the plan has text-based W/D tags or a window/door schedule.
           </div>
         )}
       </div>

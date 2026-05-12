@@ -119,50 +119,75 @@ const NewProject = () => {
     createProjectWithEstimate(items);
   };
 
+  // Map EstimatedLineItem (AI analyzer format) → EstimateItem (EstimateTemplate format)
+  const convertAnalyzerItems = (items: EstimatedLineItem[]) => {
+    const tradeMap: Record<string, string> = {
+      Carpentry: 'Carpenter', Roofing: 'Roofer', Plasterboard: 'Plasterer',
+      Painting: 'Painter', Tiling: 'Tiler', Concrete: 'Concreter',
+      Plumbing: 'Plumber', Electrical: 'Electrician', Brickwork: 'Bricklayer',
+      Landscaping: 'Landscaper',
+    };
+    const unitMap: Record<string, string> = {
+      LM: 'lm', M2: 'm²', M3: 'm³', count: 'ea', each: 'ea', item: 'ea',
+    };
+    return items.map((item, idx) => ({
+      id: item.id,
+      section_id: null,
+      area: item.area || 'General',
+      trade: tradeMap[item.trade as string] || 'Carpenter',
+      scope_of_work: item.category || 'General',
+      material_type: item.description || '',
+      quantity: item.quantity,
+      unit: unitMap[item.unit] || 'm²',
+      unit_price: item.unitRate ?? 0,
+      labour_hours: item.labourHours ?? 0,
+      labour_rate: 90,
+      material_wastage_pct: 10,
+      labour_wastage_pct: 5,
+      markup_pct: 20,
+      notes: '',
+      expanded: false,
+      item_number: String(idx + 1),
+      isEditing: false,
+      relatedMaterials: [],
+    }));
+  };
+
   const createProjectWithEstimate = async (items: EstimatedLineItem[]) => {
     setIsLoading(true);
     try {
       const validData = projectSchema.parse(formData);
 
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) {
-        toast.error("You must be signed in to create a project");
-        navigate("/auth");
-        return;
-      }
+      const newProject = {
+        id: crypto.randomUUID(),
+        name: validData.name,
+        client_name: validData.client_name || null,
+        site_address: validData.site_address || null,
+        address: validData.site_address || "TBD",
+        state: "NSW",
+        postcode: "0000",
+        plan_file_name: uploadedFile?.name || null,
+        status: "in_progress",
+        created_at: new Date().toISOString(),
+        estimate_items: convertAnalyzerItems(items),
+      };
 
-      const { data: project, error } = await supabase
-        .from("projects")
-        .insert({
-          user_id: user.id,
-          created_by: user.id,
-          name: validData.name,
-          client_name: validData.client_name || null,
-          site_address: validData.site_address || null,
-          address: validData.site_address || "TBD",
-          state: "NSW",
-          postcode: "0000",
-          plan_file_name: uploadedFile?.name || null,
-          status: "in_progress",
-        } as any)
-        .select()
-        .single();
-
-      if (error) throw error;
+      const projects = JSON.parse(localStorage.getItem("local_projects") || "[]");
+      projects.unshift(newProject);
+      localStorage.setItem("local_projects", JSON.stringify(projects));
 
       setAnalysisStep('complete');
       toast.success("Project created with AI-generated estimate!");
 
       setTimeout(() => {
-        navigate(`/project/${project.id}`);
+        navigate(`/project/${newProject.id}`);
       }, 500);
     } catch (error: any) {
       if (error instanceof z.ZodError) {
         toast.error(error.errors[0].message);
       } else {
         console.error("Project creation error:", error);
-        const msg = error?.message || error?.error_description || JSON.stringify(error);
-        toast.error(`Failed to create project: ${msg}`);
+        toast.error("Failed to create project");
       }
     } finally {
       setIsLoading(false);
@@ -201,33 +226,25 @@ const NewProject = () => {
     try {
       const validData = projectSchema.parse(formData);
 
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) {
-        toast.error("You must be signed in to create a project");
-        navigate("/auth");
-        return;
-      }
+      const newProject = {
+        id: crypto.randomUUID(),
+        name: validData.name,
+        client_name: validData.client_name || null,
+        site_address: validData.site_address || null,
+        address: validData.site_address || "TBD",
+        state: "NSW",
+        postcode: "0000",
+        status: "in_progress",
+        created_at: new Date().toISOString(),
+        estimate_items: [],
+      };
 
-      const { data: project, error } = await supabase
-        .from("projects")
-        .insert({
-          user_id: user.id,
-          created_by: user.id,
-          name: validData.name,
-          client_name: validData.client_name || null,
-          site_address: validData.site_address || null,
-          address: validData.site_address || "TBD",
-          state: "NSW",
-          postcode: "0000",
-          status: "in_progress",
-        } as any)
-        .select()
-        .single();
-
-      if (error) throw error;
+      const projects = JSON.parse(localStorage.getItem("local_projects") || "[]");
+      projects.unshift(newProject);
+      localStorage.setItem("local_projects", JSON.stringify(projects));
 
       toast.success("Project created!");
-      navigate(`/project/${project.id}`);
+      navigate(`/project/${newProject.id}`);
     } catch (error: any) {
       if (error instanceof z.ZodError) {
         toast.error(error.errors[0].message);
@@ -305,6 +322,17 @@ const NewProject = () => {
                 <span>Generating estimate</span>
               </div>
             </div>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                setIsAnalyzing(false);
+                setAnalysisStep('upload');
+                setUploadedFile(null);
+              }}
+            >
+              Cancel — go back
+            </Button>
           </div>
         </Card>
       </div>

@@ -267,6 +267,36 @@ export function AIPlanAnalyzer({
   // PDF viewer state
   const [highlightedItemId, setHighlightedItemId] = useState<string | null>(null);
   const [viewerPage, setViewerPage] = useState(1);
+  const [viewerNavVersion, setViewerNavVersion] = useState(0);
+
+  // Navigate the PDF viewer to a specific page — always fires even if page hasn't changed
+  const navigateViewer = useCallback((page: number) => {
+    setViewerPage(page);
+    setViewerNavVersion(v => v + 1);
+    setActiveTab('drawings');
+  }, []);
+
+  // Expanded page card in the Drawings tab page list
+  const [expandedPageIdx, setExpandedPageIdx] = useState<number | null>(null);
+
+  // Jump to drawings tab at the page where a symbol type is most concentrated
+  const jumpToDrawing = useCallback((symbolType: string | null, drawingType?: string) => {
+    let targetPage = 1;
+    if (symbolType) {
+      const best = analysis.pages
+        .map(p => ({ pageNumber: p.pageNumber, count: p.symbols.filter(s => s.type === symbolType).length }))
+        .reduce((a, b) => b.count > a.count ? b : a, { pageNumber: 1, count: 0 });
+      if (best.count > 0) targetPage = best.pageNumber;
+    } else if (drawingType) {
+      const pg = analysis.pages.find(p => p.drawingType === drawingType);
+      if (pg) targetPage = pg.pageNumber;
+    } else {
+      // Fall back to first floor plan
+      const fp = analysis.pages.find(p => p.drawingType === 'floor_plan');
+      if (fp) targetPage = fp.pageNumber;
+    }
+    navigateViewer(targetPage);
+  }, [analysis.pages, navigateViewer]);
 
   // Scope gap detection
   const [scopeGaps, setScopeGaps] = useState<ScopeGap[]>([]);
@@ -688,7 +718,7 @@ export function AIPlanAnalyzer({
               className="h-8 w-20 text-right text-sm font-mono"
             />
           ) : (
-            <span className="font-mono text-sm">{item.quantity.toFixed(1)}</span>
+            <span className="font-mono text-sm">{(item.quantity ?? 0).toFixed(1)}</span>
           )}
         </TableCell>
 
@@ -723,7 +753,7 @@ export function AIPlanAnalyzer({
               className="h-8 w-24 text-right text-sm font-mono"
             />
           ) : (
-            <span className="font-mono text-sm">${item.unitRate.toFixed(2)}</span>
+            <span className="font-mono text-sm">${(item.unitRate ?? 0).toFixed(2)}</span>
           )}
         </TableCell>
 
@@ -785,8 +815,7 @@ export function AIPlanAnalyzer({
               <button
                 className="text-[10px] text-blue-600 hover:text-blue-800 hover:underline"
                 onClick={() => {
-                  setActiveTab('drawings');
-                  setViewerPage(item.primarySource!.pageNumber);
+                  navigateViewer(item.primarySource!.pageNumber);
                   setHighlightedItemId(item.id);
                 }}
                 title={`Go to page ${item.primarySource.pageNumber}`}
@@ -1102,8 +1131,8 @@ export function AIPlanAnalyzer({
             {/* Construction Type */}
             <Card className="p-4">
               <div className="flex items-center gap-3">
-                <div className="p-2 rounded-lg bg-secondary/10">
-                  <Building2 className="h-5 w-5 text-secondary" />
+                <div className="p-2 rounded-lg bg-primary/10">
+                  <Building2 className="h-5 w-5 text-primary" />
                 </div>
                 <div>
                   <p className="text-sm text-muted-foreground">Construction</p>
@@ -1181,7 +1210,10 @@ export function AIPlanAnalyzer({
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               {/* Construction Type Detection */}
-              <Card className="p-4 border-2">
+              <Card
+                className="p-4 border-2 cursor-pointer hover:border-primary/60 hover:bg-muted/20 transition-all group"
+                onClick={() => jumpToDrawing(null, 'floor_plan')}
+              >
                 <h4 className="font-medium mb-3 flex items-center gap-2">
                   <Building2 className="h-4 w-4 text-primary" />
                   Construction Type
@@ -1198,10 +1230,16 @@ export function AIPlanAnalyzer({
                     "brick veneer" or construction notes in the drawings.
                   </div>
                 </div>
+                <div className="mt-3 pt-2 border-t border-dashed flex items-center gap-1 text-xs text-primary opacity-0 group-hover:opacity-100 transition-opacity">
+                  <Eye className="h-3 w-3" /> View in drawings
+                </div>
               </Card>
 
               {/* Room Detection */}
-              <Card className="p-4 border-2">
+              <Card
+                className="p-4 border-2 cursor-pointer hover:border-primary/60 hover:bg-muted/20 transition-all group"
+                onClick={() => jumpToDrawing(null, 'floor_plan')}
+              >
                 <h4 className="font-medium mb-3 flex items-center gap-2">
                   <Grid3X3 className="h-4 w-4 text-primary" />
                   Rooms Detected
@@ -1209,20 +1247,41 @@ export function AIPlanAnalyzer({
                 <div className="space-y-2 text-sm">
                   <div className="flex justify-between">
                     <span className="text-muted-foreground">Total rooms:</span>
-                    <span className="font-mono">{detectionSummary.rooms}</span>
+                    <span className="font-mono font-semibold">{detectionSummary.rooms}</span>
                   </div>
                   <div className="flex justify-between">
                     <span className="text-muted-foreground">Wet areas:</span>
                     <span className="font-mono">{detectionSummary.wetRooms}</span>
                   </div>
-                  <div className="text-xs text-muted-foreground mt-2 p-2 bg-muted rounded">
+                  {/* Compact room name list */}
+                  {analysis.pages.flatMap(p => p.rooms).length > 0 && (
+                    <div className="flex flex-wrap gap-1 pt-1">
+                      {Array.from(new Set(analysis.pages.flatMap(p => p.rooms.map(r => r.name))))
+                        .slice(0, 12)
+                        .map((name, i) => (
+                          <Badge key={i} variant="outline" className="text-[10px] py-0">{name}</Badge>
+                        ))}
+                      {new Set(analysis.pages.flatMap(p => p.rooms.map(r => r.name))).size > 12 && (
+                        <Badge variant="outline" className="text-[10px] py-0">
+                          +{new Set(analysis.pages.flatMap(p => p.rooms.map(r => r.name))).size - 12} more
+                        </Badge>
+                      )}
+                    </div>
+                  )}
+                  <div className="text-xs text-muted-foreground p-2 bg-muted rounded">
                     <strong>Used for:</strong> Waterproofing, tiling, and plumbing estimates
                   </div>
+                </div>
+                <div className="mt-3 pt-2 border-t border-dashed flex items-center gap-1 text-xs text-primary opacity-0 group-hover:opacity-100 transition-opacity">
+                  <Eye className="h-3 w-3" /> View floor plan
                 </div>
               </Card>
 
               {/* Doors */}
-              <Card className="p-4 border-2">
+              <Card
+                className="p-4 border-2 cursor-pointer hover:border-primary/60 hover:bg-muted/20 transition-all group"
+                onClick={() => jumpToDrawing('door')}
+              >
                 <h4 className="font-medium mb-3 flex items-center gap-2">
                   <DoorOpen className="h-4 w-4 text-primary" />
                   Doors
@@ -1234,16 +1293,36 @@ export function AIPlanAnalyzer({
                   </div>
                   <div className="flex justify-between">
                     <span className="text-muted-foreground">From symbols (D01, D02...):</span>
-                    <span className="font-mono">{detectionSummary.doors}</span>
+                    <span className="font-mono font-semibold">{detectionSummary.doors}</span>
                   </div>
-                  <div className="text-xs text-muted-foreground mt-2 p-2 bg-muted rounded">
+                  {/* Symbol labels found */}
+                  {analysis.pages.flatMap(p => p.symbols.filter(s => s.type === 'door')).length > 0 && (
+                    <div className="flex flex-wrap gap-1 pt-1">
+                      {Array.from(new Set(
+                        analysis.pages.flatMap(p => p.symbols.filter(s => s.type === 'door').map(s => s.label))
+                      )).slice(0, 10).map((label, i) => (
+                        <Badge key={i} variant="outline" className="text-[10px] py-0 font-mono">{label}</Badge>
+                      ))}
+                    </div>
+                  )}
+                  <div className="text-xs text-muted-foreground p-2 bg-muted rounded">
                     <strong>Source priority:</strong> Schedule data is used if found, otherwise symbol count
                   </div>
+                </div>
+                <div className="mt-3 pt-2 border-t border-dashed flex items-center gap-1 text-xs text-primary opacity-0 group-hover:opacity-100 transition-opacity">
+                  <Eye className="h-3 w-3" /> View on plan — page {
+                    analysis.pages
+                      .map(p => ({ pageNumber: p.pageNumber, count: p.symbols.filter(s => s.type === 'door').length }))
+                      .reduce((a, b) => b.count > a.count ? b : a, { pageNumber: 1, count: 0 }).pageNumber
+                  }
                 </div>
               </Card>
 
               {/* Windows */}
-              <Card className="p-4 border-2">
+              <Card
+                className="p-4 border-2 cursor-pointer hover:border-primary/60 hover:bg-muted/20 transition-all group"
+                onClick={() => jumpToDrawing('window')}
+              >
                 <h4 className="font-medium mb-3 flex items-center gap-2">
                   <Square className="h-4 w-4 text-primary" />
                   Windows
@@ -1255,16 +1334,35 @@ export function AIPlanAnalyzer({
                   </div>
                   <div className="flex justify-between">
                     <span className="text-muted-foreground">From symbols (W01, W02...):</span>
-                    <span className="font-mono">{detectionSummary.windows}</span>
+                    <span className="font-mono font-semibold">{detectionSummary.windows}</span>
                   </div>
-                  <div className="text-xs text-muted-foreground mt-2 p-2 bg-muted rounded">
+                  {analysis.pages.flatMap(p => p.symbols.filter(s => s.type === 'window')).length > 0 && (
+                    <div className="flex flex-wrap gap-1 pt-1">
+                      {Array.from(new Set(
+                        analysis.pages.flatMap(p => p.symbols.filter(s => s.type === 'window').map(s => s.label))
+                      )).slice(0, 10).map((label, i) => (
+                        <Badge key={i} variant="outline" className="text-[10px] py-0 font-mono">{label}</Badge>
+                      ))}
+                    </div>
+                  )}
+                  <div className="text-xs text-muted-foreground p-2 bg-muted rounded">
                     <strong>Source priority:</strong> Schedule data is used if found, otherwise symbol count
                   </div>
+                </div>
+                <div className="mt-3 pt-2 border-t border-dashed flex items-center gap-1 text-xs text-primary opacity-0 group-hover:opacity-100 transition-opacity">
+                  <Eye className="h-3 w-3" /> View on plan — page {
+                    analysis.pages
+                      .map(p => ({ pageNumber: p.pageNumber, count: p.symbols.filter(s => s.type === 'window').length }))
+                      .reduce((a, b) => b.count > a.count ? b : a, { pageNumber: 1, count: 0 }).pageNumber
+                  }
                 </div>
               </Card>
 
               {/* Electrical */}
-              <Card className="p-4 border-2">
+              <Card
+                className="p-4 border-2 cursor-pointer hover:border-primary/60 hover:bg-muted/20 transition-all group"
+                onClick={() => jumpToDrawing('power_point')}
+              >
                 <h4 className="font-medium mb-3 flex items-center gap-2">
                   <Zap className="h-4 w-4 text-primary" />
                   Electrical
@@ -1278,14 +1376,29 @@ export function AIPlanAnalyzer({
                     <span className="text-muted-foreground">Light points:</span>
                     <span className="font-mono">{detectionSummary.lights || 'Estimated 20'}</span>
                   </div>
-                  <div className="text-xs text-muted-foreground mt-2 p-2 bg-muted rounded">
+                  {analysis.electricalSummary && Object.keys(analysis.electricalSummary).length > 0 && (
+                    <div className="flex flex-wrap gap-1 pt-1">
+                      {Object.entries(analysis.electricalSummary).slice(0, 8).map(([key, count]) => (
+                        <Badge key={key} variant="secondary" className="text-[10px] py-0">
+                          {key}: {count}
+                        </Badge>
+                      ))}
+                    </div>
+                  )}
+                  <div className="text-xs text-muted-foreground p-2 bg-muted rounded">
                     <strong>Note:</strong> If not detected, typical residential quantities are estimated
                   </div>
+                </div>
+                <div className="mt-3 pt-2 border-t border-dashed flex items-center gap-1 text-xs text-primary opacity-0 group-hover:opacity-100 transition-opacity">
+                  <Eye className="h-3 w-3" /> View electrical plan
                 </div>
               </Card>
 
               {/* Plumbing */}
-              <Card className="p-4 border-2">
+              <Card
+                className="p-4 border-2 cursor-pointer hover:border-primary/60 hover:bg-muted/20 transition-all group"
+                onClick={() => jumpToDrawing('toilet')}
+              >
                 <h4 className="font-medium mb-3 flex items-center gap-2">
                   <Droplets className="h-4 w-4 text-primary" />
                   Plumbing Fixtures
@@ -1303,6 +1416,16 @@ export function AIPlanAnalyzer({
                     <span className="text-muted-foreground">Showers:</span>
                     <span className="font-mono">{detectionSummary.showers}</span>
                   </div>
+                  <div className="text-xs text-muted-foreground p-2 bg-muted rounded">
+                    <strong>Used for:</strong> Bathroom & kitchen plumbing estimates
+                  </div>
+                </div>
+                <div className="mt-3 pt-2 border-t border-dashed flex items-center gap-1 text-xs text-primary opacity-0 group-hover:opacity-100 transition-opacity">
+                  <Eye className="h-3 w-3" /> View on plan — page {
+                    analysis.pages
+                      .map(p => ({ pageNumber: p.pageNumber, count: p.symbols.filter(s => ['toilet','sink','shower'].includes(s.type)).length }))
+                      .reduce((a, b) => b.count > a.count ? b : a, { pageNumber: 1, count: 0 }).pageNumber
+                  }
                 </div>
               </Card>
             </div>
@@ -1360,6 +1483,8 @@ export function AIPlanAnalyzer({
                   pages={analysis.pages}
                   analysisResult={analysis}
                   highlightedItemId={highlightedItemId}
+                  targetPage={viewerPage}
+                  targetPageVersion={viewerNavVersion}
                   onMarkupClick={(markup) => {
                     setHighlightedItemId(markup.linkedEstimateId || null);
                     if (markup.linkedEstimateId) {
@@ -1382,47 +1507,259 @@ export function AIPlanAnalyzer({
                   Analyzed Pages ({analysis.pages.length})
                 </h3>
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
-                  {analysis.pages.map((page, idx) => (
-                    <div
-                      key={idx}
-                      className="p-3 border rounded-lg hover:bg-muted/50 cursor-pointer transition-colors"
-                      onClick={() => setViewerPage(page.pageNumber)}
-                    >
-                      <div className="flex items-center gap-3">
-                        {DRAWING_TYPE_ICONS[page.drawingType]}
-                        <div className="flex-1 min-w-0">
-                          <p className="font-medium text-sm truncate">
-                            Page {page.pageNumber}: {DRAWING_TYPE_LABELS[page.drawingType]}
-                          </p>
-                          {page.drawingTitle && (
-                            <p className="text-xs text-muted-foreground truncate">{page.drawingTitle}</p>
-                          )}
-                        </div>
-                        <Badge variant="outline" className="text-xs flex-shrink-0">
-                          {Math.round(page.confidence * 100)}%
-                        </Badge>
-                      </div>
+                  {analysis.pages.map((page, idx) => {
+                    const isExpanded = expandedPageIdx === idx;
+                    const symbolsByType = page.symbols.reduce((acc, s) => {
+                      const key = s.type;
+                      if (!acc[key]) acc[key] = [];
+                      acc[key].push(s);
+                      return acc;
+                    }, {} as Record<string, typeof page.symbols>);
+                    const SYMBOL_TYPE_LABEL: Record<string, string> = {
+                      door: 'Doors', window: 'Windows', power_point: 'Power Points',
+                      light: 'Lights', switch: 'Switches', toilet: 'Toilets', sink: 'Basins',
+                      shower: 'Showers', appliance: 'Appliances', site_element: 'Site Elements', other: 'Other',
+                    };
 
-                      {/* Quick stats */}
-                      <div className="mt-2 flex gap-2 flex-wrap">
-                        {page.rooms.length > 0 && (
-                          <Badge variant="secondary" className="text-[10px]">
-                            {page.rooms.length} rooms
-                          </Badge>
-                        )}
-                        {page.symbols.length > 0 && (
-                          <Badge variant="secondary" className="text-[10px]">
-                            {page.symbols.length} symbols
-                          </Badge>
-                        )}
-                        {page.elements.length > 0 && (
-                          <Badge variant="secondary" className="text-[10px]">
-                            {page.elements.length} elements
-                          </Badge>
+                    // Per-page estimation detail
+                    const pageDoors = page.symbols.filter(s => s.type === 'door');
+                    const pageWindows = page.symbols.filter(s => s.type === 'window');
+                    const pageText = page.textContent.join(' ');
+                    const framingMatches = pageText.match(/\b(?:70|90|140|45)\s*mm\s*(?:wall\s*)?frames?/gi) || [];
+                    const framingFound = [...new Set(framingMatches.map(m => m.trim().toUpperCase()))];
+                    const insMatch = pageText.match(/R\d+\.\d+\s*(?:wall|ceiling)\s*batts?/gi) || [];
+                    const insFound = [...new Set(insMatch.map(m => m.trim()))];
+                    const specDetections: { label: string; tag?: string }[] = [
+                      { label: 'Knotwood battens', tag: 'EXT' },
+                      { label: 'Linea/Weatherboard', tag: 'EXT' },
+                      { label: 'Render', tag: 'EXT' },
+                      { label: 'Brick veneer', tag: 'EXT' },
+                      { label: 'Louvre windows', tag: 'WIN' },
+                      { label: 'Stacker door', tag: 'WIN' },
+                      { label: 'Garage door', tag: 'WIN' },
+                      { label: 'Plasterboard lining', tag: 'INT' },
+                      { label: 'Eng. timber floor', tag: 'FLR' },
+                      { label: 'Tiles', tag: 'FLR' },
+                      { label: 'Carpet', tag: 'FLR' },
+                      { label: 'Pool', tag: 'EXT' },
+                      { label: 'Driveway', tag: 'SITE' },
+                    ].filter(({ label }) => {
+                      const kw = label.split('/')[0].toLowerCase().replace(/[^a-z]/g, '.?');
+                      return new RegExp(kw, 'i').test(pageText);
+                    });
+                    const pageMats = (analysis.materialSelections || []).filter(m => m.pageIndex === page.pageIndex);
+
+                    return (
+                      <div
+                        key={idx}
+                        className={`border rounded-lg transition-all ${isExpanded ? 'border-primary/50 bg-muted/10 col-span-1 sm:col-span-2' : 'hover:border-primary/30 hover:bg-muted/30'}`}
+                      >
+                        {/* Card header */}
+                        <div
+                          className="p-3 cursor-pointer"
+                          onClick={() => {
+                            navigateViewer(page.pageNumber);
+                            setExpandedPageIdx(isExpanded ? null : idx);
+                          }}
+                        >
+                          <div className="flex items-center gap-2">
+                            {DRAWING_TYPE_ICONS[page.drawingType]}
+                            <div className="flex-1 min-w-0">
+                              <p className="font-medium text-sm line-clamp-1">
+                                Page {page.pageNumber}: {DRAWING_TYPE_LABELS[page.drawingType]}
+                              </p>
+                              {page.drawingTitle && (
+                                <p className="text-xs text-muted-foreground line-clamp-2 leading-tight">{page.drawingTitle}</p>
+                              )}
+                            </div>
+                            <div className="flex items-center gap-1 shrink-0">
+                              <Badge variant="outline" className="text-xs">
+                                {Math.round(page.confidence * 100)}%
+                              </Badge>
+                              {isExpanded
+                                ? <ChevronDown className="h-3 w-3 text-muted-foreground" />
+                                : <ChevronRight className="h-3 w-3 text-muted-foreground" />
+                              }
+                            </div>
+                          </div>
+
+                          {/* Quick stats badges — clickable */}
+                          <div className="mt-2 flex gap-1.5 flex-wrap">
+                            {page.rooms.length > 0 && (
+                              <Badge
+                                variant={isExpanded ? 'default' : 'secondary'}
+                                className="text-[10px] cursor-pointer hover:bg-primary hover:text-primary-foreground transition-colors"
+                                onClick={(e) => { e.stopPropagation(); navigateViewer(page.pageNumber); setExpandedPageIdx(idx); }}
+                              >
+                                {page.rooms.length} rooms
+                              </Badge>
+                            )}
+                            {page.symbols.length > 0 && (
+                              <Badge
+                                variant={isExpanded ? 'default' : 'secondary'}
+                                className="text-[10px] cursor-pointer hover:bg-primary hover:text-primary-foreground transition-colors"
+                                onClick={(e) => { e.stopPropagation(); navigateViewer(page.pageNumber); setExpandedPageIdx(idx); }}
+                              >
+                                {page.symbols.length} symbols
+                              </Badge>
+                            )}
+                            {page.elements.length > 0 && (
+                              <Badge
+                                variant={isExpanded ? 'default' : 'secondary'}
+                                className="text-[10px] cursor-pointer hover:bg-primary hover:text-primary-foreground transition-colors"
+                                onClick={(e) => { e.stopPropagation(); navigateViewer(page.pageNumber); setExpandedPageIdx(idx); }}
+                              >
+                                {page.elements.length} elements
+                              </Badge>
+                            )}
+                          </div>
+                        </div>
+
+                        {/* Expanded detail panel — estimation-relevant per page */}
+                        {isExpanded && (
+                          <div className="border-t px-3 pb-3 pt-2 space-y-2.5 text-xs">
+
+                            {/* Doors + Windows with schedule cross-reference */}
+                            {(pageDoors.length > 0 || pageWindows.length > 0) && (
+                              <div className="grid grid-cols-2 gap-x-3 gap-y-1">
+                                {pageDoors.length > 0 && (
+                                  <div>
+                                    <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground mb-1">
+                                      Doors ({pageDoors.length})
+                                    </p>
+                                    <div className="flex flex-wrap gap-1">
+                                      {pageDoors.map((s, i) => {
+                                        const ref = s.label || `D${i + 1}`;
+                                        const sched = analysis.schedules.doors.find(
+                                          d => d.reference === ref || d.reference === ref.replace(/^D0*/, 'D')
+                                        );
+                                        return (
+                                          <Badge
+                                            key={i}
+                                            variant="outline"
+                                            className="text-[10px] py-0 font-mono cursor-help"
+                                            title={sched ? `${sched.description}${sched.size ? ' · ' + sched.size : ''}${sched.material ? ' · ' + sched.material : ''}` : ref}
+                                          >
+                                            {ref}
+                                            {sched?.size && <span className="ml-1 opacity-60">{sched.size}</span>}
+                                          </Badge>
+                                        );
+                                      })}
+                                    </div>
+                                  </div>
+                                )}
+                                {pageWindows.length > 0 && (
+                                  <div>
+                                    <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground mb-1">
+                                      Windows ({pageWindows.length})
+                                    </p>
+                                    <div className="flex flex-wrap gap-1">
+                                      {pageWindows.map((s, i) => {
+                                        const ref = s.label || `W${i + 1}`;
+                                        const sched = analysis.schedules.windows.find(
+                                          w => w.reference === ref || w.reference === ref.replace(/^W0*/, 'W')
+                                        );
+                                        return (
+                                          <Badge
+                                            key={i}
+                                            variant="outline"
+                                            className="text-[10px] py-0 font-mono text-blue-600 cursor-help"
+                                            title={sched ? `${sched.description}${sched.size ? ' · ' + sched.size : ''}${sched.material ? ' · ' + sched.material : ''}` : ref}
+                                          >
+                                            {ref}
+                                            {sched?.size && <span className="ml-1 opacity-60">{sched.size}</span>}
+                                          </Badge>
+                                        );
+                                      })}
+                                    </div>
+                                  </div>
+                                )}
+                              </div>
+                            )}
+
+                            {/* Framing specs */}
+                            {(framingFound.length > 0 || insFound.length > 0) && (
+                              <div>
+                                <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground mb-1">
+                                  Framing / Insulation
+                                </p>
+                                <div className="flex flex-wrap gap-1">
+                                  {framingFound.slice(0, 4).map((f, i) => (
+                                    <Badge key={i} variant="secondary" className="text-[10px] py-0 font-mono">{f}</Badge>
+                                  ))}
+                                  {insFound.slice(0, 3).map((r, i) => (
+                                    <Badge key={`r-${i}`} variant="secondary" className="text-[10px] py-0 font-mono text-green-700">{r}</Badge>
+                                  ))}
+                                </div>
+                              </div>
+                            )}
+
+                            {/* Material/spec keywords detected on this page */}
+                            {specDetections.length > 0 && (
+                              <div>
+                                <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground mb-1">
+                                  Materials Detected
+                                </p>
+                                <div className="flex flex-wrap gap-1">
+                                  {specDetections.map(({ label, tag }, i) => (
+                                    <Badge
+                                      key={i}
+                                      variant="secondary"
+                                      className={`text-[10px] py-0 ${tag === 'EXT' ? 'text-amber-700' : tag === 'FLR' ? 'text-purple-700' : tag === 'WIN' ? 'text-blue-700' : tag === 'SITE' ? 'text-orange-700' : ''}`}
+                                    >
+                                      {label}
+                                    </Badge>
+                                  ))}
+                                </div>
+                              </div>
+                            )}
+
+                            {/* Rooms with area */}
+                            {page.rooms.length > 0 && (
+                              <div>
+                                <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground mb-1">
+                                  Rooms ({page.rooms.length})
+                                </p>
+                                <div className="flex flex-wrap gap-1">
+                                  {page.rooms.map((room, i) => (
+                                    <Badge key={i} variant="outline" className="text-[10px] py-0">
+                                      {room.name}{room.area ? ` ${room.area}m²` : ''}
+                                    </Badge>
+                                  ))}
+                                </div>
+                              </div>
+                            )}
+
+                            {/* Per-page material notes (full text, no truncation) */}
+                            {pageMats.length > 0 && (
+                              <div>
+                                <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground mb-1">
+                                  Notes ({pageMats.length})
+                                </p>
+                                <div className="space-y-1">
+                                  {pageMats.slice(0, 6).map((m, i) => (
+                                    <p key={i} className="text-[10px] text-muted-foreground leading-relaxed break-words">
+                                      <span className="font-medium text-foreground/70">{m.category}:</span>{' '}
+                                      {m.selection}
+                                      {m.colour && <span className="ml-1 italic">({m.colour})</span>}
+                                      {m.manufacturer && <span className="ml-1 text-blue-600">[{m.manufacturer}]</span>}
+                                    </p>
+                                  ))}
+                                </div>
+                              </div>
+                            )}
+
+                            <button
+                              className="text-xs text-primary hover:underline flex items-center gap-1 pt-1"
+                              onClick={() => navigateViewer(page.pageNumber)}
+                            >
+                              <Eye className="h-3 w-3" /> View page {page.pageNumber} in PDF above
+                            </button>
+                          </div>
                         )}
                       </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               </Card>
             </div>
@@ -1536,7 +1873,12 @@ export function AIPlanAnalyzer({
                     </TableHeader>
                     <TableBody>
                       {analysis.schedules.windows.map((item, i) => (
-                        <TableRow key={i}>
+                        <TableRow
+                          key={i}
+                          className="cursor-pointer hover:bg-primary/5"
+                          onClick={() => { navigateViewer(item.pageIndex + 1); }}
+                          title={`View page ${item.pageIndex + 1} in drawings`}
+                        >
                           <TableCell className="font-mono">{item.reference}</TableCell>
                           <TableCell>{item.description}</TableCell>
                           <TableCell>{item.size || '-'}</TableCell>
@@ -1570,7 +1912,12 @@ export function AIPlanAnalyzer({
                     </TableHeader>
                     <TableBody>
                       {analysis.schedules.doors.map((item, i) => (
-                        <TableRow key={i}>
+                        <TableRow
+                          key={i}
+                          className="cursor-pointer hover:bg-primary/5"
+                          onClick={() => { navigateViewer(item.pageIndex + 1); }}
+                          title={`View page ${item.pageIndex + 1} in drawings`}
+                        >
                           <TableCell className="font-mono">{item.reference}</TableCell>
                           <TableCell>{item.description}</TableCell>
                           <TableCell>{item.size || '-'}</TableCell>
@@ -1602,7 +1949,12 @@ export function AIPlanAnalyzer({
                     </TableHeader>
                     <TableBody>
                       {analysis.schedules.finishes.map((item, i) => (
-                        <TableRow key={i}>
+                        <TableRow
+                          key={i}
+                          className="cursor-pointer hover:bg-primary/5"
+                          onClick={() => { navigateViewer(item.pageIndex + 1); }}
+                          title={`View page ${item.pageIndex + 1} in drawings`}
+                        >
                           <TableCell className="font-medium">{item.reference}</TableCell>
                           <TableCell>{item.description}</TableCell>
                         </TableRow>
@@ -1647,6 +1999,54 @@ export function AIPlanAnalyzer({
               )}
             </Card>
           </div>
+
+          {/* Materials & Selections — grouped by category */}
+          {analysis.materialSelections && analysis.materialSelections.length > 0 && (
+            <Card className="p-4">
+              <h3 className="font-semibold mb-3 flex items-center gap-2">
+                <Layers className="h-4 w-4" />
+                Materials & Selections ({analysis.materialSelections.length})
+                <span className="text-xs font-normal text-muted-foreground ml-1">— click any item to view in plan</span>
+              </h3>
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                {Object.entries(
+                  analysis.materialSelections.reduce((acc, m) => {
+                    if (!acc[m.category]) acc[m.category] = [];
+                    acc[m.category].push(m);
+                    return acc;
+                  }, {} as Record<string, typeof analysis.materialSelections>)
+                ).map(([category, items]) => (
+                  <div key={category} className="border rounded-lg p-3 bg-muted/30">
+                    <p className="text-xs font-semibold uppercase text-muted-foreground mb-2 tracking-wide">{category}</p>
+                    <div className="space-y-1">
+                      {items.map((item, i) => (
+                        <button
+                          key={i}
+                          className="w-full flex items-start gap-2 text-left rounded px-1.5 py-1 hover:bg-blue-50 hover:border-blue-200 border border-transparent transition-colors group cursor-pointer"
+                          onClick={() => { navigateViewer(item.pageIndex + 1); }}
+                          title={`View on page ${item.pageIndex + 1}`}
+                        >
+                          <div className="w-2 h-2 rounded-full bg-primary/60 mt-1.5 shrink-0 group-hover:bg-blue-500 transition-colors" />
+                          <div className="text-sm leading-snug min-w-0 flex-1">
+                            <span className="text-foreground">{item.selection}</span>
+                            {item.colour && (
+                              <span className="ml-1 text-xs text-muted-foreground italic">({item.colour})</span>
+                            )}
+                            {item.manufacturer && (
+                              <span className="ml-1 text-xs text-blue-600 font-medium">{item.manufacturer}</span>
+                            )}
+                          </div>
+                          <span className="shrink-0 text-[10px] text-blue-400 font-medium group-hover:text-blue-600 transition-colors ml-1 mt-0.5 whitespace-nowrap">
+                            p.{item.pageIndex + 1}
+                          </span>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </Card>
+          )}
         </TabsContent>
 
         {/* Scope Gaps Tab */}
@@ -1731,6 +2131,61 @@ export function AIPlanAnalyzer({
                 <Badge variant="outline" className="text-sm">
                   Total: ${totals.total.toLocaleString()}
                 </Badge>
+              </div>
+            </div>
+          </Card>
+
+          {/* Overheads and Margin Controls */}
+          <Card className="p-4 border-blue-200 bg-blue-50/50 dark:border-blue-800 dark:bg-blue-950/30">
+            <h4 className="font-semibold mb-3 text-blue-900 dark:text-blue-100">Overheads & Margin</h4>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+              <div>
+                <label className="text-xs text-muted-foreground">Site Overheads %</label>
+                <Input
+                  type="number"
+                  value={siteOverheads}
+                  onChange={(e) => setSiteOverheads(parseFloat(e.target.value) || 0)}
+                  className="h-8 w-24"
+                  min="0"
+                  max="30"
+                  step="0.5"
+                />
+              </div>
+              <div>
+                <label className="text-xs text-muted-foreground">Company Overheads %</label>
+                <Input
+                  type="number"
+                  value={companyOverheads}
+                  onChange={(e) => setCompanyOverheads(parseFloat(e.target.value) || 0)}
+                  className="h-8 w-24"
+                  min="0"
+                  max="20"
+                  step="0.5"
+                />
+              </div>
+              <div>
+                <label className="text-xs text-muted-foreground">Contingency %</label>
+                <Input
+                  type="number"
+                  value={contingency}
+                  onChange={(e) => setContingency(parseFloat(e.target.value) || 0)}
+                  className="h-8 w-24"
+                  min="0"
+                  max="20"
+                  step="0.5"
+                />
+              </div>
+              <div>
+                <label className="text-xs text-muted-foreground">Margin %</label>
+                <Input
+                  type="number"
+                  value={margin}
+                  onChange={(e) => setMargin(parseFloat(e.target.value) || 0)}
+                  className="h-8 w-24"
+                  min="0"
+                  max="30"
+                  step="0.5"
+                />
               </div>
             </div>
           </Card>
@@ -1821,61 +2276,6 @@ export function AIPlanAnalyzer({
               </ScrollArea>
             </Card>
           )}
-
-          {/* Overheads and Margin Controls */}
-          <Card className="p-4">
-            <h4 className="font-semibold mb-3">Overheads & Margin</h4>
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-              <div>
-                <label className="text-xs text-muted-foreground">Site Overheads %</label>
-                <Input
-                  type="number"
-                  value={siteOverheads}
-                  onChange={(e) => setSiteOverheads(parseFloat(e.target.value) || 0)}
-                  className="h-8 w-24"
-                  min="0"
-                  max="30"
-                  step="0.5"
-                />
-              </div>
-              <div>
-                <label className="text-xs text-muted-foreground">Company Overheads %</label>
-                <Input
-                  type="number"
-                  value={companyOverheads}
-                  onChange={(e) => setCompanyOverheads(parseFloat(e.target.value) || 0)}
-                  className="h-8 w-24"
-                  min="0"
-                  max="20"
-                  step="0.5"
-                />
-              </div>
-              <div>
-                <label className="text-xs text-muted-foreground">Contingency %</label>
-                <Input
-                  type="number"
-                  value={contingency}
-                  onChange={(e) => setContingency(parseFloat(e.target.value) || 0)}
-                  className="h-8 w-24"
-                  min="0"
-                  max="20"
-                  step="0.5"
-                />
-              </div>
-              <div>
-                <label className="text-xs text-muted-foreground">Margin %</label>
-                <Input
-                  type="number"
-                  value={margin}
-                  onChange={(e) => setMargin(parseFloat(e.target.value) || 0)}
-                  className="h-8 w-24"
-                  min="0"
-                  max="30"
-                  step="0.5"
-                />
-              </div>
-            </div>
-          </Card>
 
           {/* Totals Summary */}
           <Card className="p-4 bg-gradient-to-r from-slate-50 to-blue-50 dark:from-slate-900 dark:to-blue-950">

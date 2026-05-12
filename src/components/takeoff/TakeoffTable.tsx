@@ -113,7 +113,7 @@ export const TakeoffTable = ({
         acc[m.unit] = (acc[m.unit] || 0) + m.realValue;
         return acc;
       },
-      { LM: 0, M2: 0, M3: 0, count: 0 } as Record<MeasurementUnit, number>
+      { LM: 0, M2: 0, M3: 0, count: 0 } as Record<string, number>
     );
   }, [measurements]);
 
@@ -791,8 +791,15 @@ export const TakeoffTable = ({
       </div>
 
       {/* Table Header */}
-      <div className="grid grid-cols-12 gap-2 p-2 bg-muted/50 rounded-t-md text-[10px] font-medium text-muted-foreground">
-        <div className="col-span-1">#</div>
+      <div className="grid grid-cols-12 gap-2 p-2 bg-muted/50 rounded-t-md text-[10px] font-medium text-muted-foreground items-center">
+        <div className="col-span-1 flex items-center gap-1">
+          <Checkbox
+            checked={filteredMeasurements.length > 0 && selectedIds.size === filteredMeasurements.length}
+            onCheckedChange={toggleSelectAll}
+            aria-label="Select all"
+          />
+          <span>#</span>
+        </div>
         <div className="col-span-2">Type</div>
         <div className="col-span-1">Qty</div>
         <div className="col-span-1">Area</div>
@@ -803,7 +810,7 @@ export const TakeoffTable = ({
       </div>
 
       {/* Table Body */}
-      <ScrollArea className="h-[500px] border rounded-md">
+      <ScrollArea className="h-[55vh] border rounded-md">
         {filteredMeasurements.length === 0 ? (
           <div className="p-6 text-center text-muted-foreground text-sm">
             No measurements yet. Use the tools to add items.
@@ -837,36 +844,50 @@ export const TakeoffTable = ({
           </div>
         </div>
 
-        {/* Add to Estimate Button */}
-        {selectedIds.size > 0 && (
-          <Button
-            className="w-full"
-            onClick={() => {
-              onAddToEstimate(Array.from(selectedIds));
-              setSelectedIds(new Set());
-            }}
-          >
-            <Plus className="h-4 w-4 mr-2" />
-            Add {selectedIds.size} to Estimate
-          </Button>
+        {/* Bulk actions — always show if any measurements exist */}
+        {measurements.length > 0 && (
+          <div className="grid grid-cols-2 gap-2">
+            {/* Add selected OR all */}
+            <Button
+              className="w-full bg-primary text-primary-foreground hover:bg-primary/90"
+              onClick={() => {
+                const ids = selectedIds.size > 0
+                  ? Array.from(selectedIds)
+                  : measurements.map(m => m.id);
+                onAddToEstimate(ids);
+                setSelectedIds(new Set());
+              }}
+            >
+              <Plus className="h-4 w-4 mr-2" />
+              {selectedIds.size > 0
+                ? `Add ${selectedIds.size} Selected`
+                : `Add All (${measurements.length})`}
+            </Button>
+
+            {/* Validate / Lock selected OR all */}
+            <Button
+              variant="secondary"
+              className="w-full"
+              onClick={() => {
+                const ids = selectedIds.size > 0
+                  ? Array.from(selectedIds)
+                  : measurements.map(m => m.id);
+                ids.forEach(id => onUpdateMeasurement(id, { validated: true, lockedToSOW: true }));
+                onAddToEstimate(ids);
+                setSelectedIds(new Set());
+              }}
+            >
+              <Lock className="h-4 w-4 mr-2" />
+              {selectedIds.size > 0
+                ? `Validate ${selectedIds.size} Selected`
+                : `Validate All (${measurements.length})`}
+            </Button>
+          </div>
         )}
 
-        {/* Lock All Selected */}
-        {selectedIds.size > 0 && (
-          <Button
-            variant="secondary"
-            className="w-full"
-            onClick={() => {
-              selectedIds.forEach(id => {
-                onUpdateMeasurement(id, { lockedToSOW: true });
-              });
-              setSelectedIds(new Set());
-            }}
-          >
-            <Lock className="h-4 w-4 mr-2" />
-            Lock {selectedIds.size} to SOW
-          </Button>
-        )}
+        <p className="text-[10px] text-muted-foreground text-center">
+          Tip: tick checkboxes to act on specific rows, or leave unticked to act on all
+        </p>
       </div>
     </div>
   );
@@ -884,11 +905,16 @@ export const TakeoffTable = ({
           )}
         </Button>
       </SheetTrigger>
-      <SheetContent side="bottom" className="h-[80vh]">
-        <SheetHeader>
-          <SheetTitle>Takeoff Measurements</SheetTitle>
+      <SheetContent side="bottom" className="h-[92vh]">
+        <SheetHeader className="pb-2">
+          <SheetTitle className="flex items-center justify-between">
+            <span>Takeoff Measurements ({measurements.length})</span>
+            <span className="text-xs font-normal text-muted-foreground">
+              Validate, assign type/area, then Add to Estimate — sheet stays open so you can keep going
+            </span>
+          </SheetTitle>
         </SheetHeader>
-        <div className="mt-4 h-full overflow-hidden">
+        <div className="mt-2 h-full overflow-hidden">
           {tableContent}
         </div>
       </SheetContent>
