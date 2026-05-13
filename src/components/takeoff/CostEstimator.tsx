@@ -8,7 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { Calculator, DollarSign, Plus, Trash2, FileDown, Percent, Clock, ExternalLink, ChevronDown, ChevronRight, Wrench, CheckCircle2, Package, Link2, Unlink } from 'lucide-react';
+import { Calculator, DollarSign, Plus, Trash2, FileDown, Percent, Clock, ExternalLink, ChevronDown, ChevronRight, Wrench, CheckCircle2, Package, Link2, Unlink, Combine } from 'lucide-react';
 import { Measurement, CostItem, MeasurementArea, TRADE_OPTIONS, RelatedMaterial, ConsumableItem } from '@/lib/takeoff/types';
 import { cn } from '@/lib/utils';
 import { SCOPE_OF_WORK_RATES, type AustralianState } from '@/data/scopeOfWorkRates';
@@ -233,6 +233,7 @@ export const CostEstimator = ({
     DEFAULT_CONSUMABLES.map(c => ({ ...c, id: crypto.randomUUID(), total: c.quantity * c.unitCost }))
   );
   const [transferredIds, setTransferredIds] = useState<Set<string>>(() => getTransferred(projectId));
+  const [selectedCostIds, setSelectedCostIds] = useState<Set<string>>(new Set());
 
   // Filtered trade list based on profile
   const visibleTrades = useMemo(
@@ -349,6 +350,26 @@ export const CostEstimator = ({
       newSet.add(id);
     }
     setExpandedItems(newSet);
+  };
+
+  // Merge selected cost items into one, summing quantities
+  const handleMergeSelected = () => {
+    const toMerge = costItems.filter(item => selectedCostIds.has(item.id));
+    if (toMerge.length < 2) return;
+    const [first, ...rest] = toMerge;
+    const totalQty = toMerge.reduce((sum, item) => sum + item.quantity, 0);
+    const allLinked = toMerge.flatMap(item => item.linkedMeasurements);
+    const areas = [...new Set(toMerge.map(item => item.area).filter(Boolean))];
+    const mergedArea = areas.length > 1 ? 'Other' : (areas[0] ?? first.area);
+    onUpdateCostItem(first.id, {
+      quantity: totalQty,
+      area: mergedArea as MeasurementArea,
+      linkedMeasurements: allLinked,
+      notes: areas.length > 1 ? `Combined ${toMerge.length} areas: ${areas.join(', ')}` : (first.notes ?? ''),
+    });
+    rest.forEach(item => onDeleteCostItem(item.id));
+    setSelectedCostIds(new Set());
+    toast.success(`Combined ${toMerge.length} items — total ${totalQty.toFixed(2)} ${first.unit}`);
   };
 
   // Generate suggested related materials for an item
@@ -700,6 +721,17 @@ export const CostEstimator = ({
               )}
             </Button>
           )}
+          {selectedCostIds.size >= 2 && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleMergeSelected}
+              className="border-blue-400 text-blue-500 hover:bg-blue-50 dark:hover:bg-blue-950"
+            >
+              <Combine className="h-4 w-4 mr-1" />
+              Combine {selectedCostIds.size}
+            </Button>
+          )}
           <Button variant="outline" size="sm" onClick={() => setShowLibraryPicker(true)}>
             <Package className="h-4 w-4 mr-1" />
             From Library
@@ -781,6 +813,17 @@ export const CostEstimator = ({
             <Table className="table-fixed w-full">
               <TableHeader>
                 <TableRow className="text-xs bg-muted/50">
+                  <TableHead className="w-8 px-1">
+                    <input
+                      type="checkbox"
+                      className="h-3.5 w-3.5 cursor-pointer"
+                      checked={selectedCostIds.size === costItems.length && costItems.length > 0}
+                      onChange={() => {
+                        if (selectedCostIds.size === costItems.length) setSelectedCostIds(new Set());
+                        else setSelectedCostIds(new Set(costItems.map(i => i.id)));
+                      }}
+                    />
+                  </TableHead>
                   <TableHead className="w-8 px-1"></TableHead>
                   <TableHead className="w-20 px-1">Category</TableHead>
                   <TableHead className="w-28 px-1">Trade</TableHead>
@@ -807,7 +850,23 @@ export const CostEstimator = ({
 
                   return (
                     <React.Fragment key={item.id}>
-                      <TableRow className="text-xs">
+                      <TableRow className={cn("text-xs", selectedCostIds.has(item.id) && "bg-blue-50/40 dark:bg-blue-950/20")}>
+                        {/* Select checkbox */}
+                        <TableCell className="px-1 w-8">
+                          <input
+                            type="checkbox"
+                            className="h-3.5 w-3.5 cursor-pointer"
+                            checked={selectedCostIds.has(item.id)}
+                            onChange={() => {
+                              setSelectedCostIds(prev => {
+                                const next = new Set(prev);
+                                if (next.has(item.id)) next.delete(item.id);
+                                else next.add(item.id);
+                                return next;
+                              });
+                            }}
+                          />
+                        </TableCell>
                         {/* Expand */}
                         <TableCell className="px-1 w-8">
                           <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => toggleExpand(item.id)}>
