@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Download, ZoomIn, ZoomOut, RotateCw, Maximize2, ChevronLeft, ChevronRight, Trash2, FileText, SlidersHorizontal } from 'lucide-react';
+import { createPortal } from 'react-dom';
+import { Download, ZoomIn, ZoomOut, RotateCw, Maximize2, Minimize2, ChevronLeft, ChevronRight, Trash2, FileText, SlidersHorizontal } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { PDFUploadManager } from './PDFUploadManager';
@@ -54,6 +55,7 @@ export const PDFTakeoff = ({ projectId, estimateId, onAddCostItems }: PDFTakeoff
   const [detectedOpenings, setDetectedOpenings] = useState<DetectedOpening[]>([]);
   const [showSOWDialog, setShowSOWDialog] = useState(false);
   const [showProfileDialog, setShowProfileDialog] = useState(false);
+  const [isTakeoffFullscreen, setIsTakeoffFullscreen] = useState(false);
   const [appProfile, setAppProfile] = useState<AppProfile>(() => loadProfile());
   const canvasContainerRef = useRef<HTMLDivElement | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
@@ -114,6 +116,7 @@ export const PDFTakeoff = ({ projectId, estimateId, onAddCostItems }: PDFTakeoff
     const handleKeyDown = (e: KeyboardEvent) => {
       if (!shouldHandleShortcut(e.target)) return;
       if (e.key === 'Escape') {
+        setIsTakeoffFullscreen(false);
         dispatch({ type: 'SET_ACTIVE_TOOL', payload: 'select' });
         return;
       }
@@ -517,7 +520,125 @@ export const PDFTakeoff = ({ projectId, estimateId, onAddCostItems }: PDFTakeoff
     }
   }, [state.measurements, dispatch]);
 
+  // ── Fullscreen portal ───────────────────────────────────────────────────────
+  const fullscreenPortal = isTakeoffFullscreen && state.pdfFile ? createPortal(
+    <div className="fixed inset-0 z-[9999] bg-[#0f172a] text-white flex flex-col">
+      {/* Top bar */}
+      <div className="flex items-center gap-2 px-3 py-2 bg-[#1e293b] border-b border-gray-700 flex-wrap shrink-0">
+        <MeasurementToolbar
+          activeTool={state.activeTool}
+          onToolSelect={(tool) => dispatch({ type: 'SET_ACTIVE_TOOL', payload: tool })}
+          onUndo={() => dispatch({ type: 'UNDO' })}
+          onRedo={() => dispatch({ type: 'REDO' })}
+          canUndo={state.historyIndex > 0}
+          canRedo={state.historyIndex < state.history.length - 1}
+          disabled={!state.isCalibrated && state.activeTool !== 'pan'}
+        />
+        <div className="flex items-center gap-1 border-l border-gray-600 pl-2 ml-1">
+          <Button variant="ghost" size="sm" onClick={handleZoomOut} className="h-8 text-gray-200 hover:bg-gray-700"><ZoomOut className="h-4 w-4" /></Button>
+          <span className="text-sm font-medium min-w-14 text-center text-gray-200">{Math.round(state.transform.zoom * 100)}%</span>
+          <Button variant="ghost" size="sm" onClick={handleZoomIn} className="h-8 text-gray-200 hover:bg-gray-700"><ZoomIn className="h-4 w-4" /></Button>
+          <Button variant="ghost" size="sm" onClick={handleRotate} className="h-8 text-gray-200 hover:bg-gray-700"><RotateCw className="h-4 w-4" /></Button>
+          <Button variant="ghost" size="sm" onClick={handleFitToScreen} className="h-8 text-gray-200 hover:bg-gray-700" title="Fit to screen"><Maximize2 className="h-4 w-4" /></Button>
+        </div>
+        {state.pdfFile.pageCount > 1 && (
+          <div className="flex items-center gap-1 border-l border-gray-600 pl-2 ml-1">
+            <Button variant="ghost" size="sm" onClick={handlePagePrevious} disabled={state.currentPageIndex === 0} className="h-8 text-gray-200 hover:bg-gray-700"><ChevronLeft className="h-4 w-4" /></Button>
+            <span className="text-sm text-gray-200 min-w-24 text-center">Page {state.currentPageIndex + 1} / {state.pdfFile.pageCount}</span>
+            <Button variant="ghost" size="sm" onClick={handlePageNext} disabled={state.currentPageIndex === state.pdfFile.pageCount - 1} className="h-8 text-gray-200 hover:bg-gray-700"><ChevronRight className="h-4 w-4" /></Button>
+          </div>
+        )}
+        <Button
+          size="sm"
+          onClick={() => setIsTakeoffFullscreen(false)}
+          className="ml-auto bg-red-700 hover:bg-red-600 text-white"
+        >
+          <Minimize2 className="h-4 w-4 mr-1.5" />
+          Exit Full Screen
+        </Button>
+      </div>
+
+      {/* Main area: canvas + right measurements panel */}
+      <div className="flex flex-1 overflow-hidden">
+        {/* Canvas fills remaining space */}
+        <div className="flex-1 overflow-hidden">
+          <InteractiveCanvas
+            pdfUrl={state.pdfFile.url}
+            pageIndex={state.currentPageIndex}
+            transform={state.transform}
+            activeTool={state.activeTool}
+            isCalibrated={state.isCalibrated}
+            unitsPerMetre={state.currentScale?.unitsPerMetre || null}
+            calibrationMode={state.calibrationMode}
+            selectedColor={state.selectedColor}
+            measurements={state.measurements.filter(m => m.pageIndex === state.currentPageIndex)}
+            detectedOpenings={detectedOpenings}
+            onMeasurementComplete={handleMeasurementComplete}
+            onMeasurementUpdate={handleMeasurementUpdate}
+            onCalibrationPointsSet={handleCalibrationPointsSet}
+            onTransformChange={handleTransformChange}
+            onViewportReady={handleViewportReady}
+            onDeleteLastMeasurement={handleDeleteLastMeasurement}
+            onDeleteMeasurement={handleDeleteMeasurement}
+          />
+        </div>
+
+        {/* Right panel — measurements */}
+        <div className="w-72 bg-[#1e293b] border-l border-gray-700 flex flex-col overflow-hidden shrink-0">
+          <div className="p-3 border-b border-gray-700 flex items-center justify-between shrink-0">
+            <h3 className="font-semibold text-sm">Measurements ({filteredMeasurements.length})</h3>
+            <Select
+              value={String(pageFilter)}
+              onValueChange={(val) => setPageFilter(val === 'all' ? 'all' : Number(val))}
+            >
+              <SelectTrigger className="w-28 h-7 text-xs border-gray-600 bg-gray-800 text-gray-200">
+                <SelectValue placeholder="All pages" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All pages</SelectItem>
+                {Array.from({ length: state.pageCount || 1 }).map((_, idx) => (
+                  <SelectItem key={idx} value={String(idx)}>Page {idx + 1}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div className="flex-1 overflow-y-auto p-2 space-y-2">
+            <TakeoffTable
+              measurements={filteredMeasurements}
+              onUpdateMeasurement={(id, updates) => dispatch({ type: 'UPDATE_MEASUREMENT', payload: { id, updates } })}
+              onDeleteMeasurement={(id) => dispatch({ type: 'DELETE_MEASUREMENT', payload: id })}
+              onAddToEstimate={handleAddToEstimate}
+              onFetchNCCCode={handleFetchNCCCode}
+            />
+
+            {filteredMeasurements.length === 0 ? (
+              <p className="text-xs text-gray-400 text-center py-6">No measurements yet.<br/>Use the tools above to start measuring.</p>
+            ) : (
+              filteredMeasurements.map((m) => (
+                <div key={m.id} className="p-2 border border-gray-700 rounded text-xs bg-gray-800/50">
+                  <div className="flex items-center justify-between text-gray-400 mb-1">
+                    <span className="capitalize font-medium text-gray-300">{m.label || m.type}</span>
+                    <span>p.{m.pageIndex + 1}</span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-white font-semibold">{m.realValue.toFixed(2)} {m.unit}</span>
+                    {m.area && <span className="text-gray-400">{m.area}</span>}
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+        </div>
+      </div>
+    </div>,
+    document.body
+  ) : null;
+  // ────────────────────────────────────────────────────────────────────────────
+
   return (
+    <>
+    {fullscreenPortal}
     <div className="space-y-6">
       <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
         <div className="flex items-center justify-between">
@@ -679,6 +800,16 @@ export const PDFTakeoff = ({ projectId, estimateId, onAddCostItems }: PDFTakeoff
                     </Button>
                     <Button variant="outline" size="sm" onClick={handleFitToScreen}>
                       <Maximize2 className="h-4 w-4" />
+                    </Button>
+                    <Button
+                      variant="default"
+                      size="sm"
+                      onClick={() => setIsTakeoffFullscreen(true)}
+                      className="bg-primary text-primary-foreground ml-1"
+                      title="Full screen takeoff (ESC to exit)"
+                    >
+                      <Maximize2 className="h-4 w-4 mr-1.5" />
+                      Full Screen
                     </Button>
                   </div>
 
@@ -973,5 +1104,6 @@ export const PDFTakeoff = ({ projectId, estimateId, onAddCostItems }: PDFTakeoff
         onSave={setAppProfile}
       />
     </div>
+    </>
   );
 };
