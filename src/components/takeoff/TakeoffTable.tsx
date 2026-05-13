@@ -870,16 +870,25 @@ export const TakeoffTable = ({
         {/* Bulk actions — always show if any measurements exist */}
         {measurements.length > 0 && (
           <div className="grid grid-cols-2 gap-2">
-            {selectedIds.size >= 2 && (
-              <Button
-                variant="outline"
-                className="col-span-2 border-blue-400 text-blue-400 hover:bg-blue-950/40"
-                onClick={handleCombineSelected}
-              >
-                <Combine className="h-4 w-4 mr-2" />
-                Combine {selectedIds.size} Selected ({[...selectedIds].map(id => measurements.find(m => m.id === id)).filter(Boolean).reduce((s, m) => s + m!.realValue, 0).toFixed(2)} {measurements.find(m => selectedIds.has(m.id))?.unit})
-              </Button>
-            )}
+            {selectedIds.size >= 2 && (() => {
+              const selected = measurements.filter(m => selectedIds.has(m.id));
+              const units = [...new Set(selected.map(m => m.unit))];
+              const mixedUnits = units.length > 1;
+              const total = mixedUnits ? 0 : selected.reduce((s, m) => s + m.realValue, 0);
+              return (
+                <Button
+                  variant="outline"
+                  className={`col-span-2 ${mixedUnits ? 'border-amber-400 text-amber-400 opacity-70 cursor-not-allowed' : 'border-blue-400 text-blue-400 hover:bg-blue-950/40'}`}
+                  onClick={mixedUnits ? undefined : handleCombineSelected}
+                  disabled={mixedUnits}
+                >
+                  <Combine className="h-4 w-4 mr-2" />
+                  {mixedUnits
+                    ? `Mixed units (${units.join(' + ')}) — select same unit to combine`
+                    : `Combine ${selectedIds.size} Selected (${total.toFixed(2)} ${units[0]})`}
+                </Button>
+              );
+            })()}
           </div>
         )}
         {measurements.length > 0 && (
