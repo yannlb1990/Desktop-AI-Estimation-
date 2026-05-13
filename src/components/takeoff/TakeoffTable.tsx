@@ -1,5 +1,6 @@
 import { useState, useMemo } from 'react';
-import { Check, Trash2, ChevronDown, ChevronRight, Plus, Search, X, Lock, MessageSquare, Clock, MapPin } from 'lucide-react';
+import { Check, Trash2, ChevronDown, ChevronRight, Plus, Search, X, Lock, MessageSquare, Clock, MapPin, Combine } from 'lucide-react';
+import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -153,6 +154,28 @@ export const TakeoffTable = ({
       newSet.add(id);
     }
     setExpandedIds(newSet);
+  };
+
+  const handleCombineSelected = () => {
+    const toMerge = measurements.filter(m => selectedIds.has(m.id));
+    if (toMerge.length < 2) return;
+    const units = [...new Set(toMerge.map(m => m.unit))];
+    if (units.length > 1) {
+      toast.error(`Can't combine — mixed units: ${units.join(', ')}. Select items with the same unit.`);
+      return;
+    }
+    const [first, ...rest] = toMerge;
+    const totalValue = toMerge.reduce((sum, m) => sum + m.realValue, 0);
+    const areas = [...new Set(toMerge.map(m => m.area).filter(Boolean))];
+    const combinedLabel = toMerge.map(m => m.label || m.type).filter(Boolean).join(' + ') || first.label;
+    onUpdateMeasurement(first.id, {
+      realValue: totalValue,
+      label: combinedLabel,
+      area: areas.length === 1 ? areas[0] as MeasurementArea : first.area,
+    });
+    rest.forEach(m => onDeleteMeasurement(m.id));
+    setSelectedIds(new Set());
+    toast.success(`Combined ${toMerge.length} measurements → ${totalValue.toFixed(2)} ${first.unit}`);
   };
 
   const handleMaterialToggle = (measurementId: string, material: string) => {
@@ -845,6 +868,20 @@ export const TakeoffTable = ({
         </div>
 
         {/* Bulk actions — always show if any measurements exist */}
+        {measurements.length > 0 && (
+          <div className="grid grid-cols-2 gap-2">
+            {selectedIds.size >= 2 && (
+              <Button
+                variant="outline"
+                className="col-span-2 border-blue-400 text-blue-400 hover:bg-blue-950/40"
+                onClick={handleCombineSelected}
+              >
+                <Combine className="h-4 w-4 mr-2" />
+                Combine {selectedIds.size} Selected ({[...selectedIds].map(id => measurements.find(m => m.id === id)).filter(Boolean).reduce((s, m) => s + m!.realValue, 0).toFixed(2)} {measurements.find(m => selectedIds.has(m.id))?.unit})
+              </Button>
+            )}
+          </div>
+        )}
         {measurements.length > 0 && (
           <div className="grid grid-cols-2 gap-2">
             {/* Add selected OR all */}
