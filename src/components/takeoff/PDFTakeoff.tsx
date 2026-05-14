@@ -60,6 +60,8 @@ export const PDFTakeoff = ({ projectId, estimateId, onAddCostItems }: PDFTakeoff
   const [showProfileDialog, setShowProfileDialog] = useState(false);
   const [isTakeoffFullscreen, setIsTakeoffFullscreen] = useState(false);
   const [fsBottomOpen, setFsBottomOpen] = useState(false);
+  const [pageInputEditing, setPageInputEditing] = useState(false);
+  const [pageInputValue, setPageInputValue] = useState('');
   const [appProfile, setAppProfile] = useState<AppProfile>(() => loadProfile());
   const [sidebarSelectedIds, setSidebarSelectedIds] = useState<Set<string>>(new Set());
   const canvasContainerRef = useRef<HTMLDivElement | null>(null);
@@ -187,6 +189,15 @@ export const PDFTakeoff = ({ projectId, estimateId, onAddCostItems }: PDFTakeoff
     if (state.pdfFile && state.currentPageIndex < state.pdfFile.pageCount - 1) {
       dispatch({ type: 'SET_CURRENT_PAGE', payload: state.currentPageIndex + 1 });
     }
+  };
+
+  const commitPageInput = () => {
+    const n = parseInt(pageInputValue, 10);
+    const total = state.pdfFile?.pageCount ?? 1;
+    if (!isNaN(n) && n >= 1 && n <= total) {
+      dispatch({ type: 'SET_CURRENT_PAGE', payload: n - 1 });
+    }
+    setPageInputEditing(false);
   };
 
   // FIX: Memoize callbacks to prevent infinite re-renders
@@ -588,7 +599,27 @@ export const PDFTakeoff = ({ projectId, estimateId, onAddCostItems }: PDFTakeoff
         {state.pdfFile.pageCount > 1 && (
           <div className="flex items-center gap-1 border-l border-gray-600 pl-2 ml-1">
             <Button variant="ghost" size="sm" onClick={handlePagePrevious} disabled={state.currentPageIndex === 0} className="h-8 text-gray-200 hover:bg-gray-700"><ChevronLeft className="h-4 w-4" /></Button>
-            <span className="text-sm text-gray-200 min-w-24 text-center">Page {state.currentPageIndex + 1} / {state.pdfFile.pageCount}</span>
+            {pageInputEditing ? (
+              <input
+                autoFocus
+                type="number"
+                min={1}
+                max={state.pdfFile.pageCount}
+                value={pageInputValue}
+                onChange={e => setPageInputValue(e.target.value)}
+                onBlur={commitPageInput}
+                onKeyDown={e => { if (e.key === 'Enter') commitPageInput(); if (e.key === 'Escape') setPageInputEditing(false); }}
+                className="w-14 h-7 text-center text-sm bg-gray-800 border border-gray-500 rounded text-gray-100 focus:outline-none focus:border-blue-400"
+              />
+            ) : (
+              <button
+                onClick={() => { setPageInputValue(String(state.currentPageIndex + 1)); setPageInputEditing(true); }}
+                className="text-sm text-gray-200 min-w-24 text-center hover:text-white hover:underline underline-offset-2 cursor-pointer"
+                title="Click to jump to page"
+              >
+                Page {state.currentPageIndex + 1} / {state.pdfFile.pageCount}
+              </button>
+            )}
             <Button variant="ghost" size="sm" onClick={handlePageNext} disabled={state.currentPageIndex === state.pdfFile.pageCount - 1} className="h-8 text-gray-200 hover:bg-gray-700"><ChevronRight className="h-4 w-4" /></Button>
           </div>
         )}
@@ -880,9 +911,27 @@ export const PDFTakeoff = ({ projectId, estimateId, onAddCostItems }: PDFTakeoff
                       >
                         <ChevronLeft className="h-4 w-4" />
                       </Button>
-                      <span className="text-sm font-medium">
-                        Page {state.currentPageIndex + 1} / {state.pdfFile.pageCount}
-                      </span>
+                      {pageInputEditing ? (
+                        <input
+                          autoFocus
+                          type="number"
+                          min={1}
+                          max={state.pdfFile.pageCount}
+                          value={pageInputValue}
+                          onChange={e => setPageInputValue(e.target.value)}
+                          onBlur={commitPageInput}
+                          onKeyDown={e => { if (e.key === 'Enter') commitPageInput(); if (e.key === 'Escape') setPageInputEditing(false); }}
+                          className="w-16 h-8 text-center text-sm border border-input rounded-md bg-background focus:outline-none focus:ring-1 focus:ring-ring"
+                        />
+                      ) : (
+                        <button
+                          onClick={() => { setPageInputValue(String(state.currentPageIndex + 1)); setPageInputEditing(true); }}
+                          className="text-sm font-medium hover:underline underline-offset-2 cursor-pointer min-w-24 text-center"
+                          title="Click to jump to page"
+                        >
+                          Page {state.currentPageIndex + 1} / {state.pdfFile.pageCount}
+                        </button>
+                      )}
                       <Button
                         variant="outline"
                         size="sm"
