@@ -71,6 +71,7 @@ interface TakeoffTableProps {
   onDeleteMeasurement: (id: string) => void;
   onAddToEstimate: (measurementIds: string[]) => void;
   onFetchNCCCode?: (measurementId: string, area: string, materials: string[]) => Promise<string>;
+  inline?: boolean;
 }
 
 export const TakeoffTable = ({
@@ -79,6 +80,7 @@ export const TakeoffTable = ({
   onDeleteMeasurement,
   onAddToEstimate,
   onFetchNCCCode,
+  inline = false,
 }: TakeoffTableProps) => {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
@@ -937,6 +939,10 @@ export const TakeoffTable = ({
       </div>
     </div>
   );
+
+  if (inline) {
+    return <div className="h-full overflow-hidden">{tableContent}</div>;
+  }
 
   return (
     <Sheet open={isOpen} onOpenChange={setIsOpen}>

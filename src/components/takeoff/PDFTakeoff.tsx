@@ -603,30 +603,18 @@ export const PDFTakeoff = ({ projectId, estimateId, onAddCostItems }: PDFTakeoff
             </Select>
           </div>
 
-          <div className="flex-1 overflow-y-auto p-2 space-y-2">
-            <TakeoffTable
-              measurements={filteredMeasurements}
-              onUpdateMeasurement={(id, updates) => dispatch({ type: 'UPDATE_MEASUREMENT', payload: { id, updates } })}
-              onDeleteMeasurement={(id) => dispatch({ type: 'DELETE_MEASUREMENT', payload: id })}
-              onAddToEstimate={handleAddToEstimate}
-              onFetchNCCCode={handleFetchNCCCode}
-            />
-
+          <div className="flex-1 overflow-hidden p-2">
             {filteredMeasurements.length === 0 ? (
               <p className="text-xs text-gray-400 text-center py-6">No measurements yet.<br/>Use the tools above to start measuring.</p>
             ) : (
-              filteredMeasurements.map((m) => (
-                <div key={m.id} className="p-2 border border-gray-700 rounded text-xs bg-gray-800/50">
-                  <div className="flex items-center justify-between text-gray-400 mb-1">
-                    <span className="capitalize font-medium text-gray-300">{m.label || m.type}</span>
-                    <span>p.{m.pageIndex + 1}</span>
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <span className="text-white font-semibold">{m.realValue.toFixed(2)} {m.unit}</span>
-                    {m.area && <span className="text-gray-400">{m.area}</span>}
-                  </div>
-                </div>
-              ))
+              <TakeoffTable
+                inline
+                measurements={filteredMeasurements}
+                onUpdateMeasurement={(id, updates) => dispatch({ type: 'UPDATE_MEASUREMENT', payload: { id, updates } })}
+                onDeleteMeasurement={(id) => dispatch({ type: 'DELETE_MEASUREMENT', payload: id })}
+                onAddToEstimate={handleAddToEstimate}
+                onFetchNCCCode={handleFetchNCCCode}
+              />
             )}
           </div>
         </div>
