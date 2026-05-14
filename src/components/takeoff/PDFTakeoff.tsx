@@ -69,6 +69,7 @@ export const PDFTakeoff = ({ projectId, estimateId, onAddCostItems }: PDFTakeoff
   const [verifyActualInput, setVerifyActualInput] = useState('');
   const [appProfile, setAppProfile] = useState<AppProfile>(() => loadProfile());
   const [sidebarSelectedIds, setSidebarSelectedIds] = useState<Set<string>>(new Set());
+  const [aiPanelsOpen, setAiPanelsOpen] = useState(false);
   const canvasContainerRef = useRef<HTMLDivElement | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const initialFitDoneRef = useRef(false);
@@ -859,42 +860,65 @@ export const PDFTakeoff = ({ projectId, estimateId, onAddCostItems }: PDFTakeoff
                 }}
               />
             </div>
-            <div className="lg:col-span-1 space-y-4">
-              <AIExtractionPanel
-                pdfFile={uploadedFile}
-                pdfUrl={state.pdfFile?.url || null}
-                currentPage={state.currentPageIndex}
-                onDimensionsExtracted={handleDimensionsExtracted}
-                onTablesExtracted={handleTablesExtracted}
-                onTextExtracted={handleTextExtracted}
-                onRoomAreasImported={handleRoomAreasImported}
-              />
-              <MaterialExtractorPanel
-                pdfUrl={state.pdfFile?.url || null}
-                pageCount={state.pdfFile?.pageCount || 1}
-                projectName={state.pdfFile?.name?.replace(/\.pdf$/i, '') || undefined}
-                onImport={(measurements) => {
-                  measurements.forEach((m) =>
-                    dispatch({ type: 'ADD_MEASUREMENT', payload: m })
-                  );
-                }}
-              />
-              <PlanIntelligencePanel
-                pdfUrl={state.pdfFile?.url || null}
-                pageCount={state.pdfFile?.pageCount || 1}
-                projectName={state.pdfFile?.name?.replace(/\.pdf$/i, '') || undefined}
-              />
-              {state.pdfFile && (
-                <DetectionResultsPanel
-                  pdfUrl={state.pdfFile.url}
-                  totalPages={state.pdfFile.pageCount}
-                  onJumpToPage={(pageIndex) => {
-                    dispatch({ type: 'SET_CURRENT_PAGE', payload: pageIndex });
-                    setActiveTab('measure');
-                  }}
-                  onScanComplete={setDetectedOpenings}
-                />
-              )}
+            <div className="lg:col-span-1">
+              <Card className="overflow-hidden">
+                <button
+                  className="flex items-center justify-between w-full px-4 py-3 text-left hover:bg-muted/40 transition-colors"
+                  onClick={() => setAiPanelsOpen(v => !v)}
+                >
+                  <div className="flex items-center gap-2">
+                    <span className="font-semibold text-sm">AI Tools</span>
+                    <Badge variant="outline" className="text-[10px] px-1.5 py-0 text-muted-foreground">optional</Badge>
+                  </div>
+                  {aiPanelsOpen
+                    ? <ChevronUp className="h-4 w-4 text-muted-foreground" />
+                    : <ChevronDown className="h-4 w-4 text-muted-foreground" />}
+                </button>
+                {!aiPanelsOpen && (
+                  <div className="px-4 pb-3 text-xs text-muted-foreground">
+                    Auto-extract dimensions, materials &amp; openings from the plan — requires backend API
+                  </div>
+                )}
+                {aiPanelsOpen && (
+                  <div className="border-t border-border space-y-4 p-4">
+                    <AIExtractionPanel
+                      pdfFile={uploadedFile}
+                      pdfUrl={state.pdfFile?.url || null}
+                      currentPage={state.currentPageIndex}
+                      onDimensionsExtracted={handleDimensionsExtracted}
+                      onTablesExtracted={handleTablesExtracted}
+                      onTextExtracted={handleTextExtracted}
+                      onRoomAreasImported={handleRoomAreasImported}
+                    />
+                    <MaterialExtractorPanel
+                      pdfUrl={state.pdfFile?.url || null}
+                      pageCount={state.pdfFile?.pageCount || 1}
+                      projectName={state.pdfFile?.name?.replace(/\.pdf$/i, '') || undefined}
+                      onImport={(measurements) => {
+                        measurements.forEach((m) =>
+                          dispatch({ type: 'ADD_MEASUREMENT', payload: m })
+                        );
+                      }}
+                    />
+                    <PlanIntelligencePanel
+                      pdfUrl={state.pdfFile?.url || null}
+                      pageCount={state.pdfFile?.pageCount || 1}
+                      projectName={state.pdfFile?.name?.replace(/\.pdf$/i, '') || undefined}
+                    />
+                    {state.pdfFile && (
+                      <DetectionResultsPanel
+                        pdfUrl={state.pdfFile.url}
+                        totalPages={state.pdfFile.pageCount}
+                        onJumpToPage={(pageIndex) => {
+                          dispatch({ type: 'SET_CURRENT_PAGE', payload: pageIndex });
+                          setActiveTab('measure');
+                        }}
+                        onScanComplete={setDetectedOpenings}
+                      />
+                    )}
+                  </div>
+                )}
+              </Card>
             </div>
           </div>
           {state.pdfFile && (
