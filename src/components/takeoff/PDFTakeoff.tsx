@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { Download, ZoomIn, ZoomOut, RotateCw, Maximize2, Minimize2, ChevronLeft, ChevronRight, Trash2, FileText, SlidersHorizontal } from 'lucide-react';
+import { Download, ZoomIn, ZoomOut, RotateCw, Maximize2, Minimize2, ChevronLeft, ChevronRight, Trash2, FileText, SlidersHorizontal, Combine } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { PDFUploadManager } from './PDFUploadManager';
@@ -31,6 +31,7 @@ import { PlanIntelligencePanel } from './PlanIntelligencePanel';
 import { SOWGeneratorDialog } from './SOWGeneratorDialog';
 import { ProfileConfigDialog } from './ProfileConfigDialog';
 import { Card } from '@/components/ui/card';
+import { Checkbox } from '@/components/ui/checkbox';
 import { DimensionExtraction, ExtractedTable, RoomArea } from '@/lib/api/pdfExtractionApi';
 import { AppProfile, loadProfile } from '@/lib/takeoff/profile';
 
@@ -57,6 +58,7 @@ export const PDFTakeoff = ({ projectId, estimateId, onAddCostItems }: PDFTakeoff
   const [showProfileDialog, setShowProfileDialog] = useState(false);
   const [isTakeoffFullscreen, setIsTakeoffFullscreen] = useState(false);
   const [appProfile, setAppProfile] = useState<AppProfile>(() => loadProfile());
+  const [sidebarSelectedIds, setSidebarSelectedIds] = useState<Set<string>>(new Set());
   const canvasContainerRef = useRef<HTMLDivElement | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const initialFitDoneRef = useRef(false);
@@ -944,76 +946,130 @@ export const PDFTakeoff = ({ projectId, estimateId, onAddCostItems }: PDFTakeoff
                     {filteredMeasurements.length === 0 ? (
                       <p className="text-sm text-muted-foreground">No measurements yet</p>
                     ) : (
-                      filteredMeasurements.map((m) => (
-                        <div key={m.id} className="p-3 border border-border/60 rounded-md space-y-2 bg-muted/40">
-                          <div className="flex items-center justify-between text-xs text-muted-foreground">
-                            <span className="capitalize">{m.type}</span>
-                            <span className="font-medium">Page {m.pageIndex + 1}</span>
-                          </div>
-                          <Input
-                            value={m.label}
-                            onChange={(e) =>
-                              dispatch({
-                                type: 'UPDATE_MEASUREMENT',
-                                payload: { id: m.id, updates: { label: e.target.value } }
-                              })
-                            }
-                            placeholder="Label"
-                            className="h-8"
-                          />
-                          <div className="flex items-center gap-2 text-sm">
-                            <span className="font-semibold">{m.realValue.toFixed(2)}</span>
-                            <Select
-                              value={m.unit}
-                              onValueChange={(unit: string) =>
+                      filteredMeasurements.map((m) => {
+                        const isSelected = sidebarSelectedIds.has(m.id);
+                        return (
+                          <div
+                            key={m.id}
+                            className={`p-3 border rounded-md space-y-2 transition-colors ${isSelected ? 'border-blue-500 bg-blue-950/20' : 'border-border/60 bg-muted/40'}`}
+                          >
+                            <div className="flex items-center justify-between text-xs text-muted-foreground">
+                              <div className="flex items-center gap-2">
+                                <Checkbox
+                                  checked={isSelected}
+                                  onCheckedChange={(checked) => {
+                                    setSidebarSelectedIds(prev => {
+                                      const next = new Set(prev);
+                                      checked ? next.add(m.id) : next.delete(m.id);
+                                      return next;
+                                    });
+                                  }}
+                                />
+                                <span className="capitalize">{m.type}</span>
+                              </div>
+                              <span className="font-medium">Page {m.pageIndex + 1}</span>
+                            </div>
+                            <Input
+                              value={m.label}
+                              onChange={(e) =>
                                 dispatch({
                                   type: 'UPDATE_MEASUREMENT',
-                                  payload: { id: m.id, updates: { unit } }
+                                  payload: { id: m.id, updates: { label: e.target.value } }
                                 })
                               }
-                            >
-                              <SelectTrigger className="w-24 h-8 text-xs">
-                                <SelectValue />
-                              </SelectTrigger>
-                              <SelectContent>
-                                {UNIT_GROUPS.map((group) => (
-                                  <SelectGroup key={group}>
-                                    <SelectLabel className="text-xs text-muted-foreground">{group}</SelectLabel>
-                                    {TAKEOFF_UNITS.filter((u) => u.group === group).map((u) => (
-                                      <SelectItem key={u.value} value={u.value} className="text-xs">
-                                        {u.value}
-                                      </SelectItem>
-                                    ))}
-                                  </SelectGroup>
-                                ))}
-                              </SelectContent>
-                            </Select>
-                            <div className="ml-auto flex items-center gap-2">
-                              <span
-                                className="inline-flex h-3 w-3 rounded-full"
-                                style={{ backgroundColor: m.color }}
-                              />
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                className="h-8 w-8"
-                                onClick={() => dispatch({ type: 'DELETE_MEASUREMENT', payload: m.id })}
-                                aria-label="Delete measurement"
+                              placeholder="Label"
+                              className="h-8"
+                            />
+                            <div className="flex items-center gap-2 text-sm">
+                              <span className="font-semibold">{m.realValue.toFixed(2)}</span>
+                              <Select
+                                value={m.unit}
+                                onValueChange={(unit: string) =>
+                                  dispatch({
+                                    type: 'UPDATE_MEASUREMENT',
+                                    payload: { id: m.id, updates: { unit } }
+                                  })
+                                }
                               >
-                                <Trash2 className="h-4 w-4" />
-                              </Button>
+                                <SelectTrigger className="w-24 h-8 text-xs">
+                                  <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  {UNIT_GROUPS.map((group) => (
+                                    <SelectGroup key={group}>
+                                      <SelectLabel className="text-xs text-muted-foreground">{group}</SelectLabel>
+                                      {TAKEOFF_UNITS.filter((u) => u.group === group).map((u) => (
+                                        <SelectItem key={u.value} value={u.value} className="text-xs">
+                                          {u.value}
+                                        </SelectItem>
+                                      ))}
+                                    </SelectGroup>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                              <div className="ml-auto flex items-center gap-2">
+                                <span
+                                  className="inline-flex h-3 w-3 rounded-full"
+                                  style={{ backgroundColor: m.color }}
+                                />
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  className="h-8 w-8"
+                                  onClick={() => dispatch({ type: 'DELETE_MEASUREMENT', payload: m.id })}
+                                  aria-label="Delete measurement"
+                                >
+                                  <Trash2 className="h-4 w-4" />
+                                </Button>
+                              </div>
                             </div>
+                            <p className="text-[11px] text-muted-foreground">
+                              {new Date(m.timestamp).toLocaleString()}
+                            </p>
                           </div>
-                          <p className="text-[11px] text-muted-foreground">
-                            {new Date(m.timestamp).toLocaleString()}
-                          </p>
-                        </div>
-                      ))
+                        );
+                      })
                     )}
                   </div>
 
                   {filteredMeasurements.length > 0 && (
                     <div className="mt-4 pt-3 border-t space-y-2 text-sm">
+                      {sidebarSelectedIds.size >= 2 && (() => {
+                        const selected = filteredMeasurements.filter(m => sidebarSelectedIds.has(m.id));
+                        const units = [...new Set(selected.map(m => m.unit))];
+                        const mixedUnits = units.length > 1;
+                        const total = mixedUnits ? 0 : selected.reduce((s, m) => s + m.realValue, 0);
+                        return (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className={`w-full ${mixedUnits ? 'border-amber-400 text-amber-400 opacity-70 cursor-not-allowed' : 'border-blue-400 text-blue-400 hover:bg-blue-950/20'}`}
+                            disabled={mixedUnits}
+                            onClick={() => {
+                              if (mixedUnits) return;
+                              const [first, ...rest] = selected;
+                              dispatch({
+                                type: 'UPDATE_MEASUREMENT',
+                                payload: {
+                                  id: first.id,
+                                  updates: {
+                                    realValue: total,
+                                    label: selected.map(m => m.label || m.type).filter(Boolean).join(' + ') || first.label,
+                                  }
+                                }
+                              });
+                              rest.forEach(m => dispatch({ type: 'DELETE_MEASUREMENT', payload: m.id }));
+                              setSidebarSelectedIds(new Set());
+                              toast.success(`Combined ${selected.length} measurements → ${total.toFixed(2)} ${units[0]}`);
+                            }}
+                          >
+                            <Combine className="h-4 w-4 mr-2" />
+                            {mixedUnits
+                              ? `Mixed units (${units.join(' + ')}) — select same unit`
+                              : `Combine ${sidebarSelectedIds.size} selected (${total.toFixed(2)} ${units[0]})`}
+                          </Button>
+                        );
+                      })()}
                       <div className="flex justify-between">
                         <span>Total measurements</span>
                         <span className="font-semibold">{filteredMeasurements.length}</span>
