@@ -4,7 +4,6 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Slider } from '@/components/ui/slider';
 import { calculatePresetScaleWorld, calculateManualScaleWorld } from '@/lib/takeoff/calculations';
@@ -107,7 +106,7 @@ export const ScalingCalibrator = ({
   };
 
   return (
-    <Card className="p-4 space-y-4">
+    <div className="p-4 space-y-4">
       <div className="flex items-center gap-2">
         <Ruler className="h-5 w-5 text-primary" />
         <h3 className="font-semibold">Scale Calibration</h3>
@@ -316,6 +315,6 @@ export const ScalingCalibrator = ({
           )}
         </div>
       )}
-    </Card>
+    </div>
   );
 };

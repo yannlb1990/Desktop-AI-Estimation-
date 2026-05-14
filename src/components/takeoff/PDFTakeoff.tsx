@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { Download, ZoomIn, ZoomOut, RotateCw, Maximize2, Minimize2, ChevronLeft, ChevronRight, Trash2, FileText, SlidersHorizontal, Combine } from 'lucide-react';
+import { Download, ZoomIn, ZoomOut, RotateCw, Maximize2, Minimize2, ChevronLeft, ChevronRight, Trash2, FileText, SlidersHorizontal, Combine, Ruler } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { PDFUploadManager } from './PDFUploadManager';
@@ -32,6 +32,8 @@ import { SOWGeneratorDialog } from './SOWGeneratorDialog';
 import { ProfileConfigDialog } from './ProfileConfigDialog';
 import { Card } from '@/components/ui/card';
 import { Checkbox } from '@/components/ui/checkbox';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Badge } from '@/components/ui/badge';
 import { DimensionExtraction, ExtractedTable, RoomArea } from '@/lib/api/pdfExtractionApi';
 import { AppProfile, loadProfile } from '@/lib/takeoff/profile';
 
@@ -237,8 +239,7 @@ export const PDFTakeoff = ({ projectId, estimateId, onAddCostItems }: PDFTakeoff
         
         const fitZoom = Math.min(
           containerWidth / viewport.width,
-          containerHeight / viewport.height,
-          1.5 // Cap at 150% to prevent oversized display
+          containerHeight / viewport.height
         );
         
         dispatch({ type: 'SET_TRANSFORM', payload: { zoom: fitZoom, panX: 0, panY: 0 } });
@@ -734,35 +735,8 @@ export const PDFTakeoff = ({ projectId, estimateId, onAddCostItems }: PDFTakeoff
           )}
           {state.pdfFile && (
             <div className="grid grid-cols-1 lg:grid-cols-4 gap-4">
-              {/* Left Sidebar - Calibration */}
-              <div className="lg:col-span-1 space-y-4">
-                <ScalingCalibrator
-                  currentScale={state.currentScale}
-                  isCalibrated={state.isCalibrated}
-                  onScaleSet={(scale) => {
-                    dispatch({
-                      type: 'SET_SCALE',
-                      payload: { pageIndex: state.currentPageIndex, scale }
-                    });
-                    toast.success('Scale set successfully');
-                  }}
-                  onManualCalibrationStart={() => {
-                    dispatch({ type: 'SET_CALIBRATION_MODE', payload: 'manual' });
-                    toast.info('Click two points on a known dimension');
-                  }}
-                  onManualCalibrationCancel={handleCalibrationCancel}
-                  onResetScale={handleResetScale}
-                  manualPoints={manualCalibrationPoints}
-                  onCalibrationComplete={() => {
-                    setManualCalibrationPoints(null);
-                    dispatch({ type: 'SET_CALIBRATION_MODE', payload: null });
-                  }}
-                  pdfViewport={pdfViewport}
-                />
-              </div>
-
-              {/* Center - Canvas */}
-              <div className="lg:col-span-2 space-y-4">
+              {/* Center - Canvas (3 cols) */}
+              <div className="lg:col-span-3 space-y-2">
                 <MeasurementToolbar
                   activeTool={state.activeTool}
                   onToolSelect={(tool) => dispatch({ type: 'SET_ACTIVE_TOOL', payload: tool })}
@@ -803,12 +777,49 @@ export const PDFTakeoff = ({ projectId, estimateId, onAddCostItems }: PDFTakeoff
                     </Button>
                   </div>
 
+                  {/* Scale popover */}
+                  <Popover>
+                    <PopoverTrigger asChild>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className={`h-8 gap-1.5 ${state.isCalibrated ? 'border-green-600 text-green-400' : 'border-amber-500 text-amber-400'}`}
+                        title="Scale calibration"
+                      >
+                        <Ruler className="h-3.5 w-3.5" />
+                        {state.isCalibrated ? (state.currentScale?.name ?? 'Calibrated') : 'Set Scale'}
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-80 p-0" align="start">
+                      <ScalingCalibrator
+                        currentScale={state.currentScale}
+                        isCalibrated={state.isCalibrated}
+                        onScaleSet={(scale) => {
+                          dispatch({ type: 'SET_SCALE', payload: { pageIndex: state.currentPageIndex, scale } });
+                          toast.success('Scale set successfully');
+                        }}
+                        onManualCalibrationStart={() => {
+                          dispatch({ type: 'SET_CALIBRATION_MODE', payload: 'manual' });
+                          toast.info('Click two points on a known dimension');
+                        }}
+                        onManualCalibrationCancel={handleCalibrationCancel}
+                        onResetScale={handleResetScale}
+                        manualPoints={manualCalibrationPoints}
+                        onCalibrationComplete={() => {
+                          setManualCalibrationPoints(null);
+                          dispatch({ type: 'SET_CALIBRATION_MODE', payload: null });
+                        }}
+                        pdfViewport={pdfViewport}
+                      />
+                    </PopoverContent>
+                  </Popover>
+
                   {/* Page Navigation */}
                   {state.pdfFile && state.pdfFile.pageCount > 1 && (
                     <div className="flex items-center gap-2">
-                      <Button 
-                        variant="outline" 
-                        size="sm" 
+                      <Button
+                        variant="outline"
+                        size="sm"
                         onClick={handlePagePrevious}
                         disabled={state.currentPageIndex === 0}
                       >
@@ -817,9 +828,9 @@ export const PDFTakeoff = ({ projectId, estimateId, onAddCostItems }: PDFTakeoff
                       <span className="text-sm font-medium">
                         Page {state.currentPageIndex + 1} / {state.pdfFile.pageCount}
                       </span>
-                      <Button 
-                        variant="outline" 
-                        size="sm" 
+                      <Button
+                        variant="outline"
+                        size="sm"
                         onClick={handlePageNext}
                         disabled={state.currentPageIndex === state.pdfFile.pageCount - 1}
                       >
@@ -829,7 +840,7 @@ export const PDFTakeoff = ({ projectId, estimateId, onAddCostItems }: PDFTakeoff
                   )}
                 </div>
 
-                <div className="h-[800px]" ref={canvasContainerRef}>
+                <div className="h-[calc(100vh-260px)] min-h-[500px]" ref={canvasContainerRef}>
                   <InteractiveCanvas
                     pdfUrl={state.pdfFile.url}
                     pageIndex={state.currentPageIndex}
