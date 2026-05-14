@@ -980,6 +980,24 @@ export const PDFTakeoff = ({ projectId, estimateId, onAddCostItems }: PDFTakeoff
                               placeholder="Label"
                               className="h-8"
                             />
+                            <Select
+                              value={m.measurementType ?? ''}
+                              onValueChange={(val) =>
+                                dispatch({
+                                  type: 'UPDATE_MEASUREMENT',
+                                  payload: { id: m.id, updates: { measurementType: val as Measurement['measurementType'] } }
+                                })
+                              }
+                            >
+                              <SelectTrigger className="h-7 text-xs border-dashed">
+                                <SelectValue placeholder="Type (wall, floor…)" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {(['Wall','Floor','Ceiling','Tiling','Roofing','Cladding','Concrete Slab','Framing','Painting','Waterproofing','Insulation','Other'] as const).map(t => (
+                                  <SelectItem key={t} value={t} className="text-xs">{t}</SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
                             <div className="flex items-center gap-2 text-sm">
                               <span className="font-semibold">{m.realValue.toFixed(2)}</span>
                               <Select

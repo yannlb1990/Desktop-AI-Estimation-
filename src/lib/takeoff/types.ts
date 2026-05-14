@@ -104,7 +104,7 @@ export interface Measurement {
   addedToEstimate?: boolean;
 
   // Construction-specific fields
-  measurementType?: 'Wall' | 'Floor' | 'Ceiling' | 'Item';
+  measurementType?: 'Wall' | 'Floor' | 'Ceiling' | 'Tiling' | 'Roofing' | 'Cladding' | 'Concrete Slab' | 'Framing' | 'Painting' | 'Waterproofing' | 'Insulation' | 'Other';
   height?: number;              // For walls - to calculate m²
   isConcreteFloor?: boolean;    // For floors
   concreteDepth?: number;       // For concrete floors - to calculate m³
@@ -151,7 +151,7 @@ export interface CostItem {
 
   // Enhanced fields from measurements
   area?: MeasurementArea;
-  measurementType?: 'Wall' | 'Floor' | 'Ceiling' | 'Item';
+  measurementType?: 'Wall' | 'Floor' | 'Ceiling' | 'Tiling' | 'Roofing' | 'Cladding' | 'Concrete Slab' | 'Framing' | 'Painting' | 'Waterproofing' | 'Insulation' | 'Other';
   materials?: string[];
   drawingNumber?: string;
 

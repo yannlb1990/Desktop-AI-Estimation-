@@ -19,8 +19,7 @@ const AREA_OPTIONS: MeasurementArea[] = [
   'Utility', 'Ensuite', 'WC', 'External', 'Other'
 ];
 
-// New type options for construction
-const TYPE_OPTIONS = ['Wall', 'Floor', 'Ceiling', 'Item'] as const;
+const TYPE_OPTIONS = ['Wall', 'Floor', 'Ceiling', 'Tiling', 'Roofing', 'Cladding', 'Concrete Slab', 'Framing', 'Painting', 'Waterproofing', 'Insulation', 'Other'] as const;
 type MeasurementTypeOption = typeof TYPE_OPTIONS[number];
 
 // Framing system options
