@@ -527,7 +527,7 @@ export const PDFTakeoff = ({ projectId, estimateId, onAddCostItems }: PDFTakeoff
   const fullscreenPortal = isTakeoffFullscreen && state.pdfFile ? createPortal(
     <div className="fixed inset-0 z-[9999] bg-[#0f172a] text-white flex flex-col">
       {/* Top bar */}
-      <div className="flex items-center gap-2 px-3 py-2 bg-[#1e293b] border-b border-gray-700 flex-wrap shrink-0">
+      <div className="flex items-center gap-2 px-3 py-2 bg-[#1e293b] border-b border-gray-700 shrink-0">
         <MeasurementToolbar
           activeTool={state.activeTool}
           onToolSelect={(tool) => dispatch({ type: 'SET_ACTIVE_TOOL', payload: tool })}
@@ -537,6 +537,7 @@ export const PDFTakeoff = ({ projectId, estimateId, onAddCostItems }: PDFTakeoff
           canRedo={state.historyIndex < state.history.length - 1}
           disabled={!state.isCalibrated && state.activeTool !== 'pan'}
         />
+        {/* Zoom + rotate + fit */}
         <div className="flex items-center gap-1 border-l border-gray-600 pl-2 ml-1">
           <Button variant="ghost" size="sm" onClick={handleZoomOut} className="h-8 text-gray-200 hover:bg-gray-700"><ZoomOut className="h-4 w-4" /></Button>
           <span className="text-sm font-medium min-w-14 text-center text-gray-200">{Math.round(state.transform.zoom * 100)}%</span>
@@ -544,6 +545,45 @@ export const PDFTakeoff = ({ projectId, estimateId, onAddCostItems }: PDFTakeoff
           <Button variant="ghost" size="sm" onClick={handleRotate} className="h-8 text-gray-200 hover:bg-gray-700"><RotateCw className="h-4 w-4" /></Button>
           <Button variant="ghost" size="sm" onClick={handleFitToScreen} className="h-8 text-gray-200 hover:bg-gray-700" title="Fit to screen"><Maximize2 className="h-4 w-4" /></Button>
         </div>
+        {/* Scale popover */}
+        <div className="border-l border-gray-600 pl-2 ml-1">
+          <Popover>
+            <PopoverTrigger asChild>
+              <Button
+                variant="ghost"
+                size="sm"
+                className={`h-8 gap-1.5 ${state.isCalibrated ? 'text-green-400 hover:bg-green-950/40' : 'text-amber-400 hover:bg-amber-950/40'}`}
+                title="Scale calibration"
+              >
+                <Ruler className="h-3.5 w-3.5" />
+                {state.isCalibrated ? (state.currentScale?.name ?? 'Calibrated') : 'Set Scale'}
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent className="w-80 p-0 z-[10000]" align="start">
+              <ScalingCalibrator
+                currentScale={state.currentScale}
+                isCalibrated={state.isCalibrated}
+                onScaleSet={(scale) => {
+                  dispatch({ type: 'SET_SCALE', payload: { pageIndex: state.currentPageIndex, scale } });
+                  toast.success('Scale set successfully');
+                }}
+                onManualCalibrationStart={() => {
+                  dispatch({ type: 'SET_CALIBRATION_MODE', payload: 'manual' });
+                  toast.info('Click two points on a known dimension');
+                }}
+                onManualCalibrationCancel={handleCalibrationCancel}
+                onResetScale={handleResetScale}
+                manualPoints={manualCalibrationPoints}
+                onCalibrationComplete={() => {
+                  setManualCalibrationPoints(null);
+                  dispatch({ type: 'SET_CALIBRATION_MODE', payload: null });
+                }}
+                pdfViewport={pdfViewport}
+              />
+            </PopoverContent>
+          </Popover>
+        </div>
+        {/* Page navigation */}
         {state.pdfFile.pageCount > 1 && (
           <div className="flex items-center gap-1 border-l border-gray-600 pl-2 ml-1">
             <Button variant="ghost" size="sm" onClick={handlePagePrevious} disabled={state.currentPageIndex === 0} className="h-8 text-gray-200 hover:bg-gray-700"><ChevronLeft className="h-4 w-4" /></Button>
@@ -561,65 +601,61 @@ export const PDFTakeoff = ({ projectId, estimateId, onAddCostItems }: PDFTakeoff
         </Button>
       </div>
 
-      {/* Main area: canvas + right measurements panel */}
-      <div className="flex flex-1 overflow-hidden">
-        {/* Canvas fills remaining space */}
-        <div className="flex-1 overflow-hidden">
-          <InteractiveCanvas
-            pdfUrl={state.pdfFile.url}
-            pageIndex={state.currentPageIndex}
-            transform={state.transform}
-            activeTool={state.activeTool}
-            isCalibrated={state.isCalibrated}
-            unitsPerMetre={state.currentScale?.unitsPerMetre || null}
-            calibrationMode={state.calibrationMode}
-            selectedColor={state.selectedColor}
-            measurements={state.measurements.filter(m => m.pageIndex === state.currentPageIndex)}
-            detectedOpenings={detectedOpenings}
-            onMeasurementComplete={handleMeasurementComplete}
-            onMeasurementUpdate={handleMeasurementUpdate}
-            onCalibrationPointsSet={handleCalibrationPointsSet}
-            onTransformChange={handleTransformChange}
-            onViewportReady={handleViewportReady}
-            onDeleteLastMeasurement={handleDeleteLastMeasurement}
-            onDeleteMeasurement={handleDeleteMeasurement}
-          />
+      {/* Canvas — full width, takes all remaining vertical space */}
+      <div className="flex-1 overflow-hidden">
+        <InteractiveCanvas
+          pdfUrl={state.pdfFile.url}
+          pageIndex={state.currentPageIndex}
+          transform={state.transform}
+          activeTool={state.activeTool}
+          isCalibrated={state.isCalibrated}
+          unitsPerMetre={state.currentScale?.unitsPerMetre || null}
+          calibrationMode={state.calibrationMode}
+          selectedColor={state.selectedColor}
+          measurements={state.measurements.filter(m => m.pageIndex === state.currentPageIndex)}
+          detectedOpenings={detectedOpenings}
+          onMeasurementComplete={handleMeasurementComplete}
+          onMeasurementUpdate={handleMeasurementUpdate}
+          onCalibrationPointsSet={handleCalibrationPointsSet}
+          onTransformChange={handleTransformChange}
+          onViewportReady={handleViewportReady}
+          onDeleteLastMeasurement={handleDeleteLastMeasurement}
+          onDeleteMeasurement={handleDeleteMeasurement}
+        />
+      </div>
+
+      {/* Bottom measurements panel */}
+      <div className="h-72 bg-[#1e293b] border-t border-gray-700 flex flex-col shrink-0">
+        <div className="px-3 py-1.5 border-b border-gray-700 flex items-center gap-3 shrink-0">
+          <h3 className="font-semibold text-sm text-gray-100">Measurements ({filteredMeasurements.length})</h3>
+          <Select
+            value={String(pageFilter)}
+            onValueChange={(val) => setPageFilter(val === 'all' ? 'all' : Number(val))}
+          >
+            <SelectTrigger className="w-28 h-6 text-xs border-gray-600 bg-gray-800 text-gray-200">
+              <SelectValue placeholder="All pages" />
+            </SelectTrigger>
+            <SelectContent className="z-[10000]">
+              <SelectItem value="all">All pages</SelectItem>
+              {Array.from({ length: state.pageCount || 1 }).map((_, idx) => (
+                <SelectItem key={idx} value={String(idx)}>Page {idx + 1}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </div>
-
-        {/* Right panel — measurements */}
-        <div className="w-72 bg-[#1e293b] border-l border-gray-700 flex flex-col overflow-hidden shrink-0">
-          <div className="p-3 border-b border-gray-700 flex items-center justify-between shrink-0">
-            <h3 className="font-semibold text-sm">Measurements ({filteredMeasurements.length})</h3>
-            <Select
-              value={String(pageFilter)}
-              onValueChange={(val) => setPageFilter(val === 'all' ? 'all' : Number(val))}
-            >
-              <SelectTrigger className="w-28 h-7 text-xs border-gray-600 bg-gray-800 text-gray-200">
-                <SelectValue placeholder="All pages" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All pages</SelectItem>
-                {Array.from({ length: state.pageCount || 1 }).map((_, idx) => (
-                  <SelectItem key={idx} value={String(idx)}>Page {idx + 1}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-
-          <div className="flex-1 overflow-hidden p-2">
-            {filteredMeasurements.length === 0 ? (
-              <p className="text-xs text-gray-400 text-center py-6">No measurements yet.<br/>Use the tools above to start measuring.</p>
-            ) : (
-              <TakeoffTable
-                inline
-                measurements={filteredMeasurements}
-                onUpdateMeasurement={(id, updates) => dispatch({ type: 'UPDATE_MEASUREMENT', payload: { id, updates } })}
-                onDeleteMeasurement={(id) => dispatch({ type: 'DELETE_MEASUREMENT', payload: id })}
-                onAddToEstimate={handleAddToEstimate}
-                onFetchNCCCode={handleFetchNCCCode}
-              />
-            )}
-          </div>
+        <div className="flex-1 overflow-hidden p-2">
+          {filteredMeasurements.length === 0 ? (
+            <p className="text-xs text-gray-400 text-center py-6">No measurements yet. Use the tools above to start measuring.</p>
+          ) : (
+            <TakeoffTable
+              inline
+              measurements={filteredMeasurements}
+              onUpdateMeasurement={(id, updates) => dispatch({ type: 'UPDATE_MEASUREMENT', payload: { id, updates } })}
+              onDeleteMeasurement={(id) => dispatch({ type: 'DELETE_MEASUREMENT', payload: id })}
+              onAddToEstimate={handleAddToEstimate}
+              onFetchNCCCode={handleFetchNCCCode}
+            />
+          )}
         </div>
       </div>
     </div>,
