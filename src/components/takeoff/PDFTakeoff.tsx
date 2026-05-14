@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { Download, ZoomIn, ZoomOut, RotateCw, Maximize2, Minimize2, ChevronLeft, ChevronRight, Trash2, FileText, SlidersHorizontal, Combine, Ruler } from 'lucide-react';
+import { Download, ZoomIn, ZoomOut, RotateCw, Maximize2, Minimize2, ChevronLeft, ChevronRight, ChevronUp, ChevronDown, Trash2, FileText, SlidersHorizontal, Combine, Ruler } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { PDFUploadManager } from './PDFUploadManager';
@@ -59,6 +59,7 @@ export const PDFTakeoff = ({ projectId, estimateId, onAddCostItems }: PDFTakeoff
   const [showSOWDialog, setShowSOWDialog] = useState(false);
   const [showProfileDialog, setShowProfileDialog] = useState(false);
   const [isTakeoffFullscreen, setIsTakeoffFullscreen] = useState(false);
+  const [fsBottomOpen, setFsBottomOpen] = useState(false);
   const [appProfile, setAppProfile] = useState<AppProfile>(() => loadProfile());
   const [sidebarSelectedIds, setSidebarSelectedIds] = useState<Set<string>>(new Set());
   const canvasContainerRef = useRef<HTMLDivElement | null>(null);
@@ -624,39 +625,57 @@ export const PDFTakeoff = ({ projectId, estimateId, onAddCostItems }: PDFTakeoff
         />
       </div>
 
-      {/* Bottom measurements panel */}
-      <div className="h-72 bg-[#1e293b] border-t border-gray-700 flex flex-col shrink-0">
-        <div className="px-3 py-1.5 border-b border-gray-700 flex items-center gap-3 shrink-0">
-          <h3 className="font-semibold text-sm text-gray-100">Measurements ({filteredMeasurements.length})</h3>
-          <Select
-            value={String(pageFilter)}
-            onValueChange={(val) => setPageFilter(val === 'all' ? 'all' : Number(val))}
-          >
-            <SelectTrigger className="w-28 h-6 text-xs border-gray-600 bg-gray-800 text-gray-200">
-              <SelectValue placeholder="All pages" />
-            </SelectTrigger>
-            <SelectContent className="z-[10000]">
-              <SelectItem value="all">All pages</SelectItem>
-              {Array.from({ length: state.pageCount || 1 }).map((_, idx) => (
-                <SelectItem key={idx} value={String(idx)}>Page {idx + 1}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-        <div className="flex-1 overflow-hidden p-2">
-          {filteredMeasurements.length === 0 ? (
-            <p className="text-xs text-gray-400 text-center py-6">No measurements yet. Use the tools above to start measuring.</p>
-          ) : (
-            <TakeoffTable
-              inline
-              measurements={filteredMeasurements}
-              onUpdateMeasurement={(id, updates) => dispatch({ type: 'UPDATE_MEASUREMENT', payload: { id, updates } })}
-              onDeleteMeasurement={(id) => dispatch({ type: 'DELETE_MEASUREMENT', payload: id })}
-              onAddToEstimate={handleAddToEstimate}
-              onFetchNCCCode={handleFetchNCCCode}
-            />
+      {/* Bottom measurements panel — collapsible */}
+      <div className={`bg-[#1e293b] border-t border-gray-700 flex flex-col shrink-0 transition-all duration-200 ${fsBottomOpen ? 'h-72' : 'h-9'}`}>
+        {/* Always-visible header strip */}
+        <button
+          className="px-3 h-9 flex items-center gap-3 w-full hover:bg-gray-700/40 shrink-0"
+          onClick={() => setFsBottomOpen(v => !v)}
+        >
+          {fsBottomOpen ? <ChevronDown className="h-3.5 w-3.5 text-gray-400 shrink-0" /> : <ChevronUp className="h-3.5 w-3.5 text-gray-400 shrink-0" />}
+          <span className="text-sm font-semibold text-gray-100">Measurements ({filteredMeasurements.length})</span>
+          {!fsBottomOpen && filteredMeasurements.length > 0 && (
+            <span className="text-xs text-gray-400 ml-1">
+              {Object.entries(
+                filteredMeasurements.reduce((acc, m) => { acc[m.unit] = (acc[m.unit] || 0) + m.realValue; return acc; }, {} as Record<string,number>)
+              ).map(([u, v]) => `${v.toFixed(2)} ${u}`).join(' · ')}
+            </span>
           )}
-        </div>
+          {fsBottomOpen && (
+            <Select
+              value={String(pageFilter)}
+              onValueChange={(val) => { setPageFilter(val === 'all' ? 'all' : Number(val)); }}
+              onClick={(e) => e.stopPropagation()}
+            >
+              <SelectTrigger className="w-28 h-6 text-xs border-gray-600 bg-gray-800 text-gray-200 ml-2" onClick={(e) => e.stopPropagation()}>
+                <SelectValue placeholder="All pages" />
+              </SelectTrigger>
+              <SelectContent className="z-[10000]">
+                <SelectItem value="all">All pages</SelectItem>
+                {Array.from({ length: state.pageCount || 1 }).map((_, idx) => (
+                  <SelectItem key={idx} value={String(idx)}>Page {idx + 1}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          )}
+        </button>
+        {/* Expandable content */}
+        {fsBottomOpen && (
+          <div className="flex-1 overflow-hidden p-2">
+            {filteredMeasurements.length === 0 ? (
+              <p className="text-xs text-gray-400 text-center py-4">No measurements yet. Use the tools above to start measuring.</p>
+            ) : (
+              <TakeoffTable
+                inline
+                measurements={filteredMeasurements}
+                onUpdateMeasurement={(id, updates) => dispatch({ type: 'UPDATE_MEASUREMENT', payload: { id, updates } })}
+                onDeleteMeasurement={(id) => dispatch({ type: 'DELETE_MEASUREMENT', payload: id })}
+                onAddToEstimate={handleAddToEstimate}
+                onFetchNCCCode={handleFetchNCCCode}
+              />
+            )}
+          </div>
+        )}
       </div>
     </div>,
     document.body
