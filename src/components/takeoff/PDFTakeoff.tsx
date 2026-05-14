@@ -34,6 +34,8 @@ import { Card } from '@/components/ui/card';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Badge } from '@/components/ui/badge';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
+import { Label } from '@/components/ui/label';
 import { DimensionExtraction, ExtractedTable, RoomArea } from '@/lib/api/pdfExtractionApi';
 import { AppProfile, loadProfile } from '@/lib/takeoff/profile';
 
@@ -62,6 +64,9 @@ export const PDFTakeoff = ({ projectId, estimateId, onAddCostItems }: PDFTakeoff
   const [fsBottomOpen, setFsBottomOpen] = useState(false);
   const [pageInputEditing, setPageInputEditing] = useState(false);
   const [pageInputValue, setPageInputValue] = useState('');
+  const [isVerifyMode, setIsVerifyMode] = useState(false);
+  const [verifyMeasurement, setVerifyMeasurement] = useState<Measurement | null>(null);
+  const [verifyActualInput, setVerifyActualInput] = useState('');
   const [appProfile, setAppProfile] = useState<AppProfile>(() => loadProfile());
   const [sidebarSelectedIds, setSidebarSelectedIds] = useState<Set<string>>(new Set());
   const canvasContainerRef = useRef<HTMLDivElement | null>(null);
@@ -200,16 +205,62 @@ export const PDFTakeoff = ({ projectId, estimateId, onAddCostItems }: PDFTakeoff
     setPageInputEditing(false);
   };
 
+  const handleStartVerify = () => {
+    setIsVerifyMode(true);
+    dispatch({ type: 'SET_ACTIVE_TOOL', payload: 'line' });
+    toast.info('Draw a line on any labelled dimension on the plan', { duration: 5000 });
+  };
+
+  const applyVerifiedScale = () => {
+    if (!verifyMeasurement || !state.currentScale) return;
+    const actualMetres = parseFloat(verifyActualInput);
+    if (isNaN(actualMetres) || actualMetres <= 0) {
+      toast.error('Enter a valid dimension');
+      return;
+    }
+    // Calculate exact unitsPerMetre from the drawn line
+    const worldDistance = Math.hypot(
+      verifyMeasurement.worldPoints[verifyMeasurement.worldPoints.length - 1].x - verifyMeasurement.worldPoints[0].x,
+      verifyMeasurement.worldPoints[verifyMeasurement.worldPoints.length - 1].y - verifyMeasurement.worldPoints[0].y
+    );
+    const correctedUnitsPerMetre = worldDistance / actualMetres;
+    const correctionPct = Math.round((correctedUnitsPerMetre / state.currentScale.unitsPerMetre - 1) * 100);
+    dispatch({
+      type: 'SET_SCALE',
+      payload: {
+        pageIndex: state.currentPageIndex,
+        scale: {
+          ...state.currentScale,
+          unitsPerMetre: correctedUnitsPerMetre,
+          scaleMethod: 'manual',
+        }
+      }
+    });
+    setVerifyMeasurement(null);
+    if (Math.abs(correctionPct) < 1) {
+      toast.success('Scale verified — no correction needed');
+    } else {
+      toast.success(`Scale corrected by ${correctionPct > 0 ? '+' : ''}${correctionPct}% and locked`);
+    }
+  };
+
   // FIX: Memoize callbacks to prevent infinite re-renders
   const handleMeasurementComplete = useCallback((measurement: Measurement) => {
     // Guard: never store zero-length / zero-area measurements.
-    // These arise from accidental clicks (no drag) or double-clicks and clutter
-    // the sidebar with "0.00 m" entries that can't be meaningfully edited.
-    // Count measurements are exempt (their realValue is the item count ≥ 1).
     if ((measurement as any).type !== 'count' && measurement.realValue === 0) return;
+
+    // Verify mode: intercept the next line as a scale check
+    if (isVerifyMode && measurement.type === 'line') {
+      setVerifyMeasurement(measurement);
+      setVerifyActualInput('');
+      setIsVerifyMode(false);
+      dispatch({ type: 'SET_ACTIVE_TOOL', payload: 'pan' });
+      return;
+    }
+
     dispatch({ type: 'ADD_MEASUREMENT', payload: measurement });
     toast.success('Measurement added');
-  }, [dispatch]);
+  }, [dispatch, isVerifyMode]);
 
   const handleDeleteLastMeasurement = useCallback(() => {
     const measurements = state.measurements;
@@ -591,6 +642,7 @@ export const PDFTakeoff = ({ projectId, estimateId, onAddCostItems }: PDFTakeoff
                   dispatch({ type: 'SET_CALIBRATION_MODE', payload: null });
                 }}
                 pdfViewport={pdfViewport}
+                onStartVerify={handleStartVerify}
               />
             </PopoverContent>
           </Popover>
@@ -716,6 +768,63 @@ export const PDFTakeoff = ({ projectId, estimateId, onAddCostItems }: PDFTakeoff
   return (
     <>
     {fullscreenPortal}
+
+    {/* Verify Scale Dialog */}
+    <Dialog open={!!verifyMeasurement} onOpenChange={(open) => { if (!open) setVerifyMeasurement(null); }}>
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <Ruler className="h-5 w-5 text-amber-400" />
+            Verify Scale
+          </DialogTitle>
+        </DialogHeader>
+        <div className="space-y-4 py-2">
+          <div className="bg-muted/50 rounded-lg p-3 text-sm">
+            <p className="text-muted-foreground">Line measured at current scale:</p>
+            <p className="text-2xl font-mono font-bold mt-1">
+              {verifyMeasurement?.realValue.toFixed(3)} m
+            </p>
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="verify-input">What is the actual dimension of that line?</Label>
+            <div className="flex gap-2">
+              <Input
+                id="verify-input"
+                autoFocus
+                type="number"
+                step="0.001"
+                min="0.001"
+                placeholder="e.g. 2.200"
+                value={verifyActualInput}
+                onChange={e => setVerifyActualInput(e.target.value)}
+                onKeyDown={e => { if (e.key === 'Enter') applyVerifiedScale(); }}
+                className="flex-1"
+              />
+              <span className="flex items-center text-sm text-muted-foreground px-2">m</span>
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Enter the value shown on the dimension label (e.g. "2200" = 2.200 m)
+            </p>
+          </div>
+          {verifyActualInput && !isNaN(parseFloat(verifyActualInput)) && verifyMeasurement && (() => {
+            const actual = parseFloat(verifyActualInput);
+            const diff = Math.round((actual / verifyMeasurement.realValue - 1) * 100);
+            return actual > 0 ? (
+              <p className={`text-xs font-medium ${Math.abs(diff) < 2 ? 'text-green-500' : 'text-amber-400'}`}>
+                {Math.abs(diff) < 1 ? '✓ Scale looks correct' : `Scale will be corrected by ${diff > 0 ? '+' : ''}${diff}%`}
+              </p>
+            ) : null;
+          })()}
+        </div>
+        <DialogFooter className="gap-2">
+          <Button variant="outline" onClick={() => setVerifyMeasurement(null)}>Cancel</Button>
+          <Button onClick={applyVerifiedScale} disabled={!verifyActualInput || isNaN(parseFloat(verifyActualInput))}>
+            Apply Correction
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+
     <div className="space-y-6">
       <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
         <div className="flex items-center justify-between">
@@ -896,6 +1005,7 @@ export const PDFTakeoff = ({ projectId, estimateId, onAddCostItems }: PDFTakeoff
                           dispatch({ type: 'SET_CALIBRATION_MODE', payload: null });
                         }}
                         pdfViewport={pdfViewport}
+                        onStartVerify={handleStartVerify}
                       />
                     </PopoverContent>
                   </Popover>
@@ -943,6 +1053,16 @@ export const PDFTakeoff = ({ projectId, estimateId, onAddCostItems }: PDFTakeoff
                     </div>
                   )}
                 </div>
+
+                {isVerifyMode && (
+                  <div className="flex items-center gap-3 px-4 py-2 bg-amber-500/10 border border-amber-500/40 rounded-lg text-sm text-amber-400 animate-pulse">
+                    <Ruler className="h-4 w-4 shrink-0" />
+                    <span>Draw a line on any labelled dimension (e.g. "2200") — then enter the real value to correct the scale</span>
+                    <Button variant="ghost" size="sm" className="ml-auto h-7 text-amber-400 hover:text-amber-300" onClick={() => { setIsVerifyMode(false); dispatch({ type: 'SET_ACTIVE_TOOL', payload: 'pan' }); }}>
+                      Cancel
+                    </Button>
+                  </div>
+                )}
 
                 <div className="h-[calc(100vh-260px)] min-h-[500px]" ref={canvasContainerRef}>
                   <InteractiveCanvas

@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Ruler, CheckCircle, RotateCcw, X } from 'lucide-react';
+import { Ruler, CheckCircle, RotateCcw, X, ShieldCheck } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -20,6 +20,7 @@ interface ScalingCalibratorProps {
   manualPoints: [WorldPoint, WorldPoint] | null;
   onCalibrationComplete: () => void;
   pdfViewport?: { width: number; height: number } | null;
+  onStartVerify?: () => void;
 }
 
 export const ScalingCalibrator = ({
@@ -31,7 +32,8 @@ export const ScalingCalibrator = ({
   onResetScale,
   manualPoints,
   onCalibrationComplete,
-  pdfViewport
+  pdfViewport,
+  onStartVerify,
 }: ScalingCalibratorProps) => {
   const [calibrationMode, setCalibrationMode] = useState<'preset' | 'manual'>('preset');
   const [selectedScale, setSelectedScale] = useState('1:100');
@@ -129,14 +131,26 @@ export const ScalingCalibrator = ({
       </div>
 
       {isCalibrated && currentScale && (
-        <div className="bg-green-50 dark:bg-green-950 p-3 rounded-md">
+        <div className="bg-green-50 dark:bg-green-950 p-3 rounded-md space-y-2">
           <p className="text-sm font-medium text-green-800 dark:text-green-200">
             ✓ Scale Active: {currentScale.scaleFactor ? `1:${currentScale.scaleFactor}` : 'Manual'}
           </p>
-          <p className="text-xs text-green-700 dark:text-green-300 mt-1">
+          <p className="text-xs text-green-700 dark:text-green-300">
             {currentScale.unitsPerMetre.toFixed(2)} PDF units per metre
-            {currentScale.drawingAreaPercent && ` (${Math.round(currentScale.drawingAreaPercent * 100)}% drawing area)`}
+            {currentScale.scaleMethod === 'preset' && ' — preset'}
+            {currentScale.scaleMethod === 'manual' && ' — verified'}
           </p>
+          {onStartVerify && currentScale.scaleMethod === 'preset' && (
+            <Button
+              size="sm"
+              variant="outline"
+              className="w-full h-7 text-xs border-green-600 text-green-700 dark:text-green-300 hover:bg-green-100 dark:hover:bg-green-900"
+              onClick={onStartVerify}
+            >
+              <Ruler className="h-3 w-3 mr-1.5" />
+              Verify Scale on Drawing
+            </Button>
+          )}
         </div>
       )}
 
