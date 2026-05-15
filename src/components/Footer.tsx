@@ -7,9 +7,9 @@ const Footer = () => {
           <div className="col-span-1">
             <div className="flex items-center gap-2 mb-4">
               <div className="w-8 h-8 bg-gradient-accent rounded-lg flex items-center justify-center">
-                <span className="font-display font-bold text-primary-foreground">B</span>
+                <span className="font-display font-bold text-primary-foreground text-sm">E</span>
               </div>
-              <span className="font-display text-xl font-bold">Buildamax</span>
+              <span className="font-display text-xl font-bold">Esti-mate</span>
             </div>
             <p className="text-sm text-muted-foreground">
               AI-powered estimation for Australian builders.
@@ -51,7 +51,7 @@ const Footer = () => {
         </div>
 
         <div className="pt-8 border-t border-border text-center text-sm text-muted-foreground">
-          <p>© 2025 Buildamax Estimation AI. All rights reserved. QBCC & NCC Compliant.</p>
+          <p>© 2026 Esti-mate. All rights reserved. Built for Australian builders.</p>
         </div>
       </div>
     </footer>
