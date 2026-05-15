@@ -17,6 +17,8 @@ import { RATE_TRADE_TO_OPTION } from '@/lib/takeoff/profile';
 import { toast } from 'sonner';
 import { MaterialPickerDialog } from './MaterialPickerDialog';
 import { MaterialEntry } from '@/lib/materials/types';
+import { useSubscription } from '@/hooks/useSubscription';
+import { UpgradeModal } from '@/components/UpgradeModal';
 import { findLabourRate, getCustomRates, setCustomRate, clearCustomRate, LABOUR_MULT } from '@/data/labourRates';
 
 // Area options
@@ -221,6 +223,8 @@ export const CostEstimator = ({
   onDeleteCostItem,
   onLinkMeasurement,
 }: CostEstimatorProps) => {
+  const sub = useSubscription();
+  const [upgradeOpen, setUpgradeOpen] = useState(false);
   const [selectedState, setSelectedState] = useState<State>('NSW');
   const [marginPercent, setMarginPercent] = useState(15);
   const [gstEnabled, setGstEnabled] = useState(true);
@@ -697,11 +701,11 @@ export const CostEstimator = ({
         </div>
 
         <div className="flex gap-2">
-          <Button variant="outline" size="sm" onClick={exportToCSV}>
+          <Button variant="outline" size="sm" onClick={() => { if (!sub.caps.boqExport) { setUpgradeOpen(true); return; } exportToCSV(); }}>
             <FileDown className="h-4 w-4 mr-1" />
             CSV
           </Button>
-          <Button variant="outline" size="sm" onClick={exportToBOQ} disabled={costItems.length === 0}>
+          <Button variant="outline" size="sm" onClick={() => { if (!sub.caps.boqExport) { setUpgradeOpen(true); return; } exportToBOQ(); }} disabled={costItems.length === 0}>
             <FileDown className="h-4 w-4 mr-1" />
             BOQ
           </Button>
@@ -1321,6 +1325,7 @@ export const CostEstimator = ({
           </div>
         </div>
       </Card>
+      <UpgradeModal open={upgradeOpen} onClose={() => setUpgradeOpen(false)} feature="BOQ Export" />
     </div>
   );
 };
