@@ -539,7 +539,7 @@ const MarketInsights = () => {
               TAB 3 — SOW RATES (existing component)
           ══════════════════════════════════════════════════════════════════ */}
           <TabsContent value="sow">
-            <SOWRatesSection />
+            <SOWRatesSection selectedState={selectedState} />
           </TabsContent>
         </Tabs>
 
