@@ -1,6 +1,5 @@
 import { useState, useEffect } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
-import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -14,12 +13,18 @@ import {
   PLAN_NAMES, PLAN_PRICES, TRIAL_DAYS,
   createTrialSubscription, loadSubscription,
 } from "@/lib/subscription";
+import { localSignUp, localSignIn, isSignedIn } from "@/lib/localAuth";
 
-const authSchema = z.object({
+const signUpSchema = z.object({
   email: z.string().email("Invalid email address").max(255),
   password: z.string().min(6, "Password must be at least 6 characters").max(100),
-  companyName: z.string().min(1, "Company name required").max(100).optional(),
-  state: z.string().min(1, "State required").optional(),
+  companyName: z.string().min(1, "Company name is required").max(100),
+  state: z.string().min(1, "Please select a state"),
+});
+
+const signInSchema = z.object({
+  email: z.string().email("Invalid email address").max(255),
+  password: z.string().min(1, "Password is required").max(100),
 });
 
 const PLANS: PlanId[] = ["starter", "pro", "business"];
@@ -35,7 +40,7 @@ const Auth = () => {
 
   const planParam = (params.get("plan") as PlanId | null) || "pro";
   const billingParam = (params.get("billing") as BillingPeriod | null) || "monthly";
-  const modeParam = params.get("mode"); // "signup" | null
+  const modeParam = params.get("mode");
 
   const [isLogin, setIsLogin] = useState(modeParam !== "signup");
   const [isLoading, setIsLoading] = useState(false);
@@ -44,16 +49,14 @@ const Auth = () => {
   );
   const [billing] = useState<BillingPeriod>(billingParam);
 
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
+  const [email, setEmail]             = useState("");
+  const [password, setPassword]       = useState("");
   const [companyName, setCompanyName] = useState("");
-  const [state, setState] = useState("");
+  const [state, setState]             = useState("");
 
-  // Already logged in?
+  // Already signed in? Go straight to dashboard
   useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      if (session) navigate("/dashboard");
-    });
+    if (isSignedIn()) navigate("/dashboard");
   }, [navigate]);
 
   const handleAuth = async (e: React.FormEvent) => {
@@ -61,55 +64,42 @@ const Auth = () => {
     setIsLoading(true);
 
     try {
-      const validData = authSchema.parse({
-        email: email.trim(),
-        password,
-        companyName: !isLogin ? companyName.trim() : undefined,
-        state: !isLogin ? state : undefined,
-      });
-
       if (isLogin) {
-        const { error } = await supabase.auth.signInWithPassword({
-          email: validData.email,
-          password: validData.password,
-        });
+        const data = signInSchema.parse({ email: email.trim(), password });
+        const user = localSignIn(data.email, data.password);
 
-        if (error) {
-          toast.error(
-            error.message.includes("Invalid login credentials")
-              ? "Incorrect email or password"
-              : error.message
-          );
+        if (!user) {
+          // Check if account exists at all
+          const sub = loadSubscription();
+          if (sub && sub.email === data.email.toLowerCase()) {
+            toast.error("Incorrect password");
+          } else {
+            toast.error("No account found with that email — please sign up first");
+          }
           return;
         }
 
         toast.success("Welcome back!");
         navigate("/dashboard");
+
       } else {
-        const { data, error } = await supabase.auth.signUp({
-          email: validData.email,
-          password: validData.password,
-          options: {
-            emailRedirectTo: `${window.location.origin}/dashboard`,
-            data: {
-              company_name: validData.companyName,
-              state: validData.state,
-            },
-          },
+        const data = signUpSchema.parse({
+          email: email.trim(),
+          password,
+          companyName: companyName.trim(),
+          state,
         });
 
-        if (error) {
-          toast.error(
-            error.message.includes("already registered")
-              ? "This email is already registered. Please sign in instead."
-              : error.message
-          );
+        // Check for duplicate email
+        const existing = loadSubscription();
+        if (existing && existing.email === data.email.toLowerCase()) {
+          toast.error("That email is already registered — please sign in instead");
+          setIsLogin(true);
           return;
         }
 
-        // Start 14-day trial in localStorage
-        const displayName = validData.companyName || validData.email.split("@")[0];
-        createTrialSubscription(validData.email, displayName, selectedPlan, billing);
+        localSignUp(data.email, data.password, data.companyName, data.state);
+        createTrialSubscription(data.email, data.companyName, selectedPlan, billing);
 
         toast.success(`Account created! Your ${TRIAL_DAYS}-day free trial has started.`);
         navigate("/dashboard");
@@ -118,7 +108,7 @@ const Auth = () => {
       if (error instanceof z.ZodError) {
         toast.error(error.errors[0].message);
       } else {
-        toast.error("An unexpected error occurred");
+        toast.error("Something went wrong — please try again");
       }
     } finally {
       setIsLoading(false);
@@ -138,7 +128,7 @@ const Auth = () => {
             onClick={() => navigate("/")}
           >
             <ArrowLeft className="h-4 w-4 mr-2" />
-            Back
+            Back to home
           </Button>
 
           <Card className="p-8 shadow-xl">
@@ -251,7 +241,6 @@ const Auth = () => {
                   onChange={(e) => setPassword(e.target.value)}
                   placeholder="••••••••"
                   required
-                  minLength={6}
                   maxLength={100}
                 />
                 {!isLogin && (

@@ -2,15 +2,22 @@ import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Menu, X } from "lucide-react";
+import { isSignedIn, localSignOut } from "@/lib/localAuth";
 
 const Navigation = () => {
   const navigate = useNavigate();
   const [mobileOpen, setMobileOpen] = useState(false);
+  const signedIn = isSignedIn();
+
+  const handleSignOut = () => {
+    localSignOut();
+    navigate("/");
+  };
 
   const links = [
-    { label: "Features",       href: "#features",  internal: false },
-    { label: "Pricing",        href: "/pricing",   internal: true  },
-    { label: "Market Insights", href: "#insights", internal: false },
+    { label: "Features",        href: "#features",  internal: false },
+    { label: "Pricing",         href: "/pricing",   internal: true  },
+    { label: "Market Insights", href: "#insights",  internal: false },
   ];
 
   return (
@@ -44,16 +51,29 @@ const Navigation = () => {
                 </a>
               )
             )}
-            <Button variant="ghost" size="sm" onClick={() => navigate("/dashboard")}>
-              Sign In
-            </Button>
-            <Button
-              size="sm"
-              onClick={() => navigate("/auth?plan=pro&mode=signup")}
-              className="bg-accent text-accent-foreground hover:bg-accent/90"
-            >
-              Start Free Trial
-            </Button>
+            {signedIn ? (
+              <>
+                <Button variant="ghost" size="sm" onClick={() => navigate("/dashboard")}>
+                  Dashboard
+                </Button>
+                <Button variant="outline" size="sm" onClick={handleSignOut}>
+                  Sign Out
+                </Button>
+              </>
+            ) : (
+              <>
+                <Button variant="ghost" size="sm" onClick={() => navigate("/auth")}>
+                  Sign In
+                </Button>
+                <Button
+                  size="sm"
+                  onClick={() => navigate("/auth?plan=pro&mode=signup")}
+                  className="bg-accent text-accent-foreground hover:bg-accent/90"
+                >
+                  Start Free Trial
+                </Button>
+              </>
+            )}
           </div>
 
           <Button variant="ghost" size="icon" className="md:hidden" onClick={() => setMobileOpen(v => !v)}>
@@ -85,16 +105,29 @@ const Navigation = () => {
               )
             )}
             <div className="flex gap-2 pt-2">
-              <Button variant="outline" size="sm" className="flex-1" onClick={() => navigate("/dashboard")}>
-                Sign In
-              </Button>
-              <Button
-                size="sm"
-                className="flex-1 bg-accent text-accent-foreground hover:bg-accent/90"
-                onClick={() => navigate("/auth?plan=pro&mode=signup")}
-              >
-                Start Free Trial
-              </Button>
+              {signedIn ? (
+                <>
+                  <Button variant="outline" size="sm" className="flex-1" onClick={() => navigate("/dashboard")}>
+                    Dashboard
+                  </Button>
+                  <Button variant="ghost" size="sm" className="flex-1" onClick={handleSignOut}>
+                    Sign Out
+                  </Button>
+                </>
+              ) : (
+                <>
+                  <Button variant="outline" size="sm" className="flex-1" onClick={() => navigate("/auth")}>
+                    Sign In
+                  </Button>
+                  <Button
+                    size="sm"
+                    className="flex-1 bg-accent text-accent-foreground hover:bg-accent/90"
+                    onClick={() => navigate("/auth?plan=pro&mode=signup")}
+                  >
+                    Start Free Trial
+                  </Button>
+                </>
+              )}
             </div>
           </div>
         )}

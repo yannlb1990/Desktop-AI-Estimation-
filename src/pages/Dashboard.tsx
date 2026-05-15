@@ -6,10 +6,11 @@ import { Badge } from "@/components/ui/badge";
 import {
   Plus, FileText, DollarSign, TrendingUp, BarChart3,
   Upload, Zap, Settings, Package, ChevronRight,
-  ArrowRight, Clock, User, ExternalLink, AlertTriangle, X
+  ArrowRight, Clock, User, ExternalLink, AlertTriangle, X, LogOut
 } from "lucide-react";
 import { useSubscription } from "@/hooks/useSubscription";
 import { PLAN_NAMES } from "@/lib/subscription";
+import { getLocalUser, localSignOut } from "@/lib/localAuth";
 
 // ── helpers ─────────────────────────────────────────────────────────────────
 
@@ -59,6 +60,12 @@ const Dashboard = () => {
   const [showAll, setShowAll] = useState(false);
   const [bannerDismissed, setBannerDismissed] = useState(false);
   const sub = useSubscription();
+  const localUser = getLocalUser();
+
+  const handleSignOut = () => {
+    localSignOut();
+    navigate("/");
+  };
 
   useEffect(() => {
     const raw = localStorage.getItem("local_projects");
@@ -154,6 +161,9 @@ const Dashboard = () => {
             <Button variant="ghost" size="sm" onClick={() => navigate("/settings")}>
               <Settings className="h-4 w-4 mr-1.5" />Settings
             </Button>
+            <Button variant="ghost" size="sm" onClick={handleSignOut} className="text-muted-foreground hover:text-foreground">
+              <LogOut className="h-4 w-4 mr-1.5" />Sign Out
+            </Button>
             <Button
               size="sm"
               onClick={handleNewProject}
@@ -172,7 +182,7 @@ const Dashboard = () => {
         {/* Hero row */}
         <div className="flex items-start justify-between">
           <div>
-            <h1 className="font-display text-3xl font-bold">Welcome back, Yann</h1>
+            <h1 className="font-display text-3xl font-bold">Welcome back{localUser ? `, ${localUser.displayName}` : ''}</h1>
             <p className="text-muted-foreground mt-1">
               {projects.length} project{projects.length !== 1 ? 's' : ''} · {fmtCurrency(pipelineValue)} in pipeline
             </p>

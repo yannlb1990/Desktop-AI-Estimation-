@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { supabase } from "@/integrations/supabase/client";
+import { getLocalUser, isSignedIn } from "@/lib/localAuth";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -14,7 +14,6 @@ const Settings = () => {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [profile, setProfile] = useState<any>(null);
 
   // Company Profile
   const [companyName, setCompanyName] = useState("");
@@ -84,68 +83,46 @@ const Settings = () => {
     }
   };
 
-  const loadProfile = async () => {
+  const PROFILE_KEY = 'estimate_profile';
+
+  const loadProfile = () => {
+    if (!isSignedIn()) {
+      navigate("/auth");
+      return;
+    }
     try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) {
-        navigate("/auth");
-        return;
-      }
-
-      const { data, error } = await supabase
-        .from("profiles")
-        .select("*")
-        .eq("id", user.id)
-        .single();
-
-      if (error && error.code !== "PGRST116") {
-        throw error;
-      }
-
-      if (data) {
-        setProfile(data);
-        setCompanyName(data.company_name || "");
-        setAbn(data.abn || "");
-        setPhone(data.phone || "");
-        setAddress(data.address || "");
-        setCity(data.city || "");
-        setState(data.state || "");
-        setPostcode(data.postcode || "");
-      }
-    } catch (error) {
-      console.error("Error loading profile:", error);
+      const localUser = getLocalUser();
+      const saved = localStorage.getItem(PROFILE_KEY);
+      const data = saved ? JSON.parse(saved) : {};
+      setCompanyName(data.company_name || localUser?.displayName || "");
+      setAbn(data.abn || "");
+      setPhone(data.phone || "");
+      setAddress(data.address || "");
+      setCity(data.city || "");
+      setState(data.state || localUser?.state || "");
+      setPostcode(data.postcode || "");
+    } catch {
       toast.error("Failed to load settings");
     } finally {
       setLoading(false);
     }
   };
 
-  const handleSaveProfile = async () => {
+  const handleSaveProfile = () => {
     setSaving(true);
     try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return;
-
-      const { error } = await supabase
-        .from("profiles")
-        .update({
-          company_name: companyName,
-          abn,
-          phone,
-          address,
-          city,
-          state,
-          postcode,
-          updated_at: new Date().toISOString(),
-        })
-        .eq("id", user.id);
-
-      if (error) throw error;
-
+      localStorage.setItem(PROFILE_KEY, JSON.stringify({
+        company_name: companyName,
+        abn,
+        phone,
+        address,
+        city,
+        state,
+        postcode,
+        updated_at: new Date().toISOString(),
+      }));
       toast.success("Profile updated successfully");
-      loadProfile();
-    } catch (error) {
-      console.error("Error saving profile:", error);
+    } catch {
       toast.error("Failed to save profile");
     } finally {
       setSaving(false);
