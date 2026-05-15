@@ -7,7 +7,7 @@ const Navigation = () => {
 
   const links = [
     { label: "Features", href: "#features" },
-    { label: "Pricing", href: "#pricing" },
+    { label: "Pricing", href: "/pricing" },
     { label: "Market Insights", href: "#insights" },
   ];
 

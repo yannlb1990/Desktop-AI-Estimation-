@@ -7,9 +7,10 @@ import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { ArrowLeft, TrendingUp, DollarSign, Search, Download, RefreshCw, Package, Wrench, HardHat } from "lucide-react";
+import { ArrowLeft, TrendingUp, DollarSign, Search, Download, RefreshCw, Package, Wrench, HardHat, Lock } from "lucide-react";
 import { toast } from "sonner";
 import { SOWRatesSection } from "@/components/SOWRatesSection";
+import { useSubscription } from "@/hooks/useSubscription";
 
 // ─── STATES ──────────────────────────────────────────────────────────────────
 const STATES = ["NSW", "VIC", "QLD", "WA", "SA"] as const;
@@ -170,6 +171,7 @@ const LABOUR_CATEGORIES = ["All", ...Array.from(new Set(LABOUR.map(l => l.catego
 // ─── MAIN COMPONENT ───────────────────────────────────────────────────────────
 const MarketInsights = () => {
   const navigate = useNavigate();
+  const sub = useSubscription();
   const [selectedState, setSelectedState] = useState<StateCode>("NSW");
   const [matSearch, setMatSearch] = useState("");
   const [matCat, setMatCat] = useState("All");
@@ -235,6 +237,32 @@ const MarketInsights = () => {
     if (!entries.length) return null;
     return entries.reduce((best, [k, p]) => avg(p) < avg(item.prices[best]!) ? k : best, entries[0][0]);
   };
+
+  // ── Plan gate ──
+  if (!sub.caps.marketInsights) {
+    return (
+      <div className="min-h-screen bg-muted/30 flex items-center justify-center">
+        <div className="text-center max-w-md px-6">
+          <div className="w-16 h-16 bg-primary/10 rounded-full flex items-center justify-center mx-auto mb-4">
+            <Lock className="h-8 w-8 text-primary" />
+          </div>
+          <h2 className="font-display text-2xl font-bold mb-2">Market Insights</h2>
+          <p className="text-muted-foreground mb-6">
+            Live Australian material &amp; labour rates are available on the{" "}
+            <strong>Professional</strong> plan and above.
+          </p>
+          <div className="flex gap-3 justify-center">
+            <Button onClick={() => navigate("/pricing")} className="bg-primary text-primary-foreground">
+              View Plans
+            </Button>
+            <Button variant="outline" onClick={() => navigate("/dashboard")}>
+              Back to Dashboard
+            </Button>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-muted/30">

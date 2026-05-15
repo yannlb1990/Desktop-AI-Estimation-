@@ -1,34 +1,55 @@
 import { useState, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
-import { Loader2 } from "lucide-react";
+import { Loader2, Check, ArrowLeft } from "lucide-react";
 import { z } from "zod";
+import {
+  PlanId, BillingPeriod,
+  PLAN_NAMES, PLAN_PRICES, TRIAL_DAYS,
+  createTrialSubscription, loadSubscription,
+} from "@/lib/subscription";
 
 const authSchema = z.object({
   email: z.string().email("Invalid email address").max(255),
   password: z.string().min(6, "Password must be at least 6 characters").max(100),
   companyName: z.string().min(1, "Company name required").max(100).optional(),
   state: z.string().min(1, "State required").optional(),
-  city: z.string().min(1, "City required").max(100).optional(),
-  postcode: z.string().min(4, "Valid postcode required").max(4).optional(),
 });
+
+const PLANS: PlanId[] = ["starter", "pro", "business"];
+const PLAN_TAGLINES: Record<PlanId, string> = {
+  starter:  "$79/mo · 3 projects",
+  pro:      "$149/mo · Unlimited · Most popular",
+  business: "$279/mo · 5 team seats",
+};
 
 const Auth = () => {
   const navigate = useNavigate();
-  const [isLogin, setIsLogin] = useState(true);
+  const [params] = useSearchParams();
+
+  const planParam = (params.get("plan") as PlanId | null) || "pro";
+  const billingParam = (params.get("billing") as BillingPeriod | null) || "monthly";
+  const modeParam = params.get("mode"); // "signup" | null
+
+  const [isLogin, setIsLogin] = useState(modeParam !== "signup");
   const [isLoading, setIsLoading] = useState(false);
+  const [selectedPlan, setSelectedPlan] = useState<PlanId>(
+    PLANS.includes(planParam) ? planParam : "pro"
+  );
+  const [billing] = useState<BillingPeriod>(billingParam);
+
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [companyName, setCompanyName] = useState("");
   const [state, setState] = useState("");
-  const [city, setCity] = useState("");
-  const [postcode, setPostcode] = useState("");
 
+  // Already logged in?
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
       if (session) navigate("/dashboard");
@@ -45,8 +66,6 @@ const Auth = () => {
         password,
         companyName: !isLogin ? companyName.trim() : undefined,
         state: !isLogin ? state : undefined,
-        city: !isLogin ? city.trim() : undefined,
-        postcode: !isLogin ? postcode.trim() : undefined,
       });
 
       if (isLogin) {
@@ -56,18 +75,18 @@ const Auth = () => {
         });
 
         if (error) {
-          if (error.message.includes("Invalid login credentials")) {
-            toast.error("Incorrect email or password");
-          } else {
-            toast.error(error.message);
-          }
+          toast.error(
+            error.message.includes("Invalid login credentials")
+              ? "Incorrect email or password"
+              : error.message
+          );
           return;
         }
 
         toast.success("Welcome back!");
         navigate("/dashboard");
       } else {
-        const { error } = await supabase.auth.signUp({
+        const { data, error } = await supabase.auth.signUp({
           email: validData.email,
           password: validData.password,
           options: {
@@ -75,22 +94,24 @@ const Auth = () => {
             data: {
               company_name: validData.companyName,
               state: validData.state,
-              city: validData.city,
-              postcode: validData.postcode,
             },
           },
         });
 
         if (error) {
-          if (error.message.includes("already registered")) {
-            toast.error("This email is already registered. Please sign in instead.");
-          } else {
-            toast.error(error.message);
-          }
+          toast.error(
+            error.message.includes("already registered")
+              ? "This email is already registered. Please sign in instead."
+              : error.message
+          );
           return;
         }
 
-        toast.success("Account created! Redirecting to dashboard...");
+        // Start 14-day trial in localStorage
+        const displayName = validData.companyName || validData.email.split("@")[0];
+        createTrialSubscription(validData.email, displayName, selectedPlan, billing);
+
+        toast.success(`Account created! Your ${TRIAL_DAYS}-day free trial has started.`);
         navigate("/dashboard");
       }
     } catch (error) {
@@ -104,25 +125,76 @@ const Auth = () => {
     }
   };
 
+  const price = PLAN_PRICES[selectedPlan][billing];
+
   return (
-    <div className="min-h-screen flex items-center justify-center gradient-hero">
+    <div className="min-h-screen flex items-center justify-center gradient-hero py-12">
       <div className="container mx-auto px-6">
         <div className="max-w-md mx-auto">
-          <Card className="p-8 shadow-lg">
-            <div className="text-center mb-8">
-              <div className="flex items-center justify-center gap-2 mb-4">
-                <div className="w-10 h-10 bg-gradient-accent rounded-lg flex items-center justify-center">
-                  <span className="font-display font-bold text-primary text-xl">E</span>
-                </div>
-                <span className="font-display text-2xl font-bold">Esti-mate</span>
+
+          <Button
+            variant="ghost"
+            className="mb-6 text-white/70 hover:text-white hover:bg-white/10"
+            onClick={() => navigate("/")}
+          >
+            <ArrowLeft className="h-4 w-4 mr-2" />
+            Back
+          </Button>
+
+          <Card className="p-8 shadow-xl">
+            {/* Logo */}
+            <div className="flex items-center justify-center gap-2 mb-6">
+              <div className="w-9 h-9 bg-gradient-accent rounded-lg flex items-center justify-center">
+                <span className="font-display font-bold text-primary-foreground text-sm">E</span>
               </div>
-              <h1 className="font-display text-2xl font-bold mb-2">
-                {isLogin ? "Welcome Back" : "Get Started"}
-              </h1>
-              <p className="text-muted-foreground">
-                {isLogin ? "Sign in to your account" : "Create your account"}
-              </p>
+              <span className="font-display text-xl font-bold">Esti-mate</span>
             </div>
+
+            <h1 className="font-display text-2xl font-bold text-center mb-1">
+              {isLogin ? "Welcome back" : "Start your free trial"}
+            </h1>
+            <p className="text-center text-muted-foreground text-sm mb-6">
+              {isLogin
+                ? "Sign in to your account"
+                : `${TRIAL_DAYS} days free · No credit card required`}
+            </p>
+
+            {/* Plan selector (signup only) */}
+            {!isLogin && (
+              <div className="mb-6">
+                <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-2">
+                  Select your plan (free trial on all)
+                </p>
+                <div className="space-y-2">
+                  {PLANS.map((p) => (
+                    <button
+                      key={p}
+                      type="button"
+                      onClick={() => setSelectedPlan(p)}
+                      className={`w-full flex items-center justify-between px-4 py-3 rounded-lg border text-sm transition-all ${
+                        selectedPlan === p
+                          ? "border-primary bg-primary/5 text-foreground"
+                          : "border-border text-muted-foreground hover:border-primary/40"
+                      }`}
+                    >
+                      <div className="flex items-center gap-2">
+                        {selectedPlan === p
+                          ? <Check className="h-4 w-4 text-primary" />
+                          : <span className="w-4 h-4 rounded-full border border-border" />}
+                        <span className="font-medium">{PLAN_NAMES[p]}</span>
+                        {p === "pro" && (
+                          <Badge variant="secondary" className="text-[10px] px-1.5 py-0">Popular</Badge>
+                        )}
+                      </div>
+                      <span className="text-xs text-muted-foreground">{PLAN_TAGLINES[p]}</span>
+                    </button>
+                  ))}
+                </div>
+                <p className="text-xs text-muted-foreground mt-2 text-center">
+                  After trial: ${price} AUD/mo · Cancel anytime
+                </p>
+              </div>
+            )}
 
             <form onSubmit={handleAuth} className="space-y-4">
               {!isLogin && (
@@ -135,59 +207,24 @@ const Auth = () => {
                       value={companyName}
                       onChange={(e) => setCompanyName(e.target.value)}
                       placeholder="Your Company Pty Ltd"
-                      required={!isLogin}
+                      required
                       maxLength={100}
                     />
                   </div>
-
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <Label htmlFor="state">State</Label>
-                      <select
-                        id="state"
-                        value={state}
-                        onChange={(e) => setState(e.target.value)}
-                        className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                        required={!isLogin}
-                      >
-                        <option value="">Select state</option>
-                        <option value="NSW">NSW</option>
-                        <option value="VIC">VIC</option>
-                        <option value="QLD">QLD</option>
-                        <option value="WA">WA</option>
-                        <option value="SA">SA</option>
-                        <option value="TAS">TAS</option>
-                        <option value="NT">NT</option>
-                        <option value="ACT">ACT</option>
-                      </select>
-                    </div>
-
-                    <div>
-                      <Label htmlFor="postcode">Postcode</Label>
-                      <Input
-                        id="postcode"
-                        type="text"
-                        value={postcode}
-                        onChange={(e) => setPostcode(e.target.value)}
-                        placeholder="2000"
-                        required={!isLogin}
-                        maxLength={4}
-                        pattern="[0-9]{4}"
-                      />
-                    </div>
-                  </div>
-
                   <div>
-                    <Label htmlFor="city">City/Suburb</Label>
-                    <Input
-                      id="city"
-                      type="text"
-                      value={city}
-                      onChange={(e) => setCity(e.target.value)}
-                      placeholder="Sydney"
-                      required={!isLogin}
-                      maxLength={100}
-                    />
+                    <Label htmlFor="state">State</Label>
+                    <select
+                      id="state"
+                      value={state}
+                      onChange={(e) => setState(e.target.value)}
+                      className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                      required
+                    >
+                      <option value="">Select state</option>
+                      {["NSW","VIC","QLD","WA","SA","TAS","NT","ACT"].map(s => (
+                        <option key={s} value={s}>{s}</option>
+                      ))}
+                    </select>
                   </div>
                 </>
               )}
@@ -199,7 +236,7 @@ const Auth = () => {
                   type="email"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  placeholder="builder@example.com"
+                  placeholder="builder@example.com.au"
                   required
                   maxLength={255}
                 />
@@ -218,51 +255,42 @@ const Auth = () => {
                   maxLength={100}
                 />
                 {!isLogin && (
-                  <p className="text-xs text-muted-foreground mt-1">
-                    Minimum 6 characters
-                  </p>
+                  <p className="text-xs text-muted-foreground mt-1">Minimum 6 characters</p>
                 )}
               </div>
 
               <Button
                 type="submit"
-                className="w-full bg-accent text-accent-foreground hover:bg-accent/90"
+                className="w-full bg-primary text-primary-foreground hover:bg-primary/90"
                 disabled={isLoading}
               >
                 {isLoading ? (
-                  <>
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    {isLogin ? "Signing in..." : "Creating account..."}
-                  </>
+                  <><Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  {isLogin ? "Signing in…" : "Creating account…"}</>
                 ) : (
-                  <>{isLogin ? "Sign In" : "Create Account"}</>
+                  isLogin ? "Sign In" : `Start ${TRIAL_DAYS}-Day Free Trial`
                 )}
               </Button>
             </form>
 
-            <div className="mt-6 text-center">
+            <div className="mt-5 text-center">
               <button
                 type="button"
                 onClick={() => {
                   setIsLogin(!isLogin);
-                  setEmail("");
-                  setPassword("");
-                  setCompanyName("");
-                  setState("");
-                  setCity("");
-                  setPostcode("");
+                  setEmail(""); setPassword(""); setCompanyName(""); setState("");
                 }}
-                className="text-sm text-secondary hover:underline"
+                className="text-sm text-primary hover:underline"
               >
                 {isLogin
-                  ? "Don't have an account? Sign up"
+                  ? "No account yet? Sign up free"
                   : "Already have an account? Sign in"}
               </button>
             </div>
           </Card>
 
-          <p className="text-center mt-6 text-sm text-primary-foreground/70">
-            By continuing, you agree to our Terms of Service and Privacy Policy
+          <p className="text-center mt-4 text-sm text-white/50">
+            By continuing you agree to our Terms of Service &amp; Privacy Policy
           </p>
         </div>
       </div>

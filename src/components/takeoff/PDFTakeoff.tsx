@@ -38,6 +38,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '
 import { Label } from '@/components/ui/label';
 import { DimensionExtraction, ExtractedTable, RoomArea } from '@/lib/api/pdfExtractionApi';
 import { AppProfile, loadProfile } from '@/lib/takeoff/profile';
+import { useSubscription } from '@/hooks/useSubscription';
+import { UpgradeModal } from '@/components/UpgradeModal';
 
 interface PDFTakeoffProps {
   projectId: string;
@@ -70,6 +72,8 @@ export const PDFTakeoff = ({ projectId, estimateId, onAddCostItems }: PDFTakeoff
   const [appProfile, setAppProfile] = useState<AppProfile>(() => loadProfile());
   const [sidebarSelectedIds, setSidebarSelectedIds] = useState<Set<string>>(new Set());
   const [aiPanelsOpen, setAiPanelsOpen] = useState(false);
+  const [upgradeModal, setUpgradeModal] = useState<{ open: boolean; feature: string }>({ open: false, feature: '' });
+  const sub = useSubscription();
   const canvasContainerRef = useRef<HTMLDivElement | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const initialFitDoneRef = useRef(false);
@@ -1139,13 +1143,10 @@ export const PDFTakeoff = ({ projectId, estimateId, onAddCostItems }: PDFTakeoff
                       variant="outline"
                       className="flex-1"
                       size="sm"
-                      onClick={() =>
-                        downloadFile(
-                          'measurements.csv',
-                          ledgerToCsv(filteredMeasurements),
-                          'text/csv'
-                        )
-                      }
+                      onClick={() => {
+                        if (!sub.caps.boqExport) { setUpgradeModal({ open: true, feature: 'BOQ CSV Export' }); return; }
+                        downloadFile('measurements.csv', ledgerToCsv(filteredMeasurements), 'text/csv');
+                      }}
                       disabled={!filteredMeasurements.length}
                     >
                       <Download className="h-4 w-4 mr-2" />
@@ -1171,12 +1172,13 @@ export const PDFTakeoff = ({ projectId, estimateId, onAddCostItems }: PDFTakeoff
                       variant="outline"
                       className="flex-1"
                       size="sm"
-                      onClick={() =>
+                      onClick={() => {
+                        if (!sub.caps.takeoffPdfReport) { setUpgradeModal({ open: true, feature: 'Takeoff PDF Report' }); return; }
                         generateTakeoffPdf({
                           projectName: state.pdfFile?.name?.replace(/\.pdf$/i, '') || 'Takeoff',
                           measurements: filteredMeasurements,
-                        })
-                      }
+                        });
+                      }}
                       disabled={!filteredMeasurements.length}
                     >
                       <Download className="h-4 w-4 mr-2" />
@@ -1387,7 +1389,10 @@ export const PDFTakeoff = ({ projectId, estimateId, onAddCostItems }: PDFTakeoff
               </Button>
               <Button
                 size="sm"
-                onClick={() => setShowSOWDialog(true)}
+                onClick={() => {
+                  if (!sub.caps.sowExport) { setUpgradeModal({ open: true, feature: 'SOW PDF Generation' }); return; }
+                  setShowSOWDialog(true);
+                }}
                 disabled={state.costItems.length === 0}
                 className="gap-2"
               >
@@ -1423,6 +1428,12 @@ export const PDFTakeoff = ({ projectId, estimateId, onAddCostItems }: PDFTakeoff
         onOpenChange={setShowProfileDialog}
         profile={appProfile}
         onSave={setAppProfile}
+      />
+
+      <UpgradeModal
+        open={upgradeModal.open}
+        onClose={() => setUpgradeModal({ open: false, feature: '' })}
+        feature={upgradeModal.feature}
       />
     </div>
     </>
