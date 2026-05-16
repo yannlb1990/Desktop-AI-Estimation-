@@ -7,6 +7,7 @@ import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
 import { Loader2, Check, ArrowLeft, Mail } from "lucide-react";
+import { MetricoreLogoMark } from "@/components/MetricoreLogoMark";
 import { z } from "zod";
 import {
   PlanId, BillingPeriod,
@@ -227,9 +228,7 @@ const Auth = () => {
           <Card className="p-8 shadow-xl">
             {/* Logo */}
             <div className="flex items-center justify-center gap-2 mb-6">
-              <div className="w-9 h-9 bg-gradient-accent rounded-lg flex items-center justify-center">
-                <span className="font-display font-bold text-primary-foreground text-sm">M</span>
-              </div>
+              <MetricoreLogoMark height={34} />
               <span className="font-display text-xl font-bold">Metricore</span>
             </div>
 

@@ -10,6 +10,7 @@ import {
 } from "lucide-react";
 import { useSubscription } from "@/hooks/useSubscription";
 import { PLAN_NAMES } from "@/lib/subscription";
+import { MetricoreLogoMark } from "@/components/MetricoreLogoMark";
 import { getLocalUser, localSignOut, isSignedIn } from "@/lib/localAuth";
 
 // ── helpers ─────────────────────────────────────────────────────────────────
@@ -158,9 +159,7 @@ const Dashboard = () => {
       <nav className="border-b border-border bg-background sticky top-0 z-10">
         <div className="container mx-auto px-6 py-3 flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <div className="w-8 h-8 bg-gradient-accent rounded-lg flex items-center justify-center">
-              <span className="font-display font-bold text-primary-foreground text-sm">M</span>
-            </div>
+            <MetricoreLogoMark height={28} />
             <span className="font-display text-xl font-bold">Metricore</span>
           </div>
           <div className="flex items-center gap-2">

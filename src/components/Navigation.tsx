@@ -3,6 +3,7 @@ import { Link, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Menu, X } from "lucide-react";
 import { isSignedIn, localSignOut } from "@/lib/localAuth";
+import { MetricoreLogoMark } from "@/components/MetricoreLogoMark";
 
 const Navigation = () => {
   const navigate = useNavigate();
@@ -25,9 +26,7 @@ const Navigation = () => {
       <div className="container mx-auto px-6 py-4">
         <div className="flex items-center justify-between">
           <Link to="/" className="flex items-center gap-2">
-            <div className="w-8 h-8 bg-gradient-accent rounded-lg flex items-center justify-center">
-              <span className="font-display font-bold text-primary-foreground text-sm">M</span>
-            </div>
+            <MetricoreLogoMark height={30} />
             <span className="font-display text-xl font-bold text-foreground">Metricore</span>
           </Link>
 

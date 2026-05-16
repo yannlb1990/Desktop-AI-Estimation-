@@ -1,4 +1,14 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" fill="none">
+  <!-- Dark navy background -->
   <rect width="32" height="32" rx="6" fill="#0f172a"/>
-  <text x="16" y="22" font-family="Arial, sans-serif" font-size="18" font-weight="800" fill="#f59e0b" text-anchor="middle">M</text>
+  <!-- Wavy m mark in white -->
+  <path
+    d="M 4,26 L 4,17 C 4,6 12,6 12,17 C 12,28 20,28 20,17 C 20,6 28,6 28,17 L 28,26"
+    stroke="white"
+    stroke-width="5"
+    stroke-linecap="round"
+    stroke-linejoin="round"
+  />
+  <!-- Blue dot -->
+  <circle cx="29.5" cy="27.5" r="2.5" fill="#1e4db7"/>
 </svg>

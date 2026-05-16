@@ -1,3 +1,5 @@
+import { MetricoreLogoMark } from "@/components/MetricoreLogoMark";
+
 const Footer = () => {
   return (
     <footer className="border-t border-border bg-background py-12">
@@ -6,9 +8,7 @@ const Footer = () => {
           {/* Brand */}
           <div className="col-span-1">
             <div className="flex items-center gap-2 mb-4">
-              <div className="w-8 h-8 bg-gradient-accent rounded-lg flex items-center justify-center">
-                <span className="font-display font-bold text-primary-foreground text-sm">M</span>
-              </div>
+              <MetricoreLogoMark height={28} />
               <span className="font-display text-xl font-bold">Metricore</span>
             </div>
             <p className="text-sm text-muted-foreground">
