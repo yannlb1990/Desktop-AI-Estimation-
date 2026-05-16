@@ -47,6 +47,7 @@ export const InteractiveCanvas = ({
   onCalibrationPointsSet,
   onTransformChange,
   onViewportReady,
+  selectedColor,
   onDeleteLastMeasurement,
   onDeleteMeasurement,
   onMeasurementSelect,
