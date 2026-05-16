@@ -74,6 +74,10 @@ export const InteractiveCanvas = ({
   // Canvas objects for detected-opening overlay (separate from measurements)
   const openingOverlayObjectsRef = useRef<any[]>([]);
 
+  // Always-current draw color — avoids stale closure in mouse callbacks
+  const drawColorRef = useRef<string | undefined>(selectedColor);
+  useEffect(() => { drawColorRef.current = selectedColor; }, [selectedColor]);
+
   // Drawing state
   const [isDrawing, setIsDrawing] = useState(false);
   const [startPoint, setStartPoint] = useState<WorldPoint | null>(null);
@@ -1450,14 +1454,14 @@ export const InteractiveCanvas = ({
     }
 
     let shape: any = null;
-    const color = selectedColor || (isCalibrated ? 'red' : 'orange');
+    const drawColor = drawColorRef.current || (isCalibrated ? 'red' : 'orange');
     const strokeWidth = getZoomAwareSize(2);
     const dashSize = getZoomAwareSize(5);
 
     // Draw preview shapes at WORLD coordinates - viewportTransform handles zoom/pan
     if (activeTool === 'line') {
       shape = new Line([startPoint.x, startPoint.y, currentWorldPoint.x, currentWorldPoint.y], {
-        stroke: color,
+        stroke: drawColor,
         strokeWidth: strokeWidth,
         strokeDashArray: [dashSize, dashSize],
         selectable: false,
@@ -1504,7 +1508,7 @@ export const InteractiveCanvas = ({
       const eu = unitsPerMetre || 1;
       const r = calculateLinearWorld(startPoint, currentWorldPoint, eu);
       const t = isCalibrated ? `${r.realValue.toFixed(2)} m` : `${r.worldValue.toFixed(0)} px`;
-      previewLabelRef.current = { text: t, worldX: (startPoint.x + currentWorldPoint.x) / 2, worldY: (startPoint.y + currentWorldPoint.y) / 2, color: selectedColor || (isCalibrated ? 'red' : 'orange') };
+      previewLabelRef.current = { text: t, worldX: (startPoint.x + currentWorldPoint.x) / 2, worldY: (startPoint.y + currentWorldPoint.y) / 2, color: drawColorRef.current || (isCalibrated ? 'red' : 'orange') };
     } else if (activeTool === 'rectangle') {
       const eu = unitsPerMetre || 1;
       const r = calculateRectangleAreaWorld(startPoint, currentWorldPoint, eu);
@@ -1583,7 +1587,7 @@ export const InteractiveCanvas = ({
 
       const effectiveUnits = unitsPerMetre || 1;
       const result = calculateLinearWorld(startPoint, worldEndPoint, effectiveUnits);
-      const lineStroke = selectedColor || (isCalibrated ? 'red' : 'orange');
+      const lineStroke = drawColorRef.current || (isCalibrated ? 'red' : 'orange');
 
       // Draw at WORLD coordinates - viewportTransform handles zoom/pan
       const line = new Line([startPoint.x, startPoint.y, worldEndPoint.x, worldEndPoint.y], {
@@ -1620,7 +1624,7 @@ export const InteractiveCanvas = ({
         worldValue: result.worldValue,
         realValue: isCalibrated ? result.realValue : result.worldValue,
         unit: 'LM',
-        color: selectedColor || (isCalibrated ? '#FF6B6B' : '#FF9800'),
+        color: drawColorRef.current || (isCalibrated ? '#FF6B6B' : '#FF9800'),
         label: labelText,
         pageIndex: pageIndex,
         timestamp: new Date(),
