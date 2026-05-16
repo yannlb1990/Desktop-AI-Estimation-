@@ -29,6 +29,7 @@ interface InteractiveCanvasProps {
   onViewportReady: (viewport: PDFViewportData) => void;
   onDeleteLastMeasurement?: () => void;
   onDeleteMeasurement?: (id: string) => void;
+  onMeasurementSelect?: (id: string, screenX: number, screenY: number) => void;
 }
 
 export const InteractiveCanvas = ({
@@ -48,6 +49,7 @@ export const InteractiveCanvas = ({
   onViewportReady,
   onDeleteLastMeasurement,
   onDeleteMeasurement,
+  onMeasurementSelect,
 }: InteractiveCanvasProps) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -642,6 +644,32 @@ export const InteractiveCanvas = ({
 
     canvas.requestRenderAll();
   }, [activeTool]);
+
+  // Fire onMeasurementSelect when a shape is clicked in select mode
+  useEffect(() => {
+    const canvas = fabricCanvasRef.current;
+    if (!canvas || !onMeasurementSelect) return;
+
+    const handleSelection = (e: any) => {
+      if (activeTool !== 'select') return;
+      const target = e.selected?.[0] ?? e.target;
+      if (!target) return;
+      const measurementId = shapeToMeasurementIdRef.current.get(target);
+      if (!measurementId) return;
+      // Get screen position from the native mouse event if available
+      const nativeEvent = e.e as MouseEvent | undefined;
+      const screenX = nativeEvent?.clientX ?? 0;
+      const screenY = nativeEvent?.clientY ?? 0;
+      onMeasurementSelect(measurementId, screenX, screenY);
+    };
+
+    canvas.on('selection:created', handleSelection);
+    canvas.on('selection:updated', handleSelection);
+    return () => {
+      canvas.off('selection:created', handleSelection);
+      canvas.off('selection:updated', handleSelection);
+    };
+  }, [activeTool, onMeasurementSelect]);
 
   // Handle object modification (resize/move) to update measurements
   useEffect(() => {

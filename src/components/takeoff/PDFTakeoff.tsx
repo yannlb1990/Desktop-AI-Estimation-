@@ -30,6 +30,7 @@ import { PlanIntelligencePanel } from './PlanIntelligencePanel';
 import { SOWGeneratorDialog } from './SOWGeneratorDialog';
 import { ProfileConfigDialog } from './ProfileConfigDialog';
 import { ModificationDialog } from './ModificationDialog';
+import { AddToEstimateDialog } from './AddToEstimateDialog';
 import { Card } from '@/components/ui/card';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
@@ -72,8 +73,13 @@ export const PDFTakeoff = ({ projectId, estimateId, onAddCostItems }: PDFTakeoff
   const [appProfile, setAppProfile] = useState<AppProfile>(() => loadProfile());
   const [sidebarSelectedIds, setSidebarSelectedIds] = useState<Set<string>>(new Set());
   const [upgradeModal, setUpgradeModal] = useState<{ open: boolean; feature: string }>({ open: false, feature: '' });
-  const [modMode, setModMode] = useState<'wall' | 'door' | 'window' | null>(null);
+  const [modMode, setModMode] = useState<'wall' | 'door' | 'window' | 'custom' | null>(null);
   const [pendingModMeasurement, setPendingModMeasurement] = useState<Measurement | null>(null);
+  const [pendingModIsNew, setPendingModIsNew] = useState(true);
+  // Custom line: after draw, ask "add to estimate?"
+  const [customLinePending, setCustomLinePending] = useState<Measurement | null>(null);
+  // Existing measurement popup (select tool click)
+  const [measurementPopup, setMeasurementPopup] = useState<{ id: string; screenX: number; screenY: number } | null>(null);
   const sub = useSubscription();
   const canvasContainerRef = useRef<HTMLDivElement | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
@@ -143,8 +149,8 @@ export const PDFTakeoff = ({ projectId, estimateId, onAddCostItems }: PDFTakeoff
       }
       const key = e.key.toLowerCase();
       if (key === 'w') { setModMode('wall'); dispatch({ type: 'SET_ACTIVE_TOOL', payload: 'line' }); return; }
-      if (key === 'd') { setModMode('door'); dispatch({ type: 'SET_ACTIVE_TOOL', payload: 'count' }); return; }
-      if (key === 'q') { setModMode('window'); dispatch({ type: 'SET_ACTIVE_TOOL', payload: 'count' }); return; }
+      if (key === 'd') { setModMode('door'); dispatch({ type: 'SET_ACTIVE_TOOL', payload: 'line' }); return; }
+      if (key === 'q') { setModMode('window'); dispatch({ type: 'SET_ACTIVE_TOOL', payload: 'line' }); return; }
       const tool = shortcutToTool(e.key);
       if (tool !== null) { setModMode(null); dispatch({ type: 'SET_ACTIVE_TOOL', payload: tool }); }
     };
@@ -271,9 +277,17 @@ export const PDFTakeoff = ({ projectId, estimateId, onAddCostItems }: PDFTakeoff
       return;
     }
 
-    // Modification mode: show dialog before adding measurement
+    // Custom free-line mode: save measurement first, then ask to add to estimate
+    if (modMode === 'custom') {
+      dispatch({ type: 'ADD_MEASUREMENT', payload: measurement });
+      setCustomLinePending(measurement);
+      return;
+    }
+
+    // Modification mode (wall/door/window): show dialog before adding measurement
     if (modMode) {
       setPendingModMeasurement(measurement);
+      setPendingModIsNew(true);
       return;
     }
 
@@ -293,15 +307,56 @@ export const PDFTakeoff = ({ projectId, estimateId, onAddCostItems }: PDFTakeoff
   }, [dispatch, state.measurements]);
 
   const handleModConfirm = useCallback((measurement: Measurement, costItems: CostItem[]) => {
-    dispatch({ type: 'ADD_MEASUREMENT', payload: measurement });
+    if (pendingModIsNew) {
+      dispatch({ type: 'ADD_MEASUREMENT', payload: measurement });
+    } else {
+      dispatch({ type: 'UPDATE_MEASUREMENT', payload: { id: measurement.id, updates: measurement } });
+    }
     costItems.forEach(item => dispatch({ type: 'ADD_COST_ITEM', payload: item }));
     setPendingModMeasurement(null);
+    setMeasurementPopup(null);
     toast.success(`${costItems.length} cost item${costItems.length !== 1 ? 's' : ''} added to estimate`);
-  }, [dispatch]);
+  }, [dispatch, pendingModIsNew]);
 
   const handleModCancel = useCallback(() => {
     setPendingModMeasurement(null);
   }, []);
+
+  // Custom line: user picks a type → open ModificationDialog
+  const handleCustomLinePick = useCallback((mode: 'wall' | 'door' | 'window') => {
+    if (!customLinePending) return;
+    setCustomLinePending(null);
+    setPendingModMeasurement(customLinePending);
+    setPendingModIsNew(false); // already saved, just update + add cost items
+    setModMode(mode);
+  }, [customLinePending]);
+
+  const handleCustomLineSkip = useCallback(() => {
+    setCustomLinePending(null);
+    toast.success('Measurement saved');
+  }, []);
+
+  // Measurement popup (select-tool click on existing shape)
+  const handleMeasurementSelect = useCallback((id: string, screenX: number, screenY: number) => {
+    setMeasurementPopup({ id, screenX, screenY });
+  }, []);
+
+  const handlePopupAddToEstimate = useCallback((mode: 'wall' | 'door' | 'window') => {
+    if (!measurementPopup) return;
+    const measurement = state.measurements.find(m => m.id === measurementPopup.id);
+    if (!measurement) return;
+    setMeasurementPopup(null);
+    setPendingModMeasurement(measurement);
+    setPendingModIsNew(false);
+    setModMode(mode);
+  }, [measurementPopup, state.measurements]);
+
+  const handlePopupDelete = useCallback(() => {
+    if (!measurementPopup) return;
+    dispatch({ type: 'DELETE_MEASUREMENT', payload: measurementPopup.id });
+    setMeasurementPopup(null);
+    toast.success('Measurement deleted');
+  }, [dispatch, measurementPopup]);
 
   const handleDeleteMeasurement = useCallback((id: string) => {
     dispatch({ type: 'DELETE_MEASUREMENT', payload: id });
@@ -632,7 +687,7 @@ export const PDFTakeoff = ({ projectId, estimateId, onAddCostItems }: PDFTakeoff
           modMode={modMode}
           onModSelect={(mod) => {
             setModMode(mod);
-            dispatch({ type: 'SET_ACTIVE_TOOL', payload: mod === 'wall' ? 'line' : 'count' });
+            dispatch({ type: 'SET_ACTIVE_TOOL', payload: 'line' });
           }}
         />
         {/* Zoom + rotate + fit */}
@@ -730,6 +785,7 @@ export const PDFTakeoff = ({ projectId, estimateId, onAddCostItems }: PDFTakeoff
           onViewportReady={handleViewportReady}
           onDeleteLastMeasurement={handleDeleteLastMeasurement}
           onDeleteMeasurement={handleDeleteMeasurement}
+          onMeasurementSelect={handleMeasurementSelect}
         />
       </div>
 
@@ -930,7 +986,7 @@ export const PDFTakeoff = ({ projectId, estimateId, onAddCostItems }: PDFTakeoff
                   modMode={modMode}
                   onModSelect={(mod) => {
                     setModMode(mod);
-                    dispatch({ type: 'SET_ACTIVE_TOOL', payload: mod === 'wall' ? 'line' : 'count' });
+                    dispatch({ type: 'SET_ACTIVE_TOOL', payload: 'line' });
                   }}
                 />
 
@@ -1075,6 +1131,7 @@ export const PDFTakeoff = ({ projectId, estimateId, onAddCostItems }: PDFTakeoff
                     onViewportReady={handleViewportReady}
                     onDeleteLastMeasurement={handleDeleteLastMeasurement}
                     onDeleteMeasurement={handleDeleteMeasurement}
+                    onMeasurementSelect={handleMeasurementSelect}
                   />
                 </div>
               </div>
@@ -1401,7 +1458,7 @@ export const PDFTakeoff = ({ projectId, estimateId, onAddCostItems }: PDFTakeoff
       />
     </div>
 
-    {pendingModMeasurement && modMode && (
+    {pendingModMeasurement && modMode && modMode !== 'custom' && (
       <ModificationDialog
         open={true}
         mode={modMode}
@@ -1410,6 +1467,65 @@ export const PDFTakeoff = ({ projectId, estimateId, onAddCostItems }: PDFTakeoff
         onCancel={handleModCancel}
       />
     )}
+
+    {/* Custom line: ask to add to estimate */}
+    <AddToEstimateDialog
+      open={!!customLinePending}
+      measurementLabel={customLinePending?.label ?? ''}
+      onPick={handleCustomLinePick}
+      onSkip={handleCustomLineSkip}
+    />
+
+    {/* Measurement popup card — shown when clicking an existing shape in select mode */}
+    {measurementPopup && (() => {
+      const m = state.measurements.find(x => x.id === measurementPopup.id);
+      if (!m) return null;
+      return createPortal(
+        <div
+          className="fixed z-[10010] bg-card border border-border rounded-lg shadow-xl p-3 w-64"
+          style={{ top: measurementPopup.screenY + 12, left: measurementPopup.screenX - 32 }}
+        >
+          <div className="flex items-start justify-between mb-2">
+            <div>
+              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
+                {m.measurementType ?? m.label?.split(' ')[0] ?? 'Measurement'}
+              </p>
+              <p className="text-sm font-bold mt-0.5">{m.label}</p>
+            </div>
+            <button
+              className="text-muted-foreground hover:text-destructive ml-2 mt-0.5"
+              onClick={handlePopupDelete}
+              title="Delete measurement"
+            >
+              <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+            </button>
+          </div>
+          <p className="text-[11px] text-muted-foreground mb-2">Add to estimate as:</p>
+          <div className="flex gap-1.5 flex-wrap">
+            {(['wall', 'door', 'window'] as const).map(type => (
+              <button
+                key={type}
+                onClick={() => handlePopupAddToEstimate(type)}
+                className={`px-2.5 py-1 rounded text-xs font-medium border transition-colors ${
+                  type === 'wall' ? 'border-amber-400 text-amber-700 hover:bg-amber-50 dark:text-amber-300 dark:hover:bg-amber-950/30' :
+                  type === 'door' ? 'border-violet-400 text-violet-700 hover:bg-violet-50 dark:text-violet-300 dark:hover:bg-violet-950/30' :
+                  'border-cyan-400 text-cyan-700 hover:bg-cyan-50 dark:text-cyan-300 dark:hover:bg-cyan-950/30'
+                }`}
+              >
+                {type.charAt(0).toUpperCase() + type.slice(1)}
+              </button>
+            ))}
+          </div>
+          <button
+            className="mt-2 text-[11px] text-muted-foreground hover:text-foreground w-full text-center"
+            onClick={() => setMeasurementPopup(null)}
+          >
+            Dismiss
+          </button>
+        </div>,
+        document.body
+      );
+    })()}
     </>
   );
 };

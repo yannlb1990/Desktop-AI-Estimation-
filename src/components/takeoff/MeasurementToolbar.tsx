@@ -1,4 +1,4 @@
-import { MousePointer, Move, Eraser, Minus, Square, Pentagon, Circle, Hash, Undo, Redo, Columns, DoorOpen, AppWindow } from 'lucide-react';
+import { MousePointer, Move, Eraser, Minus, Square, Pentagon, Circle, Hash, Undo, Redo, Columns, DoorOpen, AppWindow, PenLine } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
@@ -14,8 +14,8 @@ interface MeasurementToolbarProps {
   canUndo: boolean;
   canRedo: boolean;
   disabled: boolean;
-  modMode?: 'wall' | 'door' | 'window' | null;
-  onModSelect?: (mod: 'wall' | 'door' | 'window') => void;
+  modMode?: 'wall' | 'door' | 'window' | 'custom' | null;
+  onModSelect?: (mod: 'wall' | 'door' | 'window' | 'custom') => void;
 }
 
 export const MeasurementToolbar = ({
@@ -29,6 +29,7 @@ export const MeasurementToolbar = ({
   modMode = null,
   onModSelect,
 }: MeasurementToolbarProps) => {
+  type ModId = 'wall' | 'door' | 'window' | 'custom';
   const navigationTools = [
     { id: 'select' as const, icon: MousePointer, label: 'Select (V)', shortcut: 'V' },
     { id: 'pan' as const, icon: Move, label: 'Pan (H)', shortcut: 'H' },
@@ -42,10 +43,11 @@ export const MeasurementToolbar = ({
     { id: 'count' as const, icon: Hash, label: 'Count (N)', shortcut: 'N', color: 'bg-orange-500' },
   ];
 
-  const modTools = [
-    { id: 'wall' as const, icon: Columns, label: 'Add Wall (W)', color: 'bg-amber-500', ring: 'ring-amber-500' },
-    { id: 'door' as const, icon: DoorOpen, label: 'Add Door (D)', color: 'bg-violet-500', ring: 'ring-violet-500' },
-    { id: 'window' as const, icon: AppWindow, label: 'Add Window (Q)', color: 'bg-cyan-500', ring: 'ring-cyan-500' },
+  const modTools: Array<{ id: ModId; icon: React.ComponentType<{ className?: string }>; label: string; color: string; ring: string }> = [
+    { id: 'wall', icon: Columns, label: 'Add Wall (W)', color: 'bg-amber-500', ring: 'ring-amber-500' },
+    { id: 'door', icon: DoorOpen, label: 'Add Door (D)', color: 'bg-violet-500', ring: 'ring-violet-500' },
+    { id: 'window', icon: AppWindow, label: 'Add Window (Q)', color: 'bg-cyan-500', ring: 'ring-cyan-500' },
+    { id: 'custom', icon: PenLine, label: 'Custom line (draw freely, prompt to add to estimate)', color: 'bg-slate-400', ring: 'ring-slate-400' },
   ];
 
   return (
@@ -158,16 +160,21 @@ export const MeasurementToolbar = ({
                     disabled={disabled}
                   >
                     <Icon className="h-3.5 w-3.5" />
-                    <span className="text-xs font-medium capitalize">{id}</span>
-                    <span className={cn('h-2 w-2 rounded-full shrink-0', color)} />
+                    <span className="text-xs font-medium capitalize">{id === 'custom' ? 'Custom' : id}</span>
+                    {id !== 'custom' && <span className={cn('h-2 w-2 rounded-full shrink-0', color)} />}
                   </Button>
                 </TooltipTrigger>
                 <TooltipContent>{label}</TooltipContent>
               </Tooltip>
             ))}
-            {modMode && (
+            {modMode && modMode !== 'custom' && (
               <span className="text-xs text-muted-foreground ml-1 italic">
                 Draw on the plan — a cost dialog will appear
+              </span>
+            )}
+            {modMode === 'custom' && (
+              <span className="text-xs text-muted-foreground ml-1 italic">
+                Draw any line — you'll be asked to add it to the estimate
               </span>
             )}
           </div>
