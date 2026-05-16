@@ -61,6 +61,7 @@ const Auth = () => {
   const [pendingEmail, setPendingEmail] = useState("");
   const [needsVerification, setNeedsVerification] = useState(false);
   const [resendLoading, setResendLoading] = useState(false);
+  const [resetLoading, setResetLoading] = useState(false);
 
   // Listen for Supabase auth state change (email confirmation callback)
   useEffect(() => {
@@ -139,6 +140,23 @@ const Auth = () => {
       }
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const handleForgotPassword = async () => {
+    if (!email.trim()) {
+      toast.error("Enter your email address first");
+      return;
+    }
+    setResetLoading(true);
+    const { error } = await supabase.auth.resetPasswordForEmail(email.trim(), {
+      redirectTo: `${window.location.origin}/auth`,
+    });
+    setResetLoading(false);
+    if (error) {
+      toast.error("Couldn't send reset email — try again in a moment");
+    } else {
+      toast.success("Password reset email sent — check your inbox");
     }
   };
 
@@ -358,6 +376,18 @@ const Auth = () => {
                 />
                 {!isLogin && (
                   <p className="text-xs text-muted-foreground mt-1">Minimum 6 characters</p>
+                )}
+                {isLogin && (
+                  <div className="flex justify-end mt-1">
+                    <button
+                      type="button"
+                      onClick={handleForgotPassword}
+                      disabled={resetLoading}
+                      className="text-xs text-primary hover:underline disabled:opacity-50"
+                    >
+                      {resetLoading ? "Sending…" : "Forgot password?"}
+                    </button>
+                  </div>
                 )}
               </div>
 
