@@ -901,7 +901,7 @@ export const PDFTakeoff = ({ projectId, estimateId, onAddCostItems }: PDFTakeoff
           {/* Plan info bar */}
           {state.pdfFile && (
             <div className="flex items-center justify-between px-3 py-2 bg-muted/40 border rounded-lg text-sm">
-              <span className="text-muted-foreground truncate max-w-xs">
+              <span className="text-muted-foreground truncate flex-1 min-w-0 mr-3">
                 <span className="font-medium text-foreground">Plan:</span> {state.pdfFile.name}
                 {state.pdfFile.pageCount > 1 && ` (${state.pdfFile.pageCount} pages)`}
               </span>

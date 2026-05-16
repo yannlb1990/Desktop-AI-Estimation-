@@ -42,156 +42,136 @@ export const MeasurementToolbar = ({
     { id: 'count' as const, icon: Hash, label: 'Count (N)', shortcut: 'N', color: 'bg-orange-500' },
   ];
 
+  const modTools = [
+    { id: 'wall' as const, icon: Columns, label: 'Add Wall (W)', color: 'bg-amber-500', ring: 'ring-amber-500' },
+    { id: 'door' as const, icon: DoorOpen, label: 'Add Door (D)', color: 'bg-violet-500', ring: 'ring-violet-500' },
+    { id: 'window' as const, icon: AppWindow, label: 'Add Window (Q)', color: 'bg-cyan-500', ring: 'ring-cyan-500' },
+  ];
+
   return (
     <TooltipProvider delayDuration={300}>
-      <div className="flex items-center gap-1 p-2 bg-card border border-border rounded-lg">
-        {/* Navigation Tools */}
-        {navigationTools.map(({ id, icon: Icon, label, shortcut }) => (
-          <Tooltip key={id}>
-            <TooltipTrigger asChild>
-              <Button
-                variant={activeTool === id ? 'default' : 'ghost'}
-                size="icon"
-                className="h-9 w-9"
-                onClick={() => onToolSelect(id)}
-              >
-                <Icon className="h-4 w-4" />
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent>{label}</TooltipContent>
-          </Tooltip>
-        ))}
-
-        <Separator orientation="vertical" className="h-6 mx-1" />
-
-        {/* Eraser Tool */}
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <Button
-              variant={activeTool === 'eraser' ? 'destructive' : 'ghost'}
-              size="icon"
-              className="h-9 w-9"
-              onClick={() => onToolSelect('eraser')}
-            >
-              <Eraser className="h-4 w-4" />
-            </Button>
-          </TooltipTrigger>
-          <TooltipContent>Eraser - Click on any measurement to delete it (E)</TooltipContent>
-        </Tooltip>
-
-        <Separator orientation="vertical" className="h-6 mx-1" />
-
-        {/* Measurement Tools */}
-        {measurementTools.map(({ id, icon: Icon, label, color }) => {
-          const isActive = modMode === null && activeTool === id;
-          return (
+      <div className="flex flex-col gap-1">
+        {/* ── Row 1: Measure tools ── */}
+        <div className="flex items-center gap-1 p-2 bg-card border border-border rounded-lg overflow-x-auto">
+          {/* Navigation Tools */}
+          {navigationTools.map(({ id, icon: Icon, label }) => (
             <Tooltip key={id}>
               <TooltipTrigger asChild>
                 <Button
-                  variant={isActive ? 'default' : 'ghost'}
+                  variant={activeTool === id ? 'default' : 'ghost'}
                   size="icon"
-                  className={cn('h-9 w-9 relative', isActive && 'ring-2 ring-offset-1')}
+                  className="h-9 w-9 shrink-0"
                   onClick={() => onToolSelect(id)}
-                  disabled={disabled}
                 >
                   <Icon className="h-4 w-4" />
-                  <span className={cn('absolute bottom-1 right-1 h-2 w-2 rounded-full', color)} />
                 </Button>
               </TooltipTrigger>
               <TooltipContent>{label}</TooltipContent>
             </Tooltip>
-          );
-        })}
+          ))}
 
-        {/* Set Scale Badge */}
-        {disabled && (
-          <Badge variant="secondary" className="ml-1 text-xs">
-            Set scale first
-          </Badge>
+          <Separator orientation="vertical" className="h-6 mx-1 shrink-0" />
+
+          {/* Eraser Tool */}
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                variant={activeTool === 'eraser' ? 'destructive' : 'ghost'}
+                size="icon"
+                className="h-9 w-9 shrink-0"
+                onClick={() => onToolSelect('eraser')}
+              >
+                <Eraser className="h-4 w-4" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>Eraser — click a measurement to delete (E)</TooltipContent>
+          </Tooltip>
+
+          <Separator orientation="vertical" className="h-6 mx-1 shrink-0" />
+
+          {/* Measurement Tools */}
+          {measurementTools.map(({ id, icon: Icon, label, color }) => {
+            const isActive = modMode === null && activeTool === id;
+            return (
+              <Tooltip key={id}>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant={isActive ? 'default' : 'ghost'}
+                    size="icon"
+                    className={cn('h-9 w-9 relative shrink-0', isActive && 'ring-2 ring-offset-1')}
+                    onClick={() => onToolSelect(id)}
+                    disabled={disabled}
+                  >
+                    <Icon className="h-4 w-4" />
+                    <span className={cn('absolute bottom-1 right-1 h-2 w-2 rounded-full', color)} />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>{label}</TooltipContent>
+              </Tooltip>
+            );
+          })}
+
+          {disabled && (
+            <Badge variant="secondary" className="ml-1 text-xs shrink-0">
+              Set scale first
+            </Badge>
+          )}
+
+          <Separator orientation="vertical" className="h-6 mx-1 shrink-0" />
+
+          {/* Undo/Redo */}
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button variant="ghost" size="icon" className="h-9 w-9 shrink-0" onClick={onUndo} disabled={!canUndo || disabled}>
+                <Undo className="h-4 w-4" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>Undo (Ctrl+Z)</TooltipContent>
+          </Tooltip>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button variant="ghost" size="icon" className="h-9 w-9 shrink-0" onClick={onRedo} disabled={!canRedo || disabled}>
+                <Redo className="h-4 w-4" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>Redo (Ctrl+Y)</TooltipContent>
+          </Tooltip>
+        </div>
+
+        {/* ── Row 2: Modifications (always visible) ── */}
+        {onModSelect && (
+          <div className="flex items-center gap-2 px-2 py-1.5 bg-muted/40 border border-border rounded-lg">
+            <span className="text-[11px] font-medium text-muted-foreground uppercase tracking-wide shrink-0 select-none">
+              Add to plan:
+            </span>
+            {modTools.map(({ id, icon: Icon, label, color, ring }) => (
+              <Tooltip key={id}>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant={modMode === id ? 'default' : 'outline'}
+                    size="sm"
+                    className={cn(
+                      'h-8 gap-1.5 shrink-0',
+                      modMode === id && `ring-2 ring-offset-1 ${ring}`
+                    )}
+                    onClick={() => onModSelect(id)}
+                    disabled={disabled}
+                  >
+                    <Icon className="h-3.5 w-3.5" />
+                    <span className="text-xs font-medium capitalize">{id}</span>
+                    <span className={cn('h-2 w-2 rounded-full shrink-0', color)} />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>{label}</TooltipContent>
+              </Tooltip>
+            ))}
+            {modMode && (
+              <span className="text-xs text-muted-foreground ml-1 italic">
+                Draw on the plan — a cost dialog will appear
+              </span>
+            )}
+          </div>
         )}
-
-        <Separator orientation="vertical" className="h-6 mx-1" />
-
-        {/* Modifications */}
-        <span className="text-[10px] text-muted-foreground uppercase tracking-wide px-1 select-none">Modifications</span>
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <Button
-              variant={modMode === 'wall' ? 'default' : 'ghost'}
-              size="icon"
-              className={cn('h-9 w-9 relative', modMode === 'wall' && 'ring-2 ring-offset-1')}
-              onClick={() => onModSelect?.('wall')}
-              disabled={disabled}
-            >
-              <Columns className="h-4 w-4" />
-              <span className="absolute bottom-1 right-1 h-2 w-2 rounded-full bg-amber-500" />
-            </Button>
-          </TooltipTrigger>
-          <TooltipContent>New Wall (W)</TooltipContent>
-        </Tooltip>
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <Button
-              variant={modMode === 'door' ? 'default' : 'ghost'}
-              size="icon"
-              className={cn('h-9 w-9 relative', modMode === 'door' && 'ring-2 ring-offset-1')}
-              onClick={() => onModSelect?.('door')}
-              disabled={disabled}
-            >
-              <DoorOpen className="h-4 w-4" />
-              <span className="absolute bottom-1 right-1 h-2 w-2 rounded-full bg-violet-500" />
-            </Button>
-          </TooltipTrigger>
-          <TooltipContent>New Door (D)</TooltipContent>
-        </Tooltip>
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <Button
-              variant={modMode === 'window' ? 'default' : 'ghost'}
-              size="icon"
-              className={cn('h-9 w-9 relative', modMode === 'window' && 'ring-2 ring-offset-1')}
-              onClick={() => onModSelect?.('window')}
-              disabled={disabled}
-            >
-              <AppWindow className="h-4 w-4" />
-              <span className="absolute bottom-1 right-1 h-2 w-2 rounded-full bg-cyan-500" />
-            </Button>
-          </TooltipTrigger>
-          <TooltipContent>New Window (Q)</TooltipContent>
-        </Tooltip>
-
-        <Separator orientation="vertical" className="h-6 mx-1" />
-
-        {/* Undo/Redo */}
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <Button
-              variant="ghost"
-              size="icon"
-              className="h-9 w-9"
-              onClick={onUndo}
-              disabled={!canUndo || disabled}
-            >
-              <Undo className="h-4 w-4" />
-            </Button>
-          </TooltipTrigger>
-          <TooltipContent>Undo (Ctrl+Z)</TooltipContent>
-        </Tooltip>
-
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <Button
-              variant="ghost"
-              size="icon"
-              className="h-9 w-9"
-              onClick={onRedo}
-              disabled={!canRedo || disabled}
-            >
-              <Redo className="h-4 w-4" />
-            </Button>
-          </TooltipTrigger>
-          <TooltipContent>Redo (Ctrl+Y)</TooltipContent>
-        </Tooltip>
       </div>
     </TooltipProvider>
   );
