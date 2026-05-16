@@ -1450,7 +1450,7 @@ export const InteractiveCanvas = ({
     }
 
     let shape: any = null;
-    const color = isCalibrated ? 'red' : 'orange';
+    const color = selectedColor || (isCalibrated ? 'red' : 'orange');
     const strokeWidth = getZoomAwareSize(2);
     const dashSize = getZoomAwareSize(5);
 
@@ -1504,7 +1504,7 @@ export const InteractiveCanvas = ({
       const eu = unitsPerMetre || 1;
       const r = calculateLinearWorld(startPoint, currentWorldPoint, eu);
       const t = isCalibrated ? `${r.realValue.toFixed(2)} m` : `${r.worldValue.toFixed(0)} px`;
-      previewLabelRef.current = { text: t, worldX: (startPoint.x + currentWorldPoint.x) / 2, worldY: (startPoint.y + currentWorldPoint.y) / 2, color: isCalibrated ? 'red' : 'orange' };
+      previewLabelRef.current = { text: t, worldX: (startPoint.x + currentWorldPoint.x) / 2, worldY: (startPoint.y + currentWorldPoint.y) / 2, color: selectedColor || (isCalibrated ? 'red' : 'orange') };
     } else if (activeTool === 'rectangle') {
       const eu = unitsPerMetre || 1;
       const r = calculateRectangleAreaWorld(startPoint, currentWorldPoint, eu);
@@ -1583,10 +1583,11 @@ export const InteractiveCanvas = ({
 
       const effectiveUnits = unitsPerMetre || 1;
       const result = calculateLinearWorld(startPoint, worldEndPoint, effectiveUnits);
+      const lineStroke = selectedColor || (isCalibrated ? 'red' : 'orange');
 
       // Draw at WORLD coordinates - viewportTransform handles zoom/pan
       const line = new Line([startPoint.x, startPoint.y, worldEndPoint.x, worldEndPoint.y], {
-        stroke: isCalibrated ? 'red' : 'orange',
+        stroke: lineStroke,
         strokeWidth: strokeWidth,
         selectable: false,
         evented: false,
@@ -1619,7 +1620,7 @@ export const InteractiveCanvas = ({
         worldValue: result.worldValue,
         realValue: isCalibrated ? result.realValue : result.worldValue,
         unit: 'LM',
-        color: isCalibrated ? '#FF6B6B' : '#FF9800',
+        color: selectedColor || (isCalibrated ? '#FF6B6B' : '#FF9800'),
         label: labelText,
         pageIndex: pageIndex,
         timestamp: new Date(),

@@ -277,22 +277,17 @@ export const PDFTakeoff = ({ projectId, estimateId, onAddCostItems }: PDFTakeoff
       return;
     }
 
-    // Custom free-line mode: save measurement first, then ask to add to estimate
-    if (modMode === 'custom') {
-      dispatch({ type: 'ADD_MEASUREMENT', payload: measurement });
-      setCustomLinePending(measurement);
-      return;
+    // Apply color/label metadata based on active mod mode — no dialog on draw
+    let m = measurement;
+    if (modMode === 'wall') {
+      m = { ...m, color: '#f59e0b', measurementType: 'Wall', label: m.label ? `Wall — ${m.label}` : 'Wall' };
+    } else if (modMode === 'door') {
+      m = { ...m, color: '#8b5cf6', measurementType: 'Door', label: m.label ? `Door — ${m.label}` : 'Door' };
+    } else if (modMode === 'window') {
+      m = { ...m, color: '#06b6d4', measurementType: 'Window', label: m.label ? `Window — ${m.label}` : 'Window' };
     }
 
-    // Modification mode (wall/door/window): show dialog before adding measurement
-    if (modMode) {
-      setPendingModMeasurement(measurement);
-      setPendingModIsNew(true);
-      return;
-    }
-
-    dispatch({ type: 'ADD_MEASUREMENT', payload: measurement });
-    toast.success('Measurement added');
+    dispatch({ type: 'ADD_MEASUREMENT', payload: m });
   }, [dispatch, isVerifyMode, modMode]);
 
   const handleDeleteLastMeasurement = useCallback(() => {
@@ -307,16 +302,13 @@ export const PDFTakeoff = ({ projectId, estimateId, onAddCostItems }: PDFTakeoff
   }, [dispatch, state.measurements]);
 
   const handleModConfirm = useCallback((measurement: Measurement, costItems: CostItem[]) => {
-    if (pendingModIsNew) {
-      dispatch({ type: 'ADD_MEASUREMENT', payload: measurement });
-    } else {
-      dispatch({ type: 'UPDATE_MEASUREMENT', payload: { id: measurement.id, updates: measurement } });
-    }
+    // Measurement already exists in state — update metadata + add cost items
+    dispatch({ type: 'UPDATE_MEASUREMENT', payload: { id: measurement.id, updates: measurement } });
     costItems.forEach(item => dispatch({ type: 'ADD_COST_ITEM', payload: item }));
     setPendingModMeasurement(null);
     setMeasurementPopup(null);
     toast.success(`${costItems.length} cost item${costItems.length !== 1 ? 's' : ''} added to estimate`);
-  }, [dispatch, pendingModIsNew]);
+  }, [dispatch]);
 
   const handleModCancel = useCallback(() => {
     setPendingModMeasurement(null);
@@ -775,7 +767,12 @@ export const PDFTakeoff = ({ projectId, estimateId, onAddCostItems }: PDFTakeoff
           isCalibrated={state.isCalibrated}
           unitsPerMetre={state.currentScale?.unitsPerMetre || null}
           calibrationMode={state.calibrationMode}
-          selectedColor={state.selectedColor}
+          selectedColor={
+            modMode === 'wall' ? '#f59e0b' :
+            modMode === 'door' ? '#8b5cf6' :
+            modMode === 'window' ? '#06b6d4' :
+            state.selectedColor
+          }
           measurements={state.measurements.filter(m => m.pageIndex === state.currentPageIndex)}
           detectedOpenings={detectedOpenings}
           onMeasurementComplete={handleMeasurementComplete}
@@ -1121,7 +1118,12 @@ export const PDFTakeoff = ({ projectId, estimateId, onAddCostItems }: PDFTakeoff
                     isCalibrated={state.isCalibrated}
                     unitsPerMetre={state.currentScale?.unitsPerMetre || null}
                     calibrationMode={state.calibrationMode}
-                    selectedColor={state.selectedColor}
+                    selectedColor={
+                      modMode === 'wall' ? '#f59e0b' :
+                      modMode === 'door' ? '#8b5cf6' :
+                      modMode === 'window' ? '#06b6d4' :
+                      state.selectedColor
+                    }
                     measurements={state.measurements.filter(m => m.pageIndex === state.currentPageIndex)}
                     detectedOpenings={detectedOpenings}
                     onMeasurementComplete={handleMeasurementComplete}
@@ -1467,14 +1469,6 @@ export const PDFTakeoff = ({ projectId, estimateId, onAddCostItems }: PDFTakeoff
         onCancel={handleModCancel}
       />
     )}
-
-    {/* Custom line: ask to add to estimate */}
-    <AddToEstimateDialog
-      open={!!customLinePending}
-      measurementLabel={customLinePending?.label ?? ''}
-      onPick={handleCustomLinePick}
-      onSkip={handleCustomLineSkip}
-    />
 
     {/* Measurement popup card — shown when clicking an existing shape in select mode */}
     {measurementPopup && (() => {
