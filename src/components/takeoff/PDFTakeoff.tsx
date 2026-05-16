@@ -11,7 +11,6 @@ import { ViewportControls } from './ViewportControls';
 import { Magnifier } from './Magnifier';
 import { TakeoffTable } from './TakeoffTable';
 import { CostEstimator } from './CostEstimator';
-import { AIExtractionPanel } from './AIExtractionPanel';
 import { DetectionResultsPanel } from './DetectionResultsPanel';
 import { useTakeoffState } from '@/hooks/useTakeoffState';
 import { WorldPoint, MeasurementUnit, Measurement, PDFViewportData, CostItem } from '@/lib/takeoff/types';
@@ -30,6 +29,7 @@ import { MaterialExtractorPanel } from './MaterialExtractorPanel';
 import { PlanIntelligencePanel } from './PlanIntelligencePanel';
 import { SOWGeneratorDialog } from './SOWGeneratorDialog';
 import { ProfileConfigDialog } from './ProfileConfigDialog';
+import { ModificationDialog } from './ModificationDialog';
 import { Card } from '@/components/ui/card';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
@@ -71,8 +71,9 @@ export const PDFTakeoff = ({ projectId, estimateId, onAddCostItems }: PDFTakeoff
   const [verifyActualInput, setVerifyActualInput] = useState('');
   const [appProfile, setAppProfile] = useState<AppProfile>(() => loadProfile());
   const [sidebarSelectedIds, setSidebarSelectedIds] = useState<Set<string>>(new Set());
-  const [aiPanelsOpen, setAiPanelsOpen] = useState(false);
   const [upgradeModal, setUpgradeModal] = useState<{ open: boolean; feature: string }>({ open: false, feature: '' });
+  const [modMode, setModMode] = useState<'wall' | 'door' | 'window' | null>(null);
+  const [pendingModMeasurement, setPendingModMeasurement] = useState<Measurement | null>(null);
   const sub = useSubscription();
   const canvasContainerRef = useRef<HTMLDivElement | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
@@ -129,16 +130,23 @@ export const PDFTakeoff = ({ projectId, estimateId, onAddCostItems }: PDFTakeoff
   }, [state.pdfFile, activeTab]);
 
   // Keyboard shortcuts: V=select H=pan E=eraser L=line R=rect P=polygon C=circle N=count Esc=select
+  // Modification shortcuts: W=wall D=door Q=window
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (!shouldHandleShortcut(e.target)) return;
+      if (e.ctrlKey || e.metaKey || e.altKey) return;
       if (e.key === 'Escape') {
         setIsTakeoffFullscreen(false);
+        setModMode(null);
         dispatch({ type: 'SET_ACTIVE_TOOL', payload: 'select' });
         return;
       }
+      const key = e.key.toLowerCase();
+      if (key === 'w') { setModMode('wall'); dispatch({ type: 'SET_ACTIVE_TOOL', payload: 'line' }); return; }
+      if (key === 'd') { setModMode('door'); dispatch({ type: 'SET_ACTIVE_TOOL', payload: 'count' }); return; }
+      if (key === 'q') { setModMode('window'); dispatch({ type: 'SET_ACTIVE_TOOL', payload: 'count' }); return; }
       const tool = shortcutToTool(e.key);
-      if (tool !== null) dispatch({ type: 'SET_ACTIVE_TOOL', payload: tool });
+      if (tool !== null) { setModMode(null); dispatch({ type: 'SET_ACTIVE_TOOL', payload: tool }); }
     };
     document.addEventListener('keydown', handleKeyDown);
     return () => document.removeEventListener('keydown', handleKeyDown);
@@ -263,9 +271,15 @@ export const PDFTakeoff = ({ projectId, estimateId, onAddCostItems }: PDFTakeoff
       return;
     }
 
+    // Modification mode: show dialog before adding measurement
+    if (modMode) {
+      setPendingModMeasurement(measurement);
+      return;
+    }
+
     dispatch({ type: 'ADD_MEASUREMENT', payload: measurement });
     toast.success('Measurement added');
-  }, [dispatch, isVerifyMode]);
+  }, [dispatch, isVerifyMode, modMode]);
 
   const handleDeleteLastMeasurement = useCallback(() => {
     const measurements = state.measurements;
@@ -277,6 +291,17 @@ export const PDFTakeoff = ({ projectId, estimateId, onAddCostItems }: PDFTakeoff
     dispatch({ type: 'DELETE_MEASUREMENT', payload: lastMeasurement.id });
     toast.success('Last measurement deleted');
   }, [dispatch, state.measurements]);
+
+  const handleModConfirm = useCallback((measurement: Measurement, costItems: CostItem[]) => {
+    dispatch({ type: 'ADD_MEASUREMENT', payload: measurement });
+    costItems.forEach(item => dispatch({ type: 'ADD_COST_ITEM', payload: item }));
+    setPendingModMeasurement(null);
+    toast.success(`${costItems.length} cost item${costItems.length !== 1 ? 's' : ''} added to estimate`);
+  }, [dispatch]);
+
+  const handleModCancel = useCallback(() => {
+    setPendingModMeasurement(null);
+  }, []);
 
   const handleDeleteMeasurement = useCallback((id: string) => {
     dispatch({ type: 'DELETE_MEASUREMENT', payload: id });
@@ -598,12 +623,17 @@ export const PDFTakeoff = ({ projectId, estimateId, onAddCostItems }: PDFTakeoff
       <div className="flex items-center gap-2 px-3 py-2 bg-[#1e293b] border-b border-gray-700 shrink-0">
         <MeasurementToolbar
           activeTool={state.activeTool}
-          onToolSelect={(tool) => dispatch({ type: 'SET_ACTIVE_TOOL', payload: tool })}
+          onToolSelect={(tool) => { setModMode(null); dispatch({ type: 'SET_ACTIVE_TOOL', payload: tool }); }}
           onUndo={() => dispatch({ type: 'UNDO' })}
           onRedo={() => dispatch({ type: 'REDO' })}
           canUndo={state.historyIndex > 0}
           canRedo={state.historyIndex < state.history.length - 1}
           disabled={!state.isCalibrated && state.activeTool !== 'pan'}
+          modMode={modMode}
+          onModSelect={(mod) => {
+            setModMode(mod);
+            dispatch({ type: 'SET_ACTIVE_TOOL', payload: mod === 'wall' ? 'line' : 'count' });
+          }}
         />
         {/* Zoom + rotate + fit */}
         <div className="flex items-center gap-1 border-l border-gray-600 pl-2 ml-1">
@@ -656,27 +686,17 @@ export const PDFTakeoff = ({ projectId, estimateId, onAddCostItems }: PDFTakeoff
         {state.pdfFile.pageCount > 1 && (
           <div className="flex items-center gap-1 border-l border-gray-600 pl-2 ml-1">
             <Button variant="ghost" size="sm" onClick={handlePagePrevious} disabled={state.currentPageIndex === 0} className="h-8 text-gray-200 hover:bg-gray-700"><ChevronLeft className="h-4 w-4" /></Button>
-            {pageInputEditing ? (
-              <input
-                autoFocus
-                type="number"
-                min={1}
-                max={state.pdfFile.pageCount}
-                value={pageInputValue}
-                onChange={e => setPageInputValue(e.target.value)}
-                onBlur={commitPageInput}
-                onKeyDown={e => { if (e.key === 'Enter') commitPageInput(); if (e.key === 'Escape') setPageInputEditing(false); }}
-                className="w-14 h-7 text-center text-sm bg-gray-800 border border-gray-500 rounded text-gray-100 focus:outline-none focus:border-blue-400"
-              />
-            ) : (
-              <button
-                onClick={() => { setPageInputValue(String(state.currentPageIndex + 1)); setPageInputEditing(true); }}
-                className="text-sm text-gray-200 min-w-24 text-center hover:text-white hover:underline underline-offset-2 cursor-pointer"
-                title="Click to jump to page"
-              >
-                Page {state.currentPageIndex + 1} / {state.pdfFile.pageCount}
-              </button>
-            )}
+            <select
+              value={state.currentPageIndex + 1}
+              onChange={e => dispatch({ type: 'SET_CURRENT_PAGE', payload: Number(e.target.value) - 1 })}
+              className="h-7 text-sm bg-gray-800 border border-gray-600 rounded text-gray-100 px-1 cursor-pointer focus:outline-none focus:border-blue-400 min-w-[100px]"
+            >
+              {Array.from({ length: state.pdfFile.pageCount }, (_, i) => i + 1).map(p => (
+                <option key={p} value={p} className="bg-gray-800">
+                  Page {p} / {state.pdfFile.pageCount}
+                </option>
+              ))}
+            </select>
             <Button variant="ghost" size="sm" onClick={handlePageNext} disabled={state.currentPageIndex === state.pdfFile.pageCount - 1} className="h-8 text-gray-200 hover:bg-gray-700"><ChevronRight className="h-4 w-4" /></Button>
           </div>
         )}
@@ -754,7 +774,6 @@ export const PDFTakeoff = ({ projectId, estimateId, onAddCostItems }: PDFTakeoff
               <p className="text-xs text-gray-400 text-center py-4">No measurements yet. Use the tools above to start measuring.</p>
             ) : (
               <TakeoffTable
-                inline
                 measurements={filteredMeasurements}
                 onUpdateMeasurement={(id, updates) => dispatch({ type: 'UPDATE_MEASUREMENT', payload: { id, updates } })}
                 onDeleteMeasurement={(id) => dispatch({ type: 'DELETE_MEASUREMENT', payload: id })}
@@ -864,66 +883,6 @@ export const PDFTakeoff = ({ projectId, estimateId, onAddCostItems }: PDFTakeoff
                 }}
               />
             </div>
-            <div className="lg:col-span-1">
-              <Card className="overflow-hidden">
-                <button
-                  className="flex items-center justify-between w-full px-4 py-3 text-left hover:bg-muted/40 transition-colors"
-                  onClick={() => setAiPanelsOpen(v => !v)}
-                >
-                  <div className="flex items-center gap-2">
-                    <span className="font-semibold text-sm">AI Tools</span>
-                    <Badge variant="outline" className="text-[10px] px-1.5 py-0 text-muted-foreground">optional</Badge>
-                  </div>
-                  {aiPanelsOpen
-                    ? <ChevronUp className="h-4 w-4 text-muted-foreground" />
-                    : <ChevronDown className="h-4 w-4 text-muted-foreground" />}
-                </button>
-                {!aiPanelsOpen && (
-                  <div className="px-4 pb-3 text-xs text-muted-foreground">
-                    Auto-extract dimensions, materials &amp; openings from the plan — requires backend API
-                  </div>
-                )}
-                {aiPanelsOpen && (
-                  <div className="border-t border-border space-y-4 p-4">
-                    <AIExtractionPanel
-                      pdfFile={uploadedFile}
-                      pdfUrl={state.pdfFile?.url || null}
-                      currentPage={state.currentPageIndex}
-                      onDimensionsExtracted={handleDimensionsExtracted}
-                      onTablesExtracted={handleTablesExtracted}
-                      onTextExtracted={handleTextExtracted}
-                      onRoomAreasImported={handleRoomAreasImported}
-                    />
-                    <MaterialExtractorPanel
-                      pdfUrl={state.pdfFile?.url || null}
-                      pageCount={state.pdfFile?.pageCount || 1}
-                      projectName={state.pdfFile?.name?.replace(/\.pdf$/i, '') || undefined}
-                      onImport={(measurements) => {
-                        measurements.forEach((m) =>
-                          dispatch({ type: 'ADD_MEASUREMENT', payload: m })
-                        );
-                      }}
-                    />
-                    <PlanIntelligencePanel
-                      pdfUrl={state.pdfFile?.url || null}
-                      pageCount={state.pdfFile?.pageCount || 1}
-                      projectName={state.pdfFile?.name?.replace(/\.pdf$/i, '') || undefined}
-                    />
-                    {state.pdfFile && (
-                      <DetectionResultsPanel
-                        pdfUrl={state.pdfFile.url}
-                        totalPages={state.pdfFile.pageCount}
-                        onJumpToPage={(pageIndex) => {
-                          dispatch({ type: 'SET_CURRENT_PAGE', payload: pageIndex });
-                          setActiveTab('measure');
-                        }}
-                        onScanComplete={setDetectedOpenings}
-                      />
-                    )}
-                  </div>
-                )}
-              </Card>
-            </div>
           </div>
           {state.pdfFile && (
             <div className="flex justify-end pt-2">
@@ -962,12 +921,17 @@ export const PDFTakeoff = ({ projectId, estimateId, onAddCostItems }: PDFTakeoff
               <div className="lg:col-span-3 space-y-2">
                 <MeasurementToolbar
                   activeTool={state.activeTool}
-                  onToolSelect={(tool) => dispatch({ type: 'SET_ACTIVE_TOOL', payload: tool })}
+                  onToolSelect={(tool) => { setModMode(null); dispatch({ type: 'SET_ACTIVE_TOOL', payload: tool }); }}
                   onUndo={() => dispatch({ type: 'UNDO' })}
                   onRedo={() => dispatch({ type: 'REDO' })}
                   canUndo={state.historyIndex > 0}
                   canRedo={state.historyIndex < state.history.length - 1}
                   disabled={!state.isCalibrated && state.activeTool !== 'pan'}
+                  modMode={modMode}
+                  onModSelect={(mod) => {
+                    setModMode(mod);
+                    dispatch({ type: 'SET_ACTIVE_TOOL', payload: mod === 'wall' ? 'line' : 'count' });
+                  }}
                 />
 
                 {/* Canvas Controls */}
@@ -1436,6 +1400,16 @@ export const PDFTakeoff = ({ projectId, estimateId, onAddCostItems }: PDFTakeoff
         feature={upgradeModal.feature}
       />
     </div>
+
+    {pendingModMeasurement && modMode && (
+      <ModificationDialog
+        open={true}
+        mode={modMode}
+        measurement={pendingModMeasurement}
+        onConfirm={handleModConfirm}
+        onCancel={handleModCancel}
+      />
+    )}
     </>
   );
 };

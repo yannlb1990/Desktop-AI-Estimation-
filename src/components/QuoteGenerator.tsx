@@ -747,7 +747,7 @@ export const QuoteGenerator = ({ project, estimate }: QuoteGeneratorProps) => {
                       {companyABN && <span>ABN: {companyABN}</span>}
                       {companyACN && <span>ACN: {companyACN}</span>}
                     </div>
-                    <div className="mt-2 text-gray-300">Generated with Esti-mate · {fmt(today)}</div>
+                    <div className="mt-2 text-gray-300">Generated with Metricore · {fmt(today)}</div>
                   </div>
                 </div>
               </div>

@@ -11,7 +11,6 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { MeasurementsTable } from "./MeasurementsTable";
 import { Ruler, ZoomIn, ZoomOut, Trash2, Square, Minus, Scan, Loader2, PenTool, FileText, Box, Hash, Undo2, Redo2, Edit2, Magnet, Link, Search } from "lucide-react";
 import { toast } from "sonner";
-import { supabase } from "@/integrations/supabase/client";
 import * as pdfjsLib from "pdfjs-dist";
 import { MeasurementsSidebar } from "./MeasurementsSidebar";
 
@@ -133,30 +132,20 @@ export const PlanViewer = ({ planUrl, projectId, planPageId: propPlanPageId, wiz
     }
   }, [detectedSymbols, fabricCanvas]);
 
-  // Validate propPlanPageId immediately and set isPlanReady early
+  // Load scale from localStorage when propPlanPageId is provided
   useEffect(() => {
     if (propPlanPageId) {
-      console.log('[SCALE DEBUG] propPlanPageId provided:', propPlanPageId, '- validating...');
-      supabase
-        .from('plan_pages')
-        .select('id, scale_factor')
-        .eq('id', propPlanPageId)
-        .single()
-        .then(({ data, error }) => {
-          if (data && !error) {
-            console.log('[SCALE DEBUG] Plan page validated, setting isPlanReady=true');
-            setPlanPageId(data.id);
-            planPageIdRef.current = data.id;
-            if (data.scale_factor) {
-              console.log('[SCALE DEBUG] Loading existing scale factor:', data.scale_factor);
-              setScaleFactor(data.scale_factor);
-              scaleFactorRef.current = data.scale_factor;
-            }
-            setIsPlanReady(true);  // SET THIS EARLY!
-          } else {
-            console.error('[SCALE DEBUG] Failed to validate plan page:', error);
+      const scaleData = localStorage.getItem(`plan_scale_${propPlanPageId}`);
+      if (scaleData) {
+        try {
+          const parsed = JSON.parse(scaleData);
+          if (parsed.scale_factor) {
+            setScaleFactor(parsed.scale_factor);
+            scaleFactorRef.current = parsed.scale_factor;
           }
-        });
+        } catch { }
+      }
+      setIsPlanReady(true);
     }
   }, [propPlanPageId]);
 
@@ -195,44 +184,23 @@ export const PlanViewer = ({ planUrl, projectId, planPageId: propPlanPageId, wiz
     }
   }, [tool, fabricCanvas]);
 
-  const loadMeasurements = async () => {
+  const loadMeasurements = () => {
     if (!planPageId) return;
-    
-    try {
-      const { data, error } = await supabase
-        .from('plan_measurements')
-        .select('*')
-        .eq('plan_page_id', planPageId)
-        .order('created_at', { ascending: true });
-
-      if (error) throw error;
-      setMeasurements(data || []);
-      
-      // Redraw measurements on canvas after loading
-      if (fabricCanvas && data) {
-        redrawMeasurementsOnCanvas(data);
-      }
-    } catch (error) {
-      console.error('Error loading measurements:', error);
+    const data: any[] = JSON.parse(localStorage.getItem(`plan_measurements_${planPageId}`) || '[]');
+    setMeasurements(data);
+    if (fabricCanvas && data.length > 0) {
+      redrawMeasurementsOnCanvas(data);
     }
   };
 
-  const loadScaleFactor = async () => {
+  const loadScaleFactor = () => {
     if (!planPageId) return;
-    
-    try {
-      const { data, error } = await supabase
-        .from('plan_pages')
-        .select('scale_factor')
-        .eq('id', planPageId)
-        .single();
-
-      if (error) throw error;
-      if (data?.scale_factor) {
-        setScaleFactor(data.scale_factor);
-      }
-    } catch (error) {
-      console.error('Error loading scale factor:', error);
+    const scaleData = localStorage.getItem(`plan_scale_${planPageId}`);
+    if (scaleData) {
+      try {
+        const parsed = JSON.parse(scaleData);
+        if (parsed.scale_factor) setScaleFactor(parsed.scale_factor);
+      } catch { }
     }
   };
 
@@ -259,27 +227,34 @@ export const PlanViewer = ({ planUrl, projectId, planPageId: propPlanPageId, wiz
           const pdf = await loadingTask.promise;
           const page = await pdf.getPage(1);
 
-          const viewport = page.getViewport({ scale: 1.5 });
+          // Render at high enough resolution to stay crisp when zoomed in
+          const baseViewport = page.getViewport({ scale: 1 });
+          const maxDim = Math.max(baseViewport.width, baseViewport.height);
+          const renderScale = Math.min(Math.max(4000 / maxDim, 3.0), 5.0);
+          const viewport = page.getViewport({ scale: renderScale });
           const tempCanvas = document.createElement('canvas');
           const context = tempCanvas.getContext('2d')!;
+          context.imageSmoothingEnabled = true;
+          (context as any).imageSmoothingQuality = 'high';
           tempCanvas.height = viewport.height;
           tempCanvas.width = viewport.width;
 
-          await page.render({ 
-            canvasContext: context, 
+          await page.render({
+            canvasContext: context,
             viewport,
             intent: 'display'
           } as any).promise;
 
-          const img = await FabricImage.fromURL(tempCanvas.toDataURL());
+          const img = await FabricImage.fromURL(tempCanvas.toDataURL('image/png'));
           const canvasWidth = 1000;
           const canvasHeight = 700;
           const imgScale = Math.min(canvasWidth / (img.width || 1), canvasHeight / (img.height || 1));
-          
+
           img.set({
             left: 0,
             top: 0,
             selectable: false,
+            objectCaching: false,
           });
           img.scale(imgScale);
 
@@ -323,80 +298,31 @@ export const PlanViewer = ({ planUrl, projectId, planPageId: propPlanPageId, wiz
     };
   }, [planUrl]);
 
-  // Create plan page in database (prevent duplicates)
-  const createPlanPage = async (width: number, height: number) => {
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user?.id || !projectId) {
-      console.error('[SCALE DEBUG] Cannot create plan page: missing user or project');
-      return;
-    }
+  // Create or restore plan page from localStorage (prevents duplicate IDs)
+  const createPlanPage = (_width: number, _height: number) => {
+    // If propPlanPageId is set, it was already handled by the validate useEffect
+    if (propPlanPageId) return;
+    if (!projectId) return;
 
-    // If we have a propPlanPageId, UPDATE its canvas dimensions
-    if (propPlanPageId) {
-      console.log('[SCALE DEBUG] Updating existing plan_page with canvas dimensions:', {
-        planPageId: propPlanPageId,
-        width,
-        height
-      });
-      const { error } = await supabase
-        .from('plan_pages')
-        .update({
-          canvas_width: width,
-          canvas_height: height,
-          status: 'ready'
-        })
-        .eq('id', propPlanPageId);
-
-      if (error) {
-        console.error('[SCALE DEBUG] Error updating plan page:', error);
-      } else {
-        console.log('[SCALE DEBUG] Successfully updated plan page with canvas dimensions');
-      }
-      return;  // Don't create a new record
-    }
-
-    console.log('[SCALE DEBUG] Checking for existing plan_pages for URL:', planUrl);
-    
-    // Check for existing plan page first
-    const { data: existing } = await supabase
-      .from('plan_pages')
-      .select('*')
-      .eq('project_id', projectId)
-      .eq('file_url', planUrl)
-      .maybeSingle();
-    
-    if (existing) {
-      console.log('[SCALE DEBUG] Found existing plan_page:', existing.id, 'scale_factor:', existing.scale_factor);
-      setPlanPageId(existing.id);
-      if (existing.scale_factor) {
-        setScaleFactor(existing.scale_factor);
-        console.log('[SCALE DEBUG] Loaded existing scale factor:', existing.scale_factor);
-      }
-      setIsPlanReady(true);
-      return;
-    }
-
-    console.log('[SCALE DEBUG] Creating new plan_page');
-    const { data, error } = await supabase
-      .from('plan_pages')
-      .insert({
-        project_id: projectId,
-        user_id: user.id,
-        file_url: planUrl,
-        canvas_width: width,
-        canvas_height: height,
-        status: 'ready'
-      })
-      .select()
-      .single();
-
-    if (error) {
-      console.error('[SCALE DEBUG] Error creating plan page:', error);
+    const planKey = `plan_page_${projectId}_${planUrl.replace(/[^a-z0-9]/gi, '').slice(-40)}`;
+    const stored = localStorage.getItem(planKey);
+    if (stored) {
+      try {
+        const page = JSON.parse(stored);
+        setPlanPageId(page.id);
+        planPageIdRef.current = page.id;
+        if (page.scale_factor) {
+          setScaleFactor(page.scale_factor);
+          scaleFactorRef.current = page.scale_factor;
+        }
+      } catch { }
     } else {
-      console.log('[SCALE DEBUG] Created new plan_page:', data.id);
-      setPlanPageId(data.id);
-      setIsPlanReady(true);
+      const id = crypto.randomUUID();
+      localStorage.setItem(planKey, JSON.stringify({ id }));
+      setPlanPageId(id);
+      planPageIdRef.current = id;
     }
+    setIsPlanReady(true);
   };
 
   // Snap to grid function (uses refs to prevent stale closures)
@@ -419,7 +345,6 @@ export const PlanViewer = ({ planUrl, projectId, planPageId: propPlanPageId, wiz
       }
     });
     fabricCanvas.renderAll();
-    console.log('[SCALE DEBUG] Cleared calibration objects');
   };
   
   
@@ -579,8 +504,6 @@ export const PlanViewer = ({ planUrl, projectId, planPageId: propPlanPageId, wiz
   const handleCalibrateClick = (pointer: { x: number; y: number }) => {
     const currentPlanPageId = planPageIdRef.current;
     
-    console.log('[SCALE DEBUG] Calibrate click:', { pointer, planPageId: currentPlanPageId, isPlanReady });
-    
     // Validate planPageId exists before allowing scale setting
     if (!currentPlanPageId || !isPlanReady) {
       toast.error("Please wait for plan to load before setting scale");
@@ -620,15 +543,7 @@ export const PlanViewer = ({ planUrl, projectId, planPageId: propPlanPageId, wiz
       fabricCanvas?.add(text);
       fabricCanvas?.renderAll();
 
-      console.log('[SCALE DEBUG] Added calibration point', pointLabel, 'at', pointer);
-
       if (newPoints.length === 2) {
-        const canvasDistance = Math.sqrt(
-          Math.pow(newPoints[1].x - newPoints[0].x, 2) +
-          Math.pow(newPoints[1].y - newPoints[0].y, 2)
-        );
-        console.log('[SCALE DEBUG] Canvas distance between A and B:', canvasDistance.toFixed(2), 'canvas units');
-        
         const line = new Line(
           [newPoints[0].x, newPoints[0].y, newPoints[1].x, newPoints[1].y],
           { stroke: '#FF6B6B', strokeWidth: 2, selectable: false }
@@ -642,23 +557,16 @@ export const PlanViewer = ({ planUrl, projectId, planPageId: propPlanPageId, wiz
   };
 
   // Apply scale calibration
-  const applyScale = async () => {
+  const applyScale = () => {
     const currentPlanPageId = planPageIdRef.current;
-    
-    console.log('[SCALE DEBUG] === APPLYING SCALE ===');
-    console.log('[SCALE DEBUG] planPageId:', currentPlanPageId);
-    console.log('[SCALE DEBUG] calibratePoints:', calibratePoints);
-    console.log('[SCALE DEBUG] calibrationDistance input:', calibrationDistance);
-    
+
     if (!currentPlanPageId) {
-      console.error('[SCALE DEBUG] FAILED: No planPageId');
       toast.error("Plan not loaded - cannot save scale");
       return;
     }
 
     const realDistanceMm = parseFloat(calibrationDistance);
     if (isNaN(realDistanceMm) || realDistanceMm <= 0) {
-      console.error('[SCALE DEBUG] FAILED: Invalid distance');
       toast.error("Please enter a valid distance in mm");
       return;
     }
@@ -669,39 +577,16 @@ export const PlanViewer = ({ planUrl, projectId, planPageId: propPlanPageId, wiz
     );
 
     const calculatedScaleFactor = realDistanceMm / canvasDistance;
-    
-    console.log('[SCALE DEBUG] === SCALE CALCULATION ===');
-    console.log('[SCALE DEBUG] Point A:', calibratePoints[0]);
-    console.log('[SCALE DEBUG] Point B:', calibratePoints[1]);
-    console.log('[SCALE DEBUG] dx:', (calibratePoints[1].x - calibratePoints[0].x).toFixed(2));
-    console.log('[SCALE DEBUG] dy:', (calibratePoints[1].y - calibratePoints[0].y).toFixed(2));
-    console.log('[SCALE DEBUG] Canvas distance:', canvasDistance.toFixed(2), 'canvas units');
-    console.log('[SCALE DEBUG] Real distance:', realDistanceMm, 'mm');
-    console.log('[SCALE DEBUG] Formula: scale_factor = real_mm / canvas_units');
-    console.log('[SCALE DEBUG] Scale factor =', realDistanceMm, '/', canvasDistance.toFixed(2), '=', calculatedScaleFactor.toFixed(4));
-    console.log('[SCALE DEBUG] planPageId:', currentPlanPageId);
-    console.log('[SCALE DEBUG] This means 10 canvas pixels =', (calculatedScaleFactor * 10).toFixed(2), 'mm');
-    
+
     setScaleFactor(calculatedScaleFactor);
 
-    console.log('[SCALE DEBUG] Updating database...');
-    const { error } = await supabase
-      .from('plan_pages')
-      .update({
-        scale_factor: calculatedScaleFactor,
-        scale_known_distance_mm: realDistanceMm,
-        scale_point_a: calibratePoints[0],
-        scale_point_b: calibratePoints[1]
-      })
-      .eq('id', currentPlanPageId);
-
-    if (error) {
-      console.error('[SCALE DEBUG] Database save FAILED:', error);
-      toast.error("Failed to save scale");
-      return;
-    }
-
-    console.log('[SCALE DEBUG] Scale saved successfully to database');
+    const scaleData = {
+      scale_factor: calculatedScaleFactor,
+      known_distance_mm: realDistanceMm,
+      point_a: calibratePoints[0],
+      point_b: calibratePoints[1],
+    };
+    localStorage.setItem(`plan_scale_${currentPlanPageId}`, JSON.stringify(scaleData));
     toast.success(`Scale set: ${calculatedScaleFactor.toFixed(2)} mm/unit`);
     
     // Clear calibration objects from canvas after successful application
@@ -992,110 +877,16 @@ export const PlanViewer = ({ planUrl, projectId, planPageId: propPlanPageId, wiz
   };
 
   // Detect symbols using AI
-  const handleDetectSymbols = async () => {
-    if (!planPageId) {
-      toast.error("Plan not loaded - cannot detect symbols");
-      return;
-    }
-
-    setIsDetectingSymbols(true);
-    toast.info("Detecting symbols on plan...");
-
-    try {
-      const { data, error } = await supabase.functions.invoke('plan-detect-symbols', {
-        body: {
-          planPageId,
-          planUrl
-        }
-      });
-
-      if (error) throw error;
-
-      if (data?.success) {
-        toast.success(`Detected ${data.count} symbols`);
-        // Reload symbols to display them
-        const { data: symbolsData } = await supabase
-          .from('plan_symbols')
-          .select('*')
-          .eq('plan_page_id', planPageId);
-        
-        if (symbolsData) {
-          setDetectedSymbols(symbolsData);
-        }
-      }
-    } catch (error) {
-      console.error('Error detecting symbols:', error);
-      toast.error('Failed to detect symbols');
-    } finally {
-      setIsDetectingSymbols(false);
-    }
+  const handleDetectSymbols = () => {
+    toast.error("Symbol detection requires AI backend — not available in local mode");
   };
 
-  const handleExtractSchedules = async () => {
-    if (!planPageId) {
-      toast.error("Plan not loaded - cannot extract schedules");
-      return;
-    }
-
-    toast.info("Extracting schedules from plan...");
-
-    try {
-      const { data, error } = await supabase.functions.invoke('plan-extract-schedules', {
-        body: {
-          planPageId,
-          planUrl
-        }
-      });
-
-      if (error) throw error;
-
-      if (data?.success) {
-        toast.success(`Extracted ${data.count} schedule items`);
-      }
-    } catch (error) {
-      console.error('Error extracting schedules:', error);
-      toast.error('Failed to extract schedules');
-    }
+  const handleExtractSchedules = () => {
+    toast.error("Schedule extraction requires AI backend — not available in local mode");
   };
 
-  const handleLinkSymbols = async () => {
-    if (!planPageId) {
-      toast.error("Plan not loaded - cannot link symbols");
-      return;
-    }
-
-    toast.info("Linking symbols to schedules...");
-
-    try {
-      const { data, error } = await supabase.functions.invoke('link-symbols-to-schedules', {
-        body: { planPageId }
-      });
-
-      if (error) throw error;
-
-      if (data?.success) {
-        toast.success(`Linked ${data.updated} symbols`);
-        
-        if (data.issues && data.issues.length > 0) {
-          data.issues.forEach((issue: string) => {
-            toast.warning(issue, { duration: 5000 });
-          });
-        }
-
-        // Reload symbols to show updated data
-        const { data: symbolsData } = await supabase
-          .from('plan_symbols')
-          .select('*')
-          .eq('plan_page_id', planPageId);
-        
-        if (symbolsData) {
-          setDetectedSymbols(symbolsData);
-        }
-      }
-    } catch (error) {
-      console.error('Error linking symbols:', error);
-      toast.error('Failed to link symbols');
-    }
+  const handleLinkSymbols = () => {
+    toast.error("Symbol linking requires AI backend — not available in local mode");
   };
 
   // Render symbol overlays on canvas
@@ -1165,14 +956,8 @@ export const PlanViewer = ({ planUrl, projectId, planPageId: propPlanPageId, wiz
   };
 
   // Save measurement with label and category
-  const saveMeasurement = async () => {
+  const saveMeasurement = () => {
     if (!pendingMeasurement || !planPageId) return;
-
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) {
-      toast.error("Not authenticated");
-      return;
-    }
 
     const label = measurementLabel.trim();
     if (!label) {
@@ -1180,60 +965,50 @@ export const PlanViewer = ({ planUrl, projectId, planPageId: propPlanPageId, wiz
       return;
     }
 
-    try {
-      let unit = "LM";
-      let realUnit = "m";
-      let volumeM3 = null;
-      let thicknessMm = null;
-      
-      if (pendingMeasurement.type === "area") {
-        unit = "M2";
-        realUnit = "m²";
-      } else if (pendingMeasurement.type === "volume") {
-        unit = "M3";
-        realUnit = "m³";
-        volumeM3 = pendingMeasurement.value;
-        thicknessMm = pendingMeasurement.thickness;
-      } else if (pendingMeasurement.type === "ea") {
-        unit = "EA";
-        realUnit = "ea";
-      }
+    let unit = "LM";
+    let realUnit = "m";
+    let volumeM3: number | null = null;
+    let thicknessMm: number | null = null;
 
-      const { data, error } = await supabase.from("plan_measurements").insert({
-        plan_page_id: planPageId,
-        user_id: user.id,
-        measurement_type: pendingMeasurement.type,
-        points: pendingMeasurement.points,
-        raw_value: pendingMeasurement.value,
-        real_value: pendingMeasurement.type === "volume" ? pendingMeasurement.area : pendingMeasurement.value,
-        real_unit: realUnit,
-        unit: unit,
-        volume_m3: volumeM3,
-        thickness_mm: thicknessMm,
-        label: label,
-        trade: measurementCategory || null,
-      }).select().single();
-
-      if (error) throw error;
-
-      // Add to history for undo
-      if (data) {
-        addToHistory({
-          type: 'add_measurement',
-          data: data
-        });
-      }
-
-      toast.success(`Measurement saved: ${label}`);
-      setShowLabelDialog(false);
-      setPendingMeasurement(null);
-      setMeasurementLabel("");
-      setMeasurementCategory("");
-      loadMeasurements();
-    } catch (error) {
-      console.error('Error saving measurement:', error);
-      toast.error("Failed to save measurement");
+    if (pendingMeasurement.type === "area") {
+      unit = "M2";
+      realUnit = "m²";
+    } else if (pendingMeasurement.type === "volume") {
+      unit = "M3";
+      realUnit = "m³";
+      volumeM3 = pendingMeasurement.value;
+      thicknessMm = pendingMeasurement.thickness ?? null;
+    } else if (pendingMeasurement.type === "ea") {
+      unit = "EA";
+      realUnit = "ea";
     }
+
+    const measurement = {
+      id: crypto.randomUUID(),
+      plan_page_id: planPageId,
+      measurement_type: pendingMeasurement.type,
+      points: pendingMeasurement.points,
+      raw_value: pendingMeasurement.value,
+      real_value: pendingMeasurement.type === "volume" ? pendingMeasurement.area : pendingMeasurement.value,
+      real_unit: realUnit,
+      unit: unit,
+      volume_m3: volumeM3,
+      thickness_mm: thicknessMm,
+      label: label,
+      trade: measurementCategory || null,
+      created_at: new Date().toISOString(),
+    };
+
+    const existing: any[] = JSON.parse(localStorage.getItem(`plan_measurements_${planPageId}`) || '[]');
+    localStorage.setItem(`plan_measurements_${planPageId}`, JSON.stringify([...existing, measurement]));
+
+    addToHistory({ type: 'add_measurement', data: measurement });
+    toast.success(`Measurement saved: ${label}`);
+    setShowLabelDialog(false);
+    setPendingMeasurement(null);
+    setMeasurementLabel("");
+    setMeasurementCategory("");
+    loadMeasurements();
   };
 
   // Clear all measurement objects from canvas
@@ -1254,24 +1029,11 @@ export const PlanViewer = ({ planUrl, projectId, planPageId: propPlanPageId, wiz
     fabricCanvas.renderAll();
   };
 
-  // Redraw all measurements from database onto canvas
-  const redrawMeasurementsFromDatabase = async () => {
+  // Redraw all measurements from localStorage onto canvas
+  const redrawMeasurementsFromDatabase = () => {
     if (!fabricCanvas || !planPageId) return;
-    
-    try {
-      const { data, error } = await supabase
-        .from('plan_measurements')
-        .select('*')
-        .eq('plan_page_id', planPageId)
-        .order('created_at', { ascending: true });
-
-      if (error) throw error;
-      if (data) {
-        redrawMeasurementsOnCanvas(data);
-      }
-    } catch (error) {
-      console.error('Error redrawing measurements:', error);
-    }
+    const data: any[] = JSON.parse(localStorage.getItem(`plan_measurements_${planPageId}`) || '[]');
+    redrawMeasurementsOnCanvas(data);
   };
 
   // Redraw measurements on canvas from data
@@ -1374,34 +1136,36 @@ export const PlanViewer = ({ planUrl, projectId, planPageId: propPlanPageId, wiz
     setHistoryIndex(newHistory.length - 1);
   };
 
-  const undo = async () => {
+  const undo = () => {
     if (!canUndo || historyIndex < 0) return;
     const action = history[historyIndex];
-    
-    if (action.type === 'add_measurement') {
-      await supabase.from('plan_measurements').delete().eq('id', action.data.id);
+
+    if (action.type === 'add_measurement' && planPageId) {
+      const existing: any[] = JSON.parse(localStorage.getItem(`plan_measurements_${planPageId}`) || '[]');
+      localStorage.setItem(`plan_measurements_${planPageId}`, JSON.stringify(existing.filter((m: any) => m.id !== action.data.id)));
       clearMeasurementObjects();
-      await redrawMeasurementsFromDatabase();
+      redrawMeasurementsFromDatabase();
       toast.success("Undone");
     }
-    
+
     setHistoryIndex(prev => prev - 1);
-    await loadMeasurements();
+    loadMeasurements();
   };
 
-  const redo = async () => {
+  const redo = () => {
     if (!canRedo) return;
     const action = history[historyIndex + 1];
-    
-    if (action.type === 'add_measurement') {
-      await supabase.from('plan_measurements').insert(action.data);
+
+    if (action.type === 'add_measurement' && planPageId) {
+      const existing: any[] = JSON.parse(localStorage.getItem(`plan_measurements_${planPageId}`) || '[]');
+      localStorage.setItem(`plan_measurements_${planPageId}`, JSON.stringify([...existing, action.data]));
       clearMeasurementObjects();
-      await redrawMeasurementsFromDatabase();
+      redrawMeasurementsFromDatabase();
       toast.success("Redone");
     }
-    
+
     setHistoryIndex(prev => prev + 1);
-    await loadMeasurements();
+    loadMeasurements();
   };
   
   // Edit measurement
@@ -1410,56 +1174,30 @@ export const PlanViewer = ({ planUrl, projectId, planPageId: propPlanPageId, wiz
     setShowEditDialog(true);
   };
   
-  const updateMeasurement = async () => {
-    if (!editingMeasurement) return;
-    
-    try {
-      const { error } = await supabase
-        .from('plan_measurements')
-        .update({
-          label: editingMeasurement.label,
-          trade: editingMeasurement.trade
-        })
-        .eq('id', editingMeasurement.id);
-
-      if (error) throw error;
-      
-      toast.success("Measurement updated");
-      setShowEditDialog(false);
-      setEditingMeasurement(null);
-      await loadMeasurements();
-    } catch (error) {
-      console.error('Error updating measurement:', error);
-      toast.error("Failed to update measurement");
-    }
+  const updateMeasurement = () => {
+    if (!editingMeasurement || !planPageId) return;
+    const existing: any[] = JSON.parse(localStorage.getItem(`plan_measurements_${planPageId}`) || '[]');
+    const updated = existing.map((m: any) =>
+      m.id === editingMeasurement.id ? { ...m, label: editingMeasurement.label, trade: editingMeasurement.trade } : m
+    );
+    localStorage.setItem(`plan_measurements_${planPageId}`, JSON.stringify(updated));
+    toast.success("Measurement updated");
+    setShowEditDialog(false);
+    setEditingMeasurement(null);
+    loadMeasurements();
   };
 
   // Delete measurement
-  const deleteMeasurement = async (id: string) => {
-    try {
-      const measurementToDelete = measurements.find(m => m.id === id);
-      
-      const { error } = await supabase
-        .from('plan_measurements')
-        .delete()
-        .eq('id', id);
-
-      if (error) throw error;
-
-      // Add to history for undo
-      if (measurementToDelete) {
-        addToHistory({
-          type: 'delete_measurement',
-          data: measurementToDelete
-        });
-      }
-
-      toast.success("Measurement deleted");
-      loadMeasurements();
-    } catch (error) {
-      console.error('Error deleting measurement:', error);
-      toast.error("Failed to delete measurement");
+  const deleteMeasurement = (id: string) => {
+    if (!planPageId) return;
+    const measurementToDelete = measurements.find(m => m.id === id);
+    const existing: any[] = JSON.parse(localStorage.getItem(`plan_measurements_${planPageId}`) || '[]');
+    localStorage.setItem(`plan_measurements_${planPageId}`, JSON.stringify(existing.filter((m: any) => m.id !== id)));
+    if (measurementToDelete) {
+      addToHistory({ type: 'delete_measurement', data: measurementToDelete });
     }
+    toast.success("Measurement deleted");
+    loadMeasurements();
   };
 
   const handleZoomIn = () => {
@@ -1684,12 +1422,13 @@ export const PlanViewer = ({ planUrl, projectId, planPageId: propPlanPageId, wiz
                   </p>
                 </div>
               </div>
-              <Button size="sm" variant="outline" className="w-full mt-2" onClick={async () => {
+              <Button size="sm" variant="outline" className="w-full mt-2" onClick={() => {
                 if (!planPageId) return;
-                const { data } = await supabase.from('plan_pages').select('scale_factor').eq('id', planPageId).single();
-                toast.info(`DB scale_factor: ${data?.scale_factor ? data.scale_factor.toFixed(4) : 'null'}`);
+                const scaleData = localStorage.getItem(`plan_scale_${planPageId}`);
+                const parsed = scaleData ? JSON.parse(scaleData) : null;
+                toast.info(`Local scale_factor: ${parsed?.scale_factor ? parsed.scale_factor.toFixed(4) : 'null'}`);
               }}>
-                Check DB Value
+                Check Local Value
               </Button>
             </div>
           </Card>

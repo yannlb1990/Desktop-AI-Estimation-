@@ -6,7 +6,6 @@ import { Badge } from '@/components/ui/badge';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { toast } from 'sonner';
-import { supabase } from '@/integrations/supabase/client';
 import { extractFullPageText } from '@/lib/takeoff/pdfTextExtractor';
 import type { ExtractedMaterial, MaterialExtractionResult, MaterialType } from '@/lib/takeoff/materialExtractorTypes';
 import type { Measurement, MeasurementArea } from '@/lib/takeoff/types';
@@ -131,24 +130,10 @@ export const MaterialExtractorPanel: React.FC<MaterialExtractorPanelProps> = ({
     setStatus('analyzing');
     setProgress('Sending to AI for material extraction…');
 
-    const { data, error: fnError } = await supabase.functions.invoke<MaterialExtractionResult>(
-      'extract-materials-from-text',
-      { body: { text: combined, projectName: projectName || 'Takeoff' } },
-    );
-
-    if (fnError || !data?.success) {
-      const msg = fnError?.message || data?.error || 'Extraction failed';
-      setError(msg);
-      setStatus('error');
-      toast.error(msg);
-      return;
-    }
-
-    setItems(data.items);
-    setSelected(new Set(data.items.map((_, i) => i)));
-    setStatus('done');
-    setProgress('');
-    toast.success(`Extracted ${data.totalItems} materials from ${data.chunksProcessed} text chunk${data.chunksProcessed !== 1 ? 's' : ''}`);
+    const msg = 'AI material extraction requires a backend connection. This feature is not available in local mode.';
+    setError(msg);
+    setStatus('error');
+    toast.error('AI extraction unavailable — backend not configured');
   }, [pdfUrl, pageCount, projectName]);
 
   const toggleItem = (idx: number) => {

@@ -9,7 +9,6 @@ import { Badge } from '@/components/ui/badge';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { toast } from 'sonner';
-import { supabase } from '@/integrations/supabase/client';
 import { extractFullPageText } from '@/lib/takeoff/pdfTextExtractor';
 import type {
   PlanIntelligenceResult,
@@ -238,25 +237,10 @@ export const PlanIntelligencePanel: React.FC<PlanIntelligencePanelProps> = ({
     setStatus('analyzing');
     setProgress('Analysing with AI…');
 
-    const { data, error: fnError } = await supabase.functions.invoke<PlanIntelligenceResult>(
-      'comprehensive-plan-analysis',
-      { body: { text: pageTexts.join('\n\n'), projectName, projectType } },
-    );
-
-    if (fnError || !data?.success) {
-      const msg = fnError?.message || data?.error || 'Analysis failed';
-      setError(msg);
-      setStatus('error');
-      toast.error(msg);
-      return;
-    }
-
-    setResult(data);
-    setStatus('done');
-    setProgress('');
-
-    const total = data.notes.length + data.specifications.length + data.standards.length + data.action_items.length;
-    toast.success(`Found ${total} items across ${data.chunksProcessed} text chunk${data.chunksProcessed !== 1 ? 's' : ''}`);
+    const msg = 'AI plan analysis requires a backend connection. This feature is not available in local mode.';
+    setError(msg);
+    setStatus('error');
+    toast.error('AI analysis unavailable — backend not configured');
   }, [pdfUrl, pageCount, projectName, projectType]);
 
   const handleDownload = () => {

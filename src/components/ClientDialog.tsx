@@ -1,5 +1,4 @@
 import { useState, useEffect } from "react";
-import { supabase } from "@/integrations/supabase/client";
 import {
   Dialog,
   DialogContent,
@@ -12,13 +11,14 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
-import { Loader2 } from "lucide-react";
 
 interface ClientDialogProps {
   open: boolean;
   onClose: () => void;
   editingClient?: any;
 }
+
+const CLIENTS_KEY = "local_clients";
 
 export const ClientDialog = ({ open, onClose, editingClient }: ClientDialogProps) => {
   const [saving, setSaving] = useState(false);
@@ -71,41 +71,33 @@ export const ClientDialog = ({ open, onClose, editingClient }: ClientDialogProps
     }
   }, [editingClient, open]);
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     setSaving(true);
 
     try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) {
-        toast.error("You must be signed in");
-        return;
-      }
+      const existing: any[] = JSON.parse(localStorage.getItem(CLIENTS_KEY) || "[]");
 
       if (editingClient) {
-        const { error } = await supabase
-          .from("clients" as any)
-          .update(formData)
-          .eq("id", editingClient.id);
-
-        if (error) throw error;
+        const updated = existing.map(c =>
+          c.id === editingClient.id ? { ...c, ...formData } : c
+        );
+        localStorage.setItem(CLIENTS_KEY, JSON.stringify(updated));
         toast.success("Client updated successfully");
       } else {
-        const { error } = await supabase
-          .from("clients" as any)
-          .insert({
-            ...formData,
-            user_id: user.id,
-          });
-
-        if (error) throw error;
+        const newClient = {
+          id: crypto.randomUUID(),
+          ...formData,
+          created_at: new Date().toISOString(),
+        };
+        localStorage.setItem(CLIENTS_KEY, JSON.stringify([newClient, ...existing]));
         toast.success("Client added successfully");
       }
 
       onClose();
     } catch (error: any) {
       console.error("Error saving client:", error);
-      toast.error(error.message || "Failed to save client");
+      toast.error("Failed to save client");
     } finally {
       setSaving(false);
     }
@@ -281,14 +273,7 @@ export const ClientDialog = ({ open, onClose, editingClient }: ClientDialogProps
               className="bg-accent text-accent-foreground hover:bg-accent/90"
               disabled={saving}
             >
-              {saving ? (
-                <>
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Saving...
-                </>
-              ) : (
-                <>{editingClient ? "Update Client" : "Add Client"}</>
-              )}
+              {editingClient ? "Update Client" : "Add Client"}
             </Button>
           </div>
         </form>

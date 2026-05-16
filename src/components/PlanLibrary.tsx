@@ -8,7 +8,6 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { FileUp, Eye, Trash2, Upload, AlertCircle } from "lucide-react";
-import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 
 interface PlanPage {
@@ -27,6 +26,22 @@ interface PlanLibraryProps {
   onOpenPlan: (planUrl: string, planPageId: string) => void;
 }
 
+function storageKey(projectId: string) {
+  return `local_plan_pages_${projectId}`;
+}
+
+function loadPlansFromStorage(projectId: string): PlanPage[] {
+  try {
+    return JSON.parse(localStorage.getItem(storageKey(projectId)) || "[]");
+  } catch {
+    return [];
+  }
+}
+
+function savePlansToStorage(projectId: string, plans: PlanPage[]) {
+  localStorage.setItem(storageKey(projectId), JSON.stringify(plans));
+}
+
 export const PlanLibrary = ({ projectId, onOpenPlan }: PlanLibraryProps) => {
   const [plans, setPlans] = useState<PlanPage[]>([]);
   const [loading, setLoading] = useState(true);
@@ -36,96 +51,34 @@ export const PlanLibrary = ({ projectId, onOpenPlan }: PlanLibraryProps) => {
   const [uploading, setUploading] = useState(false);
 
   useEffect(() => {
-    loadPlans();
+    setPlans(loadPlansFromStorage(projectId));
+    setLoading(false);
   }, [projectId]);
 
-  const loadPlans = async () => {
-    setLoading(true);
-    try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return;
-
-      // Fetch plans with measurement counts
-      const { data: planData, error } = await supabase
-        .from('plan_pages')
-        .select(`
-          id,
-          file_url,
-          original_filename,
-          discipline,
-          scale_factor,
-          created_at,
-          project_id
-        `)
-        .eq('user_id', user.id)
-        .eq('project_id', projectId)
-        .order('created_at', { ascending: false });
-
-      if (error) throw error;
-
-      // Get measurement counts for each plan
-      const plansWithCounts = await Promise.all(
-        (planData || []).map(async (plan) => {
-          const { count } = await supabase
-            .from('plan_measurements')
-            .select('*', { count: 'exact', head: true })
-            .eq('plan_page_id', plan.id);
-          
-          return {
-            ...plan,
-            measurement_count: count || 0
-          };
-        })
-      );
-
-      setPlans(plansWithCounts);
-    } catch (error) {
-      console.error('Error loading plans:', error);
-      toast.error("Failed to load plans");
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleUpload = async () => {
+  const handleUpload = () => {
     if (!uploadFile) return;
 
     setUploading(true);
     try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) throw new Error("Not authenticated");
+      const blobUrl = URL.createObjectURL(uploadFile);
+      const newPlan: PlanPage = {
+        id: crypto.randomUUID(),
+        file_url: blobUrl,
+        original_filename: uploadFile.name,
+        discipline: uploadDiscipline,
+        scale_factor: null,
+        created_at: new Date().toISOString(),
+        project_id: projectId,
+        measurement_count: 0,
+      };
 
-      // Upload to storage with user ID prefix for RLS
-      const fileName = `${user.id}/${Date.now()}_${uploadFile.name}`;
-      const { data: uploadData, error: uploadError } = await supabase.storage
-        .from('plans')
-        .upload(fileName, uploadFile);
-
-      if (uploadError) throw uploadError;
-
-      // Get public URL
-      const { data: { publicUrl } } = supabase.storage
-        .from('plans')
-        .getPublicUrl(fileName);
-
-      // Create plan_page record
-      const { error: insertError } = await supabase
-        .from('plan_pages')
-        .insert({
-          user_id: user.id,
-          project_id: projectId,
-          file_url: publicUrl,
-          original_filename: uploadFile.name,
-          discipline: uploadDiscipline,
-          status: 'uploaded'
-        });
-
-      if (insertError) throw insertError;
+      const updated = [newPlan, ...loadPlansFromStorage(projectId)];
+      savePlansToStorage(projectId, updated);
+      setPlans(updated);
 
       toast.success("Plan uploaded successfully");
       setShowUploadDialog(false);
       setUploadFile(null);
-      loadPlans();
     } catch (error) {
       console.error('Error uploading plan:', error);
       toast.error("Failed to upload plan");
@@ -134,26 +87,15 @@ export const PlanLibrary = ({ projectId, onOpenPlan }: PlanLibraryProps) => {
     }
   };
 
-  const handleDelete = async (planId: string) => {
-    try {
-      const { error } = await supabase
-        .from('plan_pages')
-        .delete()
-        .eq('id', planId);
-
-      if (error) throw error;
-
-      toast.success("Plan deleted");
-      loadPlans();
-    } catch (error) {
-      console.error('Error deleting plan:', error);
-      toast.error("Failed to delete plan");
-    }
+  const handleDelete = (planId: string) => {
+    const updated = loadPlansFromStorage(projectId).filter(p => p.id !== planId);
+    savePlansToStorage(projectId, updated);
+    setPlans(updated);
+    toast.success("Plan deleted");
   };
 
   const getScaleDisplay = (scaleFactor: number | null) => {
     if (!scaleFactor) return <Badge variant="destructive"><AlertCircle className="h-3 w-3 mr-1" />Not set</Badge>;
-    // scaleFactor is in mm per canvas unit, so 1000/scaleFactor gives proper ratio
     const ratio = Math.round(1000 / scaleFactor);
     return <Badge variant="secondary">1:{ratio}</Badge>;
   };
@@ -178,8 +120,8 @@ export const PlanLibrary = ({ projectId, onOpenPlan }: PlanLibraryProps) => {
           <div className="text-center py-8 text-muted-foreground">
             <FileUp className="h-12 w-12 mx-auto mb-3 opacity-50" />
             <p>No plans uploaded yet</p>
-            <Button 
-              variant="outline" 
+            <Button
+              variant="outline"
               className="mt-3"
               onClick={() => setShowUploadDialog(true)}
             >

@@ -163,6 +163,7 @@ export interface CostItem {
   markupPercent?: number;
 
   // Labour fields
+  labourTrade?: string;         // Tradesperson type for rate lookup (Carpenter, Plumber, etc.)
   hourlyRate?: number;
   labourWastePercent?: number;  // Default 10%
 

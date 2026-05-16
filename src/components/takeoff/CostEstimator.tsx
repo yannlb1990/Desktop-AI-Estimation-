@@ -12,6 +12,7 @@ import { Calculator, DollarSign, Plus, Trash2, FileDown, Percent, Clock, Externa
 import { Measurement, CostItem, MeasurementArea, TRADE_OPTIONS, RelatedMaterial, ConsumableItem } from '@/lib/takeoff/types';
 import { cn } from '@/lib/utils';
 import { SCOPE_OF_WORK_RATES, type AustralianState } from '@/data/scopeOfWorkRates';
+import { MARKET_LABOUR_RATES, getStateRate } from '@/data/marketLabourRates';
 import { exportToBOQCsv } from '@/lib/takeoff/export';
 import { RATE_TRADE_TO_OPTION } from '@/lib/takeoff/profile';
 import { toast } from 'sonner';
@@ -92,6 +93,13 @@ const CATEGORY_TO_TRADE: Record<string, string> = {
   General: 'Carpenter',
 };
 
+// Trades grouped by category for the $/Hr trade picker
+const TRADES_BY_CATEGORY = MARKET_LABOUR_RATES.reduce((acc, r) => {
+  if (!acc[r.category]) acc[r.category] = [];
+  acc[r.category].push(r);
+  return acc;
+}, {} as Record<string, typeof MARKET_LABOUR_RATES[number][]>);
+
 // Labour rate popover — click the $/Hr cell to see market benchmarks and quick-apply
 interface LabourRateCellProps {
   item: CostItem;
@@ -101,21 +109,27 @@ interface LabourRateCellProps {
 
 const LabourRateCell = ({ item, selectedState, onUpdateCostItem }: LabourRateCellProps) => {
   const [open, setOpen] = useState(false);
+
+  const currentLabourTrade = item.labourTrade || CATEGORY_TO_TRADE[item.category] || 'Carpenter';
+
   const [savedDefault, setSavedDefault] = useState<number | null>(() => {
     const cr = getCustomRates();
-    const tradeName = item.trade || CATEGORY_TO_TRADE[item.category] || 'General Labour';
-    return cr[tradeName] ?? null;
+    return cr[currentLabourTrade] ?? null;
   });
 
-  const tradeName = item.trade || CATEGORY_TO_TRADE[item.category] || 'General Labour';
-  const rateInfo = findLabourRate(tradeName);
+  const rateInfo = findLabourRate(currentLabourTrade);
   const mult = LABOUR_MULT[selectedState] ?? 1;
   const adj = (rate: number) => Math.round(rate * mult);
+
+  const handleLabourTradeChange = (tradeName: string) => {
+    const rate = getStateRate(tradeName, selectedState as AustralianState);
+    onUpdateCostItem(item.id, { labourTrade: tradeName, hourlyRate: rate });
+  };
 
   const handleOpenChange = (next: boolean) => {
     if (next) {
       const cr = getCustomRates();
-      setSavedDefault(cr[tradeName] ?? null);
+      setSavedDefault(cr[currentLabourTrade] ?? null);
     }
     setOpen(next);
   };
@@ -127,82 +141,99 @@ const LabourRateCell = ({ item, selectedState, onUpdateCostItem }: LabourRateCel
 
   const saveDefault = () => {
     const rate = item.hourlyRate ?? (rateInfo ? adj(rateInfo.typical) : 65);
-    setCustomRate(tradeName, rate);
+    setCustomRate(currentLabourTrade, rate);
     setSavedDefault(rate);
-    toast.success(`$${rate}/hr saved as default for ${tradeName}`);
+    toast.success(`$${rate}/hr saved as default for ${currentLabourTrade}`);
   };
 
   const resetDefault = () => {
-    clearCustomRate(tradeName);
+    clearCustomRate(currentLabourTrade);
     setSavedDefault(null);
-    toast.success(`${tradeName} reset to market rate`);
+    toast.success(`${currentLabourTrade} reset to market rate`);
   };
 
   return (
-    <Popover open={open} onOpenChange={handleOpenChange}>
-      <PopoverTrigger asChild>
-        <Input
-          type="number"
-          value={item.hourlyRate ?? 65}
-          onChange={(e) => onUpdateCostItem(item.id, { hourlyRate: Number(e.target.value) })}
-          className="h-8 text-xs text-right font-mono border-border px-2 w-full"
-          onFocus={() => setOpen(true)}
-        />
-      </PopoverTrigger>
-      <PopoverContent className="w-72 p-3" align="end" side="top">
-        {!rateInfo ? (
-          <p className="text-xs text-muted-foreground">No benchmark data for "{tradeName}"</p>
-        ) : (
-          <div className="space-y-3">
-            {/* Header */}
-            <div className="flex items-center gap-2">
-              <span className="text-xl">{rateInfo.icon}</span>
+    <div className="space-y-0.5">
+      {/* Trade picker — select tradesperson, auto-fills market rate */}
+      <Select value={currentLabourTrade} onValueChange={handleLabourTradeChange}>
+        <SelectTrigger className="h-6 text-[10px] px-1.5 w-full border-dashed">
+          <span className="truncate text-[10px]">{currentLabourTrade}</span>
+        </SelectTrigger>
+        <SelectContent className="bg-popover max-h-64 w-52">
+          {Object.entries(TRADES_BY_CATEGORY).map(([category, rates]) => (
+            <React.Fragment key={category}>
+              <div className="px-2 pt-1.5 pb-0.5 text-[10px] font-semibold text-muted-foreground tracking-wider uppercase">{category}</div>
+              {rates.map(r => (
+                <SelectItem key={r.trade} value={r.trade} className="text-xs pl-4">
+                  <span className="flex items-center justify-between gap-3">
+                    <span>{r.trade}</span>
+                    <span className="text-muted-foreground font-mono text-[10px]">${getStateRate(r.trade, selectedState as AustralianState)}/hr</span>
+                  </span>
+                </SelectItem>
+              ))}
+            </React.Fragment>
+          ))}
+        </SelectContent>
+      </Select>
+
+      {/* Rate input — click to open benchmark popover */}
+      <Popover open={open} onOpenChange={handleOpenChange}>
+        <PopoverTrigger asChild>
+          <Input
+            type="number"
+            value={item.hourlyRate ?? 65}
+            onChange={(e) => onUpdateCostItem(item.id, { hourlyRate: Number(e.target.value) })}
+            className="h-7 text-xs text-right font-mono border-border px-2 w-full"
+            onFocus={() => setOpen(true)}
+          />
+        </PopoverTrigger>
+        <PopoverContent className="w-72 p-3" align="end" side="top">
+          {!rateInfo ? (
+            <p className="text-xs text-muted-foreground">No benchmark data for "{currentLabourTrade}"</p>
+          ) : (
+            <div className="space-y-3">
               <div>
                 <p className="text-sm font-semibold">{rateInfo.trade}</p>
                 <p className="text-xs text-muted-foreground">{rateInfo.desc}</p>
               </div>
-            </div>
-
-            {/* Rate tiles */}
-            <p className="text-[11px] text-muted-foreground">{selectedState} market rates — click to apply</p>
-            <div className="grid grid-cols-4 gap-1">
-              {([
-                { label: 'Award', rate: rateInfo.award, cls: 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-200' },
-                { label: 'Low', rate: adj(rateInfo.low), cls: 'bg-green-100 text-green-800 dark:bg-green-900/50 dark:text-green-200' },
-                { label: 'Typical', rate: adj(rateInfo.typical), cls: 'bg-amber-100 text-amber-800 dark:bg-amber-900/50 dark:text-amber-200' },
-                { label: 'High', rate: adj(rateInfo.high), cls: 'bg-red-100 text-red-800 dark:bg-red-900/50 dark:text-red-200' },
-              ] as const).map(({ label, rate, cls }) => (
-                <button
-                  key={label}
-                  className={`${cls} rounded p-1.5 text-center hover:opacity-75 transition-opacity`}
-                  onClick={() => applyRate(rate)}
-                >
-                  <div className="text-sm font-bold">${rate}</div>
-                  <div className="text-[10px] opacity-70">{label}</div>
-                </button>
-              ))}
-            </div>
-
-            {/* Save / reset */}
-            <div className="flex items-center gap-1 pt-1 border-t border-border">
-              <Button size="sm" variant="outline" className="h-7 text-xs flex-1" onClick={saveDefault}>
-                Save ${item.hourlyRate ?? adj(rateInfo.typical)}/hr as default
-              </Button>
-              {savedDefault !== null && (
-                <Button size="sm" variant="ghost" className="h-7 text-xs text-muted-foreground shrink-0" onClick={resetDefault}>
-                  Reset
+              <p className="text-[11px] text-muted-foreground">{selectedState} market rates — click to apply</p>
+              <div className="grid grid-cols-4 gap-1">
+                {([
+                  { label: 'Award', rate: rateInfo.award, cls: 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-200' },
+                  { label: 'Low', rate: adj(rateInfo.low), cls: 'bg-green-100 text-green-800 dark:bg-green-900/50 dark:text-green-200' },
+                  { label: 'Typical', rate: adj(rateInfo.typical), cls: 'bg-amber-100 text-amber-800 dark:bg-amber-900/50 dark:text-amber-200' },
+                  { label: 'High', rate: adj(rateInfo.high), cls: 'bg-red-100 text-red-800 dark:bg-red-900/50 dark:text-red-200' },
+                ] as const).map(({ label, rate, cls }) => (
+                  <button
+                    key={label}
+                    className={`${cls} rounded p-1.5 text-center hover:opacity-75 transition-opacity`}
+                    onClick={() => applyRate(rate)}
+                  >
+                    <div className="text-sm font-bold">${rate}</div>
+                    <div className="text-[10px] opacity-70">{label}</div>
+                  </button>
+                ))}
+              </div>
+              <div className="flex items-center gap-1 pt-1 border-t border-border">
+                <Button size="sm" variant="outline" className="h-7 text-xs flex-1" onClick={saveDefault}>
+                  Save ${item.hourlyRate ?? adj(rateInfo.typical)}/hr as default
                 </Button>
+                {savedDefault !== null && (
+                  <Button size="sm" variant="ghost" className="h-7 text-xs text-muted-foreground shrink-0" onClick={resetDefault}>
+                    Reset
+                  </Button>
+                )}
+              </div>
+              {savedDefault !== null && (
+                <p className="text-[11px] text-muted-foreground">
+                  My default: <span className="font-semibold text-foreground">${savedDefault}/hr</span>
+                </p>
               )}
             </div>
-            {savedDefault !== null && (
-              <p className="text-[11px] text-muted-foreground">
-                My default: <span className="font-semibold text-foreground">${savedDefault}/hr</span>
-              </p>
-            )}
-          </div>
-        )}
-      </PopoverContent>
-    </Popover>
+          )}
+        </PopoverContent>
+      </Popover>
+    </div>
   );
 };
 
@@ -814,7 +845,7 @@ export const CostEstimator = ({
       {costItems.length > 0 && (
         <Card className="overflow-hidden">
           <div className="overflow-x-auto">
-            <Table className="table-fixed w-full">
+            <Table className="table-fixed min-w-[1320px]">
               <TableHeader>
                 <TableRow className="text-xs bg-muted/50">
                   <TableHead className="w-8 px-1">
@@ -829,20 +860,20 @@ export const CostEstimator = ({
                     />
                   </TableHead>
                   <TableHead className="w-8 px-1"></TableHead>
-                  <TableHead className="w-20 px-1">Category</TableHead>
-                  <TableHead className="w-28 px-1">Trade</TableHead>
-                  <TableHead className="w-32 px-1">Item</TableHead>
-                  <TableHead className="w-28 px-1">Material</TableHead>
-                  <TableHead className="w-24 px-1">Area</TableHead>
-                  <TableHead className="w-20 px-1 text-right">Qty</TableHead>
-                  <TableHead className="w-16 px-1">Unit</TableHead>
-                  <TableHead className="w-20 px-1 text-right">$/Unit</TableHead>
-                  <TableHead className="w-16 px-1 text-center">Mat %</TableHead>
-                  <TableHead className="w-16 px-1 text-right">Hrs</TableHead>
-                  <TableHead className="w-20 px-1 text-right">$/Hr</TableHead>
-                  <TableHead className="w-16 px-1 text-center">Lab %</TableHead>
-                  <TableHead className="w-16 px-1 text-center">Mkp %</TableHead>
-                  <TableHead className="w-24 px-1 text-right">Total</TableHead>
+                  <TableHead className="w-20 px-1 whitespace-nowrap">Category</TableHead>
+                  <TableHead className="w-24 px-1 whitespace-nowrap">Trade</TableHead>
+                  <TableHead className="w-40 px-1 whitespace-nowrap">Item</TableHead>
+                  <TableHead className="w-24 px-1 whitespace-nowrap">Material</TableHead>
+                  <TableHead className="w-20 px-1 whitespace-nowrap">Area</TableHead>
+                  <TableHead className="w-20 px-1 text-right whitespace-nowrap">Qty</TableHead>
+                  <TableHead className="w-14 px-1 whitespace-nowrap">Unit</TableHead>
+                  <TableHead className="w-20 px-1 text-right whitespace-nowrap">$/Unit</TableHead>
+                  <TableHead className="w-12 px-1 text-center whitespace-nowrap">Mat%</TableHead>
+                  <TableHead className="w-14 px-1 text-right whitespace-nowrap">Hrs</TableHead>
+                  <TableHead className="w-28 px-1 whitespace-nowrap">$/Hr</TableHead>
+                  <TableHead className="w-12 px-1 text-center whitespace-nowrap">Lab%</TableHead>
+                  <TableHead className="w-12 px-1 text-center whitespace-nowrap">Mkp%</TableHead>
+                  <TableHead className="w-20 px-1 text-right whitespace-nowrap">Total</TableHead>
                   <TableHead className="w-16 px-1"></TableHead>
                 </TableRow>
               </TableHeader>
@@ -880,15 +911,15 @@ export const CostEstimator = ({
 
                         {/* Category */}
                         <TableCell className="px-1 w-20">
-                          <Badge variant="outline" className={cn("text-xs px-1.5",
+                          <Badge variant="outline" className={cn("text-xs px-1.5 whitespace-nowrap",
                             item.category === 'Framing' && "border-orange-400 text-orange-600",
                             item.category === 'Lining' && "border-blue-400 text-blue-600",
                             item.category === 'Insulation' && "border-green-400 text-green-600"
-                          )}>{item.category.slice(0, 5)}</Badge>
+                          )}>{item.category}</Badge>
                         </TableCell>
 
                         {/* Trade */}
-                        <TableCell className="px-1 w-28">
+                        <TableCell className="px-1 w-24">
                           <Select value={item.trade || ''} onValueChange={(v) => onUpdateCostItem(item.id, { trade: v })}>
                             <SelectTrigger className="h-8 text-xs w-full px-2">
                               <SelectValue placeholder="-" />
@@ -900,7 +931,7 @@ export const CostEstimator = ({
                         </TableCell>
 
                         {/* Item Name */}
-                        <TableCell className="px-1 w-32">
+                        <TableCell className="px-1 w-40">
                           <Input
                             value={item.name}
                             onChange={(e) => onUpdateCostItem(item.id, { name: e.target.value })}
@@ -910,7 +941,7 @@ export const CostEstimator = ({
                         </TableCell>
 
                         {/* Material */}
-                        <TableCell className="px-1 w-28">
+                        <TableCell className="px-1 w-24">
                           {item.material === 'Custom' || !MATERIAL_OPTIONS[item.category]?.includes(item.material || '') ? (
                             <Input
                               value={item.customMaterial || item.material || ''}
@@ -933,7 +964,7 @@ export const CostEstimator = ({
                         </TableCell>
 
                         {/* Area */}
-                        <TableCell className="px-1 w-24">
+                        <TableCell className="px-1 w-20">
                           <Select value={item.area || ''} onValueChange={(v: MeasurementArea) => onUpdateCostItem(item.id, { area: v })}>
                             <SelectTrigger className="h-8 text-xs px-2">
                               <SelectValue placeholder="-" />
@@ -955,7 +986,7 @@ export const CostEstimator = ({
                         </TableCell>
 
                         {/* Unit */}
-                        <TableCell className="px-1 w-16">
+                        <TableCell className="px-1 w-14">
                           <Select value={item.unit} onValueChange={(v: typeof UNIT_OPTIONS[number]) => onUpdateCostItem(item.id, { unit: v })}>
                             <SelectTrigger className="h-8 text-xs w-full px-2">
                               <SelectValue />
@@ -978,7 +1009,7 @@ export const CostEstimator = ({
                         </TableCell>
 
                         {/* Material Waste % */}
-                        <TableCell className="px-1 w-16">
+                        <TableCell className="px-1 w-12">
                           <Input
                             type="number"
                             value={item.materialWastePercent ?? 5}
@@ -988,7 +1019,7 @@ export const CostEstimator = ({
                         </TableCell>
 
                         {/* Hours */}
-                        <TableCell className="px-1 w-16">
+                        <TableCell className="px-1 w-14">
                           <Input
                             type="number"
                             value={item.laborHours || ''}
@@ -999,7 +1030,7 @@ export const CostEstimator = ({
                         </TableCell>
 
                         {/* Hourly Rate — click to see market benchmarks */}
-                        <TableCell className="px-1 w-20">
+                        <TableCell className="px-1 w-28">
                           <LabourRateCell
                             item={item}
                             selectedState={selectedState}
@@ -1008,7 +1039,7 @@ export const CostEstimator = ({
                         </TableCell>
 
                         {/* Labour Waste % */}
-                        <TableCell className="px-1 w-16">
+                        <TableCell className="px-1 w-12">
                           <Input
                             type="number"
                             value={item.labourWastePercent ?? 10}
@@ -1018,7 +1049,7 @@ export const CostEstimator = ({
                         </TableCell>
 
                         {/* Markup % */}
-                        <TableCell className="px-1 w-16">
+                        <TableCell className="px-1 w-12">
                           <Input
                             type="number"
                             value={item.markupPercent ?? 0}
@@ -1028,7 +1059,7 @@ export const CostEstimator = ({
                         </TableCell>
 
                         {/* Line Total */}
-                        <TableCell className="px-1 w-24 text-right">
+                        <TableCell className="px-1 w-20 text-right">
                           <div className="font-mono font-semibold text-sm">${lineTotal.toFixed(0)}</div>
                           <div className="text-xs text-muted-foreground">
                             M:{materialTotal.toFixed(0)} L:{labourTotal.toFixed(0)}

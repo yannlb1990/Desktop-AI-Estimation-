@@ -10,7 +10,6 @@ import { Package, Plus, Search, Download } from "lucide-react";
 import { AUSTRALIAN_MATERIALS, getMaterialCategories } from "@/data/australianMaterials";
 import { SCOPE_OF_WORK_RATES } from "@/data/scopeOfWorkRates";
 import { MARKET_LABOUR_RATES } from "@/data/marketLabourRates";
-import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 
 export const MaterialsPricingSection = () => {
@@ -63,7 +62,7 @@ export const MaterialsPricingSection = () => {
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
-    link.download = `Esti-mate_Comprehensive_Pricing_${new Date().toISOString().split('T')[0]}.csv`;
+    link.download = `Metricore_Comprehensive_Pricing_${new Date().toISOString().split('T')[0]}.csv`;
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
@@ -72,34 +71,25 @@ export const MaterialsPricingSection = () => {
     toast.success(`Exported ${AUSTRALIAN_MATERIALS.length + SCOPE_OF_WORK_RATES.length + MARKET_LABOUR_RATES.length} items to CSV`);
   };
 
-  const handleAddMaterial = async () => {
+  const handleAddMaterial = () => {
     if (!newMaterial.name || !newMaterial.category || !newMaterial.unit || !newMaterial.avgPrice) {
       toast.error("Please fill in all required fields");
       return;
     }
 
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) {
-      toast.error("Please sign in to add custom materials");
-      return;
-    }
-
-    const { error } = await supabase.from('custom_materials').insert({
-      user_id: user.id,
+    const STORAGE_KEY = "local_custom_materials";
+    const existing = JSON.parse(localStorage.getItem(STORAGE_KEY) || "[]");
+    const entry = {
+      id: crypto.randomUUID(),
       name: newMaterial.name,
       category: newMaterial.category,
       subcategory: newMaterial.subcategory || newMaterial.category,
       unit: newMaterial.unit,
       avg_price: parseFloat(newMaterial.avgPrice),
-      supplier: newMaterial.supplier,
-      notes: newMaterial.notes
-    });
-
-    if (error) {
-      toast.error("Failed to add material");
-      console.error(error);
-      return;
-    }
+      supplier: newMaterial.supplier || null,
+      notes: newMaterial.notes || null,
+    };
+    localStorage.setItem(STORAGE_KEY, JSON.stringify([...existing, entry]));
 
     toast.success("Material added successfully");
     setShowAddDialog(false);

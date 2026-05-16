@@ -853,14 +853,21 @@ export function PDFAnalysisViewer({
         const calculatedBaseScale = containerWidth / baseViewport.width;
         setBaseScale(calculatedBaseScale);
 
-        // Apply zoom on top of base scale
+        // Apply zoom on top of base scale; multiply by DPR so the canvas buffer
+        // is physically sharp on HiDPI/Retina displays (DPR=2 → 2× pixel density).
+        const dpr = window.devicePixelRatio || 1;
         const finalScale = calculatedBaseScale * zoom;
-        const viewport = page.getViewport({ scale: finalScale, rotation });
+        const viewport = page.getViewport({ scale: finalScale * dpr, rotation });
 
-        // Set canvas size
+        // Physical buffer size = DPR × CSS size → crisp rendering
         canvas.width = viewport.width;
         canvas.height = viewport.height;
-        setCanvasSize({ width: viewport.width, height: viewport.height });
+        // CSS size stays at visual zoom level so measurement overlays stay aligned
+        const cssWidth = viewport.width / dpr;
+        const cssHeight = viewport.height / dpr;
+        canvas.style.width = `${cssWidth}px`;
+        canvas.style.height = `${cssHeight}px`;
+        setCanvasSize({ width: cssWidth, height: cssHeight });
 
         // Clear and render
         context.clearRect(0, 0, canvas.width, canvas.height);
@@ -1452,9 +1459,17 @@ export function PDFAnalysisViewer({
             <button onClick={() => goToPage(currentPage - 1)} disabled={currentPage <= 1} className="w-7 h-7 flex items-center justify-center rounded-full text-gray-300 hover:bg-gray-700 disabled:opacity-30 transition-all">
               <ChevronLeft className="h-4 w-4" />
             </button>
-            <span className="text-xs text-gray-200 font-medium min-w-[70px] text-center">
-              {currentPage} / {totalPages}
-            </span>
+            <select
+              value={currentPage}
+              onChange={(e) => goToPage(Number(e.target.value))}
+              className="bg-transparent text-xs text-gray-200 font-medium text-center cursor-pointer outline-none min-w-[80px] appearance-none"
+            >
+              {Array.from({ length: totalPages }, (_, i) => i + 1).map(p => (
+                <option key={p} value={p} className="bg-gray-800 text-gray-200">
+                  Page {p} / {totalPages}
+                </option>
+              ))}
+            </select>
             <button onClick={() => goToPage(currentPage + 1)} disabled={currentPage >= totalPages} className="w-7 h-7 flex items-center justify-center rounded-full text-gray-300 hover:bg-gray-700 disabled:opacity-30 transition-all">
               <ChevronRight className="h-4 w-4" />
             </button>

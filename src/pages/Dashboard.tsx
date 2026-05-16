@@ -6,11 +6,11 @@ import { Badge } from "@/components/ui/badge";
 import {
   Plus, FileText, DollarSign, TrendingUp, BarChart3,
   Upload, Zap, Settings, Package, ChevronRight,
-  ArrowRight, Clock, User, ExternalLink, AlertTriangle, X, LogOut
+  ArrowRight, Clock, User, ExternalLink, AlertTriangle, X, LogOut, Trash2
 } from "lucide-react";
 import { useSubscription } from "@/hooks/useSubscription";
 import { PLAN_NAMES } from "@/lib/subscription";
-import { getLocalUser, localSignOut } from "@/lib/localAuth";
+import { getLocalUser, localSignOut, isSignedIn } from "@/lib/localAuth";
 
 // ── helpers ─────────────────────────────────────────────────────────────────
 
@@ -68,6 +68,10 @@ const Dashboard = () => {
   };
 
   useEffect(() => {
+    if (!isSignedIn()) {
+      navigate("/auth");
+      return;
+    }
     const raw = localStorage.getItem("local_projects");
     const loaded: any[] = raw ? JSON.parse(raw) : [];
     loaded.sort((a, b) =>
@@ -75,7 +79,7 @@ const Dashboard = () => {
       new Date(a.updated_at || a.created_at || 0).getTime()
     );
     setProjects(loaded);
-  }, []);
+  }, [navigate]);
 
   // ── derived stats ──────────────────────────────────────────────────────────
   const defaultRates = (() => { try { return JSON.parse(localStorage.getItem("default_rates") || "{}"); } catch { return {}; } })();
@@ -95,6 +99,14 @@ const Dashboard = () => {
   // ── plan guards ────────────────────────────────────────────────────────────
   const atProjectLimit =
     sub.caps.maxProjects !== Infinity && projects.length >= sub.caps.maxProjects;
+
+  const handleDeleteProject = (e: React.MouseEvent, projectId: string) => {
+    e.stopPropagation();
+    if (!confirm("Delete this project? This cannot be undone.")) return;
+    const existing: any[] = JSON.parse(localStorage.getItem('local_projects') || '[]');
+    localStorage.setItem('local_projects', JSON.stringify(existing.filter((p: any) => p.id !== projectId)));
+    setProjects(prev => prev.filter(p => p.id !== projectId));
+  };
 
   const handleNewProject = () => {
     if (atProjectLimit) {
@@ -147,9 +159,9 @@ const Dashboard = () => {
         <div className="container mx-auto px-6 py-3 flex items-center justify-between">
           <div className="flex items-center gap-2">
             <div className="w-8 h-8 bg-gradient-accent rounded-lg flex items-center justify-center">
-              <span className="font-display font-bold text-primary-foreground text-sm">E</span>
+              <span className="font-display font-bold text-primary-foreground text-sm">M</span>
             </div>
-            <span className="font-display text-xl font-bold">Esti-mate</span>
+            <span className="font-display text-xl font-bold">Metricore</span>
           </div>
           <div className="flex items-center gap-2">
             <Button variant="ghost" size="sm" onClick={() => navigate("/materials")}>
@@ -294,14 +306,24 @@ const Dashboard = () => {
                         <Clock className="h-3 w-3" />
                         {fmtDate(project.updated_at || project.created_at)}
                       </div>
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        className="h-7 w-7 p-0 opacity-0 group-hover:opacity-100 transition-opacity"
-                        onClick={e => { e.stopPropagation(); navigate(`/project/${project.id}`); }}
-                      >
-                        <ExternalLink className="h-3.5 w-3.5" />
-                      </Button>
+                      <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          className="h-7 w-7 p-0"
+                          onClick={e => { e.stopPropagation(); navigate(`/project/${project.id}`); }}
+                        >
+                          <ExternalLink className="h-3.5 w-3.5" />
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          className="h-7 w-7 p-0 text-destructive hover:text-destructive hover:bg-destructive/10"
+                          onClick={e => handleDeleteProject(e, project.id)}
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </Button>
+                      </div>
                     </div>
                   );
                 })}

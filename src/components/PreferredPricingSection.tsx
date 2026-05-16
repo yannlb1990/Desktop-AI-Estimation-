@@ -1,11 +1,9 @@
 import { useState, useEffect } from "react";
-import { supabase } from "@/integrations/supabase/client";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -23,6 +21,20 @@ interface CustomMaterial {
   notes: string | null;
 }
 
+const STORAGE_KEY = "local_preferred_materials";
+
+function loadMaterialsFromStorage(): CustomMaterial[] {
+  try {
+    return JSON.parse(localStorage.getItem(STORAGE_KEY) || "[]");
+  } catch {
+    return [];
+  }
+}
+
+function saveMaterialsToStorage(materials: CustomMaterial[]) {
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(materials));
+}
+
 export const PreferredPricingSection = () => {
   const [materials, setMaterials] = useState<CustomMaterial[]>([]);
   const [loading, setLoading] = useState(true);
@@ -31,7 +43,6 @@ export const PreferredPricingSection = () => {
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   const [editingMaterial, setEditingMaterial] = useState<CustomMaterial | null>(null);
 
-  // Form state
   const [formData, setFormData] = useState({
     name: "",
     category: "Timber",
@@ -43,109 +54,62 @@ export const PreferredPricingSection = () => {
   });
 
   useEffect(() => {
-    loadMaterials();
+    setMaterials(loadMaterialsFromStorage());
+    setLoading(false);
   }, []);
 
-  const loadMaterials = async () => {
-    try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return;
-
-      const { data, error } = await supabase
-        .from("custom_materials")
-        .select("*")
-        .eq("user_id", user.id)
-        .order("category", { ascending: true });
-
-      if (error) throw error;
-      setMaterials(data || []);
-    } catch (error) {
-      console.error("Error loading materials:", error);
-      toast.error("Failed to load preferred pricing");
-    } finally {
-      setLoading(false);
+  const handleAdd = () => {
+    if (!formData.name || !formData.avg_price) {
+      toast.error("Name and price are required");
+      return;
     }
+    const newMaterial: CustomMaterial = {
+      id: crypto.randomUUID(),
+      name: formData.name,
+      category: formData.category,
+      subcategory: formData.subcategory || null,
+      unit: formData.unit,
+      avg_price: parseFloat(formData.avg_price),
+      supplier: formData.supplier || null,
+      notes: formData.notes || null,
+    };
+    const updated = [...loadMaterialsFromStorage(), newMaterial];
+    saveMaterialsToStorage(updated);
+    setMaterials(updated);
+    toast.success("Material added successfully");
+    setIsAddDialogOpen(false);
+    resetForm();
   };
 
-  const handleAdd = async () => {
-    try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) {
-        toast.error("Please sign in to add materials");
-        return;
-      }
-
-      const { error } = await supabase
-        .from("custom_materials")
-        .insert({
-          user_id: user.id,
-          name: formData.name,
-          category: formData.category,
-          subcategory: formData.subcategory || null,
-          unit: formData.unit,
-          avg_price: parseFloat(formData.avg_price),
-          supplier: formData.supplier || null,
-          notes: formData.notes || null,
-        });
-
-      if (error) throw error;
-
-      toast.success("Material added successfully");
-      setIsAddDialogOpen(false);
-      resetForm();
-      loadMaterials();
-    } catch (error) {
-      console.error("Error adding material:", error);
-      toast.error("Failed to add material");
-    }
-  };
-
-  const handleUpdate = async () => {
+  const handleUpdate = () => {
     if (!editingMaterial) return;
-
-    try {
-      const { error } = await supabase
-        .from("custom_materials")
-        .update({
-          name: formData.name,
-          category: formData.category,
-          subcategory: formData.subcategory || null,
-          unit: formData.unit,
-          avg_price: parseFloat(formData.avg_price),
-          supplier: formData.supplier || null,
-          notes: formData.notes || null,
-        })
-        .eq("id", editingMaterial.id);
-
-      if (error) throw error;
-
-      toast.success("Material updated successfully");
-      setEditingMaterial(null);
-      resetForm();
-      loadMaterials();
-    } catch (error) {
-      console.error("Error updating material:", error);
-      toast.error("Failed to update material");
-    }
+    const updated = loadMaterialsFromStorage().map(m =>
+      m.id === editingMaterial.id
+        ? {
+            ...m,
+            name: formData.name,
+            category: formData.category,
+            subcategory: formData.subcategory || null,
+            unit: formData.unit,
+            avg_price: parseFloat(formData.avg_price),
+            supplier: formData.supplier || null,
+            notes: formData.notes || null,
+          }
+        : m
+    );
+    saveMaterialsToStorage(updated);
+    setMaterials(updated);
+    toast.success("Material updated successfully");
+    setEditingMaterial(null);
+    resetForm();
   };
 
-  const handleDelete = async (id: string) => {
+  const handleDelete = (id: string) => {
     if (!confirm("Are you sure you want to delete this material?")) return;
-
-    try {
-      const { error } = await supabase
-        .from("custom_materials")
-        .delete()
-        .eq("id", id);
-
-      if (error) throw error;
-
-      toast.success("Material deleted successfully");
-      loadMaterials();
-    } catch (error) {
-      console.error("Error deleting material:", error);
-      toast.error("Failed to delete material");
-    }
+    const updated = loadMaterialsFromStorage().filter(m => m.id !== id);
+    saveMaterialsToStorage(updated);
+    setMaterials(updated);
+    toast.success("Material deleted successfully");
   };
 
   const handleEdit = (material: CustomMaterial) => {
@@ -178,43 +142,32 @@ export const PreferredPricingSection = () => {
     if (!file) return;
 
     const reader = new FileReader();
-    reader.onload = async (e) => {
+    reader.onload = (e) => {
       try {
         const text = e.target?.result as string;
         const lines = text.split("\n");
-        const headers = lines[0].split(",").map(h => h.trim());
 
-        const { data: { user } } = await supabase.auth.getUser();
-        if (!user) {
-          toast.error("Please sign in to upload materials");
-          return;
-        }
-
-        const materialsToAdd = [];
+        const materialsToAdd: CustomMaterial[] = [];
         for (let i = 1; i < lines.length; i++) {
           if (!lines[i].trim()) continue;
-          
           const values = lines[i].split(",").map(v => v.trim());
+          if (!values[0] || !values[4]) continue;
           materialsToAdd.push({
-            user_id: user.id,
+            id: crypto.randomUUID(),
             name: values[0],
-            category: values[1],
+            category: values[1] || "Other",
             subcategory: values[2] || null,
-            unit: values[3],
-            avg_price: parseFloat(values[4]),
+            unit: values[3] || "ea",
+            avg_price: parseFloat(values[4]) || 0,
             supplier: values[5] || null,
             notes: values[6] || null,
           });
         }
 
-        const { error } = await supabase
-          .from("custom_materials")
-          .insert(materialsToAdd);
-
-        if (error) throw error;
-
+        const updated = [...loadMaterialsFromStorage(), ...materialsToAdd];
+        saveMaterialsToStorage(updated);
+        setMaterials(updated);
         toast.success(`Successfully imported ${materialsToAdd.length} materials`);
-        loadMaterials();
       } catch (error) {
         console.error("Error importing CSV:", error);
         toast.error("Failed to import CSV. Please check format.");
@@ -293,9 +246,7 @@ export const PreferredPricingSection = () => {
                   <div>
                     <Label>Category</Label>
                     <Select value={formData.category} onValueChange={(value) => setFormData({ ...formData, category: value })}>
-                      <SelectTrigger>
-                        <SelectValue />
-                      </SelectTrigger>
+                      <SelectTrigger><SelectValue /></SelectTrigger>
                       <SelectContent>
                         <SelectItem value="Timber">Timber</SelectItem>
                         <SelectItem value="Plasterboard">Plasterboard</SelectItem>
@@ -320,9 +271,7 @@ export const PreferredPricingSection = () => {
                   <div>
                     <Label>Unit</Label>
                     <Select value={formData.unit} onValueChange={(value) => setFormData({ ...formData, unit: value })}>
-                      <SelectTrigger>
-                        <SelectValue />
-                      </SelectTrigger>
+                      <SelectTrigger><SelectValue /></SelectTrigger>
                       <SelectContent>
                         <SelectItem value="lm">LM (Linear Metre)</SelectItem>
                         <SelectItem value="m²">M² (Square Metre)</SelectItem>
@@ -466,9 +415,7 @@ export const PreferredPricingSection = () => {
                               <div>
                                 <Label>Category</Label>
                                 <Select value={formData.category} onValueChange={(value) => setFormData({ ...formData, category: value })}>
-                                  <SelectTrigger>
-                                    <SelectValue />
-                                  </SelectTrigger>
+                                  <SelectTrigger><SelectValue /></SelectTrigger>
                                   <SelectContent>
                                     <SelectItem value="Timber">Timber</SelectItem>
                                     <SelectItem value="Plasterboard">Plasterboard</SelectItem>
@@ -483,9 +430,7 @@ export const PreferredPricingSection = () => {
                               <div>
                                 <Label>Unit</Label>
                                 <Select value={formData.unit} onValueChange={(value) => setFormData({ ...formData, unit: value })}>
-                                  <SelectTrigger>
-                                    <SelectValue />
-                                  </SelectTrigger>
+                                  <SelectTrigger><SelectValue /></SelectTrigger>
                                   <SelectContent>
                                     <SelectItem value="lm">LM</SelectItem>
                                     <SelectItem value="m²">M²</SelectItem>

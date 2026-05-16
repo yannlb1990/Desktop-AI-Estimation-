@@ -6,7 +6,6 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import { Badge } from "@/components/ui/badge";
 import { Search, ExternalLink, Loader2, AlertCircle } from "lucide-react";
 import { toast } from "sonner";
-import { supabase } from "@/integrations/supabase/client";
 import Fuse from "fuse.js";
 import { AUSTRALIAN_MATERIALS } from "@/data/australianMaterials";
 
@@ -32,56 +31,13 @@ export const SmartMaterialSearch = () => {
   const [showClarification, setShowClarification] = useState(false);
   const [suggestions, setSuggestions] = useState<SearchSuggestion[]>([]);
 
-  const handleSearch = async () => {
+  const handleSearch = () => {
     if (!searchTerm.trim()) {
       toast.error("Please enter a search term");
       return;
     }
-
     setLoading(true);
-
-    try {
-      // Try AI search first
-      const { data, error } = await supabase.functions.invoke('ai-material-search', {
-        body: { searchTerm }
-      });
-
-      if (error) {
-        // If AI credits depleted (402) or rate limited (429), fallback to local search
-        if (error.message?.includes('402') || error.message?.includes('credits') || 
-            error.message?.includes('429') || error.message?.includes('rate limit')) {
-          toast.info("Using local search (AI unavailable)");
-          performLocalSearch();
-          return;
-        } else {
-          toast.error("Search failed. Using local fallback.");
-          performLocalSearch();
-          return;
-        }
-      }
-
-      if (data.error) {
-        toast.error("Using local search");
-        performLocalSearch();
-        return;
-      }
-
-      if (data.needsClarification) {
-        setSuggestions(data.suggestions || []);
-        setShowClarification(true);
-        setLoading(false);
-        return;
-      }
-
-      setResults(data.results || []);
-      toast.success(`Found ${data.results?.length || 0} suppliers`);
-    } catch (error) {
-      console.error("Search error:", error);
-      toast.info("Using local search");
-      performLocalSearch();
-    } finally {
-      setLoading(false);
-    }
+    performLocalSearch();
   };
 
   const performLocalSearch = () => {

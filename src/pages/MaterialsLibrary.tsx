@@ -1,4 +1,5 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
+import { isSignedIn } from '@/lib/localAuth';
 import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -23,8 +24,9 @@ import {
 import { toast } from 'sonner';
 import {
   ArrowLeft, Plus, Search, Upload, Download, Pencil, Trash2,
-  Package, Clock, Globe, MapPin, Filter,
+  Package, Clock, Globe, MapPin, Filter, Lock,
 } from 'lucide-react';
+import { useSubscription } from '@/hooks/useSubscription';
 import { useMaterialsLibrary } from '@/hooks/useMaterialsLibrary';
 import { MaterialEntry, SUPPLIER_TYPES } from '@/lib/materials/types';
 import { TRADE_OPTIONS } from '@/lib/takeoff/types';
@@ -44,7 +46,12 @@ const EMPTY_FORM: Omit<MaterialEntry, 'id' | 'createdAt' | 'updatedAt'> = {
 
 export default function MaterialsLibrary() {
   const navigate = useNavigate();
+  const sub = useSubscription();
   const { materials, addMaterial, updateMaterial, deleteMaterial, importFromCSV, exportToCSV } = useMaterialsLibrary();
+
+  useEffect(() => {
+    if (!isSignedIn()) navigate("/auth");
+  }, [navigate]);
 
   const [search, setSearch] = useState('');
   const [tradeFilter, setTradeFilter] = useState('all');
@@ -120,6 +127,31 @@ export default function MaterialsLibrary() {
   };
 
   const usedTrades = Array.from(new Set(materials.map(m => m.trade))).sort();
+
+  if (!sub.caps.materialsLibrary) {
+    return (
+      <div className="min-h-screen bg-muted/30 flex items-center justify-center">
+        <div className="text-center max-w-md px-6">
+          <div className="w-16 h-16 bg-primary/10 rounded-full flex items-center justify-center mx-auto mb-4">
+            <Lock className="h-8 w-8 text-primary" />
+          </div>
+          <h2 className="font-display text-2xl font-bold mb-2">Materials Library</h2>
+          <p className="text-muted-foreground mb-6">
+            Your personal materials catalogue with supplier pricing is available on the{' '}
+            <strong>Professional</strong> plan and above.
+          </p>
+          <div className="flex gap-3 justify-center">
+            <Button onClick={() => navigate('/pricing')} className="bg-primary text-primary-foreground">
+              View Plans
+            </Button>
+            <Button variant="outline" onClick={() => navigate('/dashboard')}>
+              Back to Dashboard
+            </Button>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-background">

@@ -1,5 +1,6 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
+import { isSignedIn } from "@/lib/localAuth";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -25,15 +26,15 @@ const LAST_UPDATED = "Q2 2026";
 type SupplierKey = "bunnings" | "mitre10" | "blackwoods" | "reece" | "tradelink" | "rexel" | "haymans" | "beaumont" | "nationalTiles";
 
 const SUPPLIERS: Record<SupplierKey, { name: string; cls: string }> = {
-  bunnings:     { name: "Bunnings",       cls: "bg-red-100 text-red-700 border-red-200" },
-  mitre10:      { name: "Mitre 10",       cls: "bg-green-100 text-green-700 border-green-200" },
-  blackwoods:   { name: "Blackwoods",     cls: "bg-blue-100 text-blue-700 border-blue-200" },
-  reece:        { name: "Reece",          cls: "bg-orange-100 text-orange-700 border-orange-200" },
-  tradelink:    { name: "Tradelink",      cls: "bg-cyan-100 text-cyan-700 border-cyan-200" },
-  rexel:        { name: "Rexel",          cls: "bg-purple-100 text-purple-700 border-purple-200" },
-  haymans:      { name: "Haymans Elec.",  cls: "bg-indigo-100 text-indigo-700 border-indigo-200" },
-  beaumont:     { name: "Beaumont Tiles", cls: "bg-amber-100 text-amber-700 border-amber-200" },
-  nationalTiles:{ name: "National Tiles", cls: "bg-yellow-100 text-yellow-800 border-yellow-200" },
+  bunnings:     { name: "Bunnings",       cls: "bg-red-100 text-red-700 border-red-200 dark:bg-red-950/50 dark:text-red-300 dark:border-red-800" },
+  mitre10:      { name: "Mitre 10",       cls: "bg-green-100 text-green-700 border-green-200 dark:bg-green-950/50 dark:text-green-300 dark:border-green-800" },
+  blackwoods:   { name: "Blackwoods",     cls: "bg-blue-100 text-blue-700 border-blue-200 dark:bg-blue-950/50 dark:text-blue-300 dark:border-blue-800" },
+  reece:        { name: "Reece",          cls: "bg-orange-100 text-orange-700 border-orange-200 dark:bg-orange-950/50 dark:text-orange-300 dark:border-orange-800" },
+  tradelink:    { name: "Tradelink",      cls: "bg-cyan-100 text-cyan-700 border-cyan-200 dark:bg-cyan-950/50 dark:text-cyan-300 dark:border-cyan-800" },
+  rexel:        { name: "Rexel",          cls: "bg-purple-100 text-purple-700 border-purple-200 dark:bg-purple-950/50 dark:text-purple-300 dark:border-purple-800" },
+  haymans:      { name: "Haymans Elec.",  cls: "bg-indigo-100 text-indigo-700 border-indigo-200 dark:bg-indigo-950/50 dark:text-indigo-300 dark:border-indigo-800" },
+  beaumont:     { name: "Beaumont Tiles", cls: "bg-amber-100 text-amber-700 border-amber-200 dark:bg-amber-950/50 dark:text-amber-300 dark:border-amber-800" },
+  nationalTiles:{ name: "National Tiles", cls: "bg-yellow-100 text-yellow-800 border-yellow-200 dark:bg-yellow-950/50 dark:text-yellow-300 dark:border-yellow-800" },
 };
 
 // ─── MATERIALS DATA ───────────────────────────────────────────────────────────
@@ -172,6 +173,11 @@ const LABOUR_CATEGORIES = ["All", ...Array.from(new Set(LABOUR.map(l => l.catego
 const MarketInsights = () => {
   const navigate = useNavigate();
   const sub = useSubscription();
+
+  useEffect(() => {
+    if (!isSignedIn()) navigate("/auth");
+  }, [navigate]);
+
   const [selectedState, setSelectedState] = useState<StateCode>("NSW");
   const [matSearch, setMatSearch] = useState("");
   const [matCat, setMatCat] = useState("All");
@@ -393,8 +399,8 @@ const MarketInsights = () => {
                       return (
                         <TableRow key={item.id} className="hover:bg-muted/30">
                           <TableCell>
-                            <div className="text-xs font-medium text-muted-foreground">{item.category}</div>
-                            <div className="text-xs text-muted-foreground/70">{item.subcategory}</div>
+                            <div className="text-xs font-semibold text-foreground">{item.category}</div>
+                            <div className="text-xs text-muted-foreground">{item.subcategory}</div>
                           </TableCell>
                           <TableCell>
                             <span className="font-medium text-sm">{item.name}</span>
@@ -402,9 +408,9 @@ const MarketInsights = () => {
                           </TableCell>
                           <TableCell className="text-center text-xs font-mono text-muted-foreground">{item.unit}</TableCell>
                           <TableCell className="text-right font-mono text-sm">
-                            <span className="text-green-700 font-medium">{fmt(allLo)}</span>
+                            <span className="text-green-600 dark:text-green-400 font-medium">{fmt(allLo)}</span>
                             <span className="text-muted-foreground mx-1">–</span>
-                            <span className="text-red-700 font-medium">{fmt(allHi)}</span>
+                            <span className="text-red-600 dark:text-red-400 font-medium">{fmt(allHi)}</span>
                           </TableCell>
                           <TableCell className="text-right font-mono font-bold text-sm">{fmt(avgPrice)}</TableCell>
                           <TableCell>
@@ -461,12 +467,12 @@ const MarketInsights = () => {
                   const award = ap(l.award, lm);
                   const pct = ((typ - lo) / (hi - lo)) * 100;
                   const catColors: Record<string, string> = {
-                    Structural: "bg-blue-50 border-blue-200",
-                    Services:   "bg-yellow-50 border-yellow-200",
-                    Lining:     "bg-purple-50 border-purple-200",
-                    Finishing:  "bg-green-50 border-green-200",
-                    External:   "bg-emerald-50 border-emerald-200",
-                    Civil:      "bg-orange-50 border-orange-200",
+                    Structural: "bg-blue-50 border-blue-200 dark:bg-blue-950/40 dark:border-blue-700",
+                    Services:   "bg-yellow-50 border-yellow-200 dark:bg-yellow-950/40 dark:border-yellow-700",
+                    Lining:     "bg-purple-50 border-purple-200 dark:bg-purple-950/40 dark:border-purple-700",
+                    Finishing:  "bg-green-50 border-green-200 dark:bg-green-950/40 dark:border-green-700",
+                    External:   "bg-emerald-50 border-emerald-200 dark:bg-emerald-950/40 dark:border-emerald-700",
+                    Civil:      "bg-orange-50 border-orange-200 dark:bg-orange-950/40 dark:border-orange-700",
                   };
                   return (
                     <Card key={l.trade} className={`p-4 border-l-4 ${catColors[l.category] || ""}`}>
@@ -483,10 +489,10 @@ const MarketInsights = () => {
 
                       {/* Rate range bar */}
                       <div className="mb-3">
-                        <div className="flex justify-between text-xs text-muted-foreground mb-1">
-                          <span className="text-green-700 font-medium">{fmt(lo)}/hr</span>
+                        <div className="flex justify-between text-xs mb-1">
+                          <span className="text-green-600 dark:text-green-400 font-medium">{fmt(lo)}/hr</span>
                           <span className="font-semibold text-foreground">{fmt(typ)}/hr typical</span>
-                          <span className="text-red-700 font-medium">{fmt(hi)}/hr</span>
+                          <span className="text-red-600 dark:text-red-400 font-medium">{fmt(hi)}/hr</span>
                         </div>
                         <div className="h-2 bg-muted rounded-full overflow-hidden">
                           <div className="h-full bg-gradient-to-r from-green-400 via-yellow-400 to-red-400 rounded-full" />

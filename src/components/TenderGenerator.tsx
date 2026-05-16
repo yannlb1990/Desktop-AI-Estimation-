@@ -440,7 +440,7 @@ export const TenderGenerator = ({ project, estimate }: TenderGeneratorProps) => 
                       {companyEmail && <span>{companyEmail}</span>}
                     </div>
                     {companyABN && <div className="mt-1">ABN: {companyABN}</div>}
-                    <div className="mt-2 text-gray-300">Generated with Esti-mate • {fmt(today)}</div>
+                    <div className="mt-2 text-gray-300">Generated with Metricore • {fmt(today)}</div>
                   </div>
 
                 </div>

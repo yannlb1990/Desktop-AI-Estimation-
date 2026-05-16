@@ -1,10 +1,9 @@
 import { useState } from 'react';
-import { Upload, FileText, AlertCircle, CheckCircle2, CloudOff } from 'lucide-react';
+import { Upload, FileText, AlertCircle, CloudOff } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { toast } from 'sonner';
 import { PDFFile } from '@/lib/takeoff/types';
-import { supabase } from '@/integrations/supabase/client';
 
 interface PDFUploadManagerProps {
   projectId: string;
@@ -15,7 +14,6 @@ interface PDFUploadManagerProps {
 export const PDFUploadManager = ({ projectId, onUploadComplete, onError }: PDFUploadManagerProps) => {
   const [uploading, setUploading] = useState(false);
   const [validationError, setValidationError] = useState<string | null>(null);
-  const [uploadMode, setUploadMode] = useState<'cloud' | 'local' | null>(null);
 
   const validateFile = (file: File): string | null => {
     if (file.size > 50 * 1024 * 1024) return 'File size must be less than 50MB';
@@ -33,45 +31,11 @@ export const PDFUploadManager = ({ projectId, onUploadComplete, onError }: PDFUp
     return pdf.numPages;
   };
 
-  const uploadToSupabase = async (file: File): Promise<string | null> => {
-    try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return null;
-
-      const ext = file.name.split('.').pop() || 'pdf';
-      const path = `${user.id}/${projectId}/${Date.now()}.${ext}`;
-
-      const { error: uploadError } = await supabase.storage
-        .from('plans')
-        .upload(path, file, { upsert: true, contentType: file.type });
-
-      if (uploadError) {
-        // Bucket may not exist yet — try creating it or fall back
-        console.warn('Supabase storage upload failed:', uploadError.message);
-        return null;
-      }
-
-      const { data: { publicUrl } } = supabase.storage.from('plans').getPublicUrl(path);
-
-      // Save URL back to project record
-      await supabase
-        .from('projects')
-        .update({ plan_file_url: publicUrl, plan_file_name: file.name } as any)
-        .eq('id', projectId);
-
-      return publicUrl;
-    } catch (err) {
-      console.warn('Supabase upload error:', err);
-      return null;
-    }
-  };
-
   const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
     setValidationError(null);
-    setUploadMode(null);
 
     const error = validateFile(file);
     if (error) {
@@ -84,30 +48,11 @@ export const PDFUploadManager = ({ projectId, onUploadComplete, onError }: PDFUp
 
     try {
       const pageCount = await getPageCount(file);
+      const url = URL.createObjectURL(file);
 
-      // Try Supabase Storage first
-      const cloudUrl = await uploadToSupabase(file);
+      toast.success(`Plan loaded — ${pageCount} page${pageCount > 1 ? 's' : ''}`);
 
-      let finalUrl: string;
-      if (cloudUrl) {
-        finalUrl = cloudUrl;
-        setUploadMode('cloud');
-        toast.success(`Uploaded to cloud — ${pageCount} page${pageCount > 1 ? 's' : ''}`);
-      } else {
-        // Fall back to local blob URL for this session
-        finalUrl = URL.createObjectURL(file);
-        setUploadMode('local');
-        toast.warning('Saved locally for this session only — cloud upload unavailable');
-      }
-
-      const pdfFile: PDFFile = {
-        file,
-        url: finalUrl,
-        name: file.name,
-        pageCount,
-      };
-
-      onUploadComplete(pdfFile);
+      onUploadComplete({ file, url, name: file.name, pageCount });
     } catch (err) {
       const errorMsg = err instanceof Error ? err.message : 'Upload failed';
       setValidationError(errorMsg);
@@ -134,8 +79,8 @@ export const PDFUploadManager = ({ projectId, onUploadComplete, onError }: PDFUp
             {uploading ? (
               <>
                 <FileText className="h-12 w-12 text-muted-foreground animate-pulse" />
-                <p className="text-lg font-medium">Uploading to cloud…</p>
-                <p className="text-sm text-muted-foreground">Reading pages and saving your plan</p>
+                <p className="text-lg font-medium">Loading plan…</p>
+                <p className="text-sm text-muted-foreground">Reading pages</p>
               </>
             ) : (
               <>
@@ -143,7 +88,6 @@ export const PDFUploadManager = ({ projectId, onUploadComplete, onError }: PDFUp
                 <div>
                   <p className="text-lg font-medium">Upload PDF or Image</p>
                   <p className="text-sm text-muted-foreground mt-1">PDF, PNG, or JPG up to 50MB</p>
-                  <p className="text-xs text-muted-foreground mt-1">Plans are saved to the cloud and restored automatically</p>
                 </div>
                 <Button type="button" variant="secondary">Choose File</Button>
               </>
@@ -152,23 +96,12 @@ export const PDFUploadManager = ({ projectId, onUploadComplete, onError }: PDFUp
         </label>
       </div>
 
-      {uploadMode === 'cloud' && (
-        <Alert className="border-green-200 bg-green-50">
-          <CheckCircle2 className="h-4 w-4 text-green-600" />
-          <AlertDescription className="text-green-700">
-            Plan saved to cloud — your measurements and scale will be restored automatically next time you open this project.
-          </AlertDescription>
-        </Alert>
-      )}
-
-      {uploadMode === 'local' && (
-        <Alert className="border-amber-200 bg-amber-50">
-          <CloudOff className="h-4 w-4 text-amber-600" />
-          <AlertDescription className="text-amber-700">
-            Plan loaded locally for this session. To enable cloud storage, create a <strong>plans</strong> bucket in your Supabase Storage dashboard with public read access. Your measurements are still saved locally.
-          </AlertDescription>
-        </Alert>
-      )}
+      <Alert className="border-amber-200 bg-amber-50">
+        <CloudOff className="h-4 w-4 text-amber-600" />
+        <AlertDescription className="text-amber-700">
+          Plans load locally for your session. Measurements are saved and will persist across page refreshes.
+        </AlertDescription>
+      </Alert>
 
       {validationError && (
         <Alert variant="destructive">

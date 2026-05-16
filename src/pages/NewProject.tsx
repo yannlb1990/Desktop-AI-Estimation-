@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
-import { supabase } from "@/integrations/supabase/client";
+import { isSignedIn } from "@/lib/localAuth";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -39,11 +39,15 @@ const NewProject = () => {
   });
 
   useEffect(() => {
+    if (!isSignedIn()) {
+      navigate("/auth");
+      return;
+    }
     const mode = searchParams.get("mode");
     if (mode === "manual") {
       setActiveTab("manual");
     }
-  }, [searchParams]);
+  }, [navigate, searchParams]);
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];

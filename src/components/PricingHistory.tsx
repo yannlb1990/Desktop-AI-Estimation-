@@ -3,7 +3,6 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Database, TrendingUp, TrendingDown, Minus } from "lucide-react";
-import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 
 interface PricingRecord {
@@ -26,76 +25,64 @@ interface PricingHistoryProps {
   };
 }
 
+function deriveHistoryFromLocalProjects(currentProjectId: string): PricingRecord[] {
+  try {
+    const allProjects: any[] = JSON.parse(localStorage.getItem('local_projects') || '[]');
+    const aggregated: Record<string, PricingRecord> = {};
+
+    allProjects
+      .filter(p => p.id !== currentProjectId)
+      .forEach(project => {
+        try {
+          const items: any[] = project.costItems || project.cost_items || project.estimate_items || [];
+
+          items.forEach((item: any) => {
+            if (!item.description || !item.item_type) return;
+            const key = `${item.item_type}|${item.description}`;
+            if (!aggregated[key]) {
+              aggregated[key] = {
+                scope_of_work: item.item_type,
+                material_type: item.description,
+                avg_unit_price: 0,
+                avg_labour_rate: 0,
+                unit: item.unit || "unit",
+                count: 0,
+                last_updated: item.created_at || new Date().toISOString(),
+              };
+            }
+            aggregated[key].avg_unit_price += parseFloat(item.unit_price || 0);
+            aggregated[key].avg_labour_rate += parseFloat(item.labour_rate || 0);
+            aggregated[key].count += 1;
+          });
+        } catch {
+          // skip corrupted entries
+        }
+      });
+
+
+    return Object.values(aggregated).map(r => ({
+      ...r,
+      avg_unit_price: r.avg_unit_price / r.count,
+      avg_labour_rate: r.avg_labour_rate / r.count,
+    }));
+  } catch {
+    return [];
+  }
+}
+
 export const PricingHistory = ({ projectId, currentItem }: PricingHistoryProps) => {
   const [history, setHistory] = useState<PricingRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
 
   useEffect(() => {
-    loadPricingHistory();
+    setHistory(deriveHistoryFromLocalProjects(projectId));
+    setLoading(false);
   }, [projectId]);
-
-  const loadPricingHistory = async () => {
-    try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return;
-
-      const { data, error } = await supabase
-        .from("estimate_items")
-        .select("item_type, description, unit_price, labour_rate, unit, created_at")
-        .neq("estimate_id", projectId) as any;
-
-      if (error) throw error;
-
-      // Aggregate pricing data by scope of work and material
-      const aggregated: Record<string, PricingRecord> = {};
-      
-      data?.forEach((item: any) => {
-        const key = `${item.item_type}|${item.description}`;
-        if (!aggregated[key]) {
-          aggregated[key] = {
-            scope_of_work: item.item_type,
-            material_type: item.description,
-            avg_unit_price: 0,
-            avg_labour_rate: 0,
-            unit: item.unit || "unit",
-            count: 0,
-            last_updated: item.created_at
-          };
-        }
-        aggregated[key].avg_unit_price += parseFloat(item.unit_price);
-        aggregated[key].avg_labour_rate += parseFloat(item.labour_rate);
-        aggregated[key].count += 1;
-        if (new Date(item.created_at) > new Date(aggregated[key].last_updated)) {
-          aggregated[key].last_updated = item.created_at;
-        }
-      });
-
-      // Calculate averages
-      const records = Object.values(aggregated).map(record => ({
-        ...record,
-        avg_unit_price: record.avg_unit_price / record.count,
-        avg_labour_rate: record.avg_labour_rate / record.count
-      }));
-
-      setHistory(records);
-    } catch (error) {
-      console.error("Failed to load pricing history:", error);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const savePricingData = async () => {
-    if (!currentItem) return;
-    
-    toast.success("Pricing data saved to history");
-  };
 
   const getMarketComparison = (currentPrice: number, avgPrice: number) => {
     if (!avgPrice) return null;
     const diff = ((currentPrice - avgPrice) / avgPrice) * 100;
-    
     if (Math.abs(diff) < 5) {
       return { icon: Minus, text: "At Market", color: "text-muted-foreground" };
     } else if (diff > 0) {
@@ -110,14 +97,14 @@ export const PricingHistory = ({ projectId, currentItem }: PricingHistoryProps) 
     h.scope_of_work.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
-  const matchingHistory = currentItem 
-    ? history.find(h => 
-        h.scope_of_work === currentItem.scope_of_work && 
+  const matchingHistory = currentItem
+    ? history.find(h =>
+        h.scope_of_work === currentItem.scope_of_work &&
         h.material_type.includes(currentItem.material_type)
       )
     : null;
 
-  const comparison = currentItem && matchingHistory 
+  const comparison = currentItem && matchingHistory
     ? getMarketComparison(currentItem.unit_price, matchingHistory.avg_unit_price)
     : null;
 
@@ -131,7 +118,11 @@ export const PricingHistory = ({ projectId, currentItem }: PricingHistoryProps) 
           <h3 className="font-display text-lg font-bold">Pricing History & Market Comparison</h3>
         </div>
         {currentItem && (
-          <Button variant="outline" size="sm" onClick={savePricingData}>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => toast.success("Pricing data saved to history")}
+          >
             Save to History
           </Button>
         )}

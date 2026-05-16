@@ -1,4 +1,4 @@
-import { MousePointer, Move, Eraser, Minus, Square, Pentagon, Circle, Hash, Undo, Redo } from 'lucide-react';
+import { MousePointer, Move, Eraser, Minus, Square, Pentagon, Circle, Hash, Undo, Redo, Columns, DoorOpen, AppWindow } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
@@ -14,6 +14,8 @@ interface MeasurementToolbarProps {
   canUndo: boolean;
   canRedo: boolean;
   disabled: boolean;
+  modMode?: 'wall' | 'door' | 'window' | null;
+  onModSelect?: (mod: 'wall' | 'door' | 'window') => void;
 }
 
 export const MeasurementToolbar = ({
@@ -23,7 +25,9 @@ export const MeasurementToolbar = ({
   onRedo,
   canUndo,
   canRedo,
-  disabled
+  disabled,
+  modMode = null,
+  onModSelect,
 }: MeasurementToolbarProps) => {
   const navigationTools = [
     { id: 'select' as const, icon: MousePointer, label: 'Select (V)', shortcut: 'V' },
@@ -78,23 +82,26 @@ export const MeasurementToolbar = ({
         <Separator orientation="vertical" className="h-6 mx-1" />
 
         {/* Measurement Tools */}
-        {measurementTools.map(({ id, icon: Icon, label, color }) => (
-          <Tooltip key={id}>
-            <TooltipTrigger asChild>
-              <Button
-                variant={activeTool === id ? 'default' : 'ghost'}
-                size="icon"
-                className={cn('h-9 w-9 relative', activeTool === id && 'ring-2 ring-offset-1')}
-                onClick={() => onToolSelect(id)}
-                disabled={disabled}
-              >
-                <Icon className="h-4 w-4" />
-                <span className={cn('absolute bottom-1 right-1 h-2 w-2 rounded-full', color)} />
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent>{label}</TooltipContent>
-          </Tooltip>
-        ))}
+        {measurementTools.map(({ id, icon: Icon, label, color }) => {
+          const isActive = modMode === null && activeTool === id;
+          return (
+            <Tooltip key={id}>
+              <TooltipTrigger asChild>
+                <Button
+                  variant={isActive ? 'default' : 'ghost'}
+                  size="icon"
+                  className={cn('h-9 w-9 relative', isActive && 'ring-2 ring-offset-1')}
+                  onClick={() => onToolSelect(id)}
+                  disabled={disabled}
+                >
+                  <Icon className="h-4 w-4" />
+                  <span className={cn('absolute bottom-1 right-1 h-2 w-2 rounded-full', color)} />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>{label}</TooltipContent>
+            </Tooltip>
+          );
+        })}
 
         {/* Set Scale Badge */}
         {disabled && (
@@ -102,6 +109,56 @@ export const MeasurementToolbar = ({
             Set scale first
           </Badge>
         )}
+
+        <Separator orientation="vertical" className="h-6 mx-1" />
+
+        {/* Modifications */}
+        <span className="text-[10px] text-muted-foreground uppercase tracking-wide px-1 select-none">Modifications</span>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              variant={modMode === 'wall' ? 'default' : 'ghost'}
+              size="icon"
+              className={cn('h-9 w-9 relative', modMode === 'wall' && 'ring-2 ring-offset-1')}
+              onClick={() => onModSelect?.('wall')}
+              disabled={disabled}
+            >
+              <Columns className="h-4 w-4" />
+              <span className="absolute bottom-1 right-1 h-2 w-2 rounded-full bg-amber-500" />
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent>New Wall (W)</TooltipContent>
+        </Tooltip>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              variant={modMode === 'door' ? 'default' : 'ghost'}
+              size="icon"
+              className={cn('h-9 w-9 relative', modMode === 'door' && 'ring-2 ring-offset-1')}
+              onClick={() => onModSelect?.('door')}
+              disabled={disabled}
+            >
+              <DoorOpen className="h-4 w-4" />
+              <span className="absolute bottom-1 right-1 h-2 w-2 rounded-full bg-violet-500" />
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent>New Door (D)</TooltipContent>
+        </Tooltip>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              variant={modMode === 'window' ? 'default' : 'ghost'}
+              size="icon"
+              className={cn('h-9 w-9 relative', modMode === 'window' && 'ring-2 ring-offset-1')}
+              onClick={() => onModSelect?.('window')}
+              disabled={disabled}
+            >
+              <AppWindow className="h-4 w-4" />
+              <span className="absolute bottom-1 right-1 h-2 w-2 rounded-full bg-cyan-500" />
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent>New Window (Q)</TooltipContent>
+        </Tooltip>
 
         <Separator orientation="vertical" className="h-6 mx-1" />
 

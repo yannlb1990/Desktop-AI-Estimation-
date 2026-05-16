@@ -1,5 +1,6 @@
 import { Button } from "@/components/ui/button";
 import { ArrowRight, Clock, CheckCircle, Users, Zap } from "lucide-react";
+import { isSignedIn } from "@/lib/localAuth";
 
 const AppMockup = () => (
   <div className="relative w-full max-w-lg mx-auto">
@@ -16,7 +17,7 @@ const AppMockup = () => (
           <span className="w-3 h-3 rounded-full bg-green-500/70" />
         </div>
         <div className="flex-1 mx-3 bg-[#0f1117] rounded-md px-3 py-1 text-[10px] text-white/30 truncate">
-          estimationapp-kappa.vercel.app/project/1
+          metricore.com.au/project/1
         </div>
       </div>
 
@@ -162,7 +163,7 @@ const Hero = () => {
             <div className="flex flex-col sm:flex-row gap-4 justify-center lg:justify-start mb-10">
               <Button
                 size="lg"
-                onClick={() => window.location.href = "/dashboard"}
+                onClick={() => window.location.href = isSignedIn() ? "/dashboard" : "/auth?mode=signup"}
                 className="bg-primary text-primary-foreground hover:bg-primary/90 shadow-glow text-lg px-8 py-6 h-auto font-semibold"
               >
                 Start for Free

@@ -25,7 +25,7 @@ class TakeoffErrorBoundary extends Component<{ children: ReactNode }, { error: E
   }
 }
 import { useParams, useNavigate } from "react-router-dom";
-import { supabase } from "@/integrations/supabase/client";
+import { isSignedIn } from "@/lib/localAuth";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -89,6 +89,10 @@ const ProjectDetail = () => {
   };
 
   useEffect(() => {
+    if (!isSignedIn()) {
+      navigate("/auth");
+      return;
+    }
     loadProject();
   }, [projectId]);
 

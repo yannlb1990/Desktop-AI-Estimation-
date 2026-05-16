@@ -26,9 +26,9 @@ const Navigation = () => {
         <div className="flex items-center justify-between">
           <Link to="/" className="flex items-center gap-2">
             <div className="w-8 h-8 bg-gradient-accent rounded-lg flex items-center justify-center">
-              <span className="font-display font-bold text-primary-foreground text-sm">E</span>
+              <span className="font-display font-bold text-primary-foreground text-sm">M</span>
             </div>
-            <span className="font-display text-xl font-bold text-foreground">Esti-mate</span>
+            <span className="font-display text-xl font-bold text-foreground">Metricore</span>
           </Link>
 
           <div className="hidden md:flex items-center gap-8">

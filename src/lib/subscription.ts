@@ -38,6 +38,7 @@ interface PlanCaps {
   maxProjects: number;
   boqExport: boolean;
   sowExport: boolean;
+  tenderDoc: boolean;
   marketInsights: boolean;
   materialsLibrary: boolean;
   teamSeats: number;
@@ -49,6 +50,7 @@ export const PLAN_CAPS: Record<PlanId, PlanCaps> = {
     maxProjects: 3,
     boqExport: false,
     sowExport: false,
+    tenderDoc: false,
     marketInsights: false,
     materialsLibrary: false,
     teamSeats: 1,
@@ -58,6 +60,7 @@ export const PLAN_CAPS: Record<PlanId, PlanCaps> = {
     maxProjects: Infinity,
     boqExport: true,
     sowExport: true,
+    tenderDoc: true,
     marketInsights: true,
     materialsLibrary: true,
     teamSeats: 1,
@@ -67,6 +70,7 @@ export const PLAN_CAPS: Record<PlanId, PlanCaps> = {
     maxProjects: Infinity,
     boqExport: true,
     sowExport: true,
+    tenderDoc: true,
     marketInsights: true,
     materialsLibrary: true,
     teamSeats: 5,

@@ -7,6 +7,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Building2, Printer, Plus, Trash2 } from "lucide-react"
 import { toast } from "sonner"
+import { useSubscription } from "@/hooks/useSubscription"
+import { UpgradeModal } from "@/components/UpgradeModal"
 
 interface FullTenderProps { project: any; estimate?: any }
 
@@ -134,7 +136,9 @@ This tender remains open for acceptance for the period stated on the cover. The 
 
 export const FullTenderGenerator = ({ project, estimate }: FullTenderProps) => {
   const [open, setOpen] = useState(false)
+  const [upgradeOpen, setUpgradeOpen] = useState(false)
   const [activeTab, setActiveTab] = useState("company")
+  const sub = useSubscription()
 
   const brand = LOAD_BRAND()
   const [logoDataUrl] = useState<string>(brand.logo || "")
@@ -340,10 +344,22 @@ export const FullTenderGenerator = ({ project, estimate }: FullTenderProps) => {
 
   return (
     <>
-      <Button onClick={() => setOpen(true)} className="bg-accent text-accent-foreground hover:bg-accent/90">
+      <Button
+        onClick={() => {
+          if (!sub.caps.tenderDoc) { setUpgradeOpen(true); return; }
+          setOpen(true);
+        }}
+        className="bg-accent text-accent-foreground hover:bg-accent/90"
+      >
         <Building2 className="mr-2 h-4 w-4" />
         Generate Tender
       </Button>
+
+      <UpgradeModal
+        open={upgradeOpen}
+        onClose={() => setUpgradeOpen(false)}
+        feature="Full Tender Document"
+      />
 
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent className="max-w-6xl h-[92vh] flex flex-col p-0 gap-0">
@@ -1159,7 +1175,7 @@ export const FullTenderGenerator = ({ project, estimate }: FullTenderProps) => {
                       {companyACN && <span>ACN: {companyACN}</span>}
                     </div>
                     <div className="mt-2 text-gray-300">Tender {tenderNumber} · {companyName} · {fmt(today)} · CONFIDENTIAL</div>
-                    <div className="text-gray-300">Generated with Esti-mate · This document is submitted in commercial confidence</div>
+                    <div className="text-gray-300">Generated with Metricore · This document is submitted in commercial confidence</div>
                   </div>
                 </div>
               </div>

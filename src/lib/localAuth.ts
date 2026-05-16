@@ -1,7 +1,5 @@
-// localStorage-based auth — no backend required
-// All data stays on the user's machine.
-
-const AUTH_KEY = 'estimate_auth';
+// Supabase-backed auth — email verification required before access
+import { supabase } from '@/integrations/supabase/client';
 
 export interface LocalUser {
   email: string;
@@ -10,68 +8,82 @@ export interface LocalUser {
   createdAt: string;
 }
 
-function hashPassword(pw: string): string {
-  // Simple deterministic hash for local-only storage (not security-critical)
-  let h = 0;
-  for (let i = 0; i < pw.length; i++) {
-    h = Math.imul(31, h) + pw.charCodeAt(i) | 0;
+// Read Supabase session from localStorage synchronously (Supabase persists it there)
+function readStoredSession(): any | null {
+  try {
+    const key = Object.keys(localStorage).find(
+      (k) => k.startsWith('sb-') && k.endsWith('-auth-token')
+    );
+    if (!key) return null;
+    const raw = localStorage.getItem(key);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    if (parsed?.expires_at && Date.now() / 1000 > parsed.expires_at) return null;
+    return parsed;
+  } catch {
+    return null;
   }
-  return String(h >>> 0);
 }
 
-interface StoredAuth {
-  user: LocalUser;
-  passwordHash: string;
+function sessionUserToLocal(u: any): LocalUser {
+  return {
+    email: u.email ?? '',
+    displayName: u.user_metadata?.displayName ?? u.email?.split('@')[0] ?? '',
+    state: u.user_metadata?.state ?? '',
+    createdAt: u.created_at ?? new Date().toISOString(),
+  };
 }
 
-export function localSignUp(
+export async function localSignUp(
   email: string,
   password: string,
   displayName: string,
   state: string
-): LocalUser {
-  const user: LocalUser = {
-    email: email.toLowerCase().trim(),
-    displayName,
-    state,
-    createdAt: new Date().toISOString(),
-  };
-  const stored: StoredAuth = { user, passwordHash: hashPassword(password) };
-  localStorage.setItem(AUTH_KEY, JSON.stringify(stored));
-  return user;
+): Promise<{ error: string | null }> {
+  const { error } = await supabase.auth.signUp({
+    email,
+    password,
+    options: {
+      data: { displayName, state },
+      emailRedirectTo: `${window.location.origin}/auth`,
+    },
+  });
+  return { error: error?.message ?? null };
 }
 
-export function localSignIn(email: string, password: string): LocalUser | null {
-  try {
-    const raw = localStorage.getItem(AUTH_KEY);
-    if (!raw) return null;
-    const stored: StoredAuth = JSON.parse(raw);
-    if (
-      stored.user.email === email.toLowerCase().trim() &&
-      stored.passwordHash === hashPassword(password)
-    ) {
-      return stored.user;
+export async function localSignIn(
+  email: string,
+  password: string
+): Promise<{ user: LocalUser | null; error: string | null; needsVerification?: boolean }> {
+  const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+  if (error) {
+    if (error.message.toLowerCase().includes('email not confirmed')) {
+      return { user: null, error: null, needsVerification: true };
     }
-    return null;
-  } catch {
-    return null;
+    return { user: null, error: error.message };
   }
+  const authUser = data.user;
+  if (!authUser?.email_confirmed_at) {
+    await supabase.auth.signOut();
+    return { user: null, error: null, needsVerification: true };
+  }
+  return { user: sessionUserToLocal(authUser), error: null };
 }
 
 export function getLocalUser(): LocalUser | null {
-  try {
-    const raw = localStorage.getItem(AUTH_KEY);
-    if (!raw) return null;
-    return (JSON.parse(raw) as StoredAuth).user;
-  } catch {
-    return null;
-  }
+  const session = readStoredSession();
+  if (!session?.user) return null;
+  const u = session.user;
+  if (!u.email_confirmed_at) return null;
+  return sessionUserToLocal(u);
 }
 
 export function localSignOut(): void {
-  localStorage.removeItem(AUTH_KEY);
+  supabase.auth.signOut();
 }
 
 export function isSignedIn(): boolean {
-  return getLocalUser() !== null;
+  const session = readStoredSession();
+  if (!session?.user) return false;
+  return !!session.user.email_confirmed_at;
 }

@@ -173,11 +173,11 @@ export const InteractiveCanvas = ({
         const pdf = await loadingTask.promise;
         const page = await pdf.getPage(pageIndex + 1);
 
-        // Render PDF at base scale 1.0 - zoom handled via viewportTransform
+        // Get base dimensions for coordinate system (always scale 1.0)
         const baseViewport = page.getViewport({ scale: 1.0, rotation: transform.rotation });
-        
-        console.log('PDF base viewport:', { 
-          width: baseViewport.width, 
+
+        console.log('PDF base viewport:', {
+          width: baseViewport.width,
           height: baseViewport.height
         });
 
@@ -189,34 +189,40 @@ export const InteractiveCanvas = ({
         setViewport(pdfViewport);
         onViewportReady(pdfViewport);
 
-        // Render PDF to temp canvas at base scale
+        // Render at high resolution so zooming stays sharp.
+        // Cap so the canvas stays under ~12 000px (browser canvas limit safety margin).
+        const maxDim = Math.max(baseViewport.width, baseViewport.height);
+        const renderQuality = Math.max(3.0, Math.min(6.0, 12000 / maxDim));
+        const hiResViewport = page.getViewport({ scale: renderQuality, rotation: transform.rotation });
+
         const tempCanvas = document.createElement('canvas');
         const context = tempCanvas.getContext('2d');
 
         if (!context) throw new Error('Could not get canvas context');
 
-        tempCanvas.width = baseViewport.width;
-        tempCanvas.height = baseViewport.height;
+        tempCanvas.width = hiResViewport.width;
+        tempCanvas.height = hiResViewport.height;
+        context.imageSmoothingEnabled = true;
+        (context as any).imageSmoothingQuality = 'high';
 
-        const renderContext = {
-          canvasContext: context,
-          viewport: baseViewport,
-        };
-        await page.render(renderContext).promise;
+        await page.render({ canvasContext: context, viewport: hiResViewport }).promise;
 
-        const dataUrl = tempCanvas.toDataURL();
+        const dataUrl = tempCanvas.toDataURL('image/png');
         const img = await FabricImage.fromURL(dataUrl);
 
         if (fabricCanvasRef.current) {
-          // Set PDF as background image at origin (0,0)
-          // Canvas stays at container size, PDF positioned at origin
+          // Scale image back to 1.0-coordinate space so Fabric's viewportTransform
+          // zoom math stays correct. Zooming now draws from the hi-res source.
           img.set({
             left: 0,
             top: 0,
             originX: 'left',
             originY: 'top',
+            scaleX: 1 / renderQuality,
+            scaleY: 1 / renderQuality,
+            objectCaching: false,
           });
-          
+
           fabricCanvasRef.current.backgroundImage = img;
           fabricCanvasRef.current.requestRenderAll();
         }

@@ -1,5 +1,6 @@
 import { Button } from "@/components/ui/button";
 import { ArrowRight, CheckCircle } from "lucide-react";
+import { isSignedIn } from "@/lib/localAuth";
 
 const CTA = () => {
   return (
@@ -35,9 +36,9 @@ const CTA = () => {
               </div>
 
               {/* CTA Button */}
-              <Button 
-                size="lg" 
-                onClick={() => window.location.href = "/dashboard"}
+              <Button
+                size="lg"
+                onClick={() => window.location.href = isSignedIn() ? "/dashboard" : "/auth?plan=pro&mode=signup"}
                 className="bg-accent text-accent-foreground hover:bg-accent/90 shadow-glow text-lg px-10 py-7 h-auto"
               >
                 Start Your Free Trial

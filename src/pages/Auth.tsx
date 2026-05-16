@@ -6,14 +6,15 @@ import { Label } from "@/components/ui/label";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
-import { Loader2, Check, ArrowLeft } from "lucide-react";
+import { Loader2, Check, ArrowLeft, Mail } from "lucide-react";
 import { z } from "zod";
 import {
   PlanId, BillingPeriod,
   PLAN_NAMES, PLAN_PRICES, TRIAL_DAYS,
-  createTrialSubscription, loadSubscription,
+  createTrialSubscription,
 } from "@/lib/subscription";
 import { localSignUp, localSignIn, isSignedIn } from "@/lib/localAuth";
+import { supabase } from "@/integrations/supabase/client";
 
 const signUpSchema = z.object({
   email: z.string().email("Invalid email address").max(255),
@@ -54,6 +55,23 @@ const Auth = () => {
   const [companyName, setCompanyName] = useState("");
   const [state, setState]             = useState("");
 
+  // Verification states
+  const [verificationSent, setVerificationSent] = useState(false);
+  const [pendingEmail, setPendingEmail] = useState("");
+  const [needsVerification, setNeedsVerification] = useState(false);
+  const [resendLoading, setResendLoading] = useState(false);
+
+  // Listen for Supabase auth state change (email confirmation callback)
+  useEffect(() => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (session?.user?.email_confirmed_at) {
+        toast.success("Email verified — welcome aboard!");
+        navigate("/dashboard");
+      }
+    });
+    return () => subscription.unsubscribe();
+  }, [navigate]);
+
   // Already signed in? Go straight to dashboard
   useEffect(() => {
     if (isSignedIn()) navigate("/dashboard");
@@ -62,20 +80,22 @@ const Auth = () => {
   const handleAuth = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
+    setNeedsVerification(false);
 
     try {
       if (isLogin) {
         const data = signInSchema.parse({ email: email.trim(), password });
-        const user = localSignIn(data.email, data.password);
+        const result = await localSignIn(data.email, data.password);
 
-        if (!user) {
-          // Check if account exists at all
-          const sub = loadSubscription();
-          if (sub && sub.email === data.email.toLowerCase()) {
-            toast.error("Incorrect password");
-          } else {
-            toast.error("No account found with that email — please sign up first");
-          }
+        if (result.needsVerification) {
+          setPendingEmail(data.email);
+          setNeedsVerification(true);
+          toast.error("Please verify your email first — check your inbox");
+          return;
+        }
+
+        if (result.error) {
+          toast.error(result.error);
           return;
         }
 
@@ -90,19 +110,25 @@ const Auth = () => {
           state,
         });
 
-        // Check for duplicate email
-        const existing = loadSubscription();
-        if (existing && existing.email === data.email.toLowerCase()) {
-          toast.error("That email is already registered — please sign in instead");
-          setIsLogin(true);
+        const result = await localSignUp(data.email, data.password, data.companyName, data.state);
+
+        if (result.error) {
+          if (
+            result.error.toLowerCase().includes('already registered') ||
+            result.error.toLowerCase().includes('already been registered') ||
+            result.error.toLowerCase().includes('already exists')
+          ) {
+            toast.error("That email is already registered — please sign in instead");
+            setIsLogin(true);
+          } else {
+            toast.error(result.error);
+          }
           return;
         }
 
-        localSignUp(data.email, data.password, data.companyName, data.state);
         createTrialSubscription(data.email, data.companyName, selectedPlan, billing);
-
-        toast.success(`Account created! Your ${TRIAL_DAYS}-day free trial has started.`);
-        navigate("/dashboard");
+        setPendingEmail(data.email);
+        setVerificationSent(true);
       }
     } catch (error) {
       if (error instanceof z.ZodError) {
@@ -115,7 +141,74 @@ const Auth = () => {
     }
   };
 
+  const handleResendVerification = async () => {
+    setResendLoading(true);
+    const { error } = await supabase.auth.resend({
+      type: 'signup',
+      email: pendingEmail,
+      options: { emailRedirectTo: `${window.location.origin}/auth` },
+    });
+    setResendLoading(false);
+    if (error) {
+      toast.error("Couldn't resend — try again in a moment");
+    } else {
+      toast.success("Verification email resent!");
+    }
+  };
+
   const price = PLAN_PRICES[selectedPlan][billing];
+
+  // Check-your-email screen (shown after signup)
+  if (verificationSent) {
+    return (
+      <div className="min-h-screen flex items-center justify-center gradient-hero py-12">
+        <div className="container mx-auto px-6">
+          <div className="max-w-md mx-auto">
+            <Card className="p-8 shadow-xl text-center space-y-5">
+              <div className="w-16 h-16 bg-blue-50 dark:bg-blue-950/30 rounded-full flex items-center justify-center mx-auto">
+                <Mail className="h-8 w-8 text-blue-600" />
+              </div>
+              <div>
+                <h1 className="font-display text-2xl font-bold mb-2">Check your inbox</h1>
+                <p className="text-muted-foreground text-sm leading-relaxed">
+                  We sent a verification link to{" "}
+                  <strong className="text-foreground">{pendingEmail}</strong>.
+                  <br />
+                  Click the link to activate your account — it expires in 24 hours.
+                </p>
+              </div>
+              <div className="space-y-3 pt-2">
+                <Button
+                  variant="outline"
+                  className="w-full"
+                  onClick={handleResendVerification}
+                  disabled={resendLoading}
+                >
+                  {resendLoading && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+                  Resend verification email
+                </Button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setVerificationSent(false);
+                    setIsLogin(true);
+                    setEmail(pendingEmail);
+                    setPassword("");
+                  }}
+                  className="text-sm text-primary hover:underline"
+                >
+                  Back to sign in
+                </button>
+              </div>
+            </Card>
+            <p className="text-center mt-4 text-sm text-white/50">
+              Didn't receive it? Check your spam folder.
+            </p>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen flex items-center justify-center gradient-hero py-12">
@@ -135,9 +228,9 @@ const Auth = () => {
             {/* Logo */}
             <div className="flex items-center justify-center gap-2 mb-6">
               <div className="w-9 h-9 bg-gradient-accent rounded-lg flex items-center justify-center">
-                <span className="font-display font-bold text-primary-foreground text-sm">E</span>
+                <span className="font-display font-bold text-primary-foreground text-sm">M</span>
               </div>
-              <span className="font-display text-xl font-bold">Esti-mate</span>
+              <span className="font-display text-xl font-bold">Metricore</span>
             </div>
 
             <h1 className="font-display text-2xl font-bold text-center mb-1">
@@ -148,6 +241,27 @@ const Auth = () => {
                 ? "Sign in to your account"
                 : `${TRIAL_DAYS} days free · No credit card required`}
             </p>
+
+            {/* Needs verification reminder */}
+            {needsVerification && (
+              <div className="mb-4 p-3 bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 rounded-lg flex items-start gap-3">
+                <Mail className="h-4 w-4 text-amber-600 mt-0.5 shrink-0" />
+                <div className="text-xs text-amber-800 dark:text-amber-200 space-y-1">
+                  <p className="font-medium">Email not verified</p>
+                  <p>Check your inbox for a verification link.</p>
+                  {pendingEmail && (
+                    <button
+                      type="button"
+                      onClick={handleResendVerification}
+                      disabled={resendLoading}
+                      className="text-amber-700 dark:text-amber-300 underline hover:no-underline"
+                    >
+                      {resendLoading ? "Resending…" : "Resend verification email"}
+                    </button>
+                  )}
+                </div>
+              </div>
+            )}
 
             {/* Plan selector (signup only) */}
             {!isLogin && (
@@ -268,6 +382,7 @@ const Auth = () => {
                 onClick={() => {
                   setIsLogin(!isLogin);
                   setEmail(""); setPassword(""); setCompanyName(""); setState("");
+                  setNeedsVerification(false);
                 }}
                 className="text-sm text-primary hover:underline"
               >

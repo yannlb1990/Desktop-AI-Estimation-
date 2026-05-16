@@ -5,7 +5,6 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Upload, Trash2, FileText, Download, File } from "lucide-react";
-import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 
 interface TenderDocument {
@@ -22,162 +21,95 @@ interface TenderDocumentsProps {
   projectId: string;
 }
 
+function storageKey(projectId: string) {
+  return `local_tender_docs_${projectId}`;
+}
+
+function loadDocs(projectId: string): TenderDocument[] {
+  try {
+    return JSON.parse(localStorage.getItem(storageKey(projectId)) || "[]");
+  } catch {
+    return [];
+  }
+}
+
+function saveDocs(projectId: string, docs: TenderDocument[]) {
+  localStorage.setItem(storageKey(projectId), JSON.stringify(docs));
+}
+
 export const TenderDocuments = ({ projectId }: TenderDocumentsProps) => {
   const [documents, setDocuments] = useState<TenderDocument[]>([]);
   const [uploading, setUploading] = useState(false);
   const [editingDescription, setEditingDescription] = useState<string | null>(null);
 
   useEffect(() => {
-    loadDocuments();
+    setDocuments(loadDocs(projectId));
   }, [projectId]);
 
-  const loadDocuments = async () => {
-    const { data, error } = await supabase
-      .from('tender_documents')
-      .select('*')
-      .eq('project_id', projectId)
-      .order('created_at', { ascending: false });
-
-    if (error) {
-      console.error('Error loading tender documents:', error);
-      return;
-    }
-
-    setDocuments(data || []);
-  };
-
-  const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
     const files = event.target.files;
     if (!files || files.length === 0) return;
 
     setUploading(true);
 
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) {
-      toast.error("Please log in to upload documents");
-      setUploading(false);
-      return;
-    }
+    const allowedTypes = [
+      'application/pdf',
+      'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+      'image/png',
+      'image/jpeg'
+    ];
 
-    try {
-      for (const file of Array.from(files)) {
-        // Validate file type
-        const allowedTypes = [
-          'application/pdf',
-          'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-          'image/png',
-          'image/jpeg'
-        ];
-        
-        if (!allowedTypes.includes(file.type)) {
-          toast.error(`${file.name}: File type not allowed. Please upload PDF, DOCX, PNG, or JPG files.`);
-          continue;
-        }
+    const current = loadDocs(projectId);
+    const added: TenderDocument[] = [];
 
-        // Validate file size (10MB max)
-        if (file.size > 10 * 1024 * 1024) {
-          toast.error(`${file.name}: File size exceeds 10MB limit.`);
-          continue;
-        }
-
-        // Upload to storage
-        const fileName = `${Date.now()}-${file.name}`;
-        const filePath = `${user.id}/${projectId}/${fileName}`;
-
-        const { error: uploadError } = await supabase.storage
-          .from('tender-documents')
-          .upload(filePath, file);
-
-        if (uploadError) {
-          console.error('Upload error:', uploadError);
-          toast.error(`Failed to upload ${file.name}`);
-          continue;
-        }
-
-        // Get public URL
-        const { data: { publicUrl } } = supabase.storage
-          .from('tender-documents')
-          .getPublicUrl(filePath);
-
-        // Save metadata to database
-        const { error: dbError } = await supabase
-          .from('tender_documents')
-          .insert({
-            project_id: projectId,
-            user_id: user.id,
-            file_name: file.name,
-            file_url: publicUrl,
-            file_type: file.type,
-            file_size: file.size,
-            description: null
-          });
-
-        if (dbError) {
-          console.error('Database error:', dbError);
-          toast.error(`Failed to save ${file.name} metadata`);
-          continue;
-        }
-
-        toast.success(`${file.name} uploaded successfully`);
+    Array.from(files).forEach(file => {
+      if (!allowedTypes.includes(file.type)) {
+        toast.error(`${file.name}: File type not allowed. Please upload PDF, DOCX, PNG, or JPG files.`);
+        return;
+      }
+      if (file.size > 10 * 1024 * 1024) {
+        toast.error(`${file.name}: File size exceeds 10MB limit.`);
+        return;
       }
 
-      // Reload documents
-      await loadDocuments();
-    } catch (error) {
-      console.error('Upload error:', error);
-      toast.error("Error uploading documents");
-    } finally {
-      setUploading(false);
-      // Reset input
-      event.target.value = '';
+      const blobUrl = URL.createObjectURL(file);
+      added.push({
+        id: crypto.randomUUID(),
+        file_name: file.name,
+        file_url: blobUrl,
+        file_type: file.type,
+        file_size: file.size,
+        description: null,
+        created_at: new Date().toISOString(),
+      });
+      toast.success(`${file.name} uploaded successfully`);
+    });
+
+    if (added.length > 0) {
+      const updated = [...added, ...current];
+      saveDocs(projectId, updated);
+      setDocuments(updated);
     }
+
+    setUploading(false);
+    event.target.value = '';
   };
 
-  const updateDescription = async (docId: string, description: string) => {
-    const { error } = await supabase
-      .from('tender_documents')
-      .update({ description })
-      .eq('id', docId);
-
-    if (error) {
-      console.error('Error updating description:', error);
-      toast.error("Failed to update description");
-      return;
-    }
-
-    await loadDocuments();
+  const updateDescription = (docId: string, description: string) => {
+    const updated = loadDocs(projectId).map(d =>
+      d.id === docId ? { ...d, description } : d
+    );
+    saveDocs(projectId, updated);
+    setDocuments(updated);
     setEditingDescription(null);
     toast.success("Description updated");
   };
 
-  const deleteDocument = async (doc: TenderDocument) => {
+  const deleteDocument = (doc: TenderDocument) => {
     if (!confirm(`Delete ${doc.file_name}?`)) return;
-
-    // Delete from storage
-    const urlParts = doc.file_url.split('/');
-    const filePath = urlParts.slice(-3).join('/'); // user_id/project_id/filename
-
-    const { error: storageError } = await supabase.storage
-      .from('tender-documents')
-      .remove([filePath]);
-
-    if (storageError) {
-      console.error('Storage delete error:', storageError);
-    }
-
-    // Delete from database
-    const { error: dbError } = await supabase
-      .from('tender_documents')
-      .delete()
-      .eq('id', doc.id);
-
-    if (dbError) {
-      console.error('Database delete error:', dbError);
-      toast.error("Failed to delete document");
-      return;
-    }
-
-    await loadDocuments();
+    const updated = loadDocs(projectId).filter(d => d.id !== doc.id);
+    saveDocs(projectId, updated);
+    setDocuments(updated);
     toast.success("Document deleted");
   };
 
@@ -264,12 +196,8 @@ export const TenderDocuments = ({ projectId }: TenderDocumentsProps) => {
                       defaultValue={doc.description || ''}
                       onBlur={(e) => updateDescription(doc.id, e.target.value)}
                       onKeyDown={(e) => {
-                        if (e.key === 'Enter') {
-                          updateDescription(doc.id, e.currentTarget.value);
-                        }
-                        if (e.key === 'Escape') {
-                          setEditingDescription(null);
-                        }
+                        if (e.key === 'Enter') updateDescription(doc.id, e.currentTarget.value);
+                        if (e.key === 'Escape') setEditingDescription(null);
                       }}
                       className="h-8"
                     />

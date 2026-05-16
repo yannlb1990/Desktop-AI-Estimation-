@@ -1,11 +1,11 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { supabase } from "@/integrations/supabase/client";
+import { isSignedIn } from "@/lib/localAuth";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { toast } from "sonner";
-import { ArrowLeft, Plus, Search, Mail, Phone, Building2, Loader2, Edit, Trash2 } from "lucide-react";
+import { ArrowLeft, Plus, Search, Mail, Phone, Building2, Edit, Trash2 } from "lucide-react";
 import { ClientDialog } from "@/components/ClientDialog";
 
 interface Client {
@@ -21,60 +21,41 @@ interface Client {
   created_at: string;
 }
 
+const CLIENTS_KEY = "local_clients";
+
+function loadClients(): Client[] {
+  try {
+    return JSON.parse(localStorage.getItem(CLIENTS_KEY) || "[]");
+  } catch {
+    return [];
+  }
+}
+
+function saveClients(clients: Client[]) {
+  localStorage.setItem(CLIENTS_KEY, JSON.stringify(clients));
+}
+
 const Clients = () => {
   const navigate = useNavigate();
-  const [loading, setLoading] = useState(true);
   const [clients, setClients] = useState<Client[]>([]);
   const [searchTerm, setSearchTerm] = useState("");
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingClient, setEditingClient] = useState<Client | null>(null);
 
   useEffect(() => {
-    loadClients();
-  }, []);
-
-  const loadClients = async () => {
-    try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) {
-        navigate("/auth");
-        return;
-      }
-
-      const { data, error } = await supabase
-        .from("clients")
-        .select("*")
-        .eq("user_id", user.id)
-        .order("created_at", { ascending: false });
-
-      if (error) throw error;
-
-      setClients(data || []);
-    } catch (error) {
-      console.error("Error loading clients:", error);
-      toast.error("Failed to load clients");
-    } finally {
-      setLoading(false);
+    if (!isSignedIn()) {
+      navigate("/auth");
+      return;
     }
-  };
+    setClients(loadClients());
+  }, [navigate]);
 
-  const handleDelete = async (clientId: string) => {
+  const handleDelete = (clientId: string) => {
     if (!confirm("Are you sure you want to delete this client?")) return;
-
-    try {
-      const { error } = await supabase
-        .from("clients" as any)
-        .delete()
-        .eq("id", clientId);
-
-      if (error) throw error;
-
-      toast.success("Client deleted successfully");
-      loadClients();
-    } catch (error) {
-      console.error("Error deleting client:", error);
-      toast.error("Failed to delete client");
-    }
+    const updated = loadClients().filter(c => c.id !== clientId);
+    saveClients(updated);
+    setClients(updated);
+    toast.success("Client deleted successfully");
   };
 
   const handleEdit = (client: Client) => {
@@ -85,7 +66,7 @@ const Clients = () => {
   const handleDialogClose = () => {
     setDialogOpen(false);
     setEditingClient(null);
-    loadClients();
+    setClients(loadClients());
   };
 
   const filteredClients = clients.filter(client =>
@@ -93,14 +74,6 @@ const Clients = () => {
     client.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
     (client.company_name && client.company_name.toLowerCase().includes(searchTerm.toLowerCase()))
   );
-
-  if (loading) {
-    return (
-      <div className="flex min-h-screen items-center justify-center">
-        <Loader2 className="h-8 w-8 animate-spin text-secondary" />
-      </div>
-    );
-  }
 
   return (
     <div className="min-h-screen bg-muted/30">
@@ -186,18 +159,10 @@ const Clients = () => {
                     )}
                   </div>
                   <div className="flex gap-1">
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      onClick={() => handleEdit(client)}
-                    >
+                    <Button size="sm" variant="ghost" onClick={() => handleEdit(client)}>
                       <Edit className="h-4 w-4" />
                     </Button>
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      onClick={() => handleDelete(client.id)}
-                    >
+                    <Button size="sm" variant="ghost" onClick={() => handleDelete(client.id)}>
                       <Trash2 className="h-4 w-4 text-destructive" />
                     </Button>
                   </div>

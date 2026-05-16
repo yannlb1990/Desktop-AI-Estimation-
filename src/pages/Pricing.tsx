@@ -396,7 +396,7 @@ const Pricing = () => {
               Start Free Trial with {PLAN_NAMES[selected]}
               <ArrowRight className="ml-2 h-5 w-5" />
             </Button>
-            <Button size="lg" variant="outline" onClick={() => navigate("/dashboard")}>
+            <Button size="lg" variant="outline" onClick={() => navigate("/auth")}>
               Sign In
             </Button>
           </div>
