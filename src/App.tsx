@@ -23,8 +23,8 @@ const App = () => (
     <TooltipProvider>
       <Toaster />
       <Sonner />
-      <AIChatbot />
       <BrowserRouter>
+        <AIChatbot />
         <Routes>
           <Route path="/" element={<Index />} />
           <Route path="/auth" element={<Auth />} />
