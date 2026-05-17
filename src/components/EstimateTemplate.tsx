@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { getUserStorageKey } from "@/lib/localAuth";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -178,7 +179,7 @@ export const EstimateTemplate = ({ projectId, estimateId }: EstimateTemplateProp
 
   const loadOverheads = () => {
     // Load from localStorage (no Supabase)
-    const projects = JSON.parse(localStorage.getItem('local_projects') || '[]');
+    const projects = JSON.parse(localStorage.getItem(getUserStorageKey('local_projects')) || '[]');
     const project = projects.find((p: any) => p.id === projectId);
     if (project && project.overhead_total) {
       setOverheadTotal(project.overhead_total);
@@ -216,14 +217,14 @@ export const EstimateTemplate = ({ projectId, estimateId }: EstimateTemplateProp
 
   const loadItems = () => {
     // Load from localStorage — also ensure project entry exists so Takeoff can push items
-    const projects = JSON.parse(localStorage.getItem('local_projects') || '[]');
+    const projects = JSON.parse(localStorage.getItem(getUserStorageKey('local_projects')) || '[]');
     let project = projects.find((p: any) => p.id === projectId);
 
     if (!project) {
       // Create a stub entry so CostEstimator.transferItems can always find it
       project = { id: projectId, estimate_items: [] };
       projects.push(project);
-      localStorage.setItem('local_projects', JSON.stringify(projects));
+      localStorage.setItem(getUserStorageKey('local_projects'), JSON.stringify(projects));
     }
 
     if (project.estimate_items && project.estimate_items.length > 0) {
@@ -278,11 +279,11 @@ export const EstimateTemplate = ({ projectId, estimateId }: EstimateTemplateProp
     setItems(updatedItems);
 
     // Save to localStorage
-    const projects = JSON.parse(localStorage.getItem('local_projects') || '[]');
+    const projects = JSON.parse(localStorage.getItem(getUserStorageKey('local_projects')) || '[]');
     const projectIndex = projects.findIndex((p: any) => p.id === projectId);
     if (projectIndex !== -1) {
       projects[projectIndex].estimate_items = updatedItems;
-      localStorage.setItem('local_projects', JSON.stringify(projects));
+      localStorage.setItem(getUserStorageKey('local_projects'), JSON.stringify(projects));
     }
 
     toast.success("Item added successfully");
@@ -304,11 +305,11 @@ export const EstimateTemplate = ({ projectId, estimateId }: EstimateTemplateProp
     setItems(updatedItems);
 
     // Save to localStorage
-    const projects = JSON.parse(localStorage.getItem('local_projects') || '[]');
+    const projects = JSON.parse(localStorage.getItem(getUserStorageKey('local_projects')) || '[]');
     const projectIndex = projects.findIndex((p: any) => p.id === projectId);
     if (projectIndex !== -1) {
       projects[projectIndex].estimate_items = updatedItems;
-      localStorage.setItem('local_projects', JSON.stringify(projects));
+      localStorage.setItem(getUserStorageKey('local_projects'), JSON.stringify(projects));
     }
 
     toast.success("Item deleted");
@@ -356,11 +357,11 @@ export const EstimateTemplate = ({ projectId, estimateId }: EstimateTemplateProp
     setItems(updatedItems);
 
     // Save to localStorage
-    const projects = JSON.parse(localStorage.getItem('local_projects') || '[]');
+    const projects = JSON.parse(localStorage.getItem(getUserStorageKey('local_projects')) || '[]');
     const projectIndex = projects.findIndex((p: any) => p.id === projectId);
     if (projectIndex !== -1) {
       projects[projectIndex].estimate_items = updatedItems;
-      localStorage.setItem('local_projects', JSON.stringify(projects));
+      localStorage.setItem(getUserStorageKey('local_projects'), JSON.stringify(projects));
     }
 
     toast.success("Item updated");

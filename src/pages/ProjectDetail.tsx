@@ -25,7 +25,7 @@ class TakeoffErrorBoundary extends Component<{ children: ReactNode }, { error: E
   }
 }
 import { useParams, useNavigate } from "react-router-dom";
-import { isSignedIn } from "@/lib/localAuth";
+import { isSignedIn, getUserStorageKey } from "@/lib/localAuth";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -105,11 +105,11 @@ const ProjectDetail = () => {
   const handleDueDateChange = (date: Date | undefined) => {
     if (!projectId) return;
     setDueDate(date);
-    const projects = JSON.parse(localStorage.getItem("local_projects") || "[]");
+    const projects = JSON.parse(localStorage.getItem(getUserStorageKey('local_projects')) || "[]");
     const idx = projects.findIndex((p: any) => p.id === projectId);
     if (idx !== -1) {
       projects[idx].due_date = date?.toISOString() || null;
-      localStorage.setItem("local_projects", JSON.stringify(projects));
+      localStorage.setItem(getUserStorageKey('local_projects'), JSON.stringify(projects));
     }
     toast.success("Due date updated");
   };
@@ -119,9 +119,9 @@ const ProjectDetail = () => {
       toast.error("Please set a due date first");
       return;
     }
-    const reminders = JSON.parse(localStorage.getItem("project_reminders") || "{}");
+    const reminders = JSON.parse(localStorage.getItem(getUserStorageKey('project_reminders')) || "{}");
     reminders[projectId!] = { projectName: project?.name, dueDate: dueDate.toISOString() };
-    localStorage.setItem("project_reminders", JSON.stringify(reminders));
+    localStorage.setItem(getUserStorageKey('project_reminders'), JSON.stringify(reminders));
     const daysLeft = Math.ceil((dueDate.getTime() - Date.now()) / 86400000);
     if (daysLeft < 0) {
       toast.warning(`Due date was ${Math.abs(daysLeft)} days ago — consider updating it`);
@@ -134,7 +134,7 @@ const ProjectDetail = () => {
 
   const loadProject = async () => {
     try {
-      const projects = JSON.parse(localStorage.getItem("local_projects") || "[]");
+      const projects = JSON.parse(localStorage.getItem(getUserStorageKey('local_projects')) || "[]");
       const projectData = projects.find((p: any) => p.id === projectId);
 
       if (!projectData) {

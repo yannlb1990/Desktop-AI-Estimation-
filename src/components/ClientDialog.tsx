@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { getUserStorageKey } from "@/lib/localAuth";
 import {
   Dialog,
   DialogContent,
@@ -18,7 +19,7 @@ interface ClientDialogProps {
   editingClient?: any;
 }
 
-const CLIENTS_KEY = "local_clients";
+const CLIENTS_BASE_KEY = "local_clients";
 
 export const ClientDialog = ({ open, onClose, editingClient }: ClientDialogProps) => {
   const [saving, setSaving] = useState(false);
@@ -76,13 +77,13 @@ export const ClientDialog = ({ open, onClose, editingClient }: ClientDialogProps
     setSaving(true);
 
     try {
-      const existing: any[] = JSON.parse(localStorage.getItem(CLIENTS_KEY) || "[]");
+      const existing: any[] = JSON.parse(localStorage.getItem(getUserStorageKey(CLIENTS_BASE_KEY)) || "[]");
 
       if (editingClient) {
         const updated = existing.map(c =>
           c.id === editingClient.id ? { ...c, ...formData } : c
         );
-        localStorage.setItem(CLIENTS_KEY, JSON.stringify(updated));
+        localStorage.setItem(getUserStorageKey(CLIENTS_BASE_KEY), JSON.stringify(updated));
         toast.success("Client updated successfully");
       } else {
         const newClient = {
@@ -90,7 +91,7 @@ export const ClientDialog = ({ open, onClose, editingClient }: ClientDialogProps
           ...formData,
           created_at: new Date().toISOString(),
         };
-        localStorage.setItem(CLIENTS_KEY, JSON.stringify([newClient, ...existing]));
+        localStorage.setItem(getUserStorageKey(CLIENTS_BASE_KEY), JSON.stringify([newClient, ...existing]));
         toast.success("Client added successfully");
       }
 

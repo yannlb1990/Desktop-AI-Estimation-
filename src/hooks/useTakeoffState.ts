@@ -31,6 +31,7 @@ interface PersistedState {
   measurements: TakeoffState['measurements'];
   costItems: TakeoffState['costItems'];
   scales: TakeoffState['scales'];
+  planId?: string;       // Stable plan identifier (name + size) — persisted even for blob URLs
   pdfName?: string;
   pdfUrl?: string;       // Supabase public URL (survives reload)
   pdfPageCount?: number;
@@ -42,7 +43,30 @@ function loadPersisted(projectId: string): PersistedState {
   try {
     const raw = localStorage.getItem(storageKey(projectId));
     if (!raw) return { measurements: [], costItems: [], scales: {} };
-    return JSON.parse(raw);
+    const data: PersistedState = JSON.parse(raw);
+    // Migrate old Wall/Door/Window measurements that stored the value in the label.
+    // New code stores label: '' so no text renders on canvas; clear any old labels here.
+    if (data.measurements) {
+      data.measurements = data.measurements.map((m: any) => {
+        const mt: string | undefined = m.measurementType;
+        if (mt === 'Wall' || mt === 'Door' || mt === 'Window') return { ...m, label: '' };
+        const lbl: string = m.label || '';
+        if (
+          lbl.startsWith('Wall ') || lbl === 'Wall' ||
+          lbl.startsWith('Door ') || lbl === 'Door' ||
+          lbl.startsWith('Window ') || lbl === 'Window'
+        ) return { ...m, label: '' };
+        return m;
+      });
+    }
+    // Pre-tag any untagged measurements with the persisted planId so they survive
+    // page refreshes where the blob URL (and therefore pdfFile) cannot be restored.
+    if (data.planId && data.measurements) {
+      data.measurements = data.measurements.map((m: any) =>
+        m.planId ? m : { ...m, planId: data.planId }
+      );
+    }
+    return data;
   } catch {
     return { measurements: [], costItems: [], scales: {} };
   }
@@ -58,6 +82,7 @@ function savePersisted(projectId: string, state: TakeoffState) {
       measurements: state.measurements,
       costItems: state.costItems,
       scales: state.scales,
+      planId: state.pdfFile?.planId,  // Always persist — name+size key survives blob URL expiry
       pdfName: persistableUrl ? state.pdfFile?.name : undefined,
       pdfUrl: persistableUrl,
       pdfPageCount: persistableUrl ? state.pdfFile?.pageCount : undefined,
@@ -86,6 +111,7 @@ function buildInitialState(projectId?: string): TakeoffState {
           url: persisted.pdfUrl,
           name: persisted.pdfName || 'plan.pdf',
           pageCount: persisted.pdfPageCount || 1,
+          planId: persisted.planId,
         }
       : null,
     uploadStatus: persisted.pdfUrl && persisted.pdfUrl.startsWith('https://') ? 'success' : 'idle',
@@ -95,13 +121,28 @@ function buildInitialState(projectId?: string): TakeoffState {
 
 function takeoffReducer(state: TakeoffState, action: TakeoffAction): TakeoffState {
   switch (action.type) {
-    case 'SET_PDF_FILE':
+    case 'SET_PDF_FILE': {
+      const newPlanId = action.payload.planId;
+      const oldPlanId = state.pdfFile?.planId;
+
+      // Whenever a plan with a planId is loaded, tag all currently-untagged measurements
+      // with the old plan's id (or 'legacy' if the previous pdfFile had none).
+      // This ensures measurements never bleed onto a different plan.
+      const isChangingPlan = !!newPlanId;
+      const fallbackId = oldPlanId || 'legacy';
+      const updatedMeasurements = isChangingPlan
+        ? state.measurements.map(m => m.planId ? m : { ...m, planId: fallbackId })
+        : state.measurements;
+
       return {
         ...state,
         pdfFile: action.payload,
         pageCount: action.payload.pageCount,
-        uploadStatus: 'success'
+        currentPageIndex: 0,
+        uploadStatus: 'success',
+        measurements: updatedMeasurements,
       };
+    }
 
     case 'SET_UPLOAD_STATUS':
       return { ...state, uploadStatus: action.payload };
@@ -263,7 +304,7 @@ function takeoffReducer(state: TakeoffState, action: TakeoffAction): TakeoffStat
 
     case 'CALCULATE_ESTIMATE': {
       const materialsCost = state.costItems.reduce((sum, item) => sum + item.subtotal, 0);
-      const laborCost = state.costItems.reduce((sum, item) => sum + (item.laborHours || 0) * 75, 0);
+      const laborCost = state.costItems.reduce((sum, item) => sum + (item.laborHours || 0) * (item.hourlyRate ?? 75), 0);
       const subtotal = materialsCost + laborCost;
       const markupAmount = subtotal * 0.15;
       return {

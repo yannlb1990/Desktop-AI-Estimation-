@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { getUserStorageKey } from "@/lib/localAuth";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -136,11 +137,11 @@ export const OverheadManager = ({ projectId }: OverheadManagerProps) => {
   // Sync total to local_projects so EstimateTemplate and FullTenderGenerator can read it
   useEffect(() => {
     try {
-      const projects = JSON.parse(localStorage.getItem("local_projects") || "[]");
+      const projects = JSON.parse(localStorage.getItem(getUserStorageKey("local_projects")) || "[]");
       const updated = projects.map((p: any) =>
         p.id === projectId ? { ...p, overhead_total: totalOverheads } : p
       );
-      localStorage.setItem("local_projects", JSON.stringify(updated));
+      localStorage.setItem(getUserStorageKey("local_projects"), JSON.stringify(updated));
     } catch (_) {}
   }, [totalOverheads, projectId]);
 

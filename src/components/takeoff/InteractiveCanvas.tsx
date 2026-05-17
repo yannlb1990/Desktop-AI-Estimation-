@@ -11,6 +11,28 @@ import { DetectedOpening } from '@/lib/takeoff/pdfTextExtractor';
 // PDF.js worker served from /public — no CDN, no Vite ?url magic
 pdfjsLib.GlobalWorkerOptions.workerSrc = '/pdf.worker.min.mjs';
 
+// ─── Snap helpers (module-level, no closure risk) ────────────────────────────
+
+/** Snap `to` so the angle from `from→to` is the nearest multiple of snapDeg. */
+function snapEndpointToAngle(from: WorldPoint, to: WorldPoint, snapDeg = 45): WorldPoint {
+  const dx = to.x - from.x;
+  const dy = to.y - from.y;
+  const dist = Math.sqrt(dx * dx + dy * dy);
+  if (dist < 0.001) return to;
+  const angle = Math.atan2(dy, dx);
+  const snapRad = (snapDeg * Math.PI) / 180;
+  const snapped = Math.round(angle / snapRad) * snapRad;
+  return { x: from.x + dist * Math.cos(snapped), y: from.y + dist * Math.sin(snapped) };
+}
+
+/** Snap rectangle end-point to make a perfect square (equal side length). */
+function snapToSquare(from: WorldPoint, to: WorldPoint): WorldPoint {
+  const dx = to.x - from.x;
+  const dy = to.y - from.y;
+  const side = Math.min(Math.abs(dx), Math.abs(dy));
+  return { x: from.x + Math.sign(dx) * side, y: from.y + Math.sign(dy) * side };
+}
+
 interface InteractiveCanvasProps {
   pdfUrl: string | null;
   pageIndex: number;
@@ -30,6 +52,8 @@ interface InteractiveCanvasProps {
   onDeleteLastMeasurement?: () => void;
   onDeleteMeasurement?: (id: string) => void;
   onMeasurementSelect?: (id: string, screenX: number, screenY: number) => void;
+  /** Parent passes a ref; canvas fills `.current` with an `{ export }` handle. */
+  canvasExportRef?: React.RefObject<{ export: () => void } | null>;
 }
 
 export const InteractiveCanvas = ({
@@ -51,6 +75,7 @@ export const InteractiveCanvas = ({
   onDeleteLastMeasurement,
   onDeleteMeasurement,
   onMeasurementSelect,
+  canvasExportRef,
 }: InteractiveCanvasProps) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -78,6 +103,24 @@ export const InteractiveCanvas = ({
   // Always-current draw color — avoids stale closure in mouse callbacks
   const drawColorRef = useRef<string | undefined>(selectedColor);
   useEffect(() => { drawColorRef.current = selectedColor; }, [selectedColor]);
+
+  // Set of measurement IDs that are Wall/Door/Window markup — labels suppressed on canvas.
+  // Stored as a ref so the after:render handler (registered once) can read it without stale closure.
+  const modMarkupIdsRef = useRef<Set<string>>(new Set());
+  useEffect(() => {
+    modMarkupIdsRef.current = new Set(
+      measurements
+        .filter(m => {
+          const mt = (m as any).measurementType as string | undefined;
+          const lbl = m.label || '';
+          return mt === 'Wall' || mt === 'Door' || mt === 'Window' ||
+            lbl.startsWith('Wall ') || lbl.startsWith('Wall—') || lbl === 'Wall' ||
+            lbl.startsWith('Door ') || lbl.startsWith('Door—') || lbl === 'Door' ||
+            lbl.startsWith('Window ') || lbl.startsWith('Window—') || lbl === 'Window';
+        })
+        .map(m => m.id)
+    );
+  }, [measurements]);
 
   // Drawing state
   const [isDrawing, setIsDrawing] = useState(false);
@@ -165,6 +208,40 @@ export const InteractiveCanvas = ({
       canvasRef.current = null;
     };
   }, []);
+
+  // Expose export handle to parent via canvasExportRef
+  useEffect(() => {
+    if (!canvasExportRef) return;
+    (canvasExportRef as React.MutableRefObject<{ export: () => void } | null>).current = {
+      export: () => {
+        const canvas = fabricCanvasRef.current;
+        if (!canvas || !viewport) return;
+
+        // Save current viewport transform
+        const savedVT = [...(canvas.viewportTransform || [1, 0, 0, 1, 0, 0])];
+
+        // Fit the full PDF page into the canvas
+        const canvasW = canvas.width || 800;
+        const canvasH = canvas.height || 600;
+        const fitZoom = Math.min(canvasW / viewport.width, canvasH / viewport.height) * 0.95;
+        const offsetX = (canvasW - viewport.width * fitZoom) / 2;
+        const offsetY = (canvasH - viewport.height * fitZoom) / 2;
+        canvas.setViewportTransform([fitZoom, 0, 0, fitZoom, offsetX, offsetY]);
+        canvas.renderAll();
+
+        const dataUrl = (canvas as any).toDataURL({ format: 'png', quality: 1, multiplier: 2 });
+
+        // Restore
+        canvas.setViewportTransform(savedVT as any);
+        canvas.requestRenderAll();
+
+        const link = document.createElement('a');
+        link.download = `plan-page-${pageIndex + 1}-markup.png`;
+        link.href = dataUrl;
+        link.click();
+      },
+    };
+  }, [canvasExportRef, viewport, pageIndex]);
 
   // Load PDF page
   useEffect(() => {
@@ -365,6 +442,7 @@ export const InteractiveCanvas = ({
   // Sync canvas objects with measurements state:
   // 1. Remove canvas objects for deleted measurements
   // 2. Draw measurements that are in state but not yet on canvas (reload / tab-restore)
+  // Note: measurements prop is pre-filtered to the current page by the parent component.
   useEffect(() => {
     const canvas = fabricCanvasRef.current;
     if (!canvas || !viewport) return;
@@ -384,7 +462,7 @@ export const InteractiveCanvas = ({
       objectsMap.delete(id);
     });
 
-    // Draw measurements that are in state but not yet on canvas (page restore / reload)
+    // Draw measurements that are in state but not yet on canvas (page restore / reload).
     const strokeWidth = getZoomAwareSize(2);
 
     measurements.forEach(measurement => {
@@ -498,75 +576,154 @@ export const InteractiveCanvas = ({
       const vt = canvas.viewportTransform || [1, 0, 0, 1, 0, 0];
       const zoom = vt[0] || 1;
 
-      // Establish a known, deterministic context state so labels always land on shapes:
-      // 1. Reset to identity (clears whatever Fabric left on the context)
-      // 2. Reapply DPR scale (Fabric applies this at init; we must match it)
-      // 3. Apply viewport transform (pan + zoom) — now context is in world space
-      // Drawing at raw world coordinates then correctly maps to screen via these transforms.
       const dpr = window.devicePixelRatio || 1;
       ctx.save();
-      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);          // baseline: DPR only
-      ctx.transform(vt[0], vt[1], vt[2], vt[3], vt[4], vt[5]); // apply viewport → world space
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      ctx.transform(vt[0], vt[1], vt[2], vt[3], vt[4], vt[5]);
 
-      // Font/stroke sizes in world units so they appear consistent at all zoom levels
-      const worldFontSize = 12 / zoom;
-      const padX = 6 / zoom;
-      const labelH = 20 / zoom;
+      const worldFontSize = 10 / zoom;
+      const dotR = 2.5 / zoom;
 
-      ctx.font = `bold ${worldFontSize}px system-ui, -apple-system, sans-serif`;
+      ctx.font = `700 ${worldFontSize}px system-ui, -apple-system, sans-serif`;
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
 
-      const drawLabel = (text: string, worldX: number, worldY: number, color: string) => {
-        const textW = ctx.measureText(text).width;
-        const boxX = worldX - textW / 2 - padX;
-        const boxY = worldY - labelH / 2; // centred on the shape midpoint
-        ctx.fillStyle = 'rgba(255,255,255,0.93)';
-        ctx.strokeStyle = color;
-        ctx.lineWidth = 1.5 / zoom;
-        ctx.fillRect(boxX, boxY, textW + padX * 2, labelH);
-        ctx.strokeRect(boxX, boxY, textW + padX * 2, labelH);
+      // Clean inline label: no box — white halo stroke for contrast, colored fill.
+      // Sits tight above the anchor dot so it stays close to the measurement line.
+      const drawLabel = (text: string, anchorX: number, anchorY: number, color: string) => {
+        const lx = anchorX;
+        const ly = anchorY - dotR - 6 / zoom;
+
+        // Anchor dot
+        ctx.beginPath();
+        ctx.arc(anchorX, anchorY, dotR, 0, Math.PI * 2);
         ctx.fillStyle = color;
-        ctx.fillText(text, worldX, boxY + labelH / 2);
+        ctx.fill();
+
+        // White halo for legibility over any plan background
+        ctx.lineWidth = 3 / zoom;
+        ctx.strokeStyle = 'rgba(255,255,255,0.88)';
+        ctx.lineJoin = 'round';
+        ctx.strokeText(text, lx, ly);
+
+        // Colored text on top
+        ctx.fillStyle = color;
+        ctx.fillText(text, lx, ly);
       };
 
+      // ── Door/window architectural symbols ───────────────────────────────
+      const drawDoorSymbol = (p1: { x: number; y: number }, p2: { x: number; y: number }, color: string) => {
+        const dx = p2.x - p1.x;
+        const dy = p2.y - p1.y;
+        const len = Math.sqrt(dx * dx + dy * dy);
+        if (len < 1) return;
+        const lineAngle = Math.atan2(dy, dx);
+        // Quarter-circle arc: hinge at p1, swing from p2 direction
+        ctx.beginPath();
+        ctx.arc(p1.x, p1.y, len, lineAngle, lineAngle + Math.PI / 2, false);
+        ctx.strokeStyle = color + 'cc';
+        ctx.lineWidth = 1 / zoom;
+        ctx.setLineDash([4 / zoom, 3 / zoom]);
+        ctx.stroke();
+        ctx.setLineDash([]);
+        // Short radial line to show door panel at the 90° position
+        const endAngle = lineAngle + Math.PI / 2;
+        ctx.beginPath();
+        ctx.moveTo(p1.x, p1.y);
+        ctx.lineTo(p1.x + len * Math.cos(endAngle), p1.y + len * Math.sin(endAngle));
+        ctx.strokeStyle = color + '88';
+        ctx.lineWidth = 1 / zoom;
+        ctx.stroke();
+      };
+
+      const drawWindowSymbol = (p1: { x: number; y: number }, p2: { x: number; y: number }, color: string) => {
+        const dx = p2.x - p1.x;
+        const dy = p2.y - p1.y;
+        const len = Math.sqrt(dx * dx + dy * dy) || 1;
+        const perpX = -dy / len;
+        const perpY = dx / len;
+        const offset = 5 / zoom; // parallel line offset
+        // Two parallel outer lines
+        for (const sign of [-1, 1]) {
+          ctx.beginPath();
+          ctx.moveTo(p1.x + perpX * offset * sign, p1.y + perpY * offset * sign);
+          ctx.lineTo(p2.x + perpX * offset * sign, p2.y + perpY * offset * sign);
+          ctx.strokeStyle = color + 'bb';
+          ctx.lineWidth = 1 / zoom;
+          ctx.stroke();
+        }
+        // Short tick marks at each end
+        for (const pt of [p1, p2]) {
+          ctx.beginPath();
+          ctx.moveTo(pt.x - perpX * offset, pt.y - perpY * offset);
+          ctx.lineTo(pt.x + perpX * offset, pt.y + perpY * offset);
+          ctx.strokeStyle = color;
+          ctx.lineWidth = 1.5 / zoom;
+          ctx.stroke();
+        }
+      };
+
+      // ── Render each measurement ──────────────────────────────────────────
       measurementObjectsRef.current.forEach((objects, measurementId) => {
         const measurement = measurementMapRef.current.get(measurementId);
-        if (!measurement?.label) return;
+        if (!measurement) return;
         const shape = objects[0];
         if (!shape) return;
-        // getCenterPoint() returns the object's centre in canvas (world) coordinates,
-        // which is exactly what we draw in after applying the viewport transform.
         const center = shape.getCenterPoint();
-        let worldX = center.x;
-        let worldY = center.y;
+        let anchorX = center.x;
+        let anchorY = center.y;
+
+        const mType = (measurement as any).measurementType as string | undefined;
+        const lbl = measurement.label || '';
+        const isModMarkup =
+          mType === 'Wall' || mType === 'Door' || mType === 'Window' ||
+          lbl.startsWith('Wall ') || lbl === 'Wall' ||
+          lbl.startsWith('Door ') || lbl === 'Door' ||
+          lbl.startsWith('Window ') || lbl === 'Window';
 
         if (shape.type === 'line') {
-          // For lines, offset label slightly to the left of the line (perpendicular)
-          // so it sits next to the line rather than obscuring it.
-          const mat = shape.calcTransformMatrix();
-          const p1 = fabricUtil.transformPoint({ x: (shape as any).x1, y: (shape as any).y1 }, mat);
-          const p2 = fabricUtil.transformPoint({ x: (shape as any).x2, y: (shape as any).y2 }, mat);
+          // Use worldPoints (stored in world coords at draw/resize time) for a reliable anchor.
+          // calcTransformMatrix() can drift when Fabric's DPR/viewport state differs from
+          // the manual setTransform(dpr)+transform(vt) context we draw labels into.
+          const wpts = measurement.worldPoints;
+          let p1: { x: number; y: number };
+          let p2: { x: number; y: number };
+          if (wpts && wpts.length >= 2) {
+            p1 = wpts[0];
+            p2 = wpts[1];
+          } else {
+            const mat = shape.calcTransformMatrix();
+            p1 = fabricUtil.transformPoint({ x: (shape as any).x1, y: (shape as any).y1 }, mat);
+            p2 = fabricUtil.transformPoint({ x: (shape as any).x2, y: (shape as any).y2 }, mat);
+          }
           const dx = p2.x - p1.x;
           const dy = p2.y - p1.y;
           const len = Math.sqrt(dx * dx + dy * dy) || 1;
-          // Left-hand perpendicular (rotate 90° counter-clockwise)
           const perpX = -dy / len;
           const perpY = dx / len;
-          const offset = 14 / zoom; // ~14 CSS-px offset in world units
-          worldX += perpX * offset;
-          worldY += perpY * offset;
-        } else if (measurement.type === 'count') {
-          // For count groups, average the centres of all markers
+          const offset = 10 / zoom;
+          anchorX = (p1.x + p2.x) / 2 + perpX * offset;
+          anchorY = (p1.y + p2.y) / 2 + perpY * offset;
+
+          // Architectural symbols for door/window (always drawn, label suppressed)
+          const lbl = measurement.label || '';
+          const isDoor = mType === 'Door' || lbl.startsWith('Door ') || lbl.startsWith('Door—') || lbl === 'Door';
+          const isWindow = mType === 'Window' || lbl.startsWith('Window ') || lbl.startsWith('Window—') || lbl === 'Window';
+          if (isDoor) drawDoorSymbol(p1, p2, measurement.color || '#8b5cf6');
+          else if (isWindow) drawWindowSymbol(p1, p2, measurement.color || '#06b6d4');
+        } else if ((measurement as any).type === 'count') {
           let sx = 0, sy = 0;
           objects.forEach(o => { const c = o.getCenterPoint(); sx += c.x; sy += c.y; });
-          worldX = sx / objects.length;
-          worldY = sy / objects.length;
+          anchorX = sx / objects.length;
+          anchorY = sy / objects.length;
         }
 
-        drawLabel(measurement.label, worldX, worldY, measurement.color || '#FF6B6B');
+        // Wall / Door / Window have empty labels — only show symbols, no text.
+        // Regular measurements: draw label only if label text is non-empty.
+        if (measurement.label && !isModMarkup) {
+          drawLabel(measurement.label, anchorX, anchorY, measurement.color || '#FF6B6B');
+        }
 
-        // For count groups: draw the number inside each individual circle
         if ((measurement as any).type === 'count') {
           ctx.fillStyle = 'white';
           ctx.textAlign = 'center';
@@ -588,7 +745,10 @@ export const InteractiveCanvas = ({
 
     canvas.on('after:render', drawLabels);
     return () => { canvas.off('after:render', drawLabels); };
-  }, []); // Reads only refs — no stale-closure risk, register once
+  // Re-register whenever measurements change so the suppression list stays current.
+  // The function itself only reads refs — no stale-closure risk.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [measurements]);
 
   // Toggle selection mode on shapes when tool changes
   useEffect(() => {
@@ -733,7 +893,14 @@ export const InteractiveCanvas = ({
         const endPoint: WorldPoint = { x: p2.x, y: p2.y };
         const result = calculateLinearWorld(startPoint, endPoint, effectiveUnits);
 
-        const labelText = isCalibrated ? `${result.realValue.toFixed(2)} m` : `${result.worldValue.toFixed(0)} px`;
+        const existingMeasurement = measurementMapRef.current.get(measurementId);
+        const existingLabel = existingMeasurement?.label ?? '';
+        // Wall/Door/Window keep empty labels so no text appears on canvas
+        const mTypeForLabel = (existingMeasurement as any)?.measurementType as string | undefined;
+        const isModLine = mTypeForLabel === 'Wall' || mTypeForLabel === 'Door' || mTypeForLabel === 'Window';
+        const labelText = isModLine
+          ? ''
+          : (isCalibrated ? `${result.realValue.toFixed(2)} m` : `${result.worldValue.toFixed(0)} px`);
 
         onMeasurementUpdate(measurementId, {
           worldPoints: [startPoint, endPoint],
@@ -845,6 +1012,116 @@ export const InteractiveCanvas = ({
       canvas.off('object:modified', handleObjectModified);
     };
   }, [onMeasurementUpdate, unitsPerMetre, isCalibrated]);
+
+  // Live measurement label during resize / move — updates previewLabelRef on every
+  // object:scaling / object:moving frame so after:render draws the live value.
+  // object:modified clears it (shape committed, static label takes over).
+  useEffect(() => {
+    const canvas = fabricCanvasRef.current;
+    if (!canvas) return;
+
+    const getLiveLabel = (target: any): { text: string; worldX: number; worldY: number; color: string } | null => {
+      const measurementId = shapeToMeasurementIdRef.current.get(target);
+      if (!measurementId) return null;
+      const measurement = measurementMapRef.current.get(measurementId);
+      if (!measurement) return null;
+      if ((target as any)._isCountMarker) return null; // count markers don't show area label
+
+      const effectiveUnits = unitsPerMetre || 1;
+      const color = measurement.color || '#FF6B6B';
+
+      let text = '';
+      let worldX = 0;
+      let worldY = 0;
+
+      if (target.type === 'line') {
+        const matrix = target.calcTransformMatrix();
+        const p1 = fabricUtil.transformPoint({ x: target.x1, y: target.y1 }, matrix);
+        const p2 = fabricUtil.transformPoint({ x: target.x2, y: target.y2 }, matrix);
+        const sp: WorldPoint = { x: p1.x, y: p1.y };
+        const ep: WorldPoint = { x: p2.x, y: p2.y };
+        const result = calculateLinearWorld(sp, ep, effectiveUnits);
+        text = isCalibrated ? `${result.realValue.toFixed(2)} m` : `${result.worldValue.toFixed(0)} px`;
+        // Offset label perpendicular to line
+        const dx = p2.x - p1.x;
+        const dy = p2.y - p1.y;
+        const len = Math.sqrt(dx * dx + dy * dy) || 1;
+        const zoom = canvas.getZoom() || 1;
+        const offset = 14 / zoom;
+        const midX = (p1.x + p2.x) / 2;
+        const midY = (p1.y + p2.y) / 2;
+        worldX = midX + (-dy / len) * offset;
+        worldY = midY + (dx / len) * offset;
+
+      } else if (target.type === 'rect') {
+        const width = target.width * target.scaleX;
+        const height = target.height * target.scaleY;
+        const sp: WorldPoint = { x: target.left, y: target.top };
+        const ep: WorldPoint = { x: target.left + width, y: target.top + height };
+        const result = calculateRectangleAreaWorld(sp, ep, effectiveUnits);
+        text = isCalibrated ? `${result.realValue.toFixed(2)} m²` : `${result.worldValue.toFixed(0)} px²`;
+        const center = target.getCenterPoint();
+        worldX = center.x;
+        worldY = center.y;
+
+      } else if (target.type === 'circle') {
+        const radius = target.radius * Math.max(target.scaleX, target.scaleY);
+        const centerX = target.left + target.radius * target.scaleX;
+        const centerY = target.top + target.radius * target.scaleY;
+        const sp: WorldPoint = { x: centerX, y: centerY };
+        const ep: WorldPoint = { x: centerX + radius, y: centerY };
+        const result = calculateCircleAreaWorld(sp, ep, effectiveUnits);
+        text = isCalibrated ? `${result.realValue.toFixed(2)} m²` : `${result.worldValue.toFixed(0)} px²`;
+        const center = target.getCenterPoint();
+        worldX = center.x;
+        worldY = center.y;
+
+      } else if (target.type === 'polygon') {
+        const matrix = target.calcTransformMatrix();
+        const rawPoints: { x: number; y: number }[] = (target as any).points || [];
+        const worldPts: WorldPoint[] = rawPoints.map((p: { x: number; y: number }) => {
+          const tp = fabricUtil.transformPoint({ x: p.x, y: p.y }, matrix);
+          return { x: tp.x, y: tp.y };
+        });
+        if (worldPts.length >= 3) {
+          const result = calculatePolygonAreaWorld(worldPts, effectiveUnits);
+          text = isCalibrated ? `${result.realValue.toFixed(2)} m²` : `${result.worldValue.toFixed(0)} px²`;
+        }
+        const center = target.getCenterPoint();
+        worldX = center.x;
+        worldY = center.y;
+
+      } else {
+        return null;
+      }
+
+      if (!text) return null;
+      return { text, worldX, worldY, color };
+    };
+
+    const handleLiveTransform = (e: any) => {
+      const target = e.target;
+      if (!target) return;
+      const label = getLiveLabel(target);
+      previewLabelRef.current = label;
+      canvas.requestRenderAll();
+    };
+
+    const handleModifiedClear = () => {
+      previewLabelRef.current = null;
+      // requestRenderAll is already called by handleObjectModified
+    };
+
+    canvas.on('object:scaling', handleLiveTransform);
+    canvas.on('object:moving', handleLiveTransform);
+    canvas.on('object:modified', handleModifiedClear);
+
+    return () => {
+      canvas.off('object:scaling', handleLiveTransform);
+      canvas.off('object:moving', handleLiveTransform);
+      canvas.off('object:modified', handleModifiedClear);
+    };
+  }, [unitsPerMetre, isCalibrated]);
 
   // Delete key — remove a single selected count marker and update the count
   useEffect(() => {
@@ -1169,7 +1446,7 @@ export const InteractiveCanvas = ({
     const viewPoint: ViewPoint = { x: pointer.x, y: pointer.y };
 
     // Convert to world coordinates for storage (applies inverse transform)
-    const worldPoint = viewToWorld(viewPoint, transform, viewport);
+    let worldPoint = viewToWorld(viewPoint, transform, viewport);
 
     // Handle calibration (drag-to-calibrate)
     if (calibrationMode === 'manual' && !isCalibrated) {
@@ -1313,6 +1590,11 @@ export const InteractiveCanvas = ({
 
     // Handle polygon tool
     if (activeTool === 'polygon') {
+      // Shift-snap: snap new vertex to 45° from the previous vertex
+      if (e.e.shiftKey && polygonPoints.length > 0) {
+        worldPoint = snapEndpointToAngle(polygonPoints[polygonPoints.length - 1], worldPoint, 45);
+      }
+
       // Snap-to-close: if we have ≥3 points and click near the first point, complete the polygon
       if (polygonPoints.length >= 3) {
         const first = polygonPoints[0];
@@ -1443,11 +1725,17 @@ export const InteractiveCanvas = ({
 
     // CRITICAL FIX: Use getPointer(e.e, true) for raw canvas coordinates
     const pointer = canvas.getPointer(e.e, true);
-    const currentWorldPoint: WorldPoint = viewToWorld(
+    let currentWorldPoint: WorldPoint = viewToWorld(
       { x: pointer.x, y: pointer.y },
       transform,
       viewport
     );
+
+    // Shift-snap: 45° for line, square for rectangle
+    if (e.e.shiftKey && startPoint) {
+      if (activeTool === 'line') currentWorldPoint = snapEndpointToAngle(startPoint, currentWorldPoint, 45);
+      else if (activeTool === 'rectangle') currentWorldPoint = snapToSquare(startPoint, currentWorldPoint);
+    }
 
     // Remove previous preview
     if (previewShape) {
@@ -1557,7 +1845,13 @@ export const InteractiveCanvas = ({
 
     // CRITICAL FIX: Use getPointer(e.e, true) for raw canvas coordinates
     const pointer = canvas.getPointer(e.e, true);
-    const worldEndPoint = viewToWorld({ x: pointer.x, y: pointer.y }, transform, viewport);
+    let worldEndPoint = viewToWorld({ x: pointer.x, y: pointer.y }, transform, viewport);
+
+    // Shift-snap: commit the same snap applied during preview
+    if (e.e.shiftKey && startPoint) {
+      if (activeTool === 'line') worldEndPoint = snapEndpointToAngle(startPoint, worldEndPoint, 45);
+      else if (activeTool === 'rectangle') worldEndPoint = snapToSquare(startPoint, worldEndPoint);
+    }
 
     // Remove preview shape
     if (previewShape) {

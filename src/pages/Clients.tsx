@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { isSignedIn } from "@/lib/localAuth";
+import { isSignedIn, getUserStorageKey } from "@/lib/localAuth";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -21,18 +21,18 @@ interface Client {
   created_at: string;
 }
 
-const CLIENTS_KEY = "local_clients";
+const CLIENTS_BASE_KEY = "local_clients";
 
 function loadClients(): Client[] {
   try {
-    return JSON.parse(localStorage.getItem(CLIENTS_KEY) || "[]");
+    return JSON.parse(localStorage.getItem(getUserStorageKey(CLIENTS_BASE_KEY)) || "[]");
   } catch {
     return [];
   }
 }
 
 function saveClients(clients: Client[]) {
-  localStorage.setItem(CLIENTS_KEY, JSON.stringify(clients));
+  localStorage.setItem(getUserStorageKey(CLIENTS_BASE_KEY), JSON.stringify(clients));
 }
 
 const Clients = () => {

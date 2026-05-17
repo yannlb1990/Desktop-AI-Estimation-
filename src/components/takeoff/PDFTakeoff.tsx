@@ -84,6 +84,7 @@ export const PDFTakeoff = ({ projectId, estimateId, onAddCostItems }: PDFTakeoff
   const canvasContainerRef = useRef<HTMLDivElement | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const initialFitDoneRef = useRef(false);
+  const canvasExportRef = useRef<{ export: () => void } | null>(null);
 
   // Reset initial fit when PDF changes
   React.useEffect(() => {
@@ -92,11 +93,15 @@ export const PDFTakeoff = ({ projectId, estimateId, onAddCostItems }: PDFTakeoff
     }
   }, [state.pdfFile?.url]);
 
-  // Filter measurements by page
+  // Sidebar list: only show measurements belonging to the current plan.
+  const currentPlanId = state.pdfFile?.planId;
   const filteredMeasurements = useMemo(() => {
-    if (pageFilter === 'all') return state.measurements;
-    return state.measurements.filter((m) => m.pageIndex === pageFilter);
-  }, [pageFilter, state.measurements]);
+    const planMeasurements = state.measurements.filter(m =>
+      !currentPlanId || m.planId === currentPlanId
+    );
+    if (pageFilter === 'all') return planMeasurements;
+    return planMeasurements.filter((m) => m.pageIndex === pageFilter);
+  }, [pageFilter, state.measurements, currentPlanId]);
 
   // Calculate totals by unit type
   const totalsByUnit = useMemo(() => {
@@ -118,20 +123,20 @@ export const PDFTakeoff = ({ projectId, estimateId, onAddCostItems }: PDFTakeoff
     URL.revokeObjectURL(url);
   };
 
-  // Auto-switch to measure tab after upload OR when PDF is restored from localStorage
-  const hasAutoSwitched = React.useRef(false);
+  // Auto-switch to measure tab only when a NEW pdf URL is loaded.
+  // Tracking the URL we already switched for prevents this from firing when the user
+  // deliberately clicks "Change Plan" (which sets activeTab='upload' while pdfFile is
+  // still set — we must NOT immediately revert them back).
+  const autoSwitchedForUrlRef = React.useRef<string | undefined>(undefined);
   React.useEffect(() => {
-    if (state.pdfFile && activeTab === 'upload') {
-      setActiveTab('measure');
-      if (!hasAutoSwitched.current) {
-        hasAutoSwitched.current = true;
-        // Only show the toast on fresh uploads, not on restoration
-        if (state.pdfFile.file) {
-          toast.success('PDF uploaded! Set scale to start measuring');
-        } else {
-          toast.success(`Plan restored: ${state.pdfFile.name}`);
-        }
-      }
+    if (!state.pdfFile || activeTab !== 'upload') return;
+    if (autoSwitchedForUrlRef.current === state.pdfFile.url) return; // already handled this URL
+    autoSwitchedForUrlRef.current = state.pdfFile.url;
+    setActiveTab('measure');
+    if (state.pdfFile.file) {
+      toast.success('PDF uploaded! Set scale to start measuring');
+    } else {
+      toast.success(`Plan restored: ${state.pdfFile.name}`);
     }
   }, [state.pdfFile, activeTab]);
 
@@ -140,7 +145,12 @@ export const PDFTakeoff = ({ projectId, estimateId, onAddCostItems }: PDFTakeoff
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (!shouldHandleShortcut(e.target)) return;
-      if (e.ctrlKey || e.metaKey || e.altKey) return;
+      if (e.ctrlKey || e.metaKey) {
+        if (e.key === 'z' || e.key === 'Z') { e.preventDefault(); dispatch({ type: 'UNDO' }); return; }
+        if (e.key === 'y' || e.key === 'Y') { e.preventDefault(); dispatch({ type: 'REDO' }); return; }
+        return;
+      }
+      if (e.altKey) return;
       if (e.key === 'Escape') {
         setIsTakeoffFullscreen(false);
         setModMode(null);
@@ -277,18 +287,21 @@ export const PDFTakeoff = ({ projectId, estimateId, onAddCostItems }: PDFTakeoff
       return;
     }
 
-    // Apply color/label metadata based on active mod mode — no dialog on draw
-    let m = measurement;
+    // Apply color/label metadata based on active mod mode — no dialog on draw.
+    // Label is intentionally left empty for Wall/Door/Window so the canvas
+    // never renders a text label next to the line (only symbols are shown).
+    // Stamp with the stable plan identifier (name + filesize — survives session reloads).
+    let m: Measurement = { ...measurement, planId: state.pdfFile?.planId };
     if (modMode === 'wall') {
-      m = { ...m, color: '#f59e0b', measurementType: 'Wall', label: m.label ? `Wall — ${m.label}` : 'Wall' };
+      m = { ...m, color: '#f59e0b', measurementType: 'Wall', label: '' };
     } else if (modMode === 'door') {
-      m = { ...m, color: '#8b5cf6', measurementType: 'Door', label: m.label ? `Door — ${m.label}` : 'Door' };
+      m = { ...m, color: '#8b5cf6', measurementType: 'Door', label: '' };
     } else if (modMode === 'window') {
-      m = { ...m, color: '#06b6d4', measurementType: 'Window', label: m.label ? `Window — ${m.label}` : 'Window' };
+      m = { ...m, color: '#06b6d4', measurementType: 'Window', label: '' };
     }
 
     dispatch({ type: 'ADD_MEASUREMENT', payload: m });
-  }, [dispatch, isVerifyMode, modMode]);
+  }, [dispatch, isVerifyMode, modMode, state.pdfFile?.planId]);
 
   const handleDeleteLastMeasurement = useCallback(() => {
     const measurements = state.measurements;
@@ -417,14 +430,14 @@ export const PDFTakeoff = ({ projectId, estimateId, onAddCostItems }: PDFTakeoff
       const measurement: Measurement = {
         id: crypto.randomUUID(),
         type: 'line',
-        points: [], // Will be positioned based on bbox
-        pixelValue: 0,
+        worldPoints: [],
+        worldValue: 0,
         realValue: dim.value,
         unit: dim.dimension_type === 'area' ? 'M2' : 'LM',
         label: `AI: ${dim.text}`,
-        color: '#10B981', // Green for AI-extracted
+        color: '#10B981',
         pageIndex: dim.page,
-        timestamp: Date.now(),
+        timestamp: new Date(),
         validated: false,
         addedToEstimate: false,
         comments: `Extracted from PDF: ${dim.text} (${dim.unit})`,
@@ -747,19 +760,32 @@ export const PDFTakeoff = ({ projectId, estimateId, onAddCostItems }: PDFTakeoff
             <Button variant="ghost" size="sm" onClick={handlePageNext} disabled={state.currentPageIndex === state.pdfFile.pageCount - 1} className="h-8 text-gray-200 hover:bg-gray-700"><ChevronRight className="h-4 w-4" /></Button>
           </div>
         )}
-        <Button
-          size="sm"
-          onClick={() => setIsTakeoffFullscreen(false)}
-          className="ml-auto bg-red-700 hover:bg-red-600 text-white"
-        >
-          <Minimize2 className="h-4 w-4 mr-1.5" />
-          Exit Full Screen
-        </Button>
+        <div className="ml-auto flex items-center gap-1">
+          <Button
+            size="sm"
+            variant="ghost"
+            onClick={() => canvasExportRef.current?.export()}
+            className="h-8 gap-1.5 text-gray-200 hover:bg-gray-700"
+            title="Export this page with markup as PNG"
+          >
+            <Download className="h-4 w-4" />
+            Export
+          </Button>
+          <Button
+            size="sm"
+            onClick={() => setIsTakeoffFullscreen(false)}
+            className="bg-red-700 hover:bg-red-600 text-white"
+          >
+            <Minimize2 className="h-4 w-4 mr-1.5" />
+            Exit Full Screen
+          </Button>
+        </div>
       </div>
 
       {/* Canvas — full width, takes all remaining vertical space */}
       <div className="flex-1 overflow-hidden">
         <InteractiveCanvas
+          key={`${state.currentPageIndex}-${state.pdfFile?.planId ?? 'none'}`}
           pdfUrl={state.pdfFile.url}
           pageIndex={state.currentPageIndex}
           transform={state.transform}
@@ -773,7 +799,11 @@ export const PDFTakeoff = ({ projectId, estimateId, onAddCostItems }: PDFTakeoff
             modMode === 'window' ? '#06b6d4' :
             state.selectedColor
           }
-          measurements={state.measurements.filter(m => m.pageIndex === state.currentPageIndex)}
+          measurements={state.measurements.filter(m => {
+            if (m.pageIndex !== state.currentPageIndex) return false;
+            if (state.pdfFile?.planId && m.planId !== state.pdfFile.planId) return false;
+            return true;
+          })}
           detectedOpenings={detectedOpenings}
           onMeasurementComplete={handleMeasurementComplete}
           onMeasurementUpdate={handleMeasurementUpdate}
@@ -783,6 +813,7 @@ export const PDFTakeoff = ({ projectId, estimateId, onAddCostItems }: PDFTakeoff
           onDeleteLastMeasurement={handleDeleteLastMeasurement}
           onDeleteMeasurement={handleDeleteMeasurement}
           onMeasurementSelect={handleMeasurementSelect}
+          canvasExportRef={canvasExportRef}
         />
       </div>
 
@@ -1055,6 +1086,20 @@ export const PDFTakeoff = ({ projectId, estimateId, onAddCostItems }: PDFTakeoff
                     </PopoverContent>
                   </Popover>
 
+                  {/* Export markup button */}
+                  {state.pdfFile && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => canvasExportRef.current?.export()}
+                      className="h-8 gap-1.5"
+                      title="Export this page with all markup as PNG"
+                    >
+                      <Download className="h-4 w-4" />
+                      Export
+                    </Button>
+                  )}
+
                   {/* Page Navigation */}
                   {state.pdfFile && state.pdfFile.pageCount > 1 && (
                     <div className="flex items-center gap-2">
@@ -1111,6 +1156,7 @@ export const PDFTakeoff = ({ projectId, estimateId, onAddCostItems }: PDFTakeoff
 
                 <div className="h-[calc(100vh-260px)] min-h-[500px]" ref={canvasContainerRef}>
                   <InteractiveCanvas
+                    key={`${state.currentPageIndex}-${state.pdfFile?.planId ?? 'none'}`}
                     pdfUrl={state.pdfFile.url}
                     pageIndex={state.currentPageIndex}
                     transform={state.transform}
@@ -1124,7 +1170,11 @@ export const PDFTakeoff = ({ projectId, estimateId, onAddCostItems }: PDFTakeoff
                       modMode === 'window' ? '#06b6d4' :
                       state.selectedColor
                     }
-                    measurements={state.measurements.filter(m => m.pageIndex === state.currentPageIndex)}
+                    measurements={state.measurements.filter(m => {
+                      if (m.pageIndex !== state.currentPageIndex) return false;
+                      if (state.pdfFile?.planId && m.planId !== state.pdfFile.planId) return false;
+                      return true;
+                    })}
                     detectedOpenings={detectedOpenings}
                     onMeasurementComplete={handleMeasurementComplete}
                     onMeasurementUpdate={handleMeasurementUpdate}
@@ -1134,6 +1184,7 @@ export const PDFTakeoff = ({ projectId, estimateId, onAddCostItems }: PDFTakeoff
                     onDeleteLastMeasurement={handleDeleteLastMeasurement}
                     onDeleteMeasurement={handleDeleteMeasurement}
                     onMeasurementSelect={handleMeasurementSelect}
+                    canvasExportRef={canvasExportRef}
                   />
                 </div>
               </div>
@@ -1250,6 +1301,11 @@ export const PDFTakeoff = ({ projectId, estimateId, onAddCostItems }: PDFTakeoff
                                   }}
                                 />
                                 <span className="capitalize">{m.type}</span>
+                                {m.addedToEstimate && (
+                                  <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 text-[10px] font-medium">
+                                    ✓ In estimate
+                                  </span>
+                                )}
                               </div>
                               <span className="font-medium">Page {m.pageIndex + 1}</span>
                             </div>
@@ -1474,49 +1530,56 @@ export const PDFTakeoff = ({ projectId, estimateId, onAddCostItems }: PDFTakeoff
     {measurementPopup && (() => {
       const m = state.measurements.find(x => x.id === measurementPopup.id);
       if (!m) return null;
+      const POPUP_W = 256;
+      const POPUP_H = 190;
+      const clampedLeft = Math.min(Math.max(measurementPopup.screenX - 32, 8), window.innerWidth - POPUP_W - 8);
+      const clampedTop = Math.min(Math.max(measurementPopup.screenY + 12, 8), window.innerHeight - POPUP_H - 8);
       return createPortal(
-        <div
-          className="fixed z-[10010] bg-card border border-border rounded-lg shadow-xl p-3 w-64"
-          style={{ top: measurementPopup.screenY + 12, left: measurementPopup.screenX - 32 }}
-        >
-          <div className="flex items-start justify-between mb-2">
-            <div>
-              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
-                {m.measurementType ?? m.label?.split(' ')[0] ?? 'Measurement'}
-              </p>
-              <p className="text-sm font-bold mt-0.5">{m.label}</p>
-            </div>
-            <button
-              className="text-muted-foreground hover:text-destructive ml-2 mt-0.5"
-              onClick={handlePopupDelete}
-              title="Delete measurement"
-            >
-              <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
-            </button>
-          </div>
-          <p className="text-[11px] text-muted-foreground mb-2">Add to estimate as:</p>
-          <div className="flex gap-1.5 flex-wrap">
-            {(['wall', 'door', 'window'] as const).map(type => (
-              <button
-                key={type}
-                onClick={() => handlePopupAddToEstimate(type)}
-                className={`px-2.5 py-1 rounded text-xs font-medium border transition-colors ${
-                  type === 'wall' ? 'border-amber-400 text-amber-700 hover:bg-amber-50 dark:text-amber-300 dark:hover:bg-amber-950/30' :
-                  type === 'door' ? 'border-violet-400 text-violet-700 hover:bg-violet-50 dark:text-violet-300 dark:hover:bg-violet-950/30' :
-                  'border-cyan-400 text-cyan-700 hover:bg-cyan-50 dark:text-cyan-300 dark:hover:bg-cyan-950/30'
-                }`}
-              >
-                {type.charAt(0).toUpperCase() + type.slice(1)}
-              </button>
-            ))}
-          </div>
-          <button
-            className="mt-2 text-[11px] text-muted-foreground hover:text-foreground w-full text-center"
-            onClick={() => setMeasurementPopup(null)}
+        <>
+          {/* Backdrop — click anywhere outside to dismiss */}
+          <div className="fixed inset-0 z-[10009]" onClick={() => setMeasurementPopup(null)} />
+          <div
+            className="fixed z-[10010] bg-card border border-border rounded-lg shadow-xl p-3 w-64"
+            style={{ top: clampedTop, left: clampedLeft }}
           >
-            Dismiss
-          </button>
-        </div>,
+            <div className="flex items-start justify-between mb-2">
+              <div>
+                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
+                  {m.measurementType ?? m.label?.split(' ')[0] ?? 'Measurement'}
+                </p>
+                <p className="text-sm font-bold mt-0.5">{m.label}</p>
+                <p className="text-xs text-muted-foreground">{m.realValue.toFixed(2)} {m.unit}</p>
+              </div>
+              <button
+                className="text-muted-foreground hover:text-destructive ml-2 mt-0.5"
+                onClick={handlePopupDelete}
+                title="Delete measurement"
+              >
+                <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+              </button>
+            </div>
+            {m.addedToEstimate ? (
+              <p className="text-[11px] text-green-600 dark:text-green-400 mb-2 font-medium">✓ Already in estimate — add again or update:</p>
+            ) : (
+              <p className="text-[11px] text-muted-foreground mb-2">Add to estimate as:</p>
+            )}
+            <div className="flex gap-1.5 flex-wrap">
+              {(['wall', 'door', 'window'] as const).map(type => (
+                <button
+                  key={type}
+                  onClick={() => handlePopupAddToEstimate(type)}
+                  className={`px-2.5 py-1 rounded text-xs font-medium border transition-colors ${
+                    type === 'wall' ? 'border-amber-400 text-amber-700 hover:bg-amber-50 dark:text-amber-300 dark:hover:bg-amber-950/30' :
+                    type === 'door' ? 'border-violet-400 text-violet-700 hover:bg-violet-50 dark:text-violet-300 dark:hover:bg-violet-950/30' :
+                    'border-cyan-400 text-cyan-700 hover:bg-cyan-50 dark:text-cyan-300 dark:hover:bg-cyan-950/30'
+                  }`}
+                >
+                  {type.charAt(0).toUpperCase() + type.slice(1)}
+                </button>
+              ))}
+            </div>
+          </div>
+        </>,
         document.body
       );
     })()}

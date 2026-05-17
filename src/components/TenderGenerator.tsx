@@ -1,5 +1,6 @@
 'use client'
 import { useState } from "react"
+import { getUserStorageKey } from "@/lib/localAuth"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -36,7 +37,7 @@ export const TenderGenerator = ({ project, estimate }: TenderGeneratorProps) => 
 
   // Company info
   const [companyName, setCompanyName] = useState(
-    () => JSON.parse(localStorage.getItem("default_rates") || "{}").companyName || "Your Company Pty Ltd"
+    () => JSON.parse(localStorage.getItem(getUserStorageKey("default_rates")) || "{}").companyName || "Your Company Pty Ltd"
   )
   const [companyABN, setCompanyABN] = useState("")
   const [companyPhone, setCompanyPhone] = useState("")

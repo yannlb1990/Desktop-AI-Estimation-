@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo } from "react";
+import { getUserStorageKey } from "@/lib/localAuth";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -1946,13 +1947,13 @@ export const NCCComplianceCard = ({ projectId }: NCCComplianceCardProps) => {
       relatedMaterials: [],
     };
     try {
-      const projects = JSON.parse(localStorage.getItem("local_projects") || "[]");
+      const projects = JSON.parse(localStorage.getItem(getUserStorageKey("local_projects")) || "[]");
       const idx = projects.findIndex((p: any) => p.id === projectId);
       if (idx !== -1) {
         const existing = projects[idx].estimate_items || [];
         newEstimateItem.item_number = String(existing.length + 1);
         projects[idx].estimate_items = [...existing, newEstimateItem];
-        localStorage.setItem("local_projects", JSON.stringify(projects));
+        localStorage.setItem(getUserStorageKey("local_projects"), JSON.stringify(projects));
         toast.success(`"${s.item.slice(0, 50)}…" added to estimate`);
       } else {
         toast.error("Project not found — open Estimate tab first");

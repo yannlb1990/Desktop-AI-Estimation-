@@ -1,16 +1,21 @@
 import { useState, useCallback, useEffect } from 'react';
 import { MaterialEntry, MATERIALS_STORAGE_KEY } from '@/lib/materials/types';
+import { getUserStorageKey } from '@/lib/localAuth';
+
+function getStorageKey(): string {
+  return getUserStorageKey(MATERIALS_STORAGE_KEY);
+}
 
 function loadFromStorage(): MaterialEntry[] {
   try {
-    return JSON.parse(localStorage.getItem(MATERIALS_STORAGE_KEY) || '[]');
+    return JSON.parse(localStorage.getItem(getStorageKey()) || '[]');
   } catch {
     return [];
   }
 }
 
 function saveToStorage(entries: MaterialEntry[]) {
-  localStorage.setItem(MATERIALS_STORAGE_KEY, JSON.stringify(entries));
+  localStorage.setItem(getStorageKey(), JSON.stringify(entries));
 }
 
 export function useMaterialsLibrary() {
@@ -101,8 +106,9 @@ export function useMaterialsLibrary() {
 
   // Sync across tabs
   useEffect(() => {
+    const key = getStorageKey();
     const handler = (e: StorageEvent) => {
-      if (e.key === MATERIALS_STORAGE_KEY) {
+      if (e.key === key) {
         setMaterials(loadFromStorage());
       }
     };

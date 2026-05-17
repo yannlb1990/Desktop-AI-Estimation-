@@ -78,7 +78,66 @@ export function getLocalUser(): LocalUser | null {
   return sessionUserToLocal(u);
 }
 
+// All user-specific localStorage keys that existed before per-user scoping was added
+const LEGACY_KEYS = [
+  'local_projects',
+  'local_clients',
+  'estimate_profile',
+  'default_rates',
+  'notif_prefs',
+  'user_materials_library',
+  'estimate_subscription',
+  'project_reminders',
+] as const;
+
+export function getUserStorageKey(baseKey: string): string {
+  const user = getLocalUser();
+  return user ? `${user.email}:${baseKey}` : baseKey;
+}
+
+// Runs once per user. If the old unscoped data belongs to this user (email matches),
+// migrates it to scoped keys and clears the shared unscoped keys so no other user
+// can see it. If the email doesn't match, just wipes the unscoped keys without
+// migrating — the current user gets a clean slate and the old data is removed.
+export function migrateUnscopedData(userEmail: string): void {
+  const migrationFlag = `${userEmail}:migrated_v1`;
+  if (localStorage.getItem(migrationFlag)) return;
+
+  try {
+    // Determine who owned the old unscoped data
+    const rawSub = localStorage.getItem('estimate_subscription');
+    const oldOwnerEmail: string | null = rawSub
+      ? (() => { try { return JSON.parse(rawSub)?.email ?? null; } catch { return null; } })()
+      : null;
+
+    const isOwner = oldOwnerEmail === userEmail;
+
+    for (const key of LEGACY_KEYS) {
+      const scopedKey = `${userEmail}:${key}`;
+      const unscopedValue = localStorage.getItem(key);
+
+      if (unscopedValue !== null) {
+        if (isOwner && !localStorage.getItem(scopedKey)) {
+          // Migrate this user's data to their scoped key
+          localStorage.setItem(scopedKey, unscopedValue);
+        }
+        // Always clear the unscoped key — prevents any future user from seeing it
+        localStorage.removeItem(key);
+      }
+    }
+  } catch {
+    // Never crash on migration failure — just proceed with clean slate
+  }
+
+  localStorage.setItem(migrationFlag, 'done');
+}
+
 export function localSignOut(): void {
+  // Wipe any leftover unscoped keys before signing out so the next user
+  // who signs in on this browser starts with a clean slate.
+  for (const key of LEGACY_KEYS) {
+    localStorage.removeItem(key);
+  }
   supabase.auth.signOut();
 }
 

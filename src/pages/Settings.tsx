@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { getLocalUser, isSignedIn } from "@/lib/localAuth";
+import { getLocalUser, isSignedIn, getUserStorageKey } from "@/lib/localAuth";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -29,14 +29,14 @@ const Settings = () => {
   const [marginPercentage, setMarginPercentage] = useState("18");
 
   // Notifications
-  const loadNotifPrefs = () => { try { return JSON.parse(localStorage.getItem("notif_prefs") || "{}") } catch { return {} } }
+  const loadNotifPrefs = () => { try { return JSON.parse(localStorage.getItem(getUserStorageKey("notif_prefs")) || "{}") } catch { return {} } }
   const [notifDueDate, setNotifDueDate] = useState(() => loadNotifPrefs().dueDate ?? true);
   const [notifDaysBeforeStr, setNotifDaysBeforeStr] = useState(() => loadNotifPrefs().daysBefore ?? "3");
   const [notifProjectUpdate, setNotifProjectUpdate] = useState(() => loadNotifPrefs().projectUpdate ?? false);
   const [notifWeeklyDigest, setNotifWeeklyDigest] = useState(() => loadNotifPrefs().weeklyDigest ?? false);
 
   const saveNotifPrefs = () => {
-    localStorage.setItem("notif_prefs", JSON.stringify({
+    localStorage.setItem(getUserStorageKey("notif_prefs"), JSON.stringify({
       dueDate: notifDueDate,
       daysBefore: notifDaysBeforeStr,
       projectUpdate: notifProjectUpdate,
@@ -54,7 +54,7 @@ const Settings = () => {
   }, []);
 
   const loadRates = () => {
-    const saved = localStorage.getItem('default_rates');
+    const saved = localStorage.getItem(getUserStorageKey('default_rates'));
     if (saved) {
       const rates = JSON.parse(saved);
       setOverheadPercentage(rates.overhead || "15");
@@ -68,7 +68,7 @@ const Settings = () => {
   const handleSaveRates = () => {
     setSaving(true);
     try {
-      localStorage.setItem('default_rates', JSON.stringify({
+      localStorage.setItem(getUserStorageKey('default_rates'), JSON.stringify({
         overhead: overheadPercentage,
         margin: marginPercentage,
         gst: gstPercentage,
@@ -83,7 +83,7 @@ const Settings = () => {
     }
   };
 
-  const PROFILE_KEY = 'estimate_profile';
+  const PROFILE_KEY = () => getUserStorageKey('estimate_profile');
 
   const loadProfile = () => {
     if (!isSignedIn()) {
@@ -92,7 +92,7 @@ const Settings = () => {
     }
     try {
       const localUser = getLocalUser();
-      const saved = localStorage.getItem(PROFILE_KEY);
+      const saved = localStorage.getItem(PROFILE_KEY());
       const data = saved ? JSON.parse(saved) : {};
       setCompanyName(data.company_name || localUser?.displayName || "");
       setAbn(data.abn || "");
@@ -111,7 +111,7 @@ const Settings = () => {
   const handleSaveProfile = () => {
     setSaving(true);
     try {
-      localStorage.setItem(PROFILE_KEY, JSON.stringify({
+      localStorage.setItem(PROFILE_KEY(), JSON.stringify({
         company_name: companyName,
         abn,
         phone,

@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
-import { isSignedIn } from "@/lib/localAuth";
+import { isSignedIn, getUserStorageKey } from "@/lib/localAuth";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -176,9 +176,9 @@ const NewProject = () => {
         estimate_items: convertAnalyzerItems(items),
       };
 
-      const projects = JSON.parse(localStorage.getItem("local_projects") || "[]");
+      const projects = JSON.parse(localStorage.getItem(getUserStorageKey('local_projects')) || "[]");
       projects.unshift(newProject);
-      localStorage.setItem("local_projects", JSON.stringify(projects));
+      localStorage.setItem(getUserStorageKey('local_projects'), JSON.stringify(projects));
 
       setAnalysisStep('complete');
       toast.success("Project created with AI-generated estimate!");
@@ -243,9 +243,9 @@ const NewProject = () => {
         estimate_items: [],
       };
 
-      const projects = JSON.parse(localStorage.getItem("local_projects") || "[]");
+      const projects = JSON.parse(localStorage.getItem(getUserStorageKey('local_projects')) || "[]");
       projects.unshift(newProject);
-      localStorage.setItem("local_projects", JSON.stringify(projects));
+      localStorage.setItem(getUserStorageKey('local_projects'), JSON.stringify(projects));
 
       toast.success("Project created!");
       navigate(`/project/${newProject.id}`);

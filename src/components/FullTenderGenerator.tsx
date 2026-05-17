@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react"
+import { getUserStorageKey } from "@/lib/localAuth"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -280,7 +281,7 @@ export const FullTenderGenerator = ({ project, estimate }: FullTenderProps) => {
 
   // ── Load estimate items from localStorage when dialog opens ──
   const loadFromEstimate = () => {
-    const projects: any[] = JSON.parse(localStorage.getItem("local_projects") || "[]")
+    const projects: any[] = JSON.parse(localStorage.getItem(getUserStorageKey("local_projects")) || "[]")
     const proj = projects.find((p: any) => p.id === project?.id)
     const estimateItems: any[] = proj?.estimate_items || estimate?.estimate_items || []
     if (estimateItems.length === 0) return

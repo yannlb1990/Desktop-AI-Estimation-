@@ -11,7 +11,7 @@ import {
 import { useSubscription } from "@/hooks/useSubscription";
 import { PLAN_NAMES } from "@/lib/subscription";
 import { MetricoreLogoMark } from "@/components/MetricoreLogoMark";
-import { getLocalUser, localSignOut, isSignedIn } from "@/lib/localAuth";
+import { getLocalUser, localSignOut, isSignedIn, getUserStorageKey, migrateUnscopedData } from "@/lib/localAuth";
 
 // ── helpers ─────────────────────────────────────────────────────────────────
 
@@ -73,7 +73,9 @@ const Dashboard = () => {
       navigate("/auth");
       return;
     }
-    const raw = localStorage.getItem("local_projects");
+    const user = getLocalUser();
+    if (user) migrateUnscopedData(user.email);
+    const raw = localStorage.getItem(getUserStorageKey('local_projects'));
     const loaded: any[] = raw ? JSON.parse(raw) : [];
     loaded.sort((a, b) =>
       new Date(b.updated_at || b.created_at || 0).getTime() -
@@ -83,7 +85,7 @@ const Dashboard = () => {
   }, [navigate]);
 
   // ── derived stats ──────────────────────────────────────────────────────────
-  const defaultRates = (() => { try { return JSON.parse(localStorage.getItem("default_rates") || "{}"); } catch { return {}; } })();
+  const defaultRates = (() => { try { return JSON.parse(localStorage.getItem(getUserStorageKey('default_rates')) || "{}"); } catch { return {}; } })();
   const targetMargin: number = defaultRates.margin ?? 0;
 
   const pipelineValue = projects.reduce((s, p) => s + getProjectValue(p), 0);
@@ -104,8 +106,8 @@ const Dashboard = () => {
   const handleDeleteProject = (e: React.MouseEvent, projectId: string) => {
     e.stopPropagation();
     if (!confirm("Delete this project? This cannot be undone.")) return;
-    const existing: any[] = JSON.parse(localStorage.getItem('local_projects') || '[]');
-    localStorage.setItem('local_projects', JSON.stringify(existing.filter((p: any) => p.id !== projectId)));
+    const existing: any[] = JSON.parse(localStorage.getItem(getUserStorageKey('local_projects')) || '[]');
+    localStorage.setItem(getUserStorageKey('local_projects'), JSON.stringify(existing.filter((p: any) => p.id !== projectId)));
     setProjects(prev => prev.filter(p => p.id !== projectId));
   };
 

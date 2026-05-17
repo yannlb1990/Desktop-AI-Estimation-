@@ -1,9 +1,12 @@
+import React from "react";
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter, Routes, Route } from "react-router-dom";
+import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { AIChatbot } from "@/components/AIChatbot";
+import { isSignedIn } from "@/lib/localAuth";
+import { getSubscriptionStatus } from "@/lib/subscription";
 import Index from "./pages/Index";
 import Auth from "./pages/Auth";
 import Dashboard from "./pages/Dashboard";
@@ -18,6 +21,14 @@ import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
 
+// Guards all protected routes: must be signed in + trial must not be expired
+const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
+  if (!isSignedIn()) return <Navigate to="/auth" replace />;
+  const { isTrialExpired } = getSubscriptionStatus();
+  if (isTrialExpired) return <Navigate to="/pricing" replace />;
+  return <>{children}</>;
+};
+
 const App = () => (
   <QueryClientProvider client={queryClient}>
     <TooltipProvider>
@@ -28,15 +39,15 @@ const App = () => (
         <Routes>
           <Route path="/" element={<Index />} />
           <Route path="/auth" element={<Auth />} />
-          <Route path="/app" element={<Dashboard />} />
           <Route path="/pricing" element={<Pricing />} />
-          <Route path="/dashboard" element={<Dashboard />} />
-          <Route path="/project/new" element={<NewProject />} />
-          <Route path="/project/:projectId" element={<ProjectDetail />} />
-          <Route path="/insights" element={<MarketInsights />} />
-          <Route path="/clients" element={<Clients />} />
-          <Route path="/settings" element={<Settings />} />
-          <Route path="/materials" element={<MaterialsLibrary />} />
+          <Route path="/app" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
+          <Route path="/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
+          <Route path="/project/new" element={<ProtectedRoute><NewProject /></ProtectedRoute>} />
+          <Route path="/project/:projectId" element={<ProtectedRoute><ProjectDetail /></ProtectedRoute>} />
+          <Route path="/insights" element={<ProtectedRoute><MarketInsights /></ProtectedRoute>} />
+          <Route path="/clients" element={<ProtectedRoute><Clients /></ProtectedRoute>} />
+          <Route path="/settings" element={<ProtectedRoute><Settings /></ProtectedRoute>} />
+          <Route path="/materials" element={<ProtectedRoute><MaterialsLibrary /></ProtectedRoute>} />
           {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
           <Route path="*" element={<NotFound />} />
         </Routes>

@@ -169,7 +169,7 @@ export const MeasurementToolbar = ({
             ))}
             {modMode && modMode !== 'custom' && (
               <span className="text-xs text-muted-foreground ml-1 italic">
-                Draw on the plan — a cost dialog will appear
+                Draw on the plan — click the line to add to estimate
               </span>
             )}
             {modMode === 'custom' && (

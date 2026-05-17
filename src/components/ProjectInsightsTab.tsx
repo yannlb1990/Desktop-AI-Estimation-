@@ -1,4 +1,5 @@
 import { useMemo } from "react";
+import { getUserStorageKey } from "@/lib/localAuth";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
@@ -36,7 +37,7 @@ interface ProjectInsightsTabProps {
 
 function loadItems(projectId: string): EstimateItem[] {
   try {
-    const projects = JSON.parse(localStorage.getItem("local_projects") || "[]");
+    const projects = JSON.parse(localStorage.getItem(getUserStorageKey("local_projects")) || "[]");
     const project = projects.find((p: any) => p.id === projectId);
     return project?.estimate_items || [];
   } catch {

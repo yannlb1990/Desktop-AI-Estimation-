@@ -94,6 +94,7 @@ export interface Measurement {
   depth?: number;
   linkedCostItem?: string;
   pageIndex: number;
+  planId?: string;       // Which plan this measurement belongs to (name + filesize key)
   timestamp: Date;
 
   // Enhanced fields for takeoff table
@@ -237,6 +238,7 @@ export interface PDFFile {
   url: string;
   name: string;
   pageCount: number;
+  planId?: string;   // stable identifier: name + size, survives blob URL expiry
 }
 
 // === PDF STATE ===

@@ -1,4 +1,5 @@
 // Subscription / plan management — localStorage-backed, ready to swap for real billing
+import { getUserStorageKey } from '@/lib/localAuth';
 
 export type PlanId = 'starter' | 'pro' | 'business';
 export type BillingPeriod = 'monthly' | 'annual';
@@ -84,7 +85,7 @@ const TRIAL_CAPS = PLAN_CAPS.pro;
 // ── Storage helpers ───────────────────────────────────────────────────────────
 export function loadSubscription(): Subscription | null {
   try {
-    const raw = localStorage.getItem(STORAGE_KEY);
+    const raw = localStorage.getItem(getUserStorageKey(STORAGE_KEY));
     return raw ? (JSON.parse(raw) as Subscription) : null;
   } catch {
     return null;
@@ -92,11 +93,11 @@ export function loadSubscription(): Subscription | null {
 }
 
 export function saveSubscription(sub: Subscription): void {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(sub));
+  localStorage.setItem(getUserStorageKey(STORAGE_KEY), JSON.stringify(sub));
 }
 
 export function clearSubscription(): void {
-  localStorage.removeItem(STORAGE_KEY);
+  localStorage.removeItem(getUserStorageKey(STORAGE_KEY));
 }
 
 // ── Create subscription on signup ─────────────────────────────────────────────
@@ -119,7 +120,8 @@ export function createTrialSubscription(
     trialStartedAt: now.toISOString(),
     trialEndsAt: trialEnd.toISOString(),
   };
-  saveSubscription(sub);
+  // Use email param directly — user may not have a session yet (pre-verification)
+  localStorage.setItem(`${email}:${STORAGE_KEY}`, JSON.stringify(sub));
   return sub;
 }
 

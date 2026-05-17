@@ -20,7 +20,7 @@ import { MaterialPickerDialog } from './MaterialPickerDialog';
 import { MaterialEntry } from '@/lib/materials/types';
 import { useSubscription } from '@/hooks/useSubscription';
 import { UpgradeModal } from '@/components/UpgradeModal';
-import { findLabourRate, getCustomRates, setCustomRate, clearCustomRate, LABOUR_MULT } from '@/data/labourRates';
+import { findLabourRate, getCustomRates, setCustomRate, clearCustomRate, LABOUR_MULT, getEffectiveRate } from '@/data/labourRates';
 
 // Area options
 const AREA_OPTIONS: MeasurementArea[] = [
@@ -237,8 +237,10 @@ const LabourRateCell = ({ item, selectedState, onUpdateCostItem }: LabourRateCel
   );
 };
 
-// Read / write the set of costItem IDs already transferred for this project
+// Persistence keys
 const transferredKey = (projectId: string) => `transferred_cost_items_${projectId}`;
+const prefsKey = (projectId: string) => `cost_estimator_prefs_${projectId}`;
+const consumablesKey = (projectId: string) => `cost_estimator_consumables_${projectId}`;
 const getTransferred = (projectId: string): Set<string> =>
   new Set(JSON.parse(localStorage.getItem(transferredKey(projectId)) || '[]'));
 const saveTransferred = (projectId: string, ids: Set<string>) =>
@@ -256,19 +258,46 @@ export const CostEstimator = ({
 }: CostEstimatorProps) => {
   const sub = useSubscription();
   const [upgradeOpen, setUpgradeOpen] = useState(false);
-  const [selectedState, setSelectedState] = useState<State>('NSW');
-  const [marginPercent, setMarginPercent] = useState(15);
-  const [gstEnabled, setGstEnabled] = useState(true);
+  const [selectedState, setSelectedState] = useState<State>(() => {
+    try { return (JSON.parse(localStorage.getItem(prefsKey(projectId)) || '{}').selectedState as State) || 'NSW'; }
+    catch { return 'NSW'; }
+  });
+  const [marginPercent, setMarginPercent] = useState<number>(() => {
+    try { return JSON.parse(localStorage.getItem(prefsKey(projectId)) || '{}').marginPercent ?? 15; }
+    catch { return 15; }
+  });
+  const [gstEnabled, setGstEnabled] = useState<boolean>(() => {
+    try { return JSON.parse(localStorage.getItem(prefsKey(projectId)) || '{}').gstEnabled ?? true; }
+    catch { return true; }
+  });
   const [showAddDialog, setShowAddDialog] = useState(false);
   const [showLibraryPicker, setShowLibraryPicker] = useState(false);
   const [selectedSOW, setSelectedSOW] = useState<string>('');
   const [selectedMeasurement, setSelectedMeasurement] = useState<string>('');
   const [expandedItems, setExpandedItems] = useState<Set<string>>(new Set());
-  const [consumables, setConsumables] = useState<ConsumableItem[]>(
-    DEFAULT_CONSUMABLES.map(c => ({ ...c, id: crypto.randomUUID(), total: c.quantity * c.unitCost }))
-  );
+  const [consumables, setConsumables] = useState<ConsumableItem[]>(() => {
+    try {
+      const raw = localStorage.getItem(consumablesKey(projectId));
+      if (raw) return JSON.parse(raw);
+    } catch {}
+    return DEFAULT_CONSUMABLES.map(c => ({ ...c, id: crypto.randomUUID(), total: c.quantity * c.unitCost }));
+  });
   const [transferredIds, setTransferredIds] = useState<Set<string>>(() => getTransferred(projectId));
   const [selectedCostIds, setSelectedCostIds] = useState<Set<string>>(new Set());
+  // Inline custom material form state: itemId → form fields
+  const [pendingCustomMaterial, setPendingCustomMaterial] = useState<Record<string, { name: string; qty: string; unit: string; cost: string }>>({});
+
+  // Persist prefs whenever they change
+  React.useEffect(() => {
+    try { localStorage.setItem(prefsKey(projectId), JSON.stringify({ selectedState, marginPercent, gstEnabled })); }
+    catch {}
+  }, [projectId, selectedState, marginPercent, gstEnabled]);
+
+  // Persist consumables whenever they change
+  React.useEffect(() => {
+    try { localStorage.setItem(consumablesKey(projectId), JSON.stringify(consumables)); }
+    catch {}
+  }, [projectId, consumables]);
 
   // Filtered trade list based on profile
   const visibleTrades = useMemo(
@@ -1212,20 +1241,78 @@ export const CostEstimator = ({
                                         </div>
                                       )}
 
-                                      {/* Add custom material row */}
-                                      <Button size="sm" variant="ghost" className="h-8 text-xs w-full border border-dashed"
-                                        onClick={() => {
-                                          const name = prompt('Material name:');
-                                          if (!name?.trim()) return;
-                                          const qty = parseFloat(prompt('Quantity:') || '1') || 1;
-                                          const cost = parseFloat(prompt('Unit cost ($):') || '0') || 0;
-                                          const unit = prompt('Unit (EA, m, box…):') || 'EA';
-                                          const custom: RelatedMaterial = { id: crypto.randomUUID(), name: name.trim(), quantity: qty, unit, unitCost: cost, isAccepted: true, isManual: true };
-                                          onUpdateCostItem(item.id, { relatedMaterials: [...(item.relatedMaterials || []), custom] });
-                                          toast.success(`Added ${name}`);
-                                        }}>
-                                        <Plus className="h-3 w-3 mr-1" /> Add Custom Material
-                                      </Button>
+                                      {/* Add custom material — inline form */}
+                                      {pendingCustomMaterial[item.id] ? (
+                                        <div className="flex flex-wrap items-center gap-1 p-1.5 border border-dashed rounded bg-muted/30">
+                                          <Input
+                                            autoFocus
+                                            placeholder="Material name"
+                                            value={pendingCustomMaterial[item.id].name}
+                                            onChange={e => setPendingCustomMaterial(prev => ({ ...prev, [item.id]: { ...prev[item.id], name: e.target.value } }))}
+                                            className="h-7 text-xs flex-1 min-w-24"
+                                            onKeyDown={e => {
+                                              if (e.key === 'Escape') setPendingCustomMaterial(prev => { const n = { ...prev }; delete n[item.id]; return n; });
+                                            }}
+                                          />
+                                          <Input
+                                            placeholder="Qty"
+                                            type="number"
+                                            min="0"
+                                            value={pendingCustomMaterial[item.id].qty}
+                                            onChange={e => setPendingCustomMaterial(prev => ({ ...prev, [item.id]: { ...prev[item.id], qty: e.target.value } }))}
+                                            className="h-7 text-xs w-14"
+                                          />
+                                          <Input
+                                            placeholder="Unit"
+                                            value={pendingCustomMaterial[item.id].unit}
+                                            onChange={e => setPendingCustomMaterial(prev => ({ ...prev, [item.id]: { ...prev[item.id], unit: e.target.value } }))}
+                                            className="h-7 text-xs w-14"
+                                          />
+                                          <Input
+                                            placeholder="$/unit"
+                                            type="number"
+                                            min="0"
+                                            value={pendingCustomMaterial[item.id].cost}
+                                            onChange={e => setPendingCustomMaterial(prev => ({ ...prev, [item.id]: { ...prev[item.id], cost: e.target.value } }))}
+                                            className="h-7 text-xs w-16"
+                                          />
+                                          <Button
+                                            size="sm"
+                                            className="h-7 text-xs px-2"
+                                            disabled={!pendingCustomMaterial[item.id].name.trim()}
+                                            onClick={() => {
+                                              const f = pendingCustomMaterial[item.id];
+                                              const custom: RelatedMaterial = {
+                                                id: crypto.randomUUID(),
+                                                name: f.name.trim(),
+                                                quantity: parseFloat(f.qty) || 1,
+                                                unit: f.unit || 'EA',
+                                                unitCost: parseFloat(f.cost) || 0,
+                                                isAccepted: true,
+                                                isManual: true,
+                                              };
+                                              onUpdateCostItem(item.id, { relatedMaterials: [...(item.relatedMaterials || []), custom] });
+                                              setPendingCustomMaterial(prev => { const n = { ...prev }; delete n[item.id]; return n; });
+                                              toast.success(`Added ${f.name}`);
+                                            }}
+                                          >
+                                            Add
+                                          </Button>
+                                          <Button
+                                            size="sm"
+                                            variant="ghost"
+                                            className="h-7 text-xs px-2"
+                                            onClick={() => setPendingCustomMaterial(prev => { const n = { ...prev }; delete n[item.id]; return n; })}
+                                          >
+                                            Cancel
+                                          </Button>
+                                        </div>
+                                      ) : (
+                                        <Button size="sm" variant="ghost" className="h-8 text-xs w-full border border-dashed"
+                                          onClick={() => setPendingCustomMaterial(prev => ({ ...prev, [item.id]: { name: '', qty: '1', unit: 'EA', cost: '0' } }))}>
+                                          <Plus className="h-3 w-3 mr-1" /> Add Custom Material
+                                        </Button>
+                                      )}
                                     </>
                                   );
                                 })()}

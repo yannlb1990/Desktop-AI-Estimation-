@@ -49,10 +49,12 @@ export const PDFUploadManager = ({ projectId, onUploadComplete, onError }: PDFUp
     try {
       const pageCount = await getPageCount(file);
       const url = URL.createObjectURL(file);
+      // Stable identifier that survives blob URL expiry: name + byte size.
+      const planId = `${file.name}_${file.size}`;
 
       toast.success(`Plan loaded — ${pageCount} page${pageCount > 1 ? 's' : ''}`);
 
-      onUploadComplete({ file, url, name: file.name, pageCount });
+      onUploadComplete({ file, url, name: file.name, pageCount, planId });
     } catch (err) {
       const errorMsg = err instanceof Error ? err.message : 'Upload failed';
       setValidationError(errorMsg);

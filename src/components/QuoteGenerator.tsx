@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect } from "react"
+import { getUserStorageKey } from "@/lib/localAuth"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -113,7 +114,7 @@ export const QuoteGenerator = ({ project, estimate }: QuoteGeneratorProps) => {
 
   // Build QuoteLine[] from localStorage estimate items for this project
   const buildLinesFromEstimate = (): QuoteLine[] => {
-    const projects: any[] = JSON.parse(localStorage.getItem("local_projects") || "[]")
+    const projects: any[] = JSON.parse(localStorage.getItem(getUserStorageKey("local_projects")) || "[]")
     const proj = projects.find((p: any) => p.id === project?.id)
     const estimateItems: any[] = proj?.estimate_items || estimate?.estimate_items || []
     return estimateItems.map((item: any) => {
