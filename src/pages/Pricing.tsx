@@ -5,11 +5,14 @@ import { Badge } from "@/components/ui/badge";
 import {
   Check, X, ArrowRight, Shield, Zap, Users,
   FileText, BarChart3, Package, Upload, Calculator,
-  Download, ChevronDown, ChevronUp,
+  Download, ChevronDown, ChevronUp, Loader2,
 } from "lucide-react";
 import Navigation from "@/components/Navigation";
 import Footer from "@/components/Footer";
-import { PLAN_PRICES, PLAN_NAMES, PlanId, TRIAL_DAYS } from "@/lib/subscription";
+import { PLAN_PRICES, PLAN_NAMES, PlanId, TRIAL_DAYS, getSubscriptionStatus } from "@/lib/subscription";
+import { isSignedIn } from "@/lib/localAuth";
+import { redirectToStripeCheckout } from "@/lib/stripeCheckout";
+import { toast } from "sonner";
 
 // ── Plan definitions ──────────────────────────────────────────────────────────
 
@@ -124,17 +127,54 @@ const Pricing = () => {
   const [billing, setBilling] = useState<'monthly' | 'annual'>('monthly');
   const [selected, setSelected] = useState<PlanId>('pro');
   const [openFaq, setOpenFaq] = useState<number | null>(null);
+  const [checkingOut, setCheckingOut] = useState(false);
+
+  const signedIn = isSignedIn();
+  const { isTrialExpired, isTrialing, subscription } = getSubscriptionStatus();
+  const alreadyPaid = subscription?.activePlan !== 'trial' && !!subscription?.subscribedAt;
 
   const selectedPlan = PLANS.find(p => p.id === selected)!;
 
   const saving = (id: PlanId) =>
     Math.round((PLAN_PRICES[id].monthly - PLAN_PRICES[id].annual) * 12);
 
+  const handleCTA = async (planId: PlanId) => {
+    if (!signedIn) {
+      navigate(`/auth?plan=${planId}&billing=${billing}&mode=signup`);
+      return;
+    }
+    // Signed in → go to Stripe
+    setCheckingOut(true);
+    try {
+      await redirectToStripeCheckout(planId, billing);
+    } catch (err: any) {
+      toast.error(err.message ?? "Could not open checkout. Please try again.");
+      setCheckingOut(false);
+    }
+  };
+
   return (
     <div className="min-h-screen bg-background">
       <Navigation />
 
       <div className="container mx-auto px-6 pt-28 pb-20 max-w-6xl">
+
+        {/* ── Signed-in status banners ── */}
+        {alreadyPaid && (
+          <div className="mb-8 bg-green-500/10 border border-green-500/30 rounded-xl px-5 py-4 text-center text-sm text-green-700 dark:text-green-400">
+            You have an active <strong>{PLAN_NAMES[subscription!.activePlan as PlanId]}</strong> subscription. To change your plan, please contact support.
+          </div>
+        )}
+        {!alreadyPaid && isTrialExpired && signedIn && (
+          <div className="mb-8 bg-destructive/10 border border-destructive/30 rounded-xl px-5 py-4 text-center text-sm text-destructive">
+            Your 14-day trial has ended. Subscribe below to regain full access.
+          </div>
+        )}
+        {!alreadyPaid && isTrialing && signedIn && (
+          <div className="mb-8 bg-primary/10 border border-primary/30 rounded-xl px-5 py-4 text-center text-sm text-primary">
+            Your trial is active. Subscribe now to lock in your plan before it expires.
+          </div>
+        )}
 
         {/* ── Header ── */}
         <div className="text-center mb-10">
@@ -267,10 +307,18 @@ const Pricing = () => {
             <Button
               size="lg"
               className="bg-primary text-primary-foreground hover:bg-primary/90 px-8 shrink-0"
-              onClick={() => navigate(`/auth?plan=${selected}&billing=${billing}&mode=signup`)}
+              disabled={checkingOut || alreadyPaid}
+              onClick={() => handleCTA(selected)}
             >
-              Get Started with {PLAN_NAMES[selected]}
-              <ArrowRight className="ml-2 h-5 w-5" />
+              {checkingOut ? (
+                <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Opening checkout…</>
+              ) : alreadyPaid ? (
+                "Already Subscribed"
+              ) : signedIn ? (
+                <>Subscribe to {PLAN_NAMES[selected]} <ArrowRight className="ml-2 h-5 w-5" /></>
+              ) : (
+                <>Get Started with {PLAN_NAMES[selected]} <ArrowRight className="ml-2 h-5 w-5" /></>
+              )}
             </Button>
           </div>
         </div>
@@ -338,9 +386,12 @@ const Pricing = () => {
                     size="sm"
                     variant={selected === plan.id ? 'default' : 'outline'}
                     className={selected === plan.id ? 'bg-primary text-primary-foreground' : ''}
-                    onClick={() => navigate(`/auth?plan=${plan.id}&billing=${billing}&mode=signup`)}
+                    disabled={checkingOut}
+                    onClick={() => handleCTA(plan.id)}
                   >
-                    {selected === plan.id ? 'Start Trial' : 'Select'}
+                    {selected === plan.id
+                      ? (signedIn ? 'Subscribe' : 'Start Trial')
+                      : 'Select'}
                   </Button>
                 </div>
               ))}
@@ -391,14 +442,24 @@ const Pricing = () => {
             <Button
               size="lg"
               className="bg-primary text-primary-foreground px-10"
-              onClick={() => navigate(`/auth?plan=${selected}&billing=${billing}&mode=signup`)}
+              disabled={checkingOut || alreadyPaid}
+              onClick={() => handleCTA(selected)}
             >
-              Start Free Trial with {PLAN_NAMES[selected]}
-              <ArrowRight className="ml-2 h-5 w-5" />
+              {checkingOut ? (
+                <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Opening checkout…</>
+              ) : alreadyPaid ? (
+                "Already Subscribed"
+              ) : signedIn ? (
+                <>Subscribe — {PLAN_NAMES[selected]} <ArrowRight className="ml-2 h-5 w-5" /></>
+              ) : (
+                <>Start Free Trial with {PLAN_NAMES[selected]} <ArrowRight className="ml-2 h-5 w-5" /></>
+              )}
             </Button>
-            <Button size="lg" variant="outline" onClick={() => navigate("/auth")}>
-              Sign In
-            </Button>
+            {!signedIn && (
+              <Button size="lg" variant="outline" onClick={() => navigate("/auth")}>
+                Sign In
+              </Button>
+            )}
           </div>
         </div>
 
