@@ -13,7 +13,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "sonner";
 import {
   ArrowLeft, Building2, DollarSign, MapPin, Bell, Save, Loader2,
-  CreditCard, Users, Download, Lock, AlertTriangle, CheckCircle,
+  CreditCard, Users, Download, Lock, CheckCircle,
   XCircle, Clock, Mail, Trash2, UserPlus,
 } from "lucide-react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -88,11 +88,6 @@ const Settings = () => {
   const [newPassword, setNewPassword]         = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [passwordSaving, setPasswordSaving]   = useState(false);
-
-  // ── Billing ─────────────────────────────────────────────────────────────────
-  const [cancelLoading, setCancelLoading]   = useState(false);
-  const [cancelledAt, setCancelledAt]       = useState<string | null>(null);
-  const [confirmCancel, setConfirmCancel]   = useState(false);
 
   // ── Team ────────────────────────────────────────────────────────────────────
   const [teamMembers, setTeamMembers]     = useState<any[]>([]);
@@ -208,21 +203,6 @@ const Settings = () => {
     toast.success("Data exported successfully");
   };
 
-  const handleCancelSubscription = async () => {
-    if (!confirmCancel) { setConfirmCancel(true); return; }
-    setCancelLoading(true);
-    try {
-      const result = await callFunction("stripe-cancel-subscription");
-      setCancelledAt(result.cancel_at);
-      setConfirmCancel(false);
-      toast.success("Subscription will cancel at end of billing period");
-    } catch (err: any) {
-      toast.error(err.message ?? "Failed to cancel subscription");
-    } finally {
-      setCancelLoading(false);
-    }
-  };
-
   const handleInvite = async () => {
     if (!inviteEmail) { toast.error("Enter an email address"); return; }
     setInviting(true);
@@ -268,7 +248,6 @@ const Settings = () => {
   const statusBadge = () => {
     if (isTrialExpired) return <Badge variant="destructive">Trial Expired</Badge>;
     if (isTrialing) return <Badge className="bg-blue-500 text-white">Trial Active</Badge>;
-    if (cancelledAt) return <Badge variant="outline" className="text-amber-600 border-amber-400">Cancels {new Date(cancelledAt).toLocaleDateString("en-AU")}</Badge>;
     if (isPaidPlan) return <Badge className="bg-green-500 text-white">Active</Badge>;
     return <Badge variant="outline">Unknown</Badge>;
   };
@@ -520,37 +499,6 @@ const Settings = () => {
                   </div>
                 )}
 
-                {cancelledAt && (
-                  <div className="flex items-center gap-3 p-4 bg-amber-500/10 border border-amber-500/30 rounded-xl text-sm text-amber-700">
-                    <AlertTriangle className="h-4 w-4 shrink-0" />
-                    Your subscription is set to cancel on <strong>{new Date(cancelledAt).toLocaleDateString("en-AU", { day: "numeric", month: "long", year: "numeric" })}</strong>. You keep full access until then.
-                  </div>
-                )}
-
-                {isPaidPlan && !cancelledAt && (
-                  <div className="pt-2">
-                    {!confirmCancel ? (
-                      <Button variant="outline" className="text-destructive border-destructive/40 hover:bg-destructive/5" onClick={() => setConfirmCancel(true)}>
-                        <XCircle className="mr-2 h-4 w-4" />Cancel Subscription
-                      </Button>
-                    ) : (
-                      <div className="p-4 border border-destructive/40 rounded-xl bg-destructive/5 space-y-3">
-                        <div className="flex items-start gap-2 text-sm">
-                          <AlertTriangle className="h-4 w-4 text-destructive shrink-0 mt-0.5" />
-                          <p>Your subscription will <strong>not renew</strong> but you keep access until the end of your current billing period. Are you sure?</p>
-                        </div>
-                        <div className="flex gap-3">
-                          <Button variant="destructive" size="sm" onClick={handleCancelSubscription} disabled={cancelLoading}>
-                            {cancelLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-                            Yes, cancel my subscription
-                          </Button>
-                          <Button variant="ghost" size="sm" onClick={() => setConfirmCancel(false)}>Keep subscription</Button>
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                )}
-
                 {isTrialExpired && (
                   <Button className="bg-primary text-primary-foreground" onClick={() => navigate("/pricing")}>
                     Subscribe Now
@@ -564,7 +512,7 @@ const Settings = () => {
               <p className="text-sm text-muted-foreground mb-3">
                 For invoice copies, payment issues, or plan changes contact us at <strong>support@metricore.com.au</strong>
               </p>
-              <p className="text-xs text-muted-foreground">7-day money-back guarantee on first payment · Cancel any time</p>
+              <p className="text-xs text-muted-foreground">All payments are final · Contact us for any billing questions</p>
             </Card>
           </TabsContent>
 
