@@ -19,6 +19,7 @@ import Clients from "./pages/Clients";
 import Settings from "./pages/Settings";
 import MaterialsLibrary from "./pages/MaterialsLibrary";
 import CheckoutSuccess from "./pages/CheckoutSuccess";
+import AcceptInvite from "./pages/AcceptInvite";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -50,6 +51,7 @@ const App = () => {
             <Route path="/auth" element={<Auth />} />
             <Route path="/pricing" element={<Pricing />} />
             <Route path="/checkout-success" element={<CheckoutSuccess />} />
+            <Route path="/accept-invite" element={<AcceptInvite />} />
             <Route path="/app" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
             <Route path="/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
             <Route path="/project/new" element={<ProtectedRoute><NewProject /></ProtectedRoute>} />
