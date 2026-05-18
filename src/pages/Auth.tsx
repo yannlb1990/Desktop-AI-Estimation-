@@ -6,15 +6,14 @@ import { Label } from "@/components/ui/label";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
-import { Loader2, Check, ArrowLeft, Mail } from "lucide-react";
+import { Loader2, Check, ArrowLeft, Mail, Phone, Building2, Home } from "lucide-react";
 import { MetricoreLogoMark } from "@/components/MetricoreLogoMark";
 import { z } from "zod";
 import {
   PlanId, BillingPeriod,
   PLAN_NAMES, PLAN_PRICES, TRIAL_DAYS,
-  createTrialSubscription,
 } from "@/lib/subscription";
-import { localSignUp, localSignIn, isSignedIn, migrateUnscopedData } from "@/lib/localAuth";
+import { localSignIn, isSignedIn, migrateUnscopedData } from "@/lib/localAuth";
 import { supabase } from "@/integrations/supabase/client";
 
 // Resets the trial end date to 14 days from now on the user's first real sign-in,
@@ -31,11 +30,11 @@ function activateTrialIfNeeded(email: string) {
   } catch { /* non-fatal */ }
 }
 
-const signUpSchema = z.object({
+const leadSchema = z.object({
+  name: z.string().min(1, "Full name is required").max(100),
   email: z.string().email("Invalid email address").max(255),
-  password: z.string().min(6, "Password must be at least 6 characters").max(100),
-  companyName: z.string().min(1, "Company name is required").max(100),
-  state: z.string().min(1, "Please select a state"),
+  phone: z.string().min(6, "Phone number is required").max(30),
+  projectType: z.enum(["commercial", "residential"], { required_error: "Please select a project type" }),
 });
 
 const signInSchema = z.object({
@@ -65,10 +64,11 @@ const Auth = () => {
   );
   const [billing] = useState<BillingPeriod>(billingParam);
 
-  const [email, setEmail]             = useState("");
-  const [password, setPassword]       = useState("");
-  const [companyName, setCompanyName] = useState("");
-  const [state, setState]             = useState("");
+  const [email, setEmail]           = useState("");
+  const [password, setPassword]     = useState("");
+  const [name, setName]             = useState("");
+  const [phone, setPhone]           = useState("");
+  const [projectType, setProjectType] = useState<"commercial" | "residential" | "">("");
 
   // Verification states
   const [verificationSent, setVerificationSent] = useState(false);
@@ -95,61 +95,85 @@ const Auth = () => {
     if (isSignedIn()) navigate("/dashboard");
   }, [navigate]);
 
-  const handleAuth = async (e: React.FormEvent) => {
+  const handleSignIn = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
     setNeedsVerification(false);
 
     try {
-      if (isLogin) {
-        const data = signInSchema.parse({ email: email.trim(), password });
-        const result = await localSignIn(data.email, data.password);
+      const data = signInSchema.parse({ email: email.trim(), password });
+      const result = await localSignIn(data.email, data.password);
 
-        if (result.needsVerification) {
-          setPendingEmail(data.email);
-          setNeedsVerification(true);
-          toast.error("Please verify your email first — check your inbox");
-          return;
-        }
-
-        if (result.error) {
-          toast.error(result.error);
-          return;
-        }
-
-        migrateUnscopedData(data.email);
-        activateTrialIfNeeded(data.email);
-        toast.success("Welcome back!");
-        navigate("/dashboard");
-
-      } else {
-        const data = signUpSchema.parse({
-          email: email.trim(),
-          password,
-          companyName: companyName.trim(),
-          state,
-        });
-
-        const result = await localSignUp(data.email, data.password, data.companyName, data.state);
-
-        if (result.error) {
-          if (
-            result.error.toLowerCase().includes('already registered') ||
-            result.error.toLowerCase().includes('already been registered') ||
-            result.error.toLowerCase().includes('already exists')
-          ) {
-            toast.error("That email is already registered — please sign in instead");
-            setIsLogin(true);
-          } else {
-            toast.error(result.error);
-          }
-          return;
-        }
-
-        createTrialSubscription(data.email, data.companyName, selectedPlan, billing);
+      if (result.needsVerification) {
         setPendingEmail(data.email);
-        setVerificationSent(true);
+        setNeedsVerification(true);
+        toast.error("Please verify your email first — check your inbox");
+        return;
       }
+
+      if (result.error) {
+        toast.error(result.error);
+        return;
+      }
+
+      migrateUnscopedData(data.email);
+      activateTrialIfNeeded(data.email);
+      toast.success("Welcome back!");
+      navigate("/dashboard");
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        toast.error(error.errors[0].message);
+      } else {
+        toast.error("Something went wrong — please try again");
+      }
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleRequestAccess = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsLoading(true);
+
+    try {
+      const data = leadSchema.parse({
+        name: name.trim(),
+        email: email.trim(),
+        phone: phone.trim(),
+        projectType,
+      });
+
+      const res = await fetch(
+        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/user-onboard`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            name: data.name,
+            email: data.email,
+            phone: data.phone,
+            project_type: data.projectType,
+            plan_id: selectedPlan,
+            billing_period: billing,
+          }),
+        }
+      );
+
+      if (res.status === 409) {
+        toast.error("That email is already registered — please sign in instead");
+        setIsLogin(true);
+        setEmail(email.trim());
+        return;
+      }
+
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        toast.error(body.error ?? "Something went wrong — please try again");
+        return;
+      }
+
+      setPendingEmail(data.email);
+      setVerificationSent(true);
     } catch (error) {
       if (error instanceof z.ZodError) {
         toast.error(error.errors[0].message);
@@ -208,10 +232,10 @@ const Auth = () => {
               <div>
                 <h1 className="font-display text-2xl font-bold mb-2">Check your inbox</h1>
                 <p className="text-muted-foreground text-sm leading-relaxed">
-                  We sent a verification link to{" "}
+                  We sent a setup link to{" "}
                   <strong className="text-foreground">{pendingEmail}</strong>.
                   <br />
-                  Click the link to activate your account — it expires in 24 hours.
+                  Click <strong>"Set Up Your Account"</strong> in the email to create your password and access your {TRIAL_DAYS}-day free trial. Link expires in 24 hours.
                 </p>
               </div>
               <div className="space-y-3 pt-2">
@@ -230,7 +254,7 @@ const Auth = () => {
                     setVerificationSent(false);
                     setIsLogin(true);
                     setEmail(pendingEmail);
-                    setPassword("");
+                    setPassword(""); setName(""); setPhone(""); setProjectType("");
                   }}
                   className="text-sm text-primary hover:underline"
                 >
@@ -274,7 +298,7 @@ const Auth = () => {
             <p className="text-center text-muted-foreground text-sm mb-6">
               {isLogin
                 ? "Sign in to your account"
-                : `${TRIAL_DAYS} days free · No credit card required`}
+                : `${TRIAL_DAYS} days free · No credit card required · Setup link sent to your email`}
             </p>
 
             {/* Needs verification reminder */}
@@ -335,67 +359,32 @@ const Auth = () => {
               </div>
             )}
 
-            <form onSubmit={handleAuth} className="space-y-4">
-              {!isLogin && (
-                <>
-                  <div>
-                    <Label htmlFor="companyName">Company Name</Label>
-                    <Input
-                      id="companyName"
-                      type="text"
-                      value={companyName}
-                      onChange={(e) => setCompanyName(e.target.value)}
-                      placeholder="Your Company Pty Ltd"
-                      required
-                      maxLength={100}
-                    />
-                  </div>
-                  <div>
-                    <Label htmlFor="state">State</Label>
-                    <select
-                      id="state"
-                      value={state}
-                      onChange={(e) => setState(e.target.value)}
-                      className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                      required
-                    >
-                      <option value="">Select state</option>
-                      {["NSW","VIC","QLD","WA","SA","TAS","NT","ACT"].map(s => (
-                        <option key={s} value={s}>{s}</option>
-                      ))}
-                    </select>
-                  </div>
-                </>
-              )}
-
-              <div>
-                <Label htmlFor="email">Email</Label>
-                <Input
-                  id="email"
-                  type="email"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  placeholder="builder@example.com.au"
-                  required
-                  maxLength={255}
-                />
-              </div>
-
-              <div>
-                <Label htmlFor="password">Password</Label>
-                <Input
-                  id="password"
-                  type="password"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  placeholder="••••••••"
-                  required
-                  maxLength={100}
-                />
-                {!isLogin && (
-                  <p className="text-xs text-muted-foreground mt-1">Minimum 6 characters</p>
-                )}
-                {isLogin && (
+            {/* ── Sign In form ─────────────────────────────────────────── */}
+            {isLogin && (
+              <form onSubmit={handleSignIn} className="space-y-4">
+                <div>
+                  <Label htmlFor="email">Email</Label>
+                  <Input
+                    id="email"
+                    type="email"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    placeholder="builder@example.com.au"
+                    required
+                    maxLength={255}
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="password">Password</Label>
+                  <Input
+                    id="password"
+                    type="password"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    placeholder="••••••••"
+                    required
+                    maxLength={100}
+                  />
                   <div className="flex justify-end mt-1">
                     <button
                       type="button"
@@ -406,29 +395,102 @@ const Auth = () => {
                       {resetLoading ? "Sending…" : "Forgot password?"}
                     </button>
                   </div>
-                )}
-              </div>
+                </div>
+                <Button
+                  type="submit"
+                  className="w-full bg-primary text-primary-foreground hover:bg-primary/90"
+                  disabled={isLoading}
+                >
+                  {isLoading
+                    ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Signing in…</>
+                    : "Sign In"}
+                </Button>
+              </form>
+            )}
 
-              <Button
-                type="submit"
-                className="w-full bg-primary text-primary-foreground hover:bg-primary/90"
-                disabled={isLoading}
-              >
-                {isLoading ? (
-                  <><Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  {isLogin ? "Signing in…" : "Creating account…"}</>
-                ) : (
-                  isLogin ? "Sign In" : `Start ${TRIAL_DAYS}-Day Free Trial`
-                )}
-              </Button>
-            </form>
+            {/* ── Lead capture form (signup) ────────────────────────────── */}
+            {!isLogin && (
+              <form onSubmit={handleRequestAccess} className="space-y-4">
+                <div>
+                  <Label htmlFor="name">Full Name</Label>
+                  <Input
+                    id="name"
+                    type="text"
+                    value={name}
+                    onChange={(e) => setName(e.target.value)}
+                    placeholder="John Smith"
+                    required
+                    maxLength={100}
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="email-signup">Email Address</Label>
+                  <Input
+                    id="email-signup"
+                    type="email"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    placeholder="john@company.com.au"
+                    required
+                    maxLength={255}
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="phone">Phone Number</Label>
+                  <div className="relative">
+                    <Phone className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                    <Input
+                      id="phone"
+                      type="tel"
+                      value={phone}
+                      onChange={(e) => setPhone(e.target.value)}
+                      placeholder="04XX XXX XXX"
+                      required
+                      maxLength={30}
+                      className="pl-9"
+                    />
+                  </div>
+                </div>
+                <div>
+                  <Label>Project Type</Label>
+                  <div className="grid grid-cols-2 gap-2 mt-1">
+                    {(["commercial", "residential"] as const).map((type) => (
+                      <button
+                        key={type}
+                        type="button"
+                        onClick={() => setProjectType(type)}
+                        className={`flex items-center gap-2 px-4 py-3 rounded-lg border text-sm font-medium transition-all ${
+                          projectType === type
+                            ? "border-primary bg-primary/5 text-foreground"
+                            : "border-border text-muted-foreground hover:border-primary/40"
+                        }`}
+                      >
+                        {type === "commercial"
+                          ? <Building2 className="h-4 w-4 shrink-0" />
+                          : <Home className="h-4 w-4 shrink-0" />}
+                        {type.charAt(0).toUpperCase() + type.slice(1)}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                <Button
+                  type="submit"
+                  className="w-full bg-primary text-primary-foreground hover:bg-primary/90"
+                  disabled={isLoading || !projectType}
+                >
+                  {isLoading
+                    ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Sending your link…</>
+                    : `Get Started — ${TRIAL_DAYS}-Day Free Trial`}
+                </Button>
+              </form>
+            )}
 
             <div className="mt-5 text-center">
               <button
                 type="button"
                 onClick={() => {
                   setIsLogin(!isLogin);
-                  setEmail(""); setPassword(""); setCompanyName(""); setState("");
+                  setEmail(""); setPassword(""); setName(""); setPhone(""); setProjectType("");
                   setNeedsVerification(false);
                 }}
                 className="text-sm text-primary hover:underline"

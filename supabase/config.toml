@@ -41,3 +41,6 @@ verify_jwt = true
 
 [functions.team-accept-invite]
 verify_jwt = false
+
+[functions.user-onboard]
+verify_jwt = false
