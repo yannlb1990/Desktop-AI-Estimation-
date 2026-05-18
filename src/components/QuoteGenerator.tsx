@@ -7,7 +7,7 @@ import { Textarea } from "@/components/ui/textarea"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Checkbox } from "@/components/ui/checkbox"
-import { FileText, Printer, X, Plus, Trash2, ChevronRight, Upload, RefreshCw, GripVertical, Pencil, Check } from "lucide-react"
+import { FileText, Printer, X, Plus, Trash2, ChevronRight, Upload, RefreshCw, GripVertical, Pencil, Check, History, RotateCcw } from "lucide-react"
 import { toast } from "sonner"
 
 interface QuoteGeneratorProps {
@@ -238,6 +238,45 @@ export const QuoteGenerator = ({ project, estimate }: QuoteGeneratorProps) => {
     toast.success("Print dialog opened — choose 'Save as PDF'")
   }
 
+  // Version history
+  const versionKey = project?.id ? getUserStorageKey(`quote_versions_${project.id}`) : null
+  const [versions, setVersions] = useState<Array<{
+    id: string; versionNumber: number; savedAt: string; quoteNumber: string; total: number; lines: QuoteLine[]
+  }>>(() => {
+    if (!versionKey) return []
+    try { return JSON.parse(localStorage.getItem(versionKey) || '[]') } catch { return [] }
+  })
+
+  const saveVersion = () => {
+    if (!versionKey) return
+    const next = {
+      id: crypto.randomUUID(),
+      versionNumber: versions.length + 1,
+      savedAt: new Date().toISOString(),
+      quoteNumber,
+      total: totalIncGst,
+      lines: quoteLines,
+    }
+    const updated = [...versions, next]
+    localStorage.setItem(versionKey, JSON.stringify(updated))
+    setVersions(updated)
+    toast.success(`Version ${next.versionNumber} saved — ${au$(totalIncGst)}`)
+  }
+
+  const restoreVersion = (v: typeof versions[0]) => {
+    setQuoteLines(v.lines)
+    setQuoteNumber(v.quoteNumber)
+    setActiveTab('lines')
+    toast.success(`Version ${v.versionNumber} restored`)
+  }
+
+  const deleteVersion = (id: string) => {
+    if (!versionKey) return
+    const updated = versions.filter(v => v.id !== id)
+    localStorage.setItem(versionKey, JSON.stringify(updated))
+    setVersions(updated)
+  }
+
   const headerGradient = `linear-gradient(135deg, ${primaryColor}ee 0%, ${primaryColor} 60%, ${primaryColor}cc 100%)`
 
   return (
@@ -254,6 +293,9 @@ export const QuoteGenerator = ({ project, estimate }: QuoteGeneratorProps) => {
               <DialogTitle className="font-display text-xl">Quote Generator</DialogTitle>
               <div className="flex gap-2">
                 <Button variant="outline" onClick={saveBrand} size="sm">Save Branding</Button>
+                <Button variant="outline" size="sm" onClick={saveVersion} disabled={quoteLines.length === 0}>
+                  <History className="mr-1.5 h-3.5 w-3.5" />Save Version
+                </Button>
                 <Button onClick={handlePrint} className="bg-accent text-accent-foreground hover:bg-accent/90">
                   <Printer className="mr-2 h-4 w-4" />Print / Save PDF
                 </Button>
@@ -265,12 +307,13 @@ export const QuoteGenerator = ({ project, estimate }: QuoteGeneratorProps) => {
             {/* Left panel */}
             <div className="w-[360px] flex-shrink-0 border-r overflow-y-auto bg-muted/30 p-4 no-print">
               <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
-                <TabsList className="grid grid-cols-5 w-full">
+                <TabsList className="grid grid-cols-6 w-full">
                   <TabsTrigger value="brand" className="text-xs">Brand</TabsTrigger>
                   <TabsTrigger value="details" className="text-xs">Details</TabsTrigger>
                   <TabsTrigger value="lines" className="text-xs">Lines</TabsTrigger>
                   <TabsTrigger value="scope" className="text-xs">Scope</TabsTrigger>
                   <TabsTrigger value="pricing" className="text-xs">Price</TabsTrigger>
+                  <TabsTrigger value="history" className="text-xs">History</TabsTrigger>
                 </TabsList>
 
                 {/* Brand tab */}
@@ -510,6 +553,60 @@ export const QuoteGenerator = ({ project, estimate }: QuoteGeneratorProps) => {
                       <div className="flex justify-between text-muted-foreground"><span>Lines ({includedLines.length})</span><span>{au$(subtotalNum)}</span></div>
                       <div className="flex justify-between text-muted-foreground"><span>GST (10%)</span><span>{au$(gstAmount)}</span></div>
                       <div className="flex justify-between font-bold border-t pt-1"><span>TOTAL (inc GST)</span><span>{au$(totalIncGst)}</span></div>
+                    </div>
+                  )}
+                  <div className="pt-2">
+                    <p className="text-xs text-muted-foreground mb-2">Payment schedule</p>
+                    <div className="space-y-1.5 text-xs font-mono">
+                      {[['Deposit', depositPct, depositAmount], ['Progress', progressPct, progressAmount], ['Final', finalPct, finalAmount]].map(([label, pct, amt]) => (
+                        <div key={label as string} className="flex justify-between items-center bg-background border rounded p-2">
+                          <span className="font-sans text-muted-foreground">{label} ({pct}%)</span>
+                          <span className="font-bold">{au$(amt as number)}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </TabsContent>
+
+                {/* History tab */}
+                <TabsContent value="history" className="space-y-3 mt-0">
+                  <div className="flex items-center justify-between">
+                    <p className="text-xs text-muted-foreground font-medium uppercase tracking-wide">Version History</p>
+                    <Button size="sm" variant="outline" className="h-7 text-xs" onClick={saveVersion} disabled={quoteLines.length === 0}>
+                      <History className="h-3 w-3 mr-1" />Save Now
+                    </Button>
+                  </div>
+                  {versions.length === 0 ? (
+                    <div className="text-center py-8">
+                      <History className="h-8 w-8 mx-auto text-muted-foreground mb-2" />
+                      <p className="text-xs text-muted-foreground">No versions saved yet. Click "Save Version" to snapshot this quote.</p>
+                    </div>
+                  ) : (
+                    <div className="space-y-2">
+                      {[...versions].reverse().map(v => (
+                        <div key={v.id} className="border border-border rounded-lg p-3 bg-background">
+                          <div className="flex items-start justify-between gap-2">
+                            <div>
+                              <div className="text-sm font-semibold">Version {v.versionNumber}</div>
+                              <div className="text-xs text-muted-foreground mt-0.5">
+                                {new Date(v.savedAt).toLocaleDateString('en-AU', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                              </div>
+                              <div className="text-xs text-muted-foreground">{v.quoteNumber} · {v.lines.length} lines</div>
+                            </div>
+                            <div className="text-right">
+                              <div className="font-mono font-bold text-sm">{au$(v.total)}</div>
+                              <div className="flex gap-1 mt-1.5">
+                                <Button size="sm" variant="outline" className="h-6 text-[10px] px-2" onClick={() => restoreVersion(v)}>
+                                  <RotateCcw className="h-2.5 w-2.5 mr-0.5" />Restore
+                                </Button>
+                                <Button size="sm" variant="ghost" className="h-6 w-6 p-0 text-destructive" onClick={() => deleteVersion(v.id)}>
+                                  <Trash2 className="h-2.5 w-2.5" />
+                                </Button>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      ))}
                     </div>
                   )}
                 </TabsContent>

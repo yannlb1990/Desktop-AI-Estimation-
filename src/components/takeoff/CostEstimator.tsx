@@ -8,7 +8,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { Calculator, DollarSign, Plus, Trash2, FileDown, Percent, Clock, ExternalLink, ChevronDown, ChevronRight, Wrench, CheckCircle2, Package, Link2, Unlink, Combine } from 'lucide-react';
+import { Calculator, DollarSign, Plus, Trash2, FileDown, Percent, Clock, ExternalLink, ChevronDown, ChevronRight, Wrench, CheckCircle2, Package, Link2, Unlink, Combine, BookmarkPlus, BookOpen } from 'lucide-react';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { getUserStorageKey } from '@/lib/localAuth';
 import { Measurement, CostItem, MeasurementArea, TRADE_OPTIONS, RelatedMaterial, ConsumableItem } from '@/lib/takeoff/types';
 import { cn } from '@/lib/utils';
 import { SCOPE_OF_WORK_RATES, type AustralianState } from '@/data/scopeOfWorkRates';
@@ -272,6 +274,46 @@ export const CostEstimator = ({
   });
   const [showAddDialog, setShowAddDialog] = useState(false);
   const [showLibraryPicker, setShowLibraryPicker] = useState(false);
+  const [saveTemplateOpen, setSaveTemplateOpen] = useState(false);
+  const [loadTemplateOpen, setLoadTemplateOpen] = useState(false);
+  const [templateName, setTemplateName] = useState('');
+  const [templateList, setTemplateList] = useState<Array<{ id: string; name: string; createdAt: string; items: CostItem[] }>>(() => {
+    try { return JSON.parse(localStorage.getItem(getUserStorageKey('estimate_templates')) || '[]'); }
+    catch { return []; }
+  });
+
+  const refreshTemplates = () => {
+    try { setTemplateList(JSON.parse(localStorage.getItem(getUserStorageKey('estimate_templates')) || '[]')); }
+    catch { setTemplateList([]); }
+  };
+
+  const handleSaveTemplate = () => {
+    if (!templateName.trim()) { toast.error('Enter a template name'); return; }
+    const key = getUserStorageKey('estimate_templates');
+    const existing: typeof templateList = (() => { try { return JSON.parse(localStorage.getItem(key) || '[]'); } catch { return []; } })();
+    const entry = { id: crypto.randomUUID(), name: templateName.trim(), createdAt: new Date().toISOString(), items: costItems };
+    const updated = [...existing, entry];
+    localStorage.setItem(key, JSON.stringify(updated));
+    setTemplateList(updated);
+    setSaveTemplateOpen(false);
+    setTemplateName('');
+    toast.success(`Template "${entry.name}" saved — ${costItems.length} items`);
+  };
+
+  const handleLoadTemplate = (items: CostItem[]) => {
+    items.forEach(item => {
+      onAddCostItem({ ...item, id: crypto.randomUUID(), linkedMeasurements: [] });
+    });
+    setLoadTemplateOpen(false);
+    toast.success(`${items.length} item${items.length !== 1 ? 's' : ''} loaded from template`);
+  };
+
+  const handleDeleteTemplate = (id: string) => {
+    const key = getUserStorageKey('estimate_templates');
+    const updated = templateList.filter(t => t.id !== id);
+    localStorage.setItem(key, JSON.stringify(updated));
+    setTemplateList(updated);
+  };
   const [selectedSOW, setSelectedSOW] = useState<string>('');
   const [selectedMeasurement, setSelectedMeasurement] = useState<string>('');
   const [expandedItems, setExpandedItems] = useState<Set<string>>(new Set());
@@ -799,6 +841,14 @@ export const CostEstimator = ({
           <Button variant="outline" size="sm" onClick={() => setShowLibraryPicker(true)}>
             <Package className="h-4 w-4 mr-1" />
             From Library
+          </Button>
+          <Button variant="outline" size="sm" onClick={() => { refreshTemplates(); setLoadTemplateOpen(true); }}>
+            <BookOpen className="h-4 w-4 mr-1" />
+            Templates
+          </Button>
+          <Button variant="outline" size="sm" onClick={() => setSaveTemplateOpen(true)} disabled={costItems.length === 0}>
+            <BookmarkPlus className="h-4 w-4 mr-1" />
+            Save
           </Button>
           <Button size="sm" onClick={() => setShowAddDialog(!showAddDialog)}>
             <Plus className="h-4 w-4 mr-1" />
@@ -1444,6 +1494,69 @@ export const CostEstimator = ({
         </div>
       </Card>
       <UpgradeModal open={upgradeOpen} onClose={() => setUpgradeOpen(false)} feature="BOQ Export" />
+
+      {/* Save Template Dialog */}
+      <Dialog open={saveTemplateOpen} onOpenChange={setSaveTemplateOpen}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Save as Template</DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-muted-foreground">Saves all {costItems.length} current cost items as a reusable template.</p>
+          <div className="space-y-3 pt-1">
+            <div>
+              <Label>Template Name</Label>
+              <Input
+                className="mt-1"
+                placeholder="e.g. Bathroom Waterproofing + Tiling"
+                value={templateName}
+                onChange={e => setTemplateName(e.target.value)}
+                onKeyDown={e => e.key === 'Enter' && handleSaveTemplate()}
+                autoFocus
+              />
+            </div>
+            <div className="flex gap-2">
+              <Button onClick={handleSaveTemplate} className="flex-1">Save Template</Button>
+              <Button variant="outline" onClick={() => setSaveTemplateOpen(false)}>Cancel</Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Load Template Dialog */}
+      <Dialog open={loadTemplateOpen} onOpenChange={setLoadTemplateOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Load Template</DialogTitle>
+          </DialogHeader>
+          {templateList.length === 0 ? (
+            <div className="text-center py-8">
+              <BookOpen className="h-10 w-10 mx-auto text-muted-foreground mb-3" />
+              <p className="text-sm text-muted-foreground">No templates saved yet. Build a cost estimate and click Save to create one.</p>
+            </div>
+          ) : (
+            <div className="space-y-2 max-h-80 overflow-y-auto">
+              {templateList.map(t => (
+                <div key={t.id} className="flex items-center justify-between p-3 border border-border rounded-lg hover:bg-muted/40">
+                  <div>
+                    <div className="font-medium text-sm">{t.name}</div>
+                    <div className="text-xs text-muted-foreground">
+                      {t.items.length} items · {new Date(t.createdAt).toLocaleDateString('en-AU', { day: 'numeric', month: 'short', year: 'numeric' })}
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-1">
+                    <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => handleLoadTemplate(t.items)}>
+                      Load
+                    </Button>
+                    <Button size="sm" variant="ghost" className="h-7 w-7 p-0 text-destructive" onClick={() => handleDeleteTemplate(t.id)}>
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </Button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };

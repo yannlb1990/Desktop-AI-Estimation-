@@ -16,6 +16,14 @@ import { getLocalUser, localSignOut, isSignedIn, getUserStorageKey, migrateUnsco
 // ── helpers ─────────────────────────────────────────────────────────────────
 
 type Stage = 'Takeoff' | 'Estimating' | 'Tender Ready' | 'Sent';
+type QuoteStatus = 'draft' | 'sent' | 'won' | 'lost';
+
+const QUOTE_STATUS_CONFIG: Record<QuoteStatus, { label: string; color: string; bg: string }> = {
+  draft:  { label: 'Draft',  color: 'text-muted-foreground', bg: 'bg-muted/60 border-border' },
+  sent:   { label: 'Sent',   color: 'text-purple-400',       bg: 'bg-purple-400/10 border-purple-400/30' },
+  won:    { label: 'Won',    color: 'text-green-400',        bg: 'bg-green-400/10 border-green-400/30' },
+  lost:   { label: 'Lost',   color: 'text-red-400',          bg: 'bg-red-400/10 border-red-400/30' },
+};
 
 const getStage = (p: any): Stage => {
   if (p.status === 'complete' || p.status === 'completed') return 'Sent';
@@ -90,6 +98,11 @@ const Dashboard = () => {
 
   const pipelineValue = projects.reduce((s, p) => s + getProjectValue(p), 0);
   const sentProjects  = projects.filter(p => getStage(p) === 'Sent');
+  const wonProjects   = projects.filter(p => p.quoteStatus === 'won');
+  const lostProjects  = projects.filter(p => p.quoteStatus === 'lost');
+  const winRate       = (wonProjects.length + lostProjects.length) > 0
+    ? Math.round((wonProjects.length / (wonProjects.length + lostProjects.length)) * 100)
+    : null;
 
   const stages: Stage[] = ['Takeoff', 'Estimating', 'Tender Ready', 'Sent'];
   const stageCounts = stages.reduce((acc, s) => {
@@ -208,7 +221,7 @@ const Dashboard = () => {
             { label: 'Active Projects',    value: String(projects.length),        sub: 'all projects',             icon: <FileText className="h-4 w-4" />,    accent: 'text-primary' },
             { label: 'Pipeline Value',     value: fmtCurrency(pipelineValue),     sub: 'across all estimates',     icon: <DollarSign className="h-4 w-4" />,  accent: 'text-green-400' },
             { label: 'Target Margin',      value: targetMargin ? `${targetMargin}%` : '—', sub: targetMargin ? 'set in Settings' : 'set in Settings', icon: <TrendingUp className="h-4 w-4" />, accent: 'text-amber-400' },
-            { label: 'Tenders Sent',       value: String(sentProjects.length),    sub: `of ${projects.length} projects`,   icon: <BarChart3 className="h-4 w-4" />,   accent: 'text-purple-400' },
+            { label: 'Win Rate',     value: winRate !== null ? `${winRate}%` : '—', sub: winRate !== null ? `${wonProjects.length} won · ${lostProjects.length} lost` : 'mark quotes as Won/Lost', icon: <BarChart3 className="h-4 w-4" />, accent: 'text-green-400' },
           ].map(({ label, value, sub, icon, accent }) => (
             <Card key={label} className="p-5 bg-background">
               <div className="flex items-center justify-between mb-3">
@@ -268,10 +281,11 @@ const Dashboard = () => {
           ) : (
             <>
               {/* Table header */}
-              <div className="grid grid-cols-[2fr_1fr_1fr_1fr_1fr_auto] gap-4 px-6 py-2 text-xs font-medium text-muted-foreground uppercase tracking-wide border-b border-border">
+              <div className="grid grid-cols-[2fr_1fr_1fr_1fr_1fr_1fr_auto] gap-4 px-6 py-2 text-xs font-medium text-muted-foreground uppercase tracking-wide border-b border-border">
                 <span>Project</span>
                 <span>Client</span>
                 <span>Stage</span>
+                <span>Status</span>
                 <span>Value</span>
                 <span>Modified</span>
                 <span></span>
@@ -281,10 +295,12 @@ const Dashboard = () => {
                   const stage = getStage(project);
                   const cfg = STAGE_CONFIG[stage];
                   const value = getProjectValue(project);
+                  const qs = (project.quoteStatus || 'draft') as QuoteStatus;
+                  const qcfg = QUOTE_STATUS_CONFIG[qs];
                   return (
                     <div
                       key={project.id}
-                      className="grid grid-cols-[2fr_1fr_1fr_1fr_1fr_auto] gap-4 px-6 py-3.5 items-center hover:bg-muted/30 cursor-pointer transition-colors group"
+                      className="grid grid-cols-[2fr_1fr_1fr_1fr_1fr_1fr_auto] gap-4 px-6 py-3.5 items-center hover:bg-muted/30 cursor-pointer transition-colors group"
                       onClick={() => navigate(`/project/${project.id}`)}
                     >
                       <div>
@@ -299,6 +315,13 @@ const Dashboard = () => {
                           <span className={`w-1.5 h-1.5 rounded-full ${cfg.dot}`} />
                           {stage}
                         </span>
+                      </div>
+                      <div>
+                        {qs !== 'draft' && (
+                          <span className={`inline-flex items-center text-xs font-medium px-2 py-1 rounded-full border ${qcfg.bg} ${qcfg.color}`}>
+                            {qcfg.label}
+                          </span>
+                        )}
                       </div>
                       <div className="font-mono text-sm font-medium">
                         {value > 0 ? fmtCurrency(value) : <span className="text-muted-foreground">—</span>}

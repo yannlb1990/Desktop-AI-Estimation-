@@ -30,7 +30,9 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "sonner";
-import { ArrowLeft, FileText, DollarSign, Ruler, Loader2, Settings, Calculator, TrendingUp, ShieldCheck, MapPin, User, Calendar as CalendarIcon, Clock, Bell, Package, ChevronDown, ChevronUp } from "lucide-react";
+import { ArrowLeft, FileText, DollarSign, Ruler, Loader2, Settings, Calculator, TrendingUp, ShieldCheck, MapPin, User, Calendar as CalendarIcon, Clock, Bell, Package, ChevronDown, ChevronUp, Users } from "lucide-react";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { SubcontractorComparison } from "@/components/SubcontractorComparison";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Lightbulb } from "lucide-react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -120,6 +122,19 @@ const ProjectDetail = () => {
     toast.success("Due date updated");
   };
 
+  const handleQuoteStatusChange = (status: string) => {
+    if (!projectId) return;
+    const projects = JSON.parse(localStorage.getItem(getUserStorageKey('local_projects')) || "[]");
+    const idx = projects.findIndex((p: any) => p.id === projectId);
+    if (idx !== -1) {
+      projects[idx].quoteStatus = status;
+      projects[idx].updated_at = new Date().toISOString();
+      localStorage.setItem(getUserStorageKey('local_projects'), JSON.stringify(projects));
+      setProject((prev: any) => ({ ...prev, quoteStatus: status }));
+    }
+    toast.success(`Status updated to ${status}`);
+  };
+
   const sendReminder = () => {
     if (!dueDate) {
       toast.error("Please set a due date first");
@@ -204,7 +219,7 @@ const ProjectDetail = () => {
         <Card className="p-6 mb-8">
           <div className="flex flex-col md:flex-row md:items-start justify-between gap-6">
             <div className="space-y-2">
-              <div className="flex items-center gap-3">
+              <div className="flex items-center gap-3 flex-wrap">
                 <h1 className="font-display text-4xl font-bold">{project.name}</h1>
                 <div className={`px-3 py-1 rounded-full text-xs font-medium ${
                   project.status === "complete" || project.status === "completed"
@@ -213,6 +228,22 @@ const ProjectDetail = () => {
                 }`}>
                   {project.status || "active"}
                 </div>
+                <Select value={project.quoteStatus || "draft"} onValueChange={handleQuoteStatusChange}>
+                  <SelectTrigger className={`h-7 w-auto text-xs px-2.5 border rounded-full ${
+                    project.quoteStatus === "won" ? "border-green-400/50 bg-green-500/10 text-green-400" :
+                    project.quoteStatus === "lost" ? "border-red-400/50 bg-red-500/10 text-red-400" :
+                    project.quoteStatus === "sent" ? "border-purple-400/50 bg-purple-500/10 text-purple-400" :
+                    "border-border bg-muted text-muted-foreground"
+                  }`}>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="draft">Draft</SelectItem>
+                    <SelectItem value="sent">Sent</SelectItem>
+                    <SelectItem value="won">Won</SelectItem>
+                    <SelectItem value="lost">Lost</SelectItem>
+                  </SelectContent>
+                </Select>
               </div>
               <div className="text-muted-foreground space-y-1">
                 {project.site_address && (
@@ -330,6 +361,7 @@ const ProjectDetail = () => {
             { key: "overheads", label: "Overheads", icon: Settings },
             { key: "insights", label: "Insights", icon: TrendingUp },
             { key: "compliance", label: "NCC", icon: ShieldCheck },
+            { key: "subbies", label: "Subbies", icon: Users },
           ].map((tool) => {
             const Icon = tool.icon;
             return (
@@ -357,6 +389,7 @@ const ProjectDetail = () => {
             <TabsTrigger value="overheads" />
             <TabsTrigger value="insights" />
             <TabsTrigger value="compliance" />
+            <TabsTrigger value="subbies" />
             <TabsTrigger value="pricing" />
             {project.plan_file_url && <TabsTrigger value="plans" />}
           </TabsList>
@@ -463,6 +496,10 @@ const ProjectDetail = () => {
 
           <TabsContent value="compliance">
             <NCCComplianceCard projectId={projectId!} />
+          </TabsContent>
+
+          <TabsContent value="subbies">
+            <SubcontractorComparison projectId={projectId!} />
           </TabsContent>
 
           <TabsContent value="pricing">
