@@ -928,7 +928,7 @@ export const CostEstimator = ({
       {costItems.length > 0 && (
         <Card className="overflow-hidden">
           <div className="overflow-x-auto">
-            <Table className="table-fixed min-w-[820px]">
+            <Table className="table-fixed min-w-[1320px]">
               <TableHeader>
                 <TableRow className="text-xs bg-muted/50">
                   <TableHead className="w-8 px-1">
@@ -950,6 +950,12 @@ export const CostEstimator = ({
                   <TableHead className="w-16 px-1 text-right whitespace-nowrap">Qty</TableHead>
                   <TableHead className="w-14 px-1 whitespace-nowrap">Unit</TableHead>
                   <TableHead className="w-20 px-1 text-right whitespace-nowrap">$/Unit</TableHead>
+                  <TableHead className="w-32 px-1 whitespace-nowrap">Material</TableHead>
+                  <TableHead className="w-14 px-1 text-right whitespace-nowrap">Mat%</TableHead>
+                  <TableHead className="w-16 px-1 text-right whitespace-nowrap">Hrs</TableHead>
+                  <TableHead className="w-36 px-1 whitespace-nowrap">$/Hr</TableHead>
+                  <TableHead className="w-14 px-1 text-right whitespace-nowrap">Lab%</TableHead>
+                  <TableHead className="w-14 px-1 text-right whitespace-nowrap">Mkp%</TableHead>
                   <TableHead className="w-28 px-1 text-right whitespace-nowrap">Total</TableHead>
                   <TableHead className="w-14 px-1"></TableHead>
                 </TableRow>
@@ -1066,6 +1072,73 @@ export const CostEstimator = ({
                           />
                         </TableCell>
 
+                        {/* Material */}
+                        <TableCell className="px-1 w-32">
+                          {item.material === 'Custom' || !MATERIAL_OPTIONS[item.category]?.includes(item.material || '') ? (
+                            <Input
+                              value={item.customMaterial || item.material || ''}
+                              onChange={(e) => onUpdateCostItem(item.id, { customMaterial: e.target.value, material: 'Custom' })}
+                              className="h-8 text-xs border-border px-2 w-full"
+                              placeholder="Custom"
+                            />
+                          ) : (
+                            <Select value={item.material || ''} onValueChange={(v) => onUpdateCostItem(item.id, { material: v })}>
+                              <SelectTrigger className="h-8 text-xs w-full px-2"><SelectValue placeholder="-" /></SelectTrigger>
+                              <SelectContent className="bg-popover max-h-48">
+                                {(MATERIAL_OPTIONS[item.category] || MATERIAL_OPTIONS.General).map(m => (
+                                  <SelectItem key={m} value={m} className="text-xs">{m}</SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          )}
+                        </TableCell>
+
+                        {/* Mat% */}
+                        <TableCell className="px-1 w-14">
+                          <Input
+                            type="number"
+                            value={item.materialWastePercent ?? 5}
+                            onChange={(e) => onUpdateCostItem(item.id, { materialWastePercent: Number(e.target.value) })}
+                            className="h-8 text-xs text-center border-border px-1 w-full"
+                          />
+                        </TableCell>
+
+                        {/* Hrs */}
+                        <TableCell className="px-1 w-16">
+                          <Input
+                            type="number"
+                            value={item.laborHours || ''}
+                            onChange={(e) => onUpdateCostItem(item.id, { laborHours: Number(e.target.value) })}
+                            className="h-8 text-xs text-right font-mono border-border px-2 w-full"
+                            placeholder="0"
+                          />
+                        </TableCell>
+
+                        {/* $/Hr — LabourRateCell with trade picker */}
+                        <TableCell className="px-1 w-36">
+                          <LabourRateCell item={item} selectedState={selectedState} onUpdateCostItem={onUpdateCostItem} />
+                        </TableCell>
+
+                        {/* Lab% */}
+                        <TableCell className="px-1 w-14">
+                          <Input
+                            type="number"
+                            value={item.labourWastePercent ?? 10}
+                            onChange={(e) => onUpdateCostItem(item.id, { labourWastePercent: Number(e.target.value) })}
+                            className="h-8 text-xs text-center border-border px-1 w-full"
+                          />
+                        </TableCell>
+
+                        {/* Mkp% */}
+                        <TableCell className="px-1 w-14">
+                          <Input
+                            type="number"
+                            value={item.markupPercent ?? 0}
+                            onChange={(e) => onUpdateCostItem(item.id, { markupPercent: Number(e.target.value) })}
+                            className="h-8 text-xs text-center border-border px-1 w-full"
+                          />
+                        </TableCell>
+
                         {/* Line Total */}
                         <TableCell className="px-1 w-28 text-right">
                           <div className="font-mono font-semibold text-sm">${lineTotal.toFixed(0)}</div>
@@ -1109,71 +1182,7 @@ export const CostEstimator = ({
                       {/* Expanded Row */}
                       {isExpanded && (
                         <TableRow className="bg-muted/30">
-                          <TableCell colSpan={11} className="p-3">
-                            {/* Cost Parameters (moved from dense main row) */}
-                            <div className="grid grid-cols-6 gap-3 mb-4 pb-3 border-b border-border/50">
-                              <div className="col-span-2">
-                                <p className="text-[10px] text-muted-foreground uppercase tracking-wide mb-1">Material</p>
-                                {item.material === 'Custom' || !MATERIAL_OPTIONS[item.category]?.includes(item.material || '') ? (
-                                  <Input
-                                    value={item.customMaterial || item.material || ''}
-                                    onChange={(e) => onUpdateCostItem(item.id, { customMaterial: e.target.value, material: 'Custom' })}
-                                    className="h-8 text-xs"
-                                    placeholder="Custom"
-                                  />
-                                ) : (
-                                  <Select value={item.material || ''} onValueChange={(v) => onUpdateCostItem(item.id, { material: v })}>
-                                    <SelectTrigger className="h-8 text-xs"><SelectValue placeholder="-" /></SelectTrigger>
-                                    <SelectContent className="bg-popover max-h-48">
-                                      {(MATERIAL_OPTIONS[item.category] || MATERIAL_OPTIONS.General).map(m => (
-                                        <SelectItem key={m} value={m} className="text-xs">{m}</SelectItem>
-                                      ))}
-                                    </SelectContent>
-                                  </Select>
-                                )}
-                              </div>
-                              <div>
-                                <p className="text-[10px] text-muted-foreground uppercase tracking-wide mb-1">Mat Waste %</p>
-                                <Input
-                                  type="number"
-                                  value={item.materialWastePercent ?? 5}
-                                  onChange={(e) => onUpdateCostItem(item.id, { materialWastePercent: Number(e.target.value) })}
-                                  className="h-8 text-xs text-center"
-                                />
-                              </div>
-                              <div>
-                                <p className="text-[10px] text-muted-foreground uppercase tracking-wide mb-1">Labour Hrs</p>
-                                <Input
-                                  type="number"
-                                  value={item.laborHours || ''}
-                                  onChange={(e) => onUpdateCostItem(item.id, { laborHours: Number(e.target.value) })}
-                                  className="h-8 text-xs text-right"
-                                  placeholder="0"
-                                />
-                              </div>
-                              <div>
-                                <p className="text-[10px] text-muted-foreground uppercase tracking-wide mb-1">Lab Waste %</p>
-                                <Input
-                                  type="number"
-                                  value={item.labourWastePercent ?? 10}
-                                  onChange={(e) => onUpdateCostItem(item.id, { labourWastePercent: Number(e.target.value) })}
-                                  className="h-8 text-xs text-center"
-                                />
-                              </div>
-                              <div>
-                                <p className="text-[10px] text-muted-foreground uppercase tracking-wide mb-1">Markup %</p>
-                                <Input
-                                  type="number"
-                                  value={item.markupPercent ?? 0}
-                                  onChange={(e) => onUpdateCostItem(item.id, { markupPercent: Number(e.target.value) })}
-                                  className="h-8 text-xs text-center"
-                                />
-                              </div>
-                              <div className="col-span-6">
-                                <p className="text-[10px] text-muted-foreground uppercase tracking-wide mb-1">Labour Trade + Rate</p>
-                                <LabourRateCell item={item} selectedState={selectedState} onUpdateCostItem={onUpdateCostItem} />
-                              </div>
-                            </div>
+                          <TableCell colSpan={17} className="p-3">
                             <div className="grid grid-cols-2 gap-4">
                               {/* Related Materials / Fixings */}
                               <div>

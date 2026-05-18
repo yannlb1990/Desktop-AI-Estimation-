@@ -309,8 +309,10 @@ export const EstimateTemplate = ({ projectId, estimateId }: EstimateTemplateProp
     const projectIndex = projects.findIndex((p: any) => p.id === projectId);
     if (projectIndex !== -1) {
       projects[projectIndex].estimate_items = updatedItems;
-      localStorage.setItem(getUserStorageKey('local_projects'), JSON.stringify(projects));
+    } else {
+      projects.push({ id: projectId, estimate_items: updatedItems });
     }
+    localStorage.setItem(getUserStorageKey('local_projects'), JSON.stringify(projects));
 
     toast.success("Item added successfully");
     setNewItem({
