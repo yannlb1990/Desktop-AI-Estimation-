@@ -95,9 +95,15 @@ export const QuoteGenerator = ({ project, estimate }: QuoteGeneratorProps) => {
   const [companyAddress, setCompanyAddress] = useState(brand.address || "")
   const [liabilityInsurance, setLiabilityInsurance] = useState(brand.liability || "$20,000,000")
 
+  // Quote settings from Settings page
+  const quoteSettings = (() => { try { return JSON.parse(localStorage.getItem(getUserStorageKey("quote_settings")) || "{}") } catch { return {} } })()
+  const quotePrefix = quoteSettings.prefix || "QTE"
+  const defaultValidity = quoteSettings.validityDays || "30"
+  const pdfTemplate: "simple" | "detailed" = quoteSettings.pdfTemplate || "detailed"
+
   // Quote details
-  const [quoteNumber, setQuoteNumber] = useState(`QTE-${Date.now().toString().slice(-6)}`)
-  const [validityDays, setValidityDays] = useState("30")
+  const [quoteNumber, setQuoteNumber] = useState(`${quotePrefix}-${Date.now().toString().slice(-6)}`)
+  const [validityDays, setValidityDays] = useState(defaultValidity)
   const [depositPct, setDepositPct] = useState("10")
   const [progressPct, setProgressPct] = useState("40")
   const [finalPct, setFinalPct] = useState("50")
@@ -652,8 +658,8 @@ export const QuoteGenerator = ({ project, estimate }: QuoteGeneratorProps) => {
                     {scopeNotes && <div className="mt-4 p-3 bg-amber-50 border border-amber-100 rounded-lg text-sm text-gray-700"><strong className="text-amber-700">Notes: </strong>{scopeNotes}</div>}
                   </section>
 
-                  {/* Payment schedule */}
-                  {subtotalNum > 0 && (
+                  {/* Payment schedule — hidden on simple template */}
+                  {pdfTemplate === "detailed" && subtotalNum > 0 && (
                     <section>
                       <div className="flex items-center gap-3 mb-4">
                         <div className="w-1 h-6 rounded-full" style={{ background: primaryColor }} />
@@ -702,14 +708,14 @@ export const QuoteGenerator = ({ project, estimate }: QuoteGeneratorProps) => {
                     )}
                   </section>
 
-                  {/* Terms */}
-                  <section>
+                  {/* Terms — hidden on simple template */}
+                  {pdfTemplate === "detailed" && <section>
                     <div className="flex items-center gap-3 mb-4">
                       <div className="w-1 h-6 rounded-full" style={{ background: primaryColor }} />
                       <h2 className="text-lg font-bold text-gray-900">Terms & Conditions</h2>
                     </div>
                     <div className="text-xs text-gray-600 leading-relaxed whitespace-pre-line">{terms}</div>
-                  </section>
+                  </section>}
 
                   {/* Acceptance */}
                   <section className="border-2 rounded-xl p-6" style={{ borderColor: accentColor + "60" }}>
