@@ -175,15 +175,41 @@ export const EstimateTemplate = ({ projectId, estimateId }: EstimateTemplateProp
 
   useEffect(() => {
     loadOverheads();
+    loadUserRateSettings();
   }, [projectId]);
 
   const loadOverheads = () => {
-    // Load from localStorage (no Supabase)
     const projects = JSON.parse(localStorage.getItem(getUserStorageKey('local_projects')) || '[]');
     const project = projects.find((p: any) => p.id === projectId);
     if (project && project.overhead_total) {
       setOverheadTotal(project.overhead_total);
     }
+  };
+
+  const loadUserRateSettings = () => {
+    try {
+      // Apply default rates from Settings → Rates tab
+      const savedRates = localStorage.getItem(getUserStorageKey('default_rates'));
+      if (savedRates) {
+        const r = JSON.parse(savedRates);
+        const defaultLabour = parseFloat(r.labourRate);
+        if (!isNaN(defaultLabour) && defaultLabour > 0) {
+          setConfig(prev => ({ ...prev, defaultLabourRate: defaultLabour }));
+        }
+        if (r.overhead) setConfig(prev => ({ ...prev, overheadPct: parseFloat(r.overhead) || prev.overheadPct }));
+        if (r.margin) setConfig(prev => ({ ...prev, marginPct: parseFloat(r.margin) || prev.marginPct }));
+      }
+      // Merge labour presets from Settings → Rates tab into per-trade rates
+      const savedPresets = localStorage.getItem(getUserStorageKey('labour_presets'));
+      if (savedPresets) {
+        const presets: { id: string; name: string; rate: string }[] = JSON.parse(savedPresets);
+        if (presets.length > 0) {
+          const presetMap: Record<string, number> = {};
+          presets.forEach(p => { if (p.name && p.rate) presetMap[p.name] = parseFloat(p.rate); });
+          setLabourRates(prev => ({ ...prev, ...presetMap }));
+        }
+      }
+    } catch { /* non-fatal */ }
   };
 
   const [newItem, setNewItem] = useState({

@@ -158,8 +158,10 @@ export const FullTenderGenerator = ({ project, estimate }: FullTenderProps) => {
   const [yearsExp, setYearsExp] = useState("10+")
   const [projectsCompleted, setProjectsCompleted] = useState("150+")
   const [companyProfile, setCompanyProfile] = useState(`${brand.companyName || "Our company"} is a fully licensed and insured building contractor delivering high-quality construction solutions across residential, commercial and industrial sectors. Founded on the principles of integrity, quality and partnership, we work collaboratively with clients, designers and subcontractors to deliver projects that exceed expectations.\n\nOur experienced team brings together expertise across all trade disciplines, supported by robust project management systems and a commitment to workplace safety.`)
-  const [tenderNumber, setTenderNumber] = useState(`TND-${Date.now().toString().slice(-6)}`)
-  const [validityDays, setValidityDays] = useState("60")
+  const tenderSettings = (() => { try { return JSON.parse(localStorage.getItem(getUserStorageKey("quote_settings")) || "{}") } catch { return {} } })()
+  const tenderPrefix = tenderSettings.prefix ? `${tenderSettings.prefix}T` : "TND"
+  const [tenderNumber, setTenderNumber] = useState(`${tenderPrefix}-${Date.now().toString().slice(-6)}`)
+  const [validityDays, setValidityDays] = useState(tenderSettings.validityDays || "60")
   const [contractType, setContractType] = useState("Lump Sum Fixed Price")
   const [deliveryMethod, setDeliveryMethod] = useState("Design & Construct")
   const [programWeeks, setProgramWeeks] = useState("12")

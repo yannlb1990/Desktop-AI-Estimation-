@@ -236,6 +236,15 @@ const Settings = () => {
         company_name: companyName, abn, phone, address, city, state, postcode,
         updated_at: new Date().toISOString(),
       }));
+      // Sync company info into quote_brand so QuoteGenerator and FullTenderGenerator stay current
+      const existingBrand = LOAD_BRAND();
+      localStorage.setItem("quote_brand", JSON.stringify({
+        ...existingBrand,
+        companyName: companyName || existingBrand.companyName,
+        abn: abn || existingBrand.abn,
+        phone: phone || existingBrand.phone,
+        address: [address, city, state, postcode].filter(Boolean).join(", ") || existingBrand.address,
+      }));
       toast.success("Profile updated");
     } catch { toast.error("Failed to save profile"); }
     finally { setSaving(false); }

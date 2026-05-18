@@ -30,7 +30,7 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "sonner";
-import { ArrowLeft, FileText, DollarSign, Ruler, Loader2, Settings, Calculator, TrendingUp, ShieldCheck, MapPin, User, Calendar as CalendarIcon, Clock, Bell } from "lucide-react";
+import { ArrowLeft, FileText, DollarSign, Ruler, Loader2, Settings, Calculator, TrendingUp, ShieldCheck, MapPin, User, Calendar as CalendarIcon, Clock, Bell, Package, ChevronDown, ChevronUp } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Lightbulb } from "lucide-react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -56,6 +56,12 @@ const ProjectDetail = () => {
   const [estimate, setEstimate] = useState<any>(null);
   const [dueDate, setDueDate] = useState<Date | undefined>();
   const [activeMainTab, setActiveMainTab] = useState("takeoff");
+  const [showSuppliers, setShowSuppliers] = useState(false);
+
+  const preferredSuppliers: any[] = (() => {
+    try { return JSON.parse(localStorage.getItem(getUserStorageKey("preferred_suppliers")) || "[]"); }
+    catch { return []; }
+  })();
 
   const handleExportCSV = () => {
     if (!project) return;
@@ -256,6 +262,34 @@ const ProjectDetail = () => {
             </div>
           </div>
         </Card>
+
+        {/* Preferred Suppliers quick reference */}
+        {preferredSuppliers.length > 0 && (
+          <div className="mb-4 border border-border rounded-xl bg-card overflow-hidden">
+            <button
+              className="w-full flex items-center justify-between px-5 py-3 text-sm font-medium hover:bg-muted/40 transition-colors"
+              onClick={() => setShowSuppliers(s => !s)}
+            >
+              <span className="flex items-center gap-2 text-muted-foreground">
+                <Package className="h-4 w-4" />
+                Preferred Suppliers ({preferredSuppliers.length})
+              </span>
+              {showSuppliers ? <ChevronUp className="h-4 w-4 text-muted-foreground" /> : <ChevronDown className="h-4 w-4 text-muted-foreground" />}
+            </button>
+            {showSuppliers && (
+              <div className="px-5 pb-4 grid grid-cols-2 md:grid-cols-3 gap-3">
+                {preferredSuppliers.map((s: any) => (
+                  <div key={s.id} className="text-xs border border-border rounded-lg p-3 bg-muted/20">
+                    <div className="font-semibold text-foreground mb-1">{s.name}</div>
+                    {s.contact && <div className="text-muted-foreground">{s.contact}</div>}
+                    {s.phone && <div className="text-muted-foreground">{s.phone}</div>}
+                    {s.account && <div className="font-mono bg-muted rounded px-1 inline-block mt-1">{s.account}</div>}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
 
         {/* Workflow progress strip */}
         <div className="flex items-center gap-0 rounded-xl border border-border bg-card p-1 mb-2">
