@@ -63,7 +63,7 @@ const DEFAULT_TERMS = `1. ACCEPTANCE: This quotation is valid for the period sta
 10. INTELLECTUAL PROPERTY: All designs, plans and documents prepared by the contractor remain the intellectual property of the contractor until full payment is received.`
 
 const LOAD_BRAND = () => {
-  try { return JSON.parse(localStorage.getItem("quote_brand") || "{}") } catch { return {} }
+  try { return JSON.parse(localStorage.getItem(getUserStorageKey("quote_brand")) || "{}") } catch { return {} }
 }
 
 const au$ = (n: number) => "$" + n.toLocaleString("en-AU", { minimumFractionDigits: 2, maximumFractionDigits: 2 })
@@ -229,7 +229,7 @@ export const QuoteGenerator = ({ project, estimate }: QuoteGeneratorProps) => {
 
   const saveBrand = () => {
     const data = { logo: logoDataUrl, primary: primaryColor, accent: accentColor, tagline: companyTagline, companyName, abn: companyABN, acn: companyACN, licence: builderLicence, phone: companyPhone, email: companyEmail, address: companyAddress, liability: liabilityInsurance }
-    localStorage.setItem("quote_brand", JSON.stringify(data))
+    localStorage.setItem(getUserStorageKey("quote_brand"), JSON.stringify(data))
     toast.success("Branding saved for all future quotes")
   }
 

@@ -49,7 +49,7 @@ const formatABN = (val: string) => {
   return `${d.slice(0, 2)} ${d.slice(2, 5)} ${d.slice(5, 8)} ${d.slice(8)}`;
 };
 
-const LOAD_BRAND = () => { try { return JSON.parse(localStorage.getItem("quote_brand") || "{}") } catch { return {} } };
+const LOAD_BRAND = () => { try { return JSON.parse(localStorage.getItem(getUserStorageKey("quote_brand")) || "{}") } catch { return {} } };
 
 // ── Toggle ────────────────────────────────────────────────────────────────────
 
@@ -85,8 +85,14 @@ const Settings = () => {
   const [postcode, setPostcode]       = useState("");
 
   // ── Branding ─────────────────────────────────────────────────────────────────
-  const [logoDataUrl, setLogoDataUrl] = useState("");
-  const [brandColor, setBrandColor]   = useState("#0f4c81");
+  const [logoDataUrl, setLogoDataUrl]               = useState("");
+  const [brandColor, setBrandColor]                 = useState("#0f4c81");
+  const [accentColor, setAccentColor]               = useState("#f59e0b");
+  const [companyTagline, setCompanyTagline]         = useState("");
+  const [companyEmail, setCompanyEmail]             = useState("");
+  const [companyACN, setCompanyACN]                 = useState("");
+  const [builderLicence, setBuilderLicence]         = useState("");
+  const [liabilityInsurance, setLiabilityInsurance] = useState("$20,000,000");
 
   // ── Default Rates ───────────────────────────────────────────────────────────
   const [overheadPercentage, setOverheadPercentage] = useState("15");
@@ -141,9 +147,12 @@ const Settings = () => {
     if (!isSignedIn()) { navigate("/auth"); return; }
     const saved = localStorage.getItem(PROFILE_KEY());
     const data = saved ? JSON.parse(saved) : {};
+    const brand = LOAD_BRAND();
     setCompanyName(data.company_name || localUser?.displayName || "");
     setAbn(data.abn || "");
+    setCompanyACN(data.acn || brand.acn || "");
     setPhone(data.phone || "");
+    setCompanyEmail(data.email || brand.email || "");
     setAddress(data.address || "");
     setCity(data.city || "");
     setState(data.state || localUser?.state || "");
@@ -154,6 +163,10 @@ const Settings = () => {
     const brand = LOAD_BRAND();
     setLogoDataUrl(brand.logo || "");
     setBrandColor(brand.primary || "#0f4c81");
+    setAccentColor(brand.accent || "#f59e0b");
+    setCompanyTagline(brand.tagline || "");
+    setBuilderLicence(brand.licence || "");
+    setLiabilityInsurance(brand.liability || "$20,000,000");
   }, []);
 
   const loadRates = useCallback(() => {
@@ -233,16 +246,18 @@ const Settings = () => {
     setSaving(true);
     try {
       localStorage.setItem(PROFILE_KEY(), JSON.stringify({
-        company_name: companyName, abn, phone, address, city, state, postcode,
+        company_name: companyName, abn, acn: companyACN, phone, email: companyEmail,
+        address, city, state, postcode,
         updated_at: new Date().toISOString(),
       }));
-      // Sync company info into quote_brand so QuoteGenerator and FullTenderGenerator stay current
       const existingBrand = LOAD_BRAND();
-      localStorage.setItem("quote_brand", JSON.stringify({
+      localStorage.setItem(getUserStorageKey("quote_brand"), JSON.stringify({
         ...existingBrand,
         companyName: companyName || existingBrand.companyName,
         abn: abn || existingBrand.abn,
+        acn: companyACN || existingBrand.acn,
         phone: phone || existingBrand.phone,
+        email: companyEmail || existingBrand.email,
         address: [address, city, state, postcode].filter(Boolean).join(", ") || existingBrand.address,
       }));
       toast.success("Profile updated");
@@ -252,7 +267,15 @@ const Settings = () => {
 
   const handleSaveBranding = () => {
     const existing = LOAD_BRAND();
-    localStorage.setItem("quote_brand", JSON.stringify({ ...existing, logo: logoDataUrl, primary: brandColor }));
+    localStorage.setItem(getUserStorageKey("quote_brand"), JSON.stringify({
+      ...existing,
+      logo: logoDataUrl,
+      primary: brandColor,
+      accent: accentColor,
+      tagline: companyTagline,
+      licence: builderLicence,
+      liability: liabilityInsurance,
+    }));
     toast.success("Branding saved — applied to all future quotes");
   };
 
@@ -431,7 +454,7 @@ const Settings = () => {
             <Card className="p-6">
               <h3 className="font-display text-xl font-bold mb-6">Company Information</h3>
               <div className="space-y-4">
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-3 gap-4">
                   <div>
                     <Label htmlFor="companyName">Company Name</Label>
                     <Input id="companyName" value={companyName} onChange={e => setCompanyName(e.target.value)} placeholder="Your Company Pty Ltd" />
@@ -446,10 +469,20 @@ const Settings = () => {
                       maxLength={14}
                     />
                   </div>
+                  <div>
+                    <Label htmlFor="acn">ACN <span className="text-muted-foreground font-normal">(optional)</span></Label>
+                    <Input id="acn" value={companyACN} onChange={e => setCompanyACN(e.target.value)} placeholder="123 456 789" maxLength={11} />
+                  </div>
                 </div>
-                <div>
-                  <Label htmlFor="phone">Phone</Label>
-                  <Input id="phone" type="tel" value={phone} onChange={e => setPhone(e.target.value)} placeholder="(02) 1234 5678" />
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <Label htmlFor="phone">Phone</Label>
+                    <Input id="phone" type="tel" value={phone} onChange={e => setPhone(e.target.value)} placeholder="(02) 1234 5678" />
+                  </div>
+                  <div>
+                    <Label htmlFor="companyEmail">Business Email</Label>
+                    <Input id="companyEmail" type="email" value={companyEmail} onChange={e => setCompanyEmail(e.target.value)} placeholder="info@yourcompany.com.au" />
+                  </div>
                 </div>
                 <div>
                   <Label htmlFor="address">Street Address</Label>
@@ -553,28 +586,61 @@ const Settings = () => {
                   )}
                 </div>
 
-                {/* Brand colour */}
+                {/* Colours */}
                 <div>
-                  <Label className="mb-2 block">Brand Colour</Label>
-                  <div className="flex items-center gap-3">
-                    <input
-                      type="color"
-                      value={brandColor}
-                      onChange={e => setBrandColor(e.target.value)}
-                      className="h-10 w-16 rounded cursor-pointer border border-border"
-                    />
-                    <Input
-                      value={brandColor}
-                      onChange={e => setBrandColor(e.target.value)}
-                      placeholder="#0f4c81"
-                      className="max-w-[120px] font-mono text-sm"
-                    />
-                    <div className="text-sm text-muted-foreground">Used as the header colour on all documents</div>
+                  <Label className="mb-2 block">Colour Scheme</Label>
+                  <div className="grid grid-cols-2 gap-4 max-w-lg">
+                    <div>
+                      <p className="text-xs text-muted-foreground mb-1.5">Primary — document header</p>
+                      <div className="flex items-center gap-2">
+                        <input type="color" value={brandColor} onChange={e => setBrandColor(e.target.value)} className="h-9 w-12 rounded cursor-pointer border border-border" />
+                        <Input value={brandColor} onChange={e => setBrandColor(e.target.value)} placeholder="#0f4c81" className="font-mono text-sm" />
+                      </div>
+                    </div>
+                    <div>
+                      <p className="text-xs text-muted-foreground mb-1.5">Accent — highlights &amp; totals</p>
+                      <div className="flex items-center gap-2">
+                        <input type="color" value={accentColor} onChange={e => setAccentColor(e.target.value)} className="h-9 w-12 rounded cursor-pointer border border-border" />
+                        <Input value={accentColor} onChange={e => setAccentColor(e.target.value)} placeholder="#f59e0b" className="font-mono text-sm" />
+                      </div>
+                    </div>
                   </div>
-                  {/* Preview swatch */}
-                  <div className="mt-3 rounded-lg p-4 text-white text-sm font-medium max-w-sm" style={{ background: brandColor }}>
-                    Preview — {companyName || "Your Company"}
+                  {/* Preview bar */}
+                  <div className="mt-3 rounded-lg overflow-hidden max-w-sm">
+                    <div className="p-4 text-white text-sm font-semibold" style={{ background: brandColor }}>
+                      {companyName || "Your Company"}
+                    </div>
+                    <div className="h-1.5" style={{ background: `linear-gradient(to right, ${accentColor}, ${brandColor})` }} />
                   </div>
+                </div>
+
+                {/* Tagline */}
+                <div>
+                  <Label htmlFor="tagline">Company Tagline <span className="text-muted-foreground font-normal">(optional)</span></Label>
+                  <Input
+                    id="tagline"
+                    className="mt-1 max-w-md"
+                    placeholder="Building Excellence Since 2010"
+                    value={companyTagline}
+                    onChange={e => setCompanyTagline(e.target.value)}
+                  />
+                  <p className="text-xs text-muted-foreground mt-1">Appears below your company name on quotes</p>
+                </div>
+
+                {/* Document credentials */}
+                <div>
+                  <Label className="mb-2 block">Document Credentials</Label>
+                  <div className="grid grid-cols-2 gap-4 max-w-lg">
+                    <div>
+                      <Label htmlFor="builderLicence" className="text-sm">Builder Licence No.</Label>
+                      <Input id="builderLicence" className="mt-1" placeholder="BLD123456" value={builderLicence} onChange={e => setBuilderLicence(e.target.value)} />
+                    </div>
+                    <div>
+                      <Label htmlFor="liability" className="text-sm">Public Liability Cover</Label>
+                      <Input id="liability" className="mt-1" placeholder="$20,000,000" value={liabilityInsurance} onChange={e => setLiabilityInsurance(e.target.value)} />
+                    </div>
+                  </div>
+                  <p className="text-xs text-muted-foreground mt-1.5">Displayed in the Insurance &amp; Compliance section of every quote</p>
                 </div>
 
                 <Button onClick={handleSaveBranding} className="bg-primary text-primary-foreground">
