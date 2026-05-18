@@ -325,6 +325,7 @@ export const CostEstimator = ({
     return DEFAULT_CONSUMABLES.map(c => ({ ...c, id: crypto.randomUUID(), total: c.quantity * c.unitCost }));
   });
   const [transferredIds, setTransferredIds] = useState<Set<string>>(() => getTransferred(projectId));
+  const [recentlyTransferredIds, setRecentlyTransferredIds] = useState<Set<string>>(new Set());
   const [selectedCostIds, setSelectedCostIds] = useState<Set<string>>(new Set());
   // Inline custom material form state: itemId → form fields
   const [pendingCustomMaterial, setPendingCustomMaterial] = useState<Record<string, { name: string; qty: string; unit: string; cost: string }>>({});
@@ -364,7 +365,7 @@ export const CostEstimator = ({
     if (items.length === 0) { toast.error('No items to transfer'); return; }
 
     // Build EstimateItem objects from CostItems
-    const projects: any[] = JSON.parse(localStorage.getItem('local_projects') || '[]');
+    const projects: any[] = JSON.parse(localStorage.getItem(getUserStorageKey('local_projects')) || '[]');
     let projectIndex = projects.findIndex((p: any) => p.id === projectId);
     if (projectIndex === -1) {
       // Auto-create stub entry so user doesn't have to visit Estimate tab first
@@ -414,9 +415,12 @@ export const CostEstimator = ({
     }
 
     projects[projectIndex].estimate_items = [...existing, ...newEstimateItems];
-    localStorage.setItem('local_projects', JSON.stringify(projects));
+    localStorage.setItem(getUserStorageKey('local_projects'), JSON.stringify(projects));
     saveTransferred(projectId, newTransferred);
     setTransferredIds(new Set(newTransferred));
+
+    setRecentlyTransferredIds(new Set(newEstimateItems.map((e: any) => e._costItemId)));
+    setTimeout(() => setRecentlyTransferredIds(new Set()), 2500);
 
     // Notify EstimateTemplate to reload and switch to Estimate tab
     window.dispatchEvent(new CustomEvent('estimate-updated', { detail: { projectId } }));
@@ -427,13 +431,13 @@ export const CostEstimator = ({
       action: {
         label: 'Undo',
         onClick: () => {
-          const ps: any[] = JSON.parse(localStorage.getItem('local_projects') || '[]');
+          const ps: any[] = JSON.parse(localStorage.getItem(getUserStorageKey('local_projects')) || '[]');
           const pi = ps.findIndex((p: any) => p.id === projectId);
           if (pi !== -1) {
             ps[pi].estimate_items = (ps[pi].estimate_items || []).filter(
               (e: any) => !transferredItemIds.includes(e.id)
             );
-            localStorage.setItem('local_projects', JSON.stringify(ps));
+            localStorage.setItem(getUserStorageKey('local_projects'), JSON.stringify(ps));
             // Remove from transferred set so they can be re-transferred
             const undoSet = new Set(newTransferred);
             newEstimateItems.forEach((e: any) => undoSet.delete(e._costItemId));
@@ -924,7 +928,7 @@ export const CostEstimator = ({
       {costItems.length > 0 && (
         <Card className="overflow-hidden">
           <div className="overflow-x-auto">
-            <Table className="table-fixed min-w-[1320px]">
+            <Table className="table-fixed min-w-[820px]">
               <TableHeader>
                 <TableRow className="text-xs bg-muted/50">
                   <TableHead className="w-8 px-1">
@@ -941,19 +945,13 @@ export const CostEstimator = ({
                   <TableHead className="w-8 px-1"></TableHead>
                   <TableHead className="w-20 px-1 whitespace-nowrap">Category</TableHead>
                   <TableHead className="w-24 px-1 whitespace-nowrap">Trade</TableHead>
-                  <TableHead className="w-40 px-1 whitespace-nowrap">Item</TableHead>
-                  <TableHead className="w-24 px-1 whitespace-nowrap">Material</TableHead>
+                  <TableHead className="px-1 whitespace-nowrap">Item</TableHead>
                   <TableHead className="w-20 px-1 whitespace-nowrap">Area</TableHead>
-                  <TableHead className="w-20 px-1 text-right whitespace-nowrap">Qty</TableHead>
+                  <TableHead className="w-16 px-1 text-right whitespace-nowrap">Qty</TableHead>
                   <TableHead className="w-14 px-1 whitespace-nowrap">Unit</TableHead>
                   <TableHead className="w-20 px-1 text-right whitespace-nowrap">$/Unit</TableHead>
-                  <TableHead className="w-12 px-1 text-center whitespace-nowrap">Mat%</TableHead>
-                  <TableHead className="w-14 px-1 text-right whitespace-nowrap">Hrs</TableHead>
-                  <TableHead className="w-28 px-1 whitespace-nowrap">$/Hr</TableHead>
-                  <TableHead className="w-12 px-1 text-center whitespace-nowrap">Lab%</TableHead>
-                  <TableHead className="w-12 px-1 text-center whitespace-nowrap">Mkp%</TableHead>
-                  <TableHead className="w-20 px-1 text-right whitespace-nowrap">Total</TableHead>
-                  <TableHead className="w-16 px-1"></TableHead>
+                  <TableHead className="w-28 px-1 text-right whitespace-nowrap">Total</TableHead>
+                  <TableHead className="w-14 px-1"></TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -964,7 +962,11 @@ export const CostEstimator = ({
 
                   return (
                     <React.Fragment key={item.id}>
-                      <TableRow className={cn("text-xs", selectedCostIds.has(item.id) && "bg-blue-50/40 dark:bg-blue-950/20")}>
+                      <TableRow className={cn(
+                          "text-xs",
+                          selectedCostIds.has(item.id) && "bg-blue-50/40 dark:bg-blue-950/20",
+                          recentlyTransferredIds.has(item.id) && "bg-green-50/60 dark:bg-green-950/20 transition-colors duration-700"
+                        )}>
                         {/* Select checkbox */}
                         <TableCell className="px-1 w-8">
                           <input
@@ -1010,36 +1012,13 @@ export const CostEstimator = ({
                         </TableCell>
 
                         {/* Item Name */}
-                        <TableCell className="px-1 w-40">
+                        <TableCell className="px-1">
                           <Input
                             value={item.name}
                             onChange={(e) => onUpdateCostItem(item.id, { name: e.target.value })}
                             className="h-8 text-xs border-border px-2 w-full"
                             title={item.name}
                           />
-                        </TableCell>
-
-                        {/* Material */}
-                        <TableCell className="px-1 w-24">
-                          {item.material === 'Custom' || !MATERIAL_OPTIONS[item.category]?.includes(item.material || '') ? (
-                            <Input
-                              value={item.customMaterial || item.material || ''}
-                              onChange={(e) => onUpdateCostItem(item.id, { customMaterial: e.target.value, material: 'Custom' })}
-                              className="h-8 text-xs border-border px-2 w-full"
-                              placeholder="Custom"
-                            />
-                          ) : (
-                            <Select value={item.material || ''} onValueChange={(v) => onUpdateCostItem(item.id, { material: v })}>
-                              <SelectTrigger className="h-8 text-xs px-2">
-                                <SelectValue placeholder="-" />
-                              </SelectTrigger>
-                              <SelectContent className="bg-popover max-h-48">
-                                {(MATERIAL_OPTIONS[item.category] || MATERIAL_OPTIONS.General).map(m => (
-                                  <SelectItem key={m} value={m} className="text-xs">{m}</SelectItem>
-                                ))}
-                              </SelectContent>
-                            </Select>
-                          )}
                         </TableCell>
 
                         {/* Area */}
@@ -1055,7 +1034,7 @@ export const CostEstimator = ({
                         </TableCell>
 
                         {/* Qty */}
-                        <TableCell className="px-1 w-20">
+                        <TableCell className="px-1 w-16">
                           <Input
                             type="number"
                             value={item.quantity || ''}
@@ -1087,62 +1066,10 @@ export const CostEstimator = ({
                           />
                         </TableCell>
 
-                        {/* Material Waste % */}
-                        <TableCell className="px-1 w-12">
-                          <Input
-                            type="number"
-                            value={item.materialWastePercent ?? 5}
-                            onChange={(e) => onUpdateCostItem(item.id, { materialWastePercent: Number(e.target.value) })}
-                            className="h-8 text-xs text-center border-border px-2 w-full"
-                          />
-                        </TableCell>
-
-                        {/* Hours */}
-                        <TableCell className="px-1 w-14">
-                          <Input
-                            type="number"
-                            value={item.laborHours || ''}
-                            onChange={(e) => onUpdateCostItem(item.id, { laborHours: Number(e.target.value) })}
-                            className="h-8 text-xs text-right border-border px-2 w-full"
-                            placeholder="0"
-                          />
-                        </TableCell>
-
-                        {/* Hourly Rate — click to see market benchmarks */}
-                        <TableCell className="px-1 w-28">
-                          <LabourRateCell
-                            item={item}
-                            selectedState={selectedState}
-                            onUpdateCostItem={onUpdateCostItem}
-                          />
-                        </TableCell>
-
-                        {/* Labour Waste % */}
-                        <TableCell className="px-1 w-12">
-                          <Input
-                            type="number"
-                            value={item.labourWastePercent ?? 10}
-                            onChange={(e) => onUpdateCostItem(item.id, { labourWastePercent: Number(e.target.value) })}
-                            className="h-8 text-xs text-center border-border px-2 w-full"
-                          />
-                        </TableCell>
-
-                        {/* Markup % */}
-                        <TableCell className="px-1 w-12">
-                          <Input
-                            type="number"
-                            value={item.markupPercent ?? 0}
-                            onChange={(e) => onUpdateCostItem(item.id, { markupPercent: Number(e.target.value) })}
-                            className="h-8 text-xs text-center border-border px-2 w-full"
-                          />
-                        </TableCell>
-
                         {/* Line Total */}
-                        <TableCell className="px-1 w-20 text-right">
+                        <TableCell className="px-1 w-28 text-right">
                           <div className="font-mono font-semibold text-sm">${lineTotal.toFixed(0)}</div>
-                          <div className="text-xs text-muted-foreground">
-                            M:{materialTotal.toFixed(0)} L:{labourTotal.toFixed(0)}
-                          </div>
+                          <div className="text-[10px] text-muted-foreground">M:{materialTotal.toFixed(0)} L:{labourTotal.toFixed(0)}</div>
                         </TableCell>
 
                         {/* Transfer + Delete */}
@@ -1182,7 +1109,71 @@ export const CostEstimator = ({
                       {/* Expanded Row */}
                       {isExpanded && (
                         <TableRow className="bg-muted/30">
-                          <TableCell colSpan={16} className="p-3">
+                          <TableCell colSpan={11} className="p-3">
+                            {/* Cost Parameters (moved from dense main row) */}
+                            <div className="grid grid-cols-6 gap-3 mb-4 pb-3 border-b border-border/50">
+                              <div className="col-span-2">
+                                <p className="text-[10px] text-muted-foreground uppercase tracking-wide mb-1">Material</p>
+                                {item.material === 'Custom' || !MATERIAL_OPTIONS[item.category]?.includes(item.material || '') ? (
+                                  <Input
+                                    value={item.customMaterial || item.material || ''}
+                                    onChange={(e) => onUpdateCostItem(item.id, { customMaterial: e.target.value, material: 'Custom' })}
+                                    className="h-8 text-xs"
+                                    placeholder="Custom"
+                                  />
+                                ) : (
+                                  <Select value={item.material || ''} onValueChange={(v) => onUpdateCostItem(item.id, { material: v })}>
+                                    <SelectTrigger className="h-8 text-xs"><SelectValue placeholder="-" /></SelectTrigger>
+                                    <SelectContent className="bg-popover max-h-48">
+                                      {(MATERIAL_OPTIONS[item.category] || MATERIAL_OPTIONS.General).map(m => (
+                                        <SelectItem key={m} value={m} className="text-xs">{m}</SelectItem>
+                                      ))}
+                                    </SelectContent>
+                                  </Select>
+                                )}
+                              </div>
+                              <div>
+                                <p className="text-[10px] text-muted-foreground uppercase tracking-wide mb-1">Mat Waste %</p>
+                                <Input
+                                  type="number"
+                                  value={item.materialWastePercent ?? 5}
+                                  onChange={(e) => onUpdateCostItem(item.id, { materialWastePercent: Number(e.target.value) })}
+                                  className="h-8 text-xs text-center"
+                                />
+                              </div>
+                              <div>
+                                <p className="text-[10px] text-muted-foreground uppercase tracking-wide mb-1">Labour Hrs</p>
+                                <Input
+                                  type="number"
+                                  value={item.laborHours || ''}
+                                  onChange={(e) => onUpdateCostItem(item.id, { laborHours: Number(e.target.value) })}
+                                  className="h-8 text-xs text-right"
+                                  placeholder="0"
+                                />
+                              </div>
+                              <div>
+                                <p className="text-[10px] text-muted-foreground uppercase tracking-wide mb-1">Lab Waste %</p>
+                                <Input
+                                  type="number"
+                                  value={item.labourWastePercent ?? 10}
+                                  onChange={(e) => onUpdateCostItem(item.id, { labourWastePercent: Number(e.target.value) })}
+                                  className="h-8 text-xs text-center"
+                                />
+                              </div>
+                              <div>
+                                <p className="text-[10px] text-muted-foreground uppercase tracking-wide mb-1">Markup %</p>
+                                <Input
+                                  type="number"
+                                  value={item.markupPercent ?? 0}
+                                  onChange={(e) => onUpdateCostItem(item.id, { markupPercent: Number(e.target.value) })}
+                                  className="h-8 text-xs text-center"
+                                />
+                              </div>
+                              <div className="col-span-6">
+                                <p className="text-[10px] text-muted-foreground uppercase tracking-wide mb-1">Labour Trade + Rate</p>
+                                <LabourRateCell item={item} selectedState={selectedState} onUpdateCostItem={onUpdateCostItem} />
+                              </div>
+                            </div>
                             <div className="grid grid-cols-2 gap-4">
                               {/* Related Materials / Fixings */}
                               <div>
