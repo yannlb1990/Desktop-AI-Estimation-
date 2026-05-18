@@ -117,7 +117,7 @@ const FAQ = [
   { q: "Can I switch plans?", a: "Yes — upgrade or downgrade any time. Upgrades apply immediately; downgrades apply at the next billing cycle." },
   { q: "Are prices in AUD?", a: "Yes. All prices are in Australian dollars and include GST." },
   { q: "What counts as a 'project'?", a: "One construction job with plans, measurements and an estimate. Archived projects don't count toward your limit." },
-  { q: "Do you offer refunds?", a: "Yes — contact us within 7 days of your first charge for a full refund, no questions asked." },
+  { q: "Do you offer refunds?", a: "All payments are final. If you have a billing question contact us at support@metricore.com.au and we'll do our best to help." },
 ];
 
 // ── Component ─────────────────────────────────────────────────────────────────
@@ -301,7 +301,7 @@ const Pricing = () => {
                 Start your {TRIAL_DAYS}-day free trial
               </h2>
               <p className="text-muted-foreground text-sm">
-                ${PLAN_PRICES[selected][billing]} AUD/mo after trial · Cancel any time · No credit card required
+                ${PLAN_PRICES[selected][billing]} AUD/mo after trial · No credit card required for trial
               </p>
             </div>
             <Button
@@ -402,8 +402,8 @@ const Pricing = () => {
         {/* ── Trust signals ── */}
         <div className="flex flex-wrap items-center justify-center gap-8 mb-16 text-sm text-muted-foreground">
           <div className="flex items-center gap-2"><Shield className="h-4 w-4 text-primary" /> No credit card for trial</div>
-          <div className="flex items-center gap-2"><Zap className="h-4 w-4 text-primary" /> Cancel anytime</div>
-          <div className="flex items-center gap-2"><Users className="h-4 w-4 text-primary" /> 7-day money-back guarantee</div>
+          <div className="flex items-center gap-2"><Zap className="h-4 w-4 text-primary" /> 14 days full access</div>
+          <div className="flex items-center gap-2"><Users className="h-4 w-4 text-primary" /> Australian support team</div>
           <div className="flex items-center gap-2"><Check className="h-4 w-4 text-primary" /> Built for Australian builders</div>
         </div>
 

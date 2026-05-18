@@ -14,8 +14,22 @@ import {
   PLAN_NAMES, PLAN_PRICES, TRIAL_DAYS,
   createTrialSubscription,
 } from "@/lib/subscription";
-import { localSignUp, localSignIn, isSignedIn } from "@/lib/localAuth";
+import { localSignUp, localSignIn, isSignedIn, migrateUnscopedData } from "@/lib/localAuth";
 import { supabase } from "@/integrations/supabase/client";
+
+// Resets the trial end date to 14 days from now on the user's first real sign-in,
+// so the clock doesn't count down the days they spent waiting to verify their email.
+function activateTrialIfNeeded(email: string) {
+  try {
+    const key = `${email}:estimate_subscription`;
+    const raw = localStorage.getItem(key);
+    if (!raw) return;
+    const sub = JSON.parse(raw);
+    if (sub.trialActivatedAt || sub.activePlan !== "trial") return;
+    const trialEndsAt = new Date(Date.now() + TRIAL_DAYS * 86_400_000).toISOString();
+    localStorage.setItem(key, JSON.stringify({ ...sub, trialActivatedAt: new Date().toISOString(), trialEndsAt }));
+  } catch { /* non-fatal */ }
+}
 
 const signUpSchema = z.object({
   email: z.string().email("Invalid email address").max(255),
@@ -66,7 +80,9 @@ const Auth = () => {
   // Listen for Supabase auth state change (email confirmation callback)
   useEffect(() => {
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      if (session?.user?.email_confirmed_at) {
+      if (session?.user?.email_confirmed_at && session.user.email) {
+        migrateUnscopedData(session.user.email);
+        activateTrialIfNeeded(session.user.email);
         toast.success("Email verified — welcome aboard!");
         navigate("/dashboard");
       }
@@ -101,6 +117,8 @@ const Auth = () => {
           return;
         }
 
+        migrateUnscopedData(data.email);
+        activateTrialIfNeeded(data.email);
         toast.success("Welcome back!");
         navigate("/dashboard");
 
@@ -312,7 +330,7 @@ const Auth = () => {
                   ))}
                 </div>
                 <p className="text-xs text-muted-foreground mt-2 text-center">
-                  After trial: ${price} AUD/mo · Cancel anytime
+                  After trial: ${price} AUD/mo
                 </p>
               </div>
             )}
