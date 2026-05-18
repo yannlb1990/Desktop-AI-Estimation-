@@ -328,17 +328,17 @@ export const EstimateTemplate = ({ projectId, estimateId }: EstimateTemplateProp
   };
 
   const deleteItem = (id: string) => {
-    // Remove from local state
     const updatedItems = items.filter(item => item.id !== id);
     setItems(updatedItems);
 
-    // Save to localStorage
     const projects = JSON.parse(localStorage.getItem(getUserStorageKey('local_projects')) || '[]');
     const projectIndex = projects.findIndex((p: any) => p.id === projectId);
     if (projectIndex !== -1) {
       projects[projectIndex].estimate_items = updatedItems;
-      localStorage.setItem(getUserStorageKey('local_projects'), JSON.stringify(projects));
+    } else {
+      projects.push({ id: projectId, estimate_items: updatedItems });
     }
+    localStorage.setItem(getUserStorageKey('local_projects'), JSON.stringify(projects));
 
     toast.success("Item deleted");
   };
@@ -384,13 +384,14 @@ export const EstimateTemplate = ({ projectId, estimateId }: EstimateTemplateProp
     });
     setItems(updatedItems);
 
-    // Save to localStorage
     const projects = JSON.parse(localStorage.getItem(getUserStorageKey('local_projects')) || '[]');
     const projectIndex = projects.findIndex((p: any) => p.id === projectId);
     if (projectIndex !== -1) {
       projects[projectIndex].estimate_items = updatedItems;
-      localStorage.setItem(getUserStorageKey('local_projects'), JSON.stringify(projects));
+    } else {
+      projects.push({ id: projectId, estimate_items: updatedItems });
     }
+    localStorage.setItem(getUserStorageKey('local_projects'), JSON.stringify(projects));
 
     toast.success("Item updated");
     setEditingId(null);
@@ -1504,21 +1505,21 @@ export const EstimateTemplate = ({ projectId, estimateId }: EstimateTemplateProp
                 <TableCell className="font-medium">Base Materials</TableCell>
                 <TableCell className="text-right font-mono">${totals.totalMaterials.toFixed(2)}</TableCell>
                 <TableCell className="text-right font-mono text-muted-foreground">
-                  {((totals.totalMaterials / totals.totalPrice) * 100).toFixed(1)}%
+                  {totals.totalPrice > 0 ? ((totals.totalMaterials / totals.totalPrice) * 100).toFixed(1) : '0.0'}%
                 </TableCell>
               </TableRow>
               <TableRow>
                 <TableCell className="font-medium">Labour Costs</TableCell>
                 <TableCell className="text-right font-mono">${totals.totalLabour.toFixed(2)}</TableCell>
                 <TableCell className="text-right font-mono text-muted-foreground">
-                  {((totals.totalLabour / totals.totalPrice) * 100).toFixed(1)}%
+                  {totals.totalPrice > 0 ? ((totals.totalLabour / totals.totalPrice) * 100).toFixed(1) : '0.0'}%
                 </TableCell>
               </TableRow>
               <TableRow className="border-t border-border">
                 <TableCell className="font-medium text-muted-foreground">Base Subtotal</TableCell>
                 <TableCell className="text-right font-mono font-semibold">${totals.baseSubtotal.toFixed(2)}</TableCell>
                 <TableCell className="text-right font-mono text-muted-foreground">
-                  {((totals.baseSubtotal / totals.totalPrice) * 100).toFixed(1)}%
+                  {totals.totalPrice > 0 ? ((totals.baseSubtotal / totals.totalPrice) * 100).toFixed(1) : '0.0'}%
                 </TableCell>
               </TableRow>
               <TableRow>
@@ -1527,7 +1528,7 @@ export const EstimateTemplate = ({ projectId, estimateId }: EstimateTemplateProp
                 </TableCell>
                 <TableCell className="text-right font-mono">${totals.supervision.toFixed(2)}</TableCell>
                 <TableCell className="text-right font-mono text-muted-foreground">
-                  {((totals.supervision / totals.totalPrice) * 100).toFixed(1)}%
+                  {totals.totalPrice > 0 ? ((totals.supervision / totals.totalPrice) * 100).toFixed(1) : '0.0'}%
                 </TableCell>
               </TableRow>
               <TableRow>
@@ -1536,21 +1537,21 @@ export const EstimateTemplate = ({ projectId, estimateId }: EstimateTemplateProp
                 </TableCell>
                 <TableCell className="text-right font-mono">${totals.overheadsPct.toFixed(2)}</TableCell>
                 <TableCell className="text-right font-mono text-muted-foreground">
-                  {((totals.overheadsPct / totals.totalPrice) * 100).toFixed(1)}%
+                  {totals.totalPrice > 0 ? ((totals.overheadsPct / totals.totalPrice) * 100).toFixed(1) : '0.0'}%
                 </TableCell>
               </TableRow>
               <TableRow>
                 <TableCell className="font-medium">Overheads (Fixed Items)</TableCell>
                 <TableCell className="text-right font-mono">${totals.overheadTotal.toFixed(2)}</TableCell>
                 <TableCell className="text-right font-mono text-muted-foreground">
-                  {((totals.overheadTotal / totals.totalPrice) * 100).toFixed(1)}%
+                  {totals.totalPrice > 0 ? ((totals.overheadTotal / totals.totalPrice) * 100).toFixed(1) : '0.0'}%
                 </TableCell>
               </TableRow>
               <TableRow className="border-t border-border">
                 <TableCell className="font-medium text-muted-foreground">Total Overheads</TableCell>
                 <TableCell className="text-right font-mono font-semibold">${totals.totalOverheads.toFixed(2)}</TableCell>
                 <TableCell className="text-right font-mono text-muted-foreground">
-                  {((totals.totalOverheads / totals.totalPrice) * 100).toFixed(1)}%
+                  {totals.totalPrice > 0 ? ((totals.totalOverheads / totals.totalPrice) * 100).toFixed(1) : '0.0'}%
                 </TableCell>
               </TableRow>
               <TableRow>
@@ -1559,14 +1560,14 @@ export const EstimateTemplate = ({ projectId, estimateId }: EstimateTemplateProp
                 </TableCell>
                 <TableCell className="text-right font-mono">${totals.margin.toFixed(2)}</TableCell>
                 <TableCell className="text-right font-mono text-muted-foreground">
-                  {((totals.margin / totals.totalPrice) * 100).toFixed(1)}%
+                  {totals.totalPrice > 0 ? ((totals.margin / totals.totalPrice) * 100).toFixed(1) : '0.0'}%
                 </TableCell>
               </TableRow>
               <TableRow className="border-t border-border">
                 <TableCell className="font-medium text-muted-foreground">Subtotal (Pre-GST)</TableCell>
                 <TableCell className="text-right font-mono font-semibold">${totals.taxable.toFixed(2)}</TableCell>
                 <TableCell className="text-right font-mono text-muted-foreground">
-                  {((totals.taxable / totals.totalPrice) * 100).toFixed(1)}%
+                  {totals.totalPrice > 0 ? ((totals.taxable / totals.totalPrice) * 100).toFixed(1) : '0.0'}%
                 </TableCell>
               </TableRow>
               <TableRow>
@@ -1575,7 +1576,7 @@ export const EstimateTemplate = ({ projectId, estimateId }: EstimateTemplateProp
                 </TableCell>
                 <TableCell className="text-right font-mono">${totals.gst.toFixed(2)}</TableCell>
                 <TableCell className="text-right font-mono text-muted-foreground">
-                  {((totals.gst / totals.totalPrice) * 100).toFixed(1)}%
+                  {totals.totalPrice > 0 ? ((totals.gst / totals.totalPrice) * 100).toFixed(1) : '0.0'}%
                 </TableCell>
               </TableRow>
               <TableRow className="border-t-2 border-primary bg-primary/5">
@@ -1593,19 +1594,19 @@ export const EstimateTemplate = ({ projectId, estimateId }: EstimateTemplateProp
             <div className="text-center p-3 bg-muted/30 rounded-lg">
               <p className="text-xs text-muted-foreground mb-1">Material %</p>
               <p className="text-lg font-bold font-mono">
-                {((totals.totalMaterials / totals.baseSubtotal) * 100).toFixed(1)}%
+                {totals.baseSubtotal > 0 ? ((totals.totalMaterials / totals.baseSubtotal) * 100).toFixed(1) : '0.0'}%
               </p>
             </div>
             <div className="text-center p-3 bg-muted/30 rounded-lg">
               <p className="text-xs text-muted-foreground mb-1">Labour %</p>
               <p className="text-lg font-bold font-mono">
-                {((totals.totalLabour / totals.baseSubtotal) * 100).toFixed(1)}%
+                {totals.baseSubtotal > 0 ? ((totals.totalLabour / totals.baseSubtotal) * 100).toFixed(1) : '0.0'}%
               </p>
             </div>
             <div className="text-center p-3 bg-muted/30 rounded-lg">
               <p className="text-xs text-muted-foreground mb-1">Gross Margin</p>
               <p className="text-lg font-bold font-mono">
-                {((totals.margin / totals.taxable) * 100).toFixed(1)}%
+                {totals.taxable > 0 ? ((totals.margin / totals.taxable) * 100).toFixed(1) : '0.0'}%
               </p>
             </div>
             <div className="text-center p-3 bg-muted/30 rounded-lg">
