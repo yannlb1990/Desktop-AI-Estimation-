@@ -187,11 +187,11 @@ const Dashboard = () => {
     navigate('/project/new');
   };
 
-  // Trial banner: show when ≤7 days left (urgent warning) or expired
+  // Trial banner: show from day 1 of trial through expiry
   const showTrialBanner =
     !bannerDismissed &&
     sub.subscription !== null &&
-    (sub.isTrialExpired || (sub.isTrialing && sub.daysLeftInTrial <= 7));
+    (sub.isTrialExpired || sub.isTrialing);
 
   // Past-due banner: payment failed, within 3-day grace period
   const showPastDueBanner = sub.isPastDue;
@@ -216,33 +216,43 @@ const Dashboard = () => {
         </div>
       )}
 
-      {/* Trial / expiry banner */}
-      {showTrialBanner && (
-        <div className={`border-b px-6 py-2.5 flex items-center justify-between text-sm ${
-          sub.isTrialExpired
-            ? 'bg-red-500/10 border-red-500/30 text-red-400'
-            : sub.daysLeftInTrial <= 3
-            ? 'bg-red-500/10 border-red-500/30 text-red-400'
-            : 'bg-amber-500/10 border-amber-500/30 text-amber-400'
-        }`}>
-          <div className="flex items-center gap-2">
-            {sub.isTrialExpired
-              ? <><AlertTriangle className="h-4 w-4" /> Your free trial has ended — upgrade to keep full access</>
-              : <><Zap className="h-4 w-4" /> Free trial · {sub.daysLeftInTrial} day{sub.daysLeftInTrial !== 1 ? 's' : ''} left · You're on {sub.subscription?.selectedPlan ? PLAN_NAMES[sub.subscription.selectedPlan] : 'Pro'} features</>
-            }
+      {/* Trial / expiry banner — 3 urgency tiers */}
+      {showTrialBanner && (() => {
+        const d = sub.daysLeftInTrial;
+        const expired = sub.isTrialExpired;
+        const urgent = !expired && d <= 3;
+        const warning = !expired && d > 3 && d <= 7;
+        const info = !expired && d > 7;
+        const colorClass = expired || urgent
+          ? 'bg-red-500/10 border-red-500/30 text-red-400'
+          : warning
+          ? 'bg-amber-500/10 border-amber-500/30 text-amber-400'
+          : 'bg-blue-500/10 border-blue-500/30 text-blue-400';
+        return (
+          <div className={`border-b px-6 py-2.5 flex items-center justify-between text-sm ${colorClass}`}>
+            <div className="flex items-center gap-2">
+              {expired
+                ? <><AlertTriangle className="h-4 w-4 flex-shrink-0" /> Your free trial has ended — upgrade to keep full access</>
+                : urgent
+                ? <><AlertTriangle className="h-4 w-4 flex-shrink-0" /> Trial ends in {d} day{d !== 1 ? 's' : ''} — upgrade now to keep your projects and data</>
+                : warning
+                ? <><Zap className="h-4 w-4 flex-shrink-0" /> {d} days left in your free trial · You have full {sub.subscription?.selectedPlan ? PLAN_NAMES[sub.subscription.selectedPlan] : 'Pro'} access</>
+                : <><Zap className="h-4 w-4 flex-shrink-0" /> Free trial — {d} of 14 days remaining · Full {sub.subscription?.selectedPlan ? PLAN_NAMES[sub.subscription.selectedPlan] : 'Pro'} access included</>
+              }
+            </div>
+            <div className="flex items-center gap-3">
+              <Button size="sm" variant="outline" className="h-7 text-xs border-current text-current hover:bg-white/10" onClick={() => navigate('/pricing')}>
+                {expired ? 'Choose a Plan' : 'See Plans'}
+              </Button>
+              {!expired && (
+                <button onClick={() => setBannerDismissed(true)} className="opacity-60 hover:opacity-100">
+                  <X className="h-4 w-4" />
+                </button>
+              )}
+            </div>
           </div>
-          <div className="flex items-center gap-3">
-            <Button size="sm" variant="outline" className="h-7 text-xs border-current text-current hover:bg-white/10" onClick={() => navigate('/pricing')}>
-              {sub.isTrialExpired ? 'Choose a Plan' : 'Upgrade Now'}
-            </Button>
-            {!sub.isTrialExpired && sub.daysLeftInTrial > 3 && (
-              <button onClick={() => setBannerDismissed(true)} className="opacity-60 hover:opacity-100">
-                <X className="h-4 w-4" />
-              </button>
-            )}
-          </div>
-        </div>
-      )}
+        );
+      })()}
 
       {/* Nav */}
       <nav className="border-b border-border bg-background sticky top-0 z-10">

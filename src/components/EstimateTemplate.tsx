@@ -1,4 +1,5 @@
-import { useState, useEffect } from "react";
+import React, { useState, useEffect } from "react";
+import { ESTIMATE_TEMPLATES, EstimateTemplateData } from "@/data/estimateTemplates";
 import { getUserStorageKey } from "@/lib/localAuth";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -20,7 +21,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { toast } from "sonner";
-import { Plus, Trash2, ChevronDown, ChevronRight, DollarSign, Edit2, Save, X, Link, Copy, CheckCircle } from "lucide-react";
+import { Plus, Trash2, ChevronDown, ChevronRight, DollarSign, Edit2, Save, X, Link, Copy, CheckCircle, BookOpen } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { Textarea } from "@/components/ui/textarea";
@@ -29,6 +30,7 @@ import { NCCSearchBar } from "./NCCSearchBar";
 import { LabourRatesSection } from "./LabourRatesSection";
 import { PricingHistory } from "./PricingHistory";
 import { CustomMaterialDialog } from "./CustomMaterialDialog";
+import { TourTip } from "@/components/TourTip";
 
 const AU_TRADES = [
   "Carpenter", "Plumber", "Electrician", "Bricklayer", "Plasterer",
@@ -172,6 +174,9 @@ export const EstimateTemplate = ({ projectId, estimateId }: EstimateTemplateProp
   const [customConfigs, setCustomConfigs] = useState<{ id: string; name: string; value: number }[]>([]);
   const [newCustomConfig, setNewCustomConfig] = useState({ name: "", value: "" });
   const [showConfig, setShowConfig] = useState(false);
+  const [groupingMode, setGroupingMode] = useState<'none' | 'trade' | 'room'>('none');
+  const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set());
+  const [showTemplateModal, setShowTemplateModal] = useState(false);
 
   useEffect(() => {
     loadOverheads();
@@ -259,6 +264,9 @@ export const EstimateTemplate = ({ projectId, estimateId }: EstimateTemplateProp
       const cutoff = Date.now() - 60_000;
       const fresh = project.estimate_items.filter((i: any) => i._costItemId && i._transferredAt > cutoff);
       setRecentlyTransferred(fresh);
+    }
+    if (project.estimate_config?.groupingMode) {
+      setGroupingMode(project.estimate_config.groupingMode as 'none' | 'trade' | 'room');
     }
   };
 
@@ -518,24 +526,32 @@ export const EstimateTemplate = ({ projectId, estimateId }: EstimateTemplateProp
   const calculateTotals = () => {
     let totalMaterials = 0;
     let totalLabour = 0;
+    let totalMarkup = 0;
 
     items.forEach(item => {
       // Material calculation with wastage
       const matBase = (item.quantity || 0) * (item.unit_price || 0);
       const matWaste = matBase * ((item.material_wastage_pct || 0) / 100);
-      totalMaterials += matBase + matWaste;
+      let matTotal = matBase + matWaste;
+      totalMaterials += matTotal;
 
-      // Add related materials
+      // Add related materials — included in both totalMaterials and markup base
       if (item.relatedMaterials) {
         item.relatedMaterials.forEach(rm => {
-          totalMaterials += (rm.quantity || 0) * (rm.unit_price || 0);
+          const rmCost = (rm.quantity || 0) * (rm.unit_price || 0);
+          totalMaterials += rmCost;
+          matTotal += rmCost;
         });
       }
 
       // Labour calculation with wastage — always use current labourRates state so rate changes apply to existing items
       const labBase = (item.labour_hours || 0) * (labourRates[item.trade] || item.labour_rate || config.defaultLabourRate);
       const labWaste = labBase * ((item.labour_wastage_pct || 0) / 100);
-      totalLabour += labBase + labWaste;
+      const labTotal = labBase + labWaste;
+      totalLabour += labTotal;
+
+      // Per-item markup applied to item subtotal (mat + related materials + labour with wastage)
+      totalMarkup += (matTotal + labTotal) * ((item.markup_pct || 0) / 100);
     });
 
     // Add consumables to materials
@@ -547,7 +563,8 @@ export const EstimateTemplate = ({ projectId, estimateId }: EstimateTemplateProp
     const supervision = totalLabour * (config.supervisionPct / 100);
     const overheadsPct = (baseSubtotal + supervision) * (config.overheadPct / 100);
     const totalOverheads = overheadsPct + overheadTotal;
-    const preMargin = baseSubtotal + supervision + totalOverheads;
+    // totalMarkup is added to preMargin so contingency and overall margin apply on top
+    const preMargin = baseSubtotal + totalMarkup + supervision + totalOverheads;
     const contingency = preMargin * (config.contingencyPct / 100);
     
     // Add custom configs
@@ -564,6 +581,7 @@ export const EstimateTemplate = ({ projectId, estimateId }: EstimateTemplateProp
     return {
       totalMaterials,
       totalLabour,
+      totalMarkup,
       baseSubtotal,
       supervision,
       overheadsPct,
@@ -580,6 +598,19 @@ export const EstimateTemplate = ({ projectId, estimateId }: EstimateTemplateProp
   };
 
   const totals = calculateTotals();
+
+  // Sync estimate_config, consumables, and estimate_totals to the project record so
+  // QuoteGenerator and FullTenderGenerator always read current rates and percentages.
+  useEffect(() => {
+    if (!projectId) return;
+    const projects: any[] = JSON.parse(localStorage.getItem(getUserStorageKey('local_projects')) || '[]');
+    const idx = projects.findIndex((p: any) => p.id === projectId);
+    if (idx === -1) return;
+    projects[idx].estimate_config = { ...config, labourRates, customConfigs, groupingMode };
+    projects[idx].consumables = consumables;
+    projects[idx].estimate_totals = calculateTotals();
+    localStorage.setItem(getUserStorageKey('local_projects'), JSON.stringify(projects));
+  }, [items, config, consumables, labourRates, overheadTotal, customConfigs, groupingMode, projectId]);
 
   const handleAIItems = (aiItems: any[]) => {
     aiItems.forEach(item => {
@@ -601,20 +632,388 @@ export const EstimateTemplate = ({ projectId, estimateId }: EstimateTemplateProp
     const qty = parseFloat(newItem.quantity) || 0;
     const unitPrice = parseFloat(newItem.unit_price) || 0;
     const labourHrs = parseFloat(newItem.labour_hours) || 0;
-    
+
     // Material with wastage
     const matBase = qty * unitPrice;
     const matWithWaste = matBase * (1 + config.materialWastage / 100);
-    
-    // Labour with wastage
-    const labBase = labourHrs * config.defaultLabourRate;
+
+    // Labour with wastage — use the selected trade's rate, fall back to default
+    const tradeRate = labourRates[newItem.trade] || config.defaultLabourRate;
+    const labBase = labourHrs * tradeRate;
     const labWithWaste = labBase * (1 + config.labourWastage / 100);
-    
+
     return {
       materials: matWithWaste,
       labour: labWithWaste,
       total: matWithWaste + labWithWaste
     };
+  };
+
+  const getGroups = (mode: 'trade' | 'room'): { order: string[]; groups: Record<string, EstimateItem[]> } => {
+    const order: string[] = [];
+    const groups: Record<string, EstimateItem[]> = {};
+    items.forEach(item => {
+      const key = mode === 'trade' ? (item.trade || 'Other') : (item.area || 'Other');
+      if (!groups[key]) { groups[key] = []; order.push(key); }
+      groups[key].push(item);
+    });
+    return { order, groups };
+  };
+
+  const toggleGroup = (key: string) => {
+    setCollapsedGroups(prev => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key); else next.add(key);
+      return next;
+    });
+  };
+
+  const loadTemplate = (template: EstimateTemplateData) => {
+    const newItems: EstimateItem[] = template.items.map((ti, idx) => ({
+      id: `item-${Date.now()}-${idx}`,
+      section_id: null,
+      area: ti.area,
+      trade: ti.trade,
+      scope_of_work: ti.scope_of_work,
+      material_type: ti.material_type,
+      quantity: ti.quantity,
+      unit: ti.unit,
+      unit_price: ti.unit_price,
+      labour_hours: ti.labour_hours,
+      labour_rate: labourRates[ti.trade] || config.defaultLabourRate,
+      material_wastage_pct: ti.material_wastage_pct,
+      labour_wastage_pct: ti.labour_wastage_pct,
+      markup_pct: ti.markup_pct,
+      notes: '',
+      expanded: false,
+      item_number: `${idx + 1}`,
+      isEditing: false,
+      relatedMaterials: [],
+    }));
+    setItems(newItems);
+    const projects = JSON.parse(localStorage.getItem(getUserStorageKey('local_projects')) || '[]');
+    const projectIndex = projects.findIndex((p: any) => p.id === projectId);
+    if (projectIndex !== -1) {
+      projects[projectIndex].estimate_items = newItems;
+      localStorage.setItem(getUserStorageKey('local_projects'), JSON.stringify(projects));
+    }
+    setShowTemplateModal(false);
+    toast.success(`${template.items.length} items loaded from "${template.name}"`);
+  };
+
+  const renderItem = (item: EstimateItem) => {
+    const matBase = item.quantity * item.unit_price;
+    const matWaste = matBase * (item.material_wastage_pct / 100);
+    const relatedMatsTotal = (item.relatedMaterials || []).reduce((s, rm) => s + (rm.quantity || 0) * (rm.unit_price || 0), 0);
+    const matTotalWithRelated = matBase + matWaste + relatedMatsTotal;
+    const labBase = item.labour_hours * (labourRates[item.trade] || item.labour_rate || config.defaultLabourRate);
+    const labWaste = labBase * (item.labour_wastage_pct / 100);
+    const labTotal = labBase + labWaste;
+    const subtotal = matTotalWithRelated + labTotal;
+    const markup = subtotal * (item.markup_pct / 100);
+    const lineTotal = subtotal + markup;
+    const isEditing = editingId === item.id;
+    const relatedMats = SOW_RELATED_MATERIALS[item.scope_of_work] || [];
+
+    return (
+      <React.Fragment key={item.id}>
+        <TableRow className="group">
+          <TableCell>
+            {relatedMats.length > 0 && (
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-8 w-8"
+                onClick={() => toggleExpanded(item.id)}
+              >
+                {item.expanded ? (
+                  <ChevronDown className="h-4 w-4" />
+                ) : (
+                  <ChevronRight className="h-4 w-4" />
+                )}
+              </Button>
+            )}
+          </TableCell>
+          <TableCell className="font-mono text-sm font-medium">{item.item_number}</TableCell>
+          <TableCell>
+            {isEditing ? (
+              <Input
+                value={editValues.area}
+                onChange={(e) => setEditValues({ ...editValues, area: e.target.value })}
+                className="h-8"
+              />
+            ) : item.area}
+          </TableCell>
+          <TableCell>{item.trade}</TableCell>
+          <TableCell>{item.scope_of_work}</TableCell>
+          <TableCell>
+            {isEditing ? (
+              <Input
+                value={editValues.material_type}
+                onChange={(e) => setEditValues({ ...editValues, material_type: e.target.value })}
+                className="h-8"
+              />
+            ) : item.material_type}
+          </TableCell>
+          <TableCell className="text-right">
+            {isEditing ? (
+              <Input
+                type="number"
+                step="0.01"
+                value={editValues.quantity}
+                onChange={(e) => setEditValues({ ...editValues, quantity: parseFloat(e.target.value) })}
+                className="h-8 w-24 text-right"
+              />
+            ) : <span className="font-mono">{Number(item.quantity).toFixed(1)}</span>}
+          </TableCell>
+          <TableCell>{item.unit}</TableCell>
+          <TableCell className="text-right">
+            {isEditing ? (
+              <Input
+                type="number"
+                step="0.01"
+                value={editValues.unit_price}
+                onChange={(e) => setEditValues({ ...editValues, unit_price: parseFloat(e.target.value) })}
+                className="h-8 w-24 text-right"
+              />
+            ) : <span className="font-mono">${item.unit_price.toFixed(2)}</span>}
+          </TableCell>
+          <TableCell className="text-center">
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-8 w-8"
+              onClick={() => openUrlDialog('item', item.id)}
+            >
+              <Link className="h-4 w-4" />
+            </Button>
+          </TableCell>
+          <TableCell className="text-right">
+            {isEditing ? (
+              <Input
+                type="number"
+                step="0.5"
+                value={editValues.labour_hours}
+                onChange={(e) => setEditValues({ ...editValues, labour_hours: parseFloat(e.target.value) })}
+                className="h-8 w-24 text-right"
+              />
+            ) : (
+              <div className="text-right">
+                <span className="font-mono">{Number(item.labour_hours).toFixed(1)}</span>
+                <div className="text-xs text-muted-foreground mt-0.5">
+                  @${(labourRates[item.trade] || item.labour_rate || config.defaultLabourRate).toFixed(0)}/hr
+                </div>
+              </div>
+            )}
+          </TableCell>
+          <TableCell className="text-right">
+            <div>
+              <span className="font-mono text-sm">${matTotalWithRelated.toFixed(2)}</span>
+              {relatedMatsTotal > 0 && (
+                <div className="text-xs text-muted-foreground mt-0.5">incl. +${relatedMatsTotal.toFixed(2)} related</div>
+              )}
+              <div className="text-xs text-muted-foreground mt-0.5">
+                {lineTotal > 0 ? ((matTotalWithRelated / lineTotal) * 100).toFixed(0) : '0'}%
+              </div>
+            </div>
+          </TableCell>
+          <TableCell className="text-right">
+            <div>
+              <span className="font-mono text-sm">${labTotal.toFixed(2)}</span>
+              <div className="text-xs text-muted-foreground mt-0.5">
+                {lineTotal > 0 ? ((labTotal / lineTotal) * 100).toFixed(0) : '0'}%
+              </div>
+            </div>
+          </TableCell>
+          <TableCell className="text-right">
+            {isEditing ? (
+              <Input
+                type="number"
+                step="0.1"
+                min="0"
+                value={editValues.markup_pct !== undefined ? editValues.markup_pct : 0}
+                onChange={(e) => {
+                  const value = e.target.value;
+                  setEditValues({ ...editValues, markup_pct: value === '' ? 0 : parseFloat(value) });
+                }}
+                className="h-8 w-20 text-right"
+              />
+            ) : <span className="font-mono">{item.markup_pct}%</span>}
+          </TableCell>
+          <TableCell className="text-right font-mono font-bold">${lineTotal.toFixed(2)}</TableCell>
+          <TableCell>
+            <div className="flex gap-1">
+              {isEditing ? (
+                <>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => saveEdit(item.id)}
+                    className="text-green-600 h-8 w-8"
+                  >
+                    <Save className="h-4 w-4" />
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={cancelEditing}
+                    className="h-8 w-8"
+                  >
+                    <X className="h-4 w-4" />
+                  </Button>
+                </>
+              ) : (
+                <>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => startEditing(item)}
+                    className="h-8 w-8"
+                  >
+                    <Edit2 className="h-4 w-4" />
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => deleteItem(item.id)}
+                    className="text-destructive h-8 w-8"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </Button>
+                </>
+              )}
+            </div>
+          </TableCell>
+        </TableRow>
+        {item.expanded && relatedMats.length > 0 && (
+          <TableRow className="bg-muted/30">
+            <TableCell colSpan={14} className="py-0">
+              <div className="p-4 space-y-3">
+                <div className="flex items-center justify-between">
+                  <p className="text-sm font-semibold text-muted-foreground">Related Materials for {item.scope_of_work}:</p>
+                  <Select onValueChange={(value) => {
+                    if (value === "__custom__") {
+                      setShowCustomMaterialDialog(true);
+                    } else {
+                      addRelatedMaterial(item.id, value);
+                    }
+                  }}>
+                    <SelectTrigger className="w-64 h-8">
+                      <SelectValue placeholder="Add material..." />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="__custom__" className="font-semibold text-primary">
+                        + Add Custom Material
+                      </SelectItem>
+                      {relatedMats.map(mat => (
+                        <SelectItem key={mat} value={mat}>{mat}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                {item.relatedMaterials && item.relatedMaterials.length > 0 && (
+                  <div className="space-y-2">
+                    <div className="grid grid-cols-12 gap-2 px-3 pb-2 text-xs font-semibold text-muted-foreground border-b">
+                      <div className="col-span-3">Material Name</div>
+                      <div className="col-span-1 text-center">Qty</div>
+                      <div className="col-span-1 text-center">Unit</div>
+                      <div className="col-span-1 text-right">$/Unit</div>
+                      <div className="col-span-1 text-center">URL</div>
+                      <div className="col-span-4">Comment</div>
+                      <div className="col-span-1 text-right">Total</div>
+                    </div>
+                    {item.relatedMaterials.map((rm, rmIdx) => (
+                      <div key={rm.id} className="space-y-2 border-l-2 border-primary/20 ml-4 pl-3">
+                        <div className="bg-background rounded border border-border p-3 grid grid-cols-12 gap-2 items-center">
+                          <div className="col-span-3 flex items-center gap-2">
+                            <span className="text-[10px] font-mono font-bold text-primary/70 bg-primary/8 border border-primary/20 rounded px-1.5 py-0.5 flex-shrink-0 leading-none">{item.item_number}.{rmIdx + 1}</span>
+                            <span className="text-sm font-medium">{rm.name}</span>
+                          </div>
+                          <Input
+                            type="number"
+                            step="0.01"
+                            value={rm.quantity}
+                            onChange={(e) => updateRelatedMaterial(item.id, rm.id, 'quantity', parseFloat(e.target.value) || 0)}
+                            placeholder="Qty"
+                            className="col-span-1 h-8"
+                          />
+                          <Select
+                            value={rm.unit}
+                            onValueChange={(value) => updateRelatedMaterial(item.id, rm.id, 'unit', value)}
+                          >
+                            <SelectTrigger className="col-span-1 h-8">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="ea">ea</SelectItem>
+                              <SelectItem value="m">m</SelectItem>
+                              <SelectItem value="m²">m²</SelectItem>
+                              <SelectItem value="kg">kg</SelectItem>
+                              <SelectItem value="L">L</SelectItem>
+                            </SelectContent>
+                          </Select>
+                          <Input
+                            type="number"
+                            step="0.01"
+                            value={rm.unit_price}
+                            onChange={(e) => updateRelatedMaterial(item.id, rm.id, 'unit_price', parseFloat(e.target.value) || 0)}
+                            placeholder="$/Unit"
+                            className="col-span-1 h-8"
+                          />
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-8 w-8"
+                            onClick={() => openUrlDialog('related', item.id, rm.id)}
+                          >
+                            <Link className="h-4 w-4" />
+                          </Button>
+                          <Input
+                            value={rm.comment}
+                            onChange={(e) => updateRelatedMaterial(item.id, rm.id, 'comment', e.target.value)}
+                            placeholder="Comment"
+                            className="col-span-4 h-8"
+                          />
+                          <div className="col-span-1 text-right font-mono text-sm">
+                            ${(rm.quantity * rm.unit_price).toFixed(2)}
+                          </div>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => deleteRelatedMaterial(item.id, rm.id)}
+                            className="h-8 w-8 text-destructive"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </div>
+                        <div className="flex justify-end px-3">
+                          {rm.confirmed ? (
+                            <div className="flex items-center gap-2 text-sm text-accent-foreground">
+                              <CheckCircle className="h-4 w-4" />
+                              <span>Added to Total</span>
+                            </div>
+                          ) : (
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => toggleRelatedMaterialConfirmed(item.id, rm.id)}
+                              className="h-8"
+                            >
+                              <CheckCircle className="h-4 w-4 mr-2" />
+                              Confirm & Add to Total
+                            </Button>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </TableCell>
+          </TableRow>
+        )}
+      </React.Fragment>
+    );
   };
 
   const addCustomConfig = () => {
@@ -963,14 +1362,30 @@ export const EstimateTemplate = ({ projectId, estimateId }: EstimateTemplateProp
         </div>
 
         <div className="col-span-full mt-6 p-4 bg-accent/10 rounded-lg flex items-center justify-between">
-          <div className="space-y-1">
-            <div className="text-sm">
-              <span className="text-muted-foreground">Materials:</span> ${calculateLineTotal().materials.toFixed(2)} 
-              <span className="text-xs text-muted-foreground ml-2">(incl. {config.materialWastage}% waste)</span>
+          <div className="space-y-1.5">
+            <div className="flex items-center gap-1.5 text-sm">
+              <span className="text-muted-foreground">Materials:</span>
+              <span>${calculateLineTotal().materials.toFixed(2)}</span>
+              <span className="text-xs text-muted-foreground">(incl.</span>
+              <input
+                type="number" min="0" max="100" step="0.1"
+                value={config.materialWastage}
+                onChange={(e) => setConfig({ ...config, materialWastage: parseFloat(e.target.value) || 0 })}
+                className="w-12 h-5 text-right text-xs border border-input rounded px-1 bg-background font-mono focus:outline-none focus:ring-1 focus:ring-primary"
+              />
+              <span className="text-xs text-muted-foreground">% waste)</span>
             </div>
-            <div className="text-sm">
-              <span className="text-muted-foreground">Labour:</span> ${calculateLineTotal().labour.toFixed(2)} 
-              <span className="text-xs text-muted-foreground ml-2">(incl. {config.labourWastage}% waste)</span>
+            <div className="flex items-center gap-1.5 text-sm">
+              <span className="text-muted-foreground">Labour:</span>
+              <span>${calculateLineTotal().labour.toFixed(2)}</span>
+              <span className="text-xs text-muted-foreground">(incl.</span>
+              <input
+                type="number" min="0" max="100" step="0.1"
+                value={config.labourWastage}
+                onChange={(e) => setConfig({ ...config, labourWastage: parseFloat(e.target.value) || 0 })}
+                className="w-12 h-5 text-right text-xs border border-input rounded px-1 bg-background font-mono focus:outline-none focus:ring-1 focus:ring-primary"
+              />
+              <span className="text-xs text-muted-foreground">% waste)</span>
             </div>
             <div className="text-lg font-bold">
               Line Total: <span className="text-accent">${calculateLineTotal().total.toFixed(2)}</span>
@@ -985,7 +1400,59 @@ export const EstimateTemplate = ({ projectId, estimateId }: EstimateTemplateProp
 
       {/* 9. Project Price Per Item */}
       <Card className="p-6">
-        <h3 className="text-lg font-semibold mb-4">Project Price Per Item</h3>
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="text-lg font-semibold">Project Price Per Item</h3>
+          <div className="flex items-center gap-3">
+            <div className="flex items-center rounded-lg border border-border overflow-hidden text-sm">
+              {(['none', 'trade', 'room'] as const).map((mode) => (
+                <button
+                  key={mode}
+                  onClick={() => { setGroupingMode(mode); setCollapsedGroups(new Set()); }}
+                  className={`px-3 py-1.5 text-xs font-medium transition-colors ${
+                    groupingMode === mode
+                      ? 'bg-primary text-primary-foreground'
+                      : 'text-muted-foreground hover:text-foreground hover:bg-muted/50'
+                  }`}
+                >
+                  {mode === 'none' ? 'Flat' : mode === 'trade' ? 'By Trade' : 'By Room'}
+                </button>
+              ))}
+            </div>
+            <TourTip text="Start your estimate from a pre-built template — New Build, Bathroom Reno, Kitchen, Deck, or Commercial Fitout. Loads all standard line items instantly." position="left">
+              <Button variant="outline" size="sm" onClick={() => setShowTemplateModal(true)}>
+                <BookOpen className="h-4 w-4 mr-2" />
+                Load Template
+              </Button>
+            </TourTip>
+          </div>
+        </div>
+
+        {/* Empty state — show template picker when no items yet */}
+        {items.length === 0 && (
+          <div className="px-2 pb-4">
+            <div className="rounded-lg border border-dashed border-primary/30 bg-primary/5 p-5">
+              <div className="flex items-center gap-2 mb-3">
+                <BookOpen className="h-4 w-4 text-primary" />
+                <span className="text-sm font-semibold">Start from a template</span>
+                <span className="text-xs text-muted-foreground">— or add items manually using the form above</span>
+              </div>
+              <div className="grid grid-cols-2 md:grid-cols-5 gap-2">
+                {ESTIMATE_TEMPLATES.map(t => (
+                  <button
+                    key={t.id}
+                    onClick={() => { loadTemplate(t); }}
+                    className="flex flex-col items-start gap-1 p-3 rounded-lg border border-border bg-background hover:border-primary/50 hover:bg-primary/5 transition-all text-left group"
+                  >
+                    <span className="text-xl">{t.icon}</span>
+                    <span className="text-xs font-semibold leading-tight group-hover:text-primary transition-colors">{t.name}</span>
+                    <span className="text-[10px] text-muted-foreground">{t.items.length} items</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
+
         <div className="overflow-x-auto">
           <Table>
             <TableHeader>
@@ -1001,294 +1468,57 @@ export const EstimateTemplate = ({ projectId, estimateId }: EstimateTemplateProp
                 <TableHead className="text-right w-24">$/Unit</TableHead>
                 <TableHead className="text-center w-12">URL</TableHead>
                 <TableHead className="text-right w-24">Labour Hrs</TableHead>
+                <TableHead className="text-right w-28">Mat $</TableHead>
+                <TableHead className="text-right w-28">Labour $</TableHead>
                 <TableHead className="text-right w-24">Markup %</TableHead>
                 <TableHead className="text-right w-28">Line Total</TableHead>
                 <TableHead className="w-20"></TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
-              {items.map(item => {
-                const matBase = item.quantity * item.unit_price;
-                const matWaste = matBase * (item.material_wastage_pct / 100);
-                const labBase = item.labour_hours * (labourRates[item.trade] || item.labour_rate || config.defaultLabourRate);
-                const labWaste = labBase * (item.labour_wastage_pct / 100);
-                const subtotal = matBase + matWaste + labBase + labWaste;
-                const markup = subtotal * (item.markup_pct / 100);
-                const lineTotal = subtotal + markup;
-                const isEditing = editingId === item.id;
-                const relatedMats = SOW_RELATED_MATERIALS[item.scope_of_work] || [];
-
-                return (
-                  <>
-                    <TableRow key={item.id} className="group">
-                      <TableCell>
-                        {relatedMats.length > 0 && (
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-8 w-8"
-                            onClick={() => toggleExpanded(item.id)}
+              {groupingMode === 'none'
+                ? items.map(item => renderItem(item))
+                : (() => {
+                    const { order, groups } = getGroups(groupingMode);
+                    return order.map(groupName => {
+                      const groupItems = groups[groupName];
+                      const isCollapsed = collapsedGroups.has(groupName);
+                      const sectionTotal = groupItems.reduce((sum, item) => {
+                        const mb = item.quantity * item.unit_price;
+                        const mw = mb * (item.material_wastage_pct / 100);
+                        const rt = (item.relatedMaterials || []).reduce((s, rm) => s + (rm.quantity || 0) * (rm.unit_price || 0), 0);
+                        const lb = item.labour_hours * (labourRates[item.trade] || item.labour_rate || config.defaultLabourRate);
+                        const lw = lb * (item.labour_wastage_pct / 100);
+                        return sum + (mb + mw + rt + lb + lw) * (1 + item.markup_pct / 100);
+                      }, 0);
+                      return (
+                        <React.Fragment key={groupName}>
+                          <TableRow
+                            className="bg-primary/5 hover:bg-primary/8 cursor-pointer select-none border-t-2 border-primary/10"
+                            onClick={() => toggleGroup(groupName)}
                           >
-                            {item.expanded ? (
-                              <ChevronDown className="h-4 w-4" />
-                            ) : (
-                              <ChevronRight className="h-4 w-4" />
-                            )}
-                          </Button>
-                        )}
-                      </TableCell>
-                      <TableCell className="font-mono text-sm font-medium">{item.item_number}</TableCell>
-                      <TableCell>
-                        {isEditing ? (
-                          <Input
-                            value={editValues.area}
-                            onChange={(e) => setEditValues({ ...editValues, area: e.target.value })}
-                            className="h-8"
-                          />
-                        ) : item.area}
-                      </TableCell>
-                      <TableCell>{item.trade}</TableCell>
-                      <TableCell>{item.scope_of_work}</TableCell>
-                      <TableCell>
-                        {isEditing ? (
-                          <Input
-                            value={editValues.material_type}
-                            onChange={(e) => setEditValues({ ...editValues, material_type: e.target.value })}
-                            className="h-8"
-                          />
-                        ) : item.material_type}
-                      </TableCell>
-                      <TableCell className="text-right">
-                        {isEditing ? (
-                          <Input
-                            type="number"
-                            step="0.01"
-                            value={editValues.quantity}
-                            onChange={(e) => setEditValues({ ...editValues, quantity: parseFloat(e.target.value) })}
-                            className="h-8 w-24 text-right"
-                          />
-                        ) : <span className="font-mono">{item.quantity}</span>}
-                      </TableCell>
-                      <TableCell>{item.unit}</TableCell>
-                      <TableCell className="text-right">
-                        {isEditing ? (
-                          <Input
-                            type="number"
-                            step="0.01"
-                            value={editValues.unit_price}
-                            onChange={(e) => setEditValues({ ...editValues, unit_price: parseFloat(e.target.value) })}
-                            className="h-8 w-24 text-right"
-                          />
-                        ) : <span className="font-mono">${item.unit_price.toFixed(2)}</span>}
-                      </TableCell>
-                      <TableCell className="text-center">
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-8 w-8"
-                          onClick={() => openUrlDialog('item', item.id)}
-                        >
-                          <Link className="h-4 w-4" />
-                        </Button>
-                      </TableCell>
-                      <TableCell className="text-right">
-                        {isEditing ? (
-                          <Input
-                            type="number"
-                            step="0.5"
-                            value={editValues.labour_hours}
-                            onChange={(e) => setEditValues({ ...editValues, labour_hours: parseFloat(e.target.value) })}
-                            className="h-8 w-24 text-right"
-                          />
-                        ) : <span className="font-mono">{item.labour_hours}</span>}
-                      </TableCell>
-                      <TableCell className="text-right">
-                        {isEditing ? (
-                          <Input
-                            type="number"
-                            step="0.1"
-                            min="0"
-                            value={editValues.markup_pct !== undefined ? editValues.markup_pct : 0}
-                            onChange={(e) => {
-                              const value = e.target.value;
-                              setEditValues({ ...editValues, markup_pct: value === '' ? 0 : parseFloat(value) });
-                            }}
-                            className="h-8 w-20 text-right"
-                          />
-                        ) : <span className="font-mono">{item.markup_pct}%</span>}
-                      </TableCell>
-                      <TableCell className="text-right font-mono font-bold">${lineTotal.toFixed(2)}</TableCell>
-                      <TableCell>
-                        <div className="flex gap-1">
-                          {isEditing ? (
-                            <>
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                onClick={() => saveEdit(item.id)}
-                                className="text-green-600 h-8 w-8"
-                              >
-                                <Save className="h-4 w-4" />
-                              </Button>
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                onClick={cancelEditing}
-                                className="h-8 w-8"
-                              >
-                                <X className="h-4 w-4" />
-                              </Button>
-                            </>
-                          ) : (
-                            <>
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                onClick={() => startEditing(item)}
-                                className="h-8 w-8"
-                              >
-                                <Edit2 className="h-4 w-4" />
-                              </Button>
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                onClick={() => deleteItem(item.id)}
-                                className="text-destructive h-8 w-8"
-                              >
-                                <Trash2 className="h-4 w-4" />
-                              </Button>
-                            </>
-                          )}
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                    {item.expanded && relatedMats.length > 0 && (
-                      <TableRow key={`${item.id}-related`} className="bg-muted/30">
-                        <TableCell colSpan={14} className="py-0">
-                          <div className="p-4 space-y-3">
-                            <div className="flex items-center justify-between">
-                              <p className="text-sm font-semibold text-muted-foreground">Related Materials for {item.scope_of_work}:</p>
-                              <Select onValueChange={(value) => {
-                                if (value === "__custom__") {
-                                  setShowCustomMaterialDialog(true);
-                                } else {
-                                  addRelatedMaterial(item.id, value);
-                                }
-                              }}>
-                                <SelectTrigger className="w-64 h-8">
-                                  <SelectValue placeholder="Add material..." />
-                                </SelectTrigger>
-                                <SelectContent>
-                                  <SelectItem value="__custom__" className="font-semibold text-primary">
-                                    + Add Custom Material
-                                  </SelectItem>
-                                  {relatedMats.map(mat => (
-                                    <SelectItem key={mat} value={mat}>{mat}</SelectItem>
-                                  ))}
-                                </SelectContent>
-                              </Select>
-                            </div>
-                            {item.relatedMaterials && item.relatedMaterials.length > 0 && (
-                              <div className="space-y-2">
-                                <div className="grid grid-cols-12 gap-2 px-3 pb-2 text-xs font-semibold text-muted-foreground border-b">
-                                  <div className="col-span-3">Material Name</div>
-                                  <div className="col-span-1 text-center">Qty</div>
-                                  <div className="col-span-1 text-center">Unit</div>
-                                  <div className="col-span-1 text-right">$/Unit</div>
-                                  <div className="col-span-1 text-center">URL</div>
-                                  <div className="col-span-4">Comment</div>
-                                  <div className="col-span-1 text-right">Total</div>
+                            <TableCell colSpan={16} className="py-2.5 px-4">
+                              <div className="flex items-center justify-between">
+                                <div className="flex items-center gap-2">
+                                  {isCollapsed
+                                    ? <ChevronRight className="h-4 w-4 text-primary" />
+                                    : <ChevronDown className="h-4 w-4 text-primary" />
+                                  }
+                                  <span className="text-sm font-bold uppercase tracking-wide">{groupName}</span>
+                                  <span className="text-xs text-muted-foreground bg-muted px-1.5 py-0.5 rounded-full">
+                                    {groupItems.length} item{groupItems.length !== 1 ? 's' : ''}
+                                  </span>
                                 </div>
-                                {item.relatedMaterials.map(rm => (
-                                  <div key={rm.id} className="space-y-2">
-                                    <div className="bg-background rounded border border-border p-3 grid grid-cols-12 gap-2 items-center">
-                                      <div className="col-span-3 text-sm font-medium">{rm.name}</div>
-                                      <Input
-                                        type="number"
-                                        step="0.01"
-                                        value={rm.quantity}
-                                        onChange={(e) => updateRelatedMaterial(item.id, rm.id, 'quantity', parseFloat(e.target.value) || 0)}
-                                        placeholder="Qty"
-                                        className="col-span-1 h-8"
-                                      />
-                                      <Select
-                                        value={rm.unit}
-                                        onValueChange={(value) => updateRelatedMaterial(item.id, rm.id, 'unit', value)}
-                                      >
-                                        <SelectTrigger className="col-span-1 h-8">
-                                          <SelectValue />
-                                        </SelectTrigger>
-                                        <SelectContent>
-                                          <SelectItem value="ea">ea</SelectItem>
-                                          <SelectItem value="m">m</SelectItem>
-                                          <SelectItem value="m²">m²</SelectItem>
-                                          <SelectItem value="kg">kg</SelectItem>
-                                          <SelectItem value="L">L</SelectItem>
-                                        </SelectContent>
-                                      </Select>
-                                      <Input
-                                        type="number"
-                                        step="0.01"
-                                        value={rm.unit_price}
-                                        onChange={(e) => updateRelatedMaterial(item.id, rm.id, 'unit_price', parseFloat(e.target.value) || 0)}
-                                        placeholder="$/Unit"
-                                        className="col-span-1 h-8"
-                                      />
-                                      <Button
-                                        variant="ghost"
-                                        size="icon"
-                                        className="h-8 w-8"
-                                        onClick={() => openUrlDialog('related', item.id, rm.id)}
-                                      >
-                                        <Link className="h-4 w-4" />
-                                      </Button>
-                                      <Input
-                                        value={rm.comment}
-                                        onChange={(e) => updateRelatedMaterial(item.id, rm.id, 'comment', e.target.value)}
-                                        placeholder="Comment"
-                                        className="col-span-4 h-8"
-                                      />
-                                      <div className="col-span-1 text-right font-mono text-sm">
-                                        ${(rm.quantity * rm.unit_price).toFixed(2)}
-                                      </div>
-                                      <Button
-                                        variant="ghost"
-                                        size="icon"
-                                        onClick={() => deleteRelatedMaterial(item.id, rm.id)}
-                                        className="h-8 w-8 text-destructive"
-                                      >
-                                        <Trash2 className="h-4 w-4" />
-                                      </Button>
-                                    </div>
-                                    <div className="flex justify-end px-3">
-                                      {rm.confirmed ? (
-                                        <div className="flex items-center gap-2 text-sm text-accent-foreground">
-                                          <CheckCircle className="h-4 w-4" />
-                                          <span>Added to Total</span>
-                                        </div>
-                                      ) : (
-                                        <Button
-                                          variant="outline"
-                                          size="sm"
-                                          onClick={() => toggleRelatedMaterialConfirmed(item.id, rm.id)}
-                                          className="h-8"
-                                        >
-                                          <CheckCircle className="h-4 w-4 mr-2" />
-                                          Confirm & Add to Total
-                                        </Button>
-                                      )}
-                                    </div>
-                                  </div>
-                                ))}
+                                <span className="font-mono text-sm font-semibold text-primary">${sectionTotal.toFixed(2)}</span>
                               </div>
-                            )}
-                          </div>
-                        </TableCell>
-                      </TableRow>
-                    )}
-                  </>
-                );
-              })}
+                            </TableCell>
+                          </TableRow>
+                          {!isCollapsed && groupItems.map(item => renderItem(item))}
+                        </React.Fragment>
+                      );
+                    });
+                  })()
+              }
             </TableBody>
           </Table>
         </div>
@@ -1411,7 +1641,7 @@ export const EstimateTemplate = ({ projectId, estimateId }: EstimateTemplateProp
               {consumables.map(cons => (
                 <TableRow key={cons.id}>
                   <TableCell>{cons.name}</TableCell>
-                  <TableCell className="text-right font-mono">{cons.quantity}</TableCell>
+                  <TableCell className="text-right font-mono">{Number(cons.quantity).toFixed(1)}</TableCell>
                   <TableCell>{cons.unit}</TableCell>
                   <TableCell className="text-right font-mono">${cons.unit_price.toFixed(2)}</TableCell>
                   <TableCell className="text-right font-mono font-bold">
@@ -1452,9 +1682,10 @@ export const EstimateTemplate = ({ projectId, estimateId }: EstimateTemplateProp
                   items.forEach(item => {
                     const matBase = (item.quantity || 0) * (item.unit_price || 0);
                     const matWaste = matBase * ((item.material_wastage_pct || 0) / 100);
-                    const labBase = (item.labour_hours || 0) * (item.labour_rate || config.defaultLabourRate);
+                    const labBase = (item.labour_hours || 0) * (labourRates[item.trade] || item.labour_rate || config.defaultLabourRate);
                     const labWaste = labBase * ((item.labour_wastage_pct || 0) / 100);
-                    total += matBase + matWaste + labBase + labWaste;
+                    const sub = matBase + matWaste + labBase + labWaste;
+                    total += sub * (1 + ((item.markup_pct || 0) / 100));
                   });
                   return total.toFixed(2);
                 })()}
@@ -1498,93 +1729,165 @@ export const EstimateTemplate = ({ projectId, estimateId }: EstimateTemplateProp
                 <TableHead className="font-bold">Cost Component</TableHead>
                 <TableHead className="text-right font-bold">Amount</TableHead>
                 <TableHead className="text-right font-bold">Percentage</TableHead>
+                <TableHead className="w-8"></TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
-              <TableRow>
-                <TableCell className="font-medium">Base Materials</TableCell>
-                <TableCell className="text-right font-mono">${totals.totalMaterials.toFixed(2)}</TableCell>
-                <TableCell className="text-right font-mono text-muted-foreground">
-                  {totals.totalPrice > 0 ? ((totals.totalMaterials / totals.totalPrice) * 100).toFixed(1) : '0.0'}%
-                </TableCell>
+              {/* ── Section: Base Costs (derived, read-only) ── */}
+              <TableRow className="bg-muted/20">
+                <TableCell colSpan={4} className="py-1 px-4 text-xs font-semibold uppercase tracking-wider text-muted-foreground">Base Costs</TableCell>
               </TableRow>
               <TableRow>
-                <TableCell className="font-medium">Labour Costs</TableCell>
+                <TableCell className="font-medium pl-5">Base Materials</TableCell>
+                <TableCell className="text-right font-mono">${totals.totalMaterials.toFixed(2)}</TableCell>
+                <TableCell className="text-right font-mono text-muted-foreground">{totals.totalPrice > 0 ? ((totals.totalMaterials / totals.totalPrice) * 100).toFixed(1) : '0.0'}%</TableCell>
+                <TableCell />
+              </TableRow>
+              <TableRow>
+                <TableCell className="font-medium pl-5">Labour Costs</TableCell>
                 <TableCell className="text-right font-mono">${totals.totalLabour.toFixed(2)}</TableCell>
-                <TableCell className="text-right font-mono text-muted-foreground">
-                  {totals.totalPrice > 0 ? ((totals.totalLabour / totals.totalPrice) * 100).toFixed(1) : '0.0'}%
-                </TableCell>
+                <TableCell className="text-right font-mono text-muted-foreground">{totals.totalPrice > 0 ? ((totals.totalLabour / totals.totalPrice) * 100).toFixed(1) : '0.0'}%</TableCell>
+                <TableCell />
               </TableRow>
               <TableRow className="border-t border-border">
-                <TableCell className="font-medium text-muted-foreground">Base Subtotal</TableCell>
+                <TableCell className="font-semibold text-muted-foreground pl-5">Base Subtotal</TableCell>
                 <TableCell className="text-right font-mono font-semibold">${totals.baseSubtotal.toFixed(2)}</TableCell>
-                <TableCell className="text-right font-mono text-muted-foreground">
-                  {totals.totalPrice > 0 ? ((totals.baseSubtotal / totals.totalPrice) * 100).toFixed(1) : '0.0'}%
-                </TableCell>
+                <TableCell className="text-right font-mono text-muted-foreground">{totals.totalPrice > 0 ? ((totals.baseSubtotal / totals.totalPrice) * 100).toFixed(1) : '0.0'}%</TableCell>
+                <TableCell />
+              </TableRow>
+
+              {/* ── Section: Project Costs (editable %) ── */}
+              <TableRow className="bg-muted/20">
+                <TableCell colSpan={4} className="py-1 px-4 text-xs font-semibold uppercase tracking-wider text-muted-foreground">Project Costs</TableCell>
               </TableRow>
               <TableRow>
-                <TableCell className="font-medium">
-                  Supervision ({config.supervisionPct}%)
+                <TableCell className="pl-5">
+                  <div className="flex items-center gap-1.5">
+                    <span className="font-medium">Supervision</span>
+                    <input type="number" min="0" max="100" step="0.1" value={config.supervisionPct}
+                      onChange={(e) => setConfig({ ...config, supervisionPct: parseFloat(e.target.value) || 0 })}
+                      className="w-14 h-6 text-right text-sm border border-input rounded px-1.5 bg-background font-mono focus:outline-none focus:ring-1 focus:ring-primary" />
+                    <span className="text-sm text-muted-foreground">% of labour</span>
+                  </div>
                 </TableCell>
                 <TableCell className="text-right font-mono">${totals.supervision.toFixed(2)}</TableCell>
-                <TableCell className="text-right font-mono text-muted-foreground">
-                  {totals.totalPrice > 0 ? ((totals.supervision / totals.totalPrice) * 100).toFixed(1) : '0.0'}%
-                </TableCell>
+                <TableCell className="text-right font-mono text-muted-foreground">{totals.totalPrice > 0 ? ((totals.supervision / totals.totalPrice) * 100).toFixed(1) : '0.0'}%</TableCell>
+                <TableCell />
               </TableRow>
               <TableRow>
-                <TableCell className="font-medium">
-                  Overheads (Percentage: {config.overheadPct}%)
+                <TableCell className="pl-5">
+                  <div className="flex items-center gap-1.5">
+                    <span className="font-medium">Overheads</span>
+                    <input type="number" min="0" max="100" step="0.1" value={config.overheadPct}
+                      onChange={(e) => setConfig({ ...config, overheadPct: parseFloat(e.target.value) || 0 })}
+                      className="w-14 h-6 text-right text-sm border border-input rounded px-1.5 bg-background font-mono focus:outline-none focus:ring-1 focus:ring-primary" />
+                    <span className="text-sm text-muted-foreground">% of subtotal</span>
+                  </div>
                 </TableCell>
                 <TableCell className="text-right font-mono">${totals.overheadsPct.toFixed(2)}</TableCell>
-                <TableCell className="text-right font-mono text-muted-foreground">
-                  {totals.totalPrice > 0 ? ((totals.overheadsPct / totals.totalPrice) * 100).toFixed(1) : '0.0'}%
-                </TableCell>
+                <TableCell className="text-right font-mono text-muted-foreground">{totals.totalPrice > 0 ? ((totals.overheadsPct / totals.totalPrice) * 100).toFixed(1) : '0.0'}%</TableCell>
+                <TableCell />
               </TableRow>
-              <TableRow>
-                <TableCell className="font-medium">Overheads (Fixed Items)</TableCell>
-                <TableCell className="text-right font-mono">${totals.overheadTotal.toFixed(2)}</TableCell>
-                <TableCell className="text-right font-mono text-muted-foreground">
-                  {totals.totalPrice > 0 ? ((totals.overheadTotal / totals.totalPrice) * 100).toFixed(1) : '0.0'}%
-                </TableCell>
-              </TableRow>
+              {totals.overheadTotal > 0 && (
+                <TableRow>
+                  <TableCell className="font-medium pl-5">Overheads (Fixed Items)</TableCell>
+                  <TableCell className="text-right font-mono">${totals.overheadTotal.toFixed(2)}</TableCell>
+                  <TableCell className="text-right font-mono text-muted-foreground">{totals.totalPrice > 0 ? ((totals.overheadTotal / totals.totalPrice) * 100).toFixed(1) : '0.0'}%</TableCell>
+                  <TableCell />
+                </TableRow>
+              )}
+              {totals.totalMarkup > 0 && (
+                <TableRow>
+                  <TableCell className="font-medium pl-5">Per-item Markup</TableCell>
+                  <TableCell className="text-right font-mono">${totals.totalMarkup.toFixed(2)}</TableCell>
+                  <TableCell className="text-right font-mono text-muted-foreground">{totals.totalPrice > 0 ? ((totals.totalMarkup / totals.totalPrice) * 100).toFixed(1) : '0.0'}%</TableCell>
+                  <TableCell />
+                </TableRow>
+              )}
               <TableRow className="border-t border-border">
-                <TableCell className="font-medium text-muted-foreground">Total Overheads</TableCell>
-                <TableCell className="text-right font-mono font-semibold">${totals.totalOverheads.toFixed(2)}</TableCell>
-                <TableCell className="text-right font-mono text-muted-foreground">
-                  {totals.totalPrice > 0 ? ((totals.totalOverheads / totals.totalPrice) * 100).toFixed(1) : '0.0'}%
-                </TableCell>
+                <TableCell className="font-semibold text-muted-foreground pl-5">Total Project Costs</TableCell>
+                <TableCell className="text-right font-mono font-semibold">${(totals.totalOverheads + totals.totalMarkup).toFixed(2)}</TableCell>
+                <TableCell className="text-right font-mono text-muted-foreground">{totals.totalPrice > 0 ? (((totals.totalOverheads + totals.totalMarkup) / totals.totalPrice) * 100).toFixed(1) : '0.0'}%</TableCell>
+                <TableCell />
+              </TableRow>
+
+              {/* ── Section: Margins & Fees (editable %) ── */}
+              <TableRow className="bg-muted/20">
+                <TableCell colSpan={4} className="py-1 px-4 text-xs font-semibold uppercase tracking-wider text-muted-foreground">Margins &amp; Fees</TableCell>
               </TableRow>
               <TableRow>
-                <TableCell className="font-medium">
-                  Margin ({config.marginPct}%)
+                <TableCell className="pl-5">
+                  <div className="flex items-center gap-1.5">
+                    <span className="font-medium">Contingency</span>
+                    <input type="number" min="0" max="100" step="0.1" value={config.contingencyPct}
+                      onChange={(e) => setConfig({ ...config, contingencyPct: parseFloat(e.target.value) || 0 })}
+                      className="w-14 h-6 text-right text-sm border border-input rounded px-1.5 bg-background font-mono focus:outline-none focus:ring-1 focus:ring-primary" />
+                    <span className="text-sm text-muted-foreground">%</span>
+                  </div>
+                </TableCell>
+                <TableCell className="text-right font-mono">${totals.contingency.toFixed(2)}</TableCell>
+                <TableCell className="text-right font-mono text-muted-foreground">{totals.totalPrice > 0 ? ((totals.contingency / totals.totalPrice) * 100).toFixed(1) : '0.0'}%</TableCell>
+                <TableCell />
+              </TableRow>
+              {customConfigs.map(cc => (
+                <TableRow key={cc.id}>
+                  <TableCell className="pl-5">
+                    <div className="flex items-center gap-1.5">
+                      <span className="font-medium">{cc.name}</span>
+                      <input type="number" min="0" max="100" step="0.1" value={cc.value}
+                        onChange={(e) => updateCustomConfig(cc.id, parseFloat(e.target.value) || 0)}
+                        className="w-14 h-6 text-right text-sm border border-input rounded px-1.5 bg-background font-mono focus:outline-none focus:ring-1 focus:ring-primary" />
+                      <span className="text-sm text-muted-foreground">%</span>
+                    </div>
+                  </TableCell>
+                  <TableCell className="text-right font-mono">${(totals.preMargin * (cc.value / 100)).toFixed(2)}</TableCell>
+                  <TableCell className="text-right font-mono text-muted-foreground">{totals.totalPrice > 0 ? (((totals.preMargin * (cc.value / 100)) / totals.totalPrice) * 100).toFixed(1) : '0.0'}%</TableCell>
+                  <TableCell className="text-center">
+                    <button onClick={() => removeCustomConfig(cc.id)} className="text-muted-foreground hover:text-destructive transition-colors" title={`Remove ${cc.name}`}><X className="h-3.5 w-3.5" /></button>
+                  </TableCell>
+                </TableRow>
+              ))}
+              <TableRow>
+                <TableCell className="pl-5">
+                  <div className="flex items-center gap-1.5">
+                    <span className="font-medium">Margin</span>
+                    <input type="number" min="0" max="100" step="0.1" value={config.marginPct}
+                      onChange={(e) => setConfig({ ...config, marginPct: parseFloat(e.target.value) || 0 })}
+                      className="w-14 h-6 text-right text-sm border border-input rounded px-1.5 bg-background font-mono focus:outline-none focus:ring-1 focus:ring-primary" />
+                    <span className="text-sm text-muted-foreground">%</span>
+                  </div>
                 </TableCell>
                 <TableCell className="text-right font-mono">${totals.margin.toFixed(2)}</TableCell>
-                <TableCell className="text-right font-mono text-muted-foreground">
-                  {totals.totalPrice > 0 ? ((totals.margin / totals.totalPrice) * 100).toFixed(1) : '0.0'}%
-                </TableCell>
+                <TableCell className="text-right font-mono text-muted-foreground">{totals.totalPrice > 0 ? ((totals.margin / totals.totalPrice) * 100).toFixed(1) : '0.0'}%</TableCell>
+                <TableCell />
               </TableRow>
-              <TableRow className="border-t border-border">
-                <TableCell className="font-medium text-muted-foreground">Subtotal (Pre-GST)</TableCell>
+
+              {/* ── GST & Total ── */}
+              <TableRow className="border-t-2 border-border">
+                <TableCell className="font-semibold text-muted-foreground pl-5">Subtotal (Pre-GST)</TableCell>
                 <TableCell className="text-right font-mono font-semibold">${totals.taxable.toFixed(2)}</TableCell>
-                <TableCell className="text-right font-mono text-muted-foreground">
-                  {totals.totalPrice > 0 ? ((totals.taxable / totals.totalPrice) * 100).toFixed(1) : '0.0'}%
-                </TableCell>
+                <TableCell className="text-right font-mono text-muted-foreground">{totals.totalPrice > 0 ? ((totals.taxable / totals.totalPrice) * 100).toFixed(1) : '0.0'}%</TableCell>
+                <TableCell />
               </TableRow>
               <TableRow>
-                <TableCell className="font-medium">
-                  GST ({config.gstPct}%)
+                <TableCell className="pl-5">
+                  <div className="flex items-center gap-1.5">
+                    <span className="font-medium">GST</span>
+                    <input type="number" min="0" max="100" step="0.1" value={config.gstPct}
+                      onChange={(e) => setConfig({ ...config, gstPct: parseFloat(e.target.value) || 0 })}
+                      className="w-14 h-6 text-right text-sm border border-input rounded px-1.5 bg-background font-mono focus:outline-none focus:ring-1 focus:ring-primary" />
+                    <span className="text-sm text-muted-foreground">%</span>
+                  </div>
                 </TableCell>
                 <TableCell className="text-right font-mono">${totals.gst.toFixed(2)}</TableCell>
-                <TableCell className="text-right font-mono text-muted-foreground">
-                  {totals.totalPrice > 0 ? ((totals.gst / totals.totalPrice) * 100).toFixed(1) : '0.0'}%
-                </TableCell>
+                <TableCell className="text-right font-mono text-muted-foreground">{totals.totalPrice > 0 ? ((totals.gst / totals.totalPrice) * 100).toFixed(1) : '0.0'}%</TableCell>
+                <TableCell />
               </TableRow>
               <TableRow className="border-t-2 border-primary bg-primary/5">
                 <TableCell className="font-bold text-lg">TOTAL PROJECT COST</TableCell>
-                <TableCell className="text-right font-mono font-bold text-2xl text-primary">
-                  ${totals.totalPrice.toFixed(2)}
-                </TableCell>
+                <TableCell className="text-right font-mono font-bold text-2xl text-primary">${totals.totalPrice.toFixed(2)}</TableCell>
                 <TableCell className="text-right font-mono font-bold text-primary">100%</TableCell>
+                <TableCell />
               </TableRow>
             </TableBody>
           </Table>
@@ -1618,6 +1921,48 @@ export const EstimateTemplate = ({ projectId, estimateId }: EstimateTemplateProp
           </div>
         </div>
       </Card>
+
+      {/* Template Library Modal */}
+      <Dialog open={showTemplateModal} onOpenChange={setShowTemplateModal}>
+        <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <BookOpen className="h-5 w-5" />
+              Estimate Templates
+            </DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-muted-foreground -mt-1 mb-4">
+            Select a template to load its items into this project. Your current items will be replaced.
+          </p>
+          <div className="grid gap-3">
+            {ESTIMATE_TEMPLATES.map(template => (
+              <div
+                key={template.id}
+                className="flex items-start gap-4 p-4 rounded-lg border border-border hover:border-primary/40 hover:bg-primary/5 transition-colors"
+              >
+                <div className="text-3xl flex-shrink-0 mt-0.5">{template.icon}</div>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 mb-1">
+                    <h4 className="font-semibold">{template.name}</h4>
+                    <span className="text-xs bg-muted text-muted-foreground px-2 py-0.5 rounded-full">
+                      {template.items.length} items
+                    </span>
+                  </div>
+                  <p className="text-sm text-muted-foreground">{template.description}</p>
+                </div>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="flex-shrink-0 mt-0.5"
+                  onClick={() => loadTemplate(template)}
+                >
+                  Load
+                </Button>
+              </div>
+            ))}
+          </div>
+        </DialogContent>
+      </Dialog>
 
       <CustomMaterialDialog
         open={showCustomMaterialDialog}
