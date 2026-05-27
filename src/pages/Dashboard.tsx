@@ -6,13 +6,15 @@ import { Badge } from "@/components/ui/badge";
 import {
   Plus, FileText, DollarSign, TrendingUp, BarChart3,
   Upload, Zap, Settings, Package, ChevronRight,
-  ArrowRight, Clock, User, ExternalLink, AlertTriangle, X, LogOut, Trash2
+  ArrowRight, Clock, User, ExternalLink, AlertTriangle, X, LogOut, Trash2, BookOpen
 } from "lucide-react";
 import { useSubscription } from "@/hooks/useSubscription";
 import { PLAN_NAMES } from "@/lib/subscription";
 import { MetricoreLogoMark } from "@/components/MetricoreLogoMark";
 import { getLocalUser, localSignOut, isSignedIn, getUserStorageKey, migrateUnscopedData } from "@/lib/localAuth";
 import { loadProjectsMerged, deleteProjectFromSupabase, lsSaveProjects, migrateLocalProjectsToSupabase } from "@/lib/db/projects";
+import { useTour } from "@/context/TourContext";
+import { TourTip } from "@/components/TourTip";
 
 // ── helpers ─────────────────────────────────────────────────────────────────
 
@@ -118,6 +120,7 @@ const Dashboard = () => {
   const [bannerDismissed, setBannerDismissed] = useState(false);
   const sub = useSubscription();
   const localUser = getLocalUser();
+  const { tourEnabled, toggleTour } = useTour();
 
   const handleSignOut = () => {
     localSignOut();
@@ -249,27 +252,46 @@ const Dashboard = () => {
             <span className="font-display text-xl font-bold">Metricore</span>
           </div>
           <div className="flex items-center gap-2">
-            <Button variant="ghost" size="sm" onClick={() => navigate("/materials")}>
-              <Package className="h-4 w-4 mr-1.5" />Materials
-            </Button>
-            <Button variant="ghost" size="sm" onClick={() => navigate("/insights")}>
-              <BarChart3 className="h-4 w-4 mr-1.5" />Insights
-            </Button>
-            <Button variant="ghost" size="sm" onClick={() => navigate("/settings")}>
-              <Settings className="h-4 w-4 mr-1.5" />Settings
-            </Button>
+            <TourTip text="Browse supplier materials and update your pricing catalogue." position="bottom">
+              <Button variant="ghost" size="sm" onClick={() => navigate("/materials")}>
+                <Package className="h-4 w-4 mr-1.5" />Materials
+              </Button>
+            </TourTip>
+            <TourTip text="View current Australian build rates, cost trends, and market benchmarks." position="bottom">
+              <Button variant="ghost" size="sm" onClick={() => navigate("/insights")}>
+                <BarChart3 className="h-4 w-4 mr-1.5" />Insights
+              </Button>
+            </TourTip>
+            <TourTip text="Manage your company branding, default margins, subscription and account details." position="bottom">
+              <Button variant="ghost" size="sm" onClick={() => navigate("/settings")}>
+                <Settings className="h-4 w-4 mr-1.5" />Settings
+              </Button>
+            </TourTip>
             <Button variant="ghost" size="sm" onClick={handleSignOut} className="text-muted-foreground hover:text-foreground">
               <LogOut className="h-4 w-4 mr-1.5" />Sign Out
             </Button>
+            {/* Guide mode toggle */}
             <Button
+              variant="ghost"
               size="sm"
-              onClick={handleNewProject}
-              className={`ml-2 ${atProjectLimit ? 'bg-muted text-muted-foreground' : 'bg-primary text-primary-foreground'}`}
-              title={atProjectLimit ? `Plan limit: ${sub.caps.maxProjects} projects — upgrade to add more` : undefined}
+              onClick={toggleTour}
+              className={`border ${tourEnabled ? 'border-violet-500/60 text-violet-400 bg-violet-500/10' : 'border-border text-muted-foreground'}`}
+              title={tourEnabled ? "Turn off Guide Mode" : "Turn on Guide Mode — hover over buttons to learn what they do"}
             >
-              <Plus className="h-4 w-4 mr-1.5" />New Project
-              {atProjectLimit && <Badge variant="outline" className="ml-1.5 text-[9px] px-1 py-0 border-current">Limit</Badge>}
+              <BookOpen className="h-4 w-4 mr-1.5" />
+              {tourEnabled ? "Guide On" : "Guide"}
             </Button>
+            <TourTip text="Start a new estimation project. You can upload a PDF plan or enter manually." position="bottom">
+              <Button
+                size="sm"
+                onClick={handleNewProject}
+                className={`ml-2 ${atProjectLimit ? 'bg-muted text-muted-foreground' : 'bg-primary text-primary-foreground'}`}
+                title={atProjectLimit ? `Plan limit: ${sub.caps.maxProjects} projects — upgrade to add more` : undefined}
+              >
+                <Plus className="h-4 w-4 mr-1.5" />New Project
+                {atProjectLimit && <Badge variant="outline" className="ml-1.5 text-[9px] px-1 py-0 border-current">Limit</Badge>}
+              </Button>
+            </TourTip>
           </div>
         </div>
       </nav>
@@ -462,38 +484,43 @@ const Dashboard = () => {
               desc: atProjectLimit ? `Limit reached (${projects.length}/${sub.caps.maxProjects}) — upgrade` : 'Upload plans & start measuring',
               action: handleNewProject,
               primary: true,
+              tour: 'Upload a PDF plan and let AI detect your takeoff quantities, or start a manual estimate from scratch.',
             },
             {
               icon: <Zap className="h-5 w-5 text-amber-400" />,
               title: 'Quick Estimate',
               desc: 'Manual estimate, no plan needed',
               action: () => atProjectLimit ? navigate('/pricing') : navigate('/project/new?mode=manual'),
+              tour: 'Skip the PDF — enter rooms and items directly. Great for fast ballpark quotes.',
             },
             {
               icon: <BarChart3 className="h-5 w-5 text-blue-400" />,
               title: 'Market Insights',
               desc: sub.caps.marketInsights ? 'Current Australian build rates' : 'Pro plan — upgrade to access',
               action: () => sub.caps.marketInsights ? navigate('/insights') : navigate('/pricing'),
+              tour: 'Live Australian construction cost benchmarks — compare your rates against current market data.',
             },
             {
               icon: <Package className="h-5 w-5 text-green-400" />,
               title: 'Materials Library',
               desc: 'Supplier catalogue & pricing',
               action: () => navigate('/materials'),
+              tour: 'Save your favourite suppliers and materials with custom unit rates so they auto-fill in estimates.',
             },
-          ].map(({ icon, title, desc, action, primary }) => (
-            <Card
-              key={title}
-              onClick={action}
-              className={`p-4 cursor-pointer hover:shadow-md transition-all group ${primary ? 'border-primary/40 bg-primary/5' : 'bg-background'}`}
-            >
-              <div className="flex items-start justify-between mb-3">
-                <div className="p-2 bg-muted rounded-lg">{icon}</div>
-                <ChevronRight className="h-4 w-4 text-muted-foreground/40 group-hover:text-muted-foreground group-hover:translate-x-0.5 transition-all" />
-              </div>
-              <div className="font-semibold text-sm mb-1">{title}</div>
-              <div className="text-xs text-muted-foreground">{desc}</div>
-            </Card>
+          ].map(({ icon, title, desc, action, primary, tour }) => (
+            <TourTip key={title} text={tour} position="top">
+              <Card
+                onClick={action}
+                className={`p-4 cursor-pointer hover:shadow-md transition-all group w-full ${primary ? 'border-primary/40 bg-primary/5' : 'bg-background'}`}
+              >
+                <div className="flex items-start justify-between mb-3">
+                  <div className="p-2 bg-muted rounded-lg">{icon}</div>
+                  <ChevronRight className="h-4 w-4 text-muted-foreground/40 group-hover:text-muted-foreground group-hover:translate-x-0.5 transition-all" />
+                </div>
+                <div className="font-semibold text-sm mb-1">{title}</div>
+                <div className="text-xs text-muted-foreground">{desc}</div>
+              </Card>
+            </TourTip>
           ))}
         </div>
 

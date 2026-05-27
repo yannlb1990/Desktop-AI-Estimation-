@@ -5,6 +5,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route, Navigate, useNavigate } from "react-router-dom";
 import { AIChatbot } from "@/components/AIChatbot";
+import { TourProvider } from "@/context/TourContext";
 import { isSignedIn, getLocalUser, localSignOut } from "@/lib/localAuth";
 import { getSubscriptionStatus } from "@/lib/subscription";
 import { syncSubscriptionFromDB } from "@/lib/stripeCheckout";
@@ -65,6 +66,7 @@ const App = () => {
 
   return (
     <QueryClientProvider client={queryClient}>
+      <TourProvider>
       <TooltipProvider>
         <Toaster />
         <Sonner />
@@ -92,6 +94,7 @@ const App = () => {
           </Routes>
         </BrowserRouter>
       </TooltipProvider>
+      </TourProvider>
     </QueryClientProvider>
   );
 };
