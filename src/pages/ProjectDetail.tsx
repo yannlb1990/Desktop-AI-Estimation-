@@ -51,6 +51,7 @@ import { AIPlanAnalyzerEnhanced } from "@/components/AIPlanAnalyzerEnhanced";
 import { DocumentLibrary } from "@/components/DocumentLibrary";
 import { FFEModule } from "@/components/ffe/FFEModule";
 import { syncProjectToSupabase } from "@/lib/db/projects";
+import { TourTip } from "@/components/TourTip";
 
 const ProjectDetail = () => {
   const { projectId } = useParams();
@@ -223,11 +224,17 @@ const ProjectDetail = () => {
               Back to Dashboard
             </Button>
             <div className="flex gap-2">
-              <QuoteGenerator project={project} estimate={estimate} />
-              <FullTenderGenerator project={project} estimate={estimate} />
-              <Button onClick={handleExportCSV} className="bg-accent text-accent-foreground hover:bg-accent/90">
-                Export to Excel
-              </Button>
+              <TourTip text="Generate a branded PDF quote — 2-page proposal with your logo, scope summary, pricing breakdown and signature block." position="bottom">
+                <QuoteGenerator project={project} estimate={estimate} />
+              </TourTip>
+              <TourTip text="Create a full corporate tender document including company profile, methodology, NCC compliance, programme and legal terms." position="bottom">
+                <FullTenderGenerator project={project} estimate={estimate} />
+              </TourTip>
+              <TourTip text="Download the complete estimate as a CSV file — open it in Excel or Google Sheets for further review or sharing." position="bottom">
+                <Button onClick={handleExportCSV} className="bg-accent text-accent-foreground hover:bg-accent/90">
+                  Export to Excel
+                </Button>
+              </TourTip>
             </div>
           </div>
         </div>
@@ -246,22 +253,24 @@ const ProjectDetail = () => {
                 }`}>
                   {project.status || "active"}
                 </div>
-                <Select value={project.quoteStatus || "draft"} onValueChange={handleQuoteStatusChange}>
-                  <SelectTrigger className={`h-7 w-auto text-xs px-2.5 border rounded-full ${
-                    project.quoteStatus === "won" ? "border-green-400/50 bg-green-500/10 text-green-400" :
-                    project.quoteStatus === "lost" ? "border-red-400/50 bg-red-500/10 text-red-400" :
-                    project.quoteStatus === "sent" ? "border-purple-400/50 bg-purple-500/10 text-purple-400" :
-                    "border-border bg-muted text-muted-foreground"
-                  }`}>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="draft">Draft</SelectItem>
-                    <SelectItem value="sent">Sent</SelectItem>
-                    <SelectItem value="won">Won</SelectItem>
-                    <SelectItem value="lost">Lost</SelectItem>
-                  </SelectContent>
-                </Select>
+                <TourTip text="Track the quote status: Draft (in progress), Sent (submitted to client), Won or Lost. This feeds your win rate on the dashboard." position="bottom">
+                  <Select value={project.quoteStatus || "draft"} onValueChange={handleQuoteStatusChange}>
+                    <SelectTrigger className={`h-7 w-auto text-xs px-2.5 border rounded-full ${
+                      project.quoteStatus === "won" ? "border-green-400/50 bg-green-500/10 text-green-400" :
+                      project.quoteStatus === "lost" ? "border-red-400/50 bg-red-500/10 text-red-400" :
+                      project.quoteStatus === "sent" ? "border-purple-400/50 bg-purple-500/10 text-purple-400" :
+                      "border-border bg-muted text-muted-foreground"
+                    }`}>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="draft">Draft</SelectItem>
+                      <SelectItem value="sent">Sent</SelectItem>
+                      <SelectItem value="won">Won</SelectItem>
+                      <SelectItem value="lost">Lost</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </TourTip>
               </div>
               <div className="text-muted-foreground space-y-1">
                 {project.site_address && (
@@ -288,26 +297,30 @@ const ProjectDetail = () => {
                 <Clock className="h-4 w-4 text-muted-foreground" />
                 <span className="text-sm font-medium">Complete estimate by:</span>
               </div>
-              <Popover>
-                <PopoverTrigger asChild>
-                  <Button variant="outline" className="justify-start text-left w-[240px]">
-                    <CalendarIcon className="mr-2 h-4 w-4" />
-                    {dueDate ? format(dueDate, "PPP") : "Pick a date"}
-                  </Button>
-                </PopoverTrigger>
-                <PopoverContent className="w-auto p-0" align="start">
-                  <Calendar
-                    mode="single"
-                    selected={dueDate}
-                    onSelect={handleDueDateChange}
-                    initialFocus
-                  />
-                </PopoverContent>
-              </Popover>
-              <Button variant="outline" onClick={sendReminder} size="sm">
-                <Bell className="h-4 w-4 mr-2" />
-                Set Reminder
-              </Button>
+              <TourTip text="Set the deadline to complete this estimate. Helps you prioritise when you have multiple jobs on the go." position="left">
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <Button variant="outline" className="justify-start text-left w-[240px]">
+                      <CalendarIcon className="mr-2 h-4 w-4" />
+                      {dueDate ? format(dueDate, "PPP") : "Pick a date"}
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-auto p-0" align="start">
+                    <Calendar
+                      mode="single"
+                      selected={dueDate}
+                      onSelect={handleDueDateChange}
+                      initialFocus
+                    />
+                  </PopoverContent>
+                </Popover>
+              </TourTip>
+              <TourTip text="Save a reminder for this project's due date — shown on your dashboard so you never miss a submission." position="left">
+                <Button variant="outline" onClick={sendReminder} size="sm">
+                  <Bell className="h-4 w-4 mr-2" />
+                  Set Reminder
+                </Button>
+              </TourTip>
             </div>
           </div>
         </Card>
@@ -343,9 +356,9 @@ const ProjectDetail = () => {
         {/* Workflow progress strip */}
         <div className="flex items-center gap-0 rounded-xl border border-border bg-card p-1 mb-2">
           {[
-            { key: "takeoff", label: "1. Takeoff", icon: Ruler },
-            { key: "estimate", label: "2. Estimate", icon: Calculator },
-            { key: "tender", label: "3. Tender", icon: FileText },
+            { key: "takeoff", label: "1. Takeoff", icon: Ruler, tour: "Upload your PDF plans here. AI measures quantities automatically — review and adjust each item, then send everything to Estimate." },
+            { key: "estimate", label: "2. Estimate", icon: Calculator, tour: "Review and price all takeoff items. Add labour, materials, margins and overheads. This is your full cost build-up before generating the client document." },
+            { key: "tender", label: "3. Tender", icon: FileText, tour: "Generate the final client document. Choose a Quote (fast 2-page branded proposal) or a full Tender with compliance, programme and legal terms." },
           ].map((step, i) => {
             const Icon = step.icon;
             const isActive = activeMainTab === step.key;
@@ -354,20 +367,22 @@ const ProjectDetail = () => {
               (step.key === "estimate" && activeMainTab === "tender");
             return (
               <React.Fragment key={step.key}>
-                <button
-                  onClick={() => setActiveMainTab(step.key)}
-                  className={`flex items-center gap-2 px-5 py-2.5 rounded-lg text-sm font-semibold transition-all flex-1 justify-center ${
-                    isActive
-                      ? "bg-primary text-primary-foreground shadow"
-                      : isPast
-                      ? "text-primary/80 hover:bg-primary/10"
-                      : "text-muted-foreground hover:bg-muted"
-                  }`}
-                >
-                  <Icon className="h-4 w-4" />
-                  {step.label}
-                  {isPast && <span className="ml-1 text-xs opacity-70">✓</span>}
-                </button>
+                <TourTip text={step.tour} position="bottom">
+                  <button
+                    onClick={() => setActiveMainTab(step.key)}
+                    className={`flex items-center gap-2 px-5 py-2.5 rounded-lg text-sm font-semibold transition-all flex-1 justify-center ${
+                      isActive
+                        ? "bg-primary text-primary-foreground shadow"
+                        : isPast
+                        ? "text-primary/80 hover:bg-primary/10"
+                        : "text-muted-foreground hover:bg-muted"
+                    }`}
+                  >
+                    <Icon className="h-4 w-4" />
+                    {step.label}
+                    {isPast && <span className="ml-1 text-xs opacity-70">✓</span>}
+                  </button>
+                </TourTip>
                 {i < 2 && (
                   <span className="text-muted-foreground/40 text-lg select-none px-1">›</span>
                 )}
@@ -376,27 +391,28 @@ const ProjectDetail = () => {
           })}
           <div className="w-px bg-border mx-2 self-stretch" />
           {[
-            { key: "overheads", label: "Overheads", icon: Settings },
-            { key: "ffe", label: "FF&E", icon: Sofa },
-            { key: "insights", label: "Insights", icon: TrendingUp },
-            { key: "compliance", label: "NCC", icon: ShieldCheck },
-            { key: "subbies", label: "Subbies", icon: Users },
-            { key: "documents", label: "Docs", icon: FolderOpen },
+            { key: "overheads", label: "Overheads", icon: Settings,   tour: "Add company overheads — insurance, supervision, site costs, preliminaries. These are added on top of your direct estimate costs." },
+            { key: "ffe",       label: "FF&E",       icon: Sofa,       tour: "Fixtures, Fittings & Equipment schedule. Enter appliances, furniture and fittings room by room with photos, supplier and pricing. Export as a branded PDF." },
+            { key: "insights",  label: "Insights",   icon: TrendingUp, tour: "AI-generated cost breakdown analysis — compare your project's rates against current Australian market benchmarks." },
+            { key: "compliance",label: "NCC",         icon: ShieldCheck,tour: "National Construction Code compliance checklist tailored to this project type. Identify gaps before submission." },
+            { key: "subbies",   label: "Subbies",    icon: Users,      tour: "Enter and compare subcontractor quotes side by side for each trade. Easily select the best price and attach it to your estimate." },
+            { key: "documents", label: "Docs",        icon: FolderOpen, tour: "Store all project documents in one place — contracts, variations, site photos, council approvals and correspondence." },
           ].map((tool) => {
             const Icon = tool.icon;
             return (
-              <button
-                key={tool.key}
-                onClick={() => setActiveMainTab(tool.key)}
-                className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium transition-all ${
-                  activeMainTab === tool.key
-                    ? "bg-muted text-foreground"
-                    : "text-muted-foreground hover:bg-muted/60"
-                }`}
-              >
-                <Icon className="h-3.5 w-3.5" />
-                {tool.label}
-              </button>
+              <TourTip key={tool.key} text={tool.tour} position="bottom">
+                <button
+                  onClick={() => setActiveMainTab(tool.key)}
+                  className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium transition-all ${
+                    activeMainTab === tool.key
+                      ? "bg-muted text-foreground"
+                      : "text-muted-foreground hover:bg-muted/60"
+                  }`}
+                >
+                  <Icon className="h-3.5 w-3.5" />
+                  {tool.label}
+                </button>
+              </TourTip>
             );
           })}
         </div>
