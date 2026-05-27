@@ -13,6 +13,7 @@ import { ArrowLeft, Upload, Zap, Loader2, FileText, Brain, CheckCircle } from "l
 import { z } from "zod";
 import { analyzePDFWithData, PlanAnalysisResult, EstimatedLineItem } from "@/lib/aiPlanAnalyzer";
 import AIPlanAnalyzer from "@/components/AIPlanAnalyzer";
+import { syncProjectToSupabase } from "@/lib/db/projects";
 
 const projectSchema = z.object({
   name: z.string().min(1, "Project name required").max(200),
@@ -179,6 +180,7 @@ const NewProject = () => {
       const projects = JSON.parse(localStorage.getItem(getUserStorageKey('local_projects')) || "[]");
       projects.unshift(newProject);
       localStorage.setItem(getUserStorageKey('local_projects'), JSON.stringify(projects));
+      syncProjectToSupabase(newProject);
 
       setAnalysisStep('complete');
       toast.success("Project created with AI-generated estimate!");
@@ -246,6 +248,7 @@ const NewProject = () => {
       const projects = JSON.parse(localStorage.getItem(getUserStorageKey('local_projects')) || "[]");
       projects.unshift(newProject);
       localStorage.setItem(getUserStorageKey('local_projects'), JSON.stringify(projects));
+      syncProjectToSupabase(newProject);
 
       toast.success("Project created!");
       navigate(`/project/${newProject.id}`);

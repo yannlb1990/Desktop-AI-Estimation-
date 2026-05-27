@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { isSignedIn, getUserStorageKey } from "@/lib/localAuth";
+import { isSignedIn, getUserStorageKey, getLocalUser } from "@/lib/localAuth";
+import { loadClientsMerged, lsSaveClients, deleteClientFromSupabase, migrateLocalClientsToSupabase } from "@/lib/db/clients";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -47,13 +48,20 @@ const Clients = () => {
       navigate("/auth");
       return;
     }
-    setClients(loadClients());
+    const user = getLocalUser();
+    if (user) migrateLocalClientsToSupabase(user.email);
+    loadClientsMerged().then(all => {
+      setClients(all);
+      lsSaveClients(all);
+    });
   }, [navigate]);
 
   const handleDelete = (clientId: string) => {
     if (!confirm("Are you sure you want to delete this client?")) return;
     const updated = loadClients().filter(c => c.id !== clientId);
     saveClients(updated);
+    lsSaveClients(updated);
+    deleteClientFromSupabase(clientId);
     setClients(updated);
     toast.success("Client deleted successfully");
   };
@@ -66,7 +74,7 @@ const Clients = () => {
   const handleDialogClose = () => {
     setDialogOpen(false);
     setEditingClient(null);
-    setClients(loadClients());
+    loadClientsMerged().then(all => { setClients(all); lsSaveClients(all); });
   };
 
   const filteredClients = clients.filter(client =>

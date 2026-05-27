@@ -50,6 +50,7 @@ import { PlanAnalysisWizard } from "@/components/PlanAnalysisWizard";
 import { AIPlanAnalyzerEnhanced } from "@/components/AIPlanAnalyzerEnhanced";
 import { DocumentLibrary } from "@/components/DocumentLibrary";
 import { FFEModule } from "@/components/ffe/FFEModule";
+import { syncProjectToSupabase } from "@/lib/db/projects";
 
 const ProjectDetail = () => {
   const { projectId } = useParams();
@@ -120,6 +121,7 @@ const ProjectDetail = () => {
     if (idx !== -1) {
       projects[idx].due_date = date?.toISOString() || null;
       localStorage.setItem(getUserStorageKey('local_projects'), JSON.stringify(projects));
+      syncProjectToSupabase(projects[idx]);
     }
     toast.success("Due date updated");
   };
@@ -133,6 +135,7 @@ const ProjectDetail = () => {
       projects[idx].updated_at = new Date().toISOString();
       localStorage.setItem(getUserStorageKey('local_projects'), JSON.stringify(projects));
       setProject((prev: any) => ({ ...prev, quoteStatus: status }));
+      syncProjectToSupabase(projects[idx]);
     }
     toast.success(`Status updated to ${status}`);
   };
@@ -158,7 +161,20 @@ const ProjectDetail = () => {
   const loadProject = async () => {
     try {
       const projects = JSON.parse(localStorage.getItem(getUserStorageKey('local_projects')) || "[]");
-      const projectData = projects.find((p: any) => p.id === projectId);
+      let projectData = projects.find((p: any) => p.id === projectId);
+
+      // If not in localStorage, try Supabase (cross-device access)
+      if (!projectData) {
+        const { loadProjectsFromSupabase } = await import('@/lib/db/projects');
+        const dbProjects = await loadProjectsFromSupabase();
+        projectData = dbProjects.find((p: any) => p.id === projectId);
+        if (projectData) {
+          // Cache locally for offline access
+          const all = JSON.parse(localStorage.getItem(getUserStorageKey('local_projects')) || '[]');
+          all.unshift(projectData);
+          localStorage.setItem(getUserStorageKey('local_projects'), JSON.stringify(all));
+        }
+      }
 
       if (!projectData) {
         toast.error("Project not found");

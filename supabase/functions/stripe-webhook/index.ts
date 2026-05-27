@@ -74,8 +74,35 @@ serve(async (req) => {
           { onConflict: "user_id" },
         );
 
-        if (error) console.error("upsert failed:", error);
-        else console.log(`Activated ${planId}/${billingPeriod} for user ${userId}`);
+        if (error) {
+          console.error("upsert failed:", error);
+        } else {
+          console.log(`Activated ${planId}/${billingPeriod} for user ${userId}`);
+          // Send payment receipt email
+          const { data: profile } = await supabase.from("profiles").select("display_name, email").eq("id", userId).single();
+          const userEmail = profile?.email ?? session.customer_details?.email;
+          if (userEmail) {
+            const amountTotal = session.amount_total ? `$${(session.amount_total / 100).toFixed(0)}` : '';
+            const nextDate = new Date(sub.current_period_end * 1000).toLocaleDateString('en-AU', { day: 'numeric', month: 'long', year: 'numeric' });
+            const planNames: Record<string, string> = { starter: 'Starter', pro: 'Professional', business: 'Business' };
+            await fetch(`${Deno.env.get("SUPABASE_URL")}/functions/v1/send-email`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json", "Authorization": `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}` },
+              body: JSON.stringify({
+                type: "payment_receipt",
+                to: userEmail,
+                name: profile?.display_name ?? userEmail,
+                data: {
+                  planName: planNames[planId] ?? planId,
+                  billing: billingPeriod === 'annual' ? 'Annual' : 'Monthly',
+                  amount: amountTotal,
+                  nextDate,
+                  invoiceId: session.invoice as string ?? '',
+                },
+              }),
+            }).catch(console.error);
+          }
+        }
         break;
       }
 

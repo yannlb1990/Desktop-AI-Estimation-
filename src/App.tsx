@@ -3,11 +3,33 @@ import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
+import { BrowserRouter, Routes, Route, Navigate, useNavigate } from "react-router-dom";
 import { AIChatbot } from "@/components/AIChatbot";
-import { isSignedIn } from "@/lib/localAuth";
+import { isSignedIn, getLocalUser, localSignOut } from "@/lib/localAuth";
 import { getSubscriptionStatus } from "@/lib/subscription";
 import { syncSubscriptionFromDB } from "@/lib/stripeCheckout";
+
+// Owner email is exempt from idle timeout — all other accounts are logged out after 30 min of inactivity
+const OWNER_EMAIL = import.meta.env.VITE_OWNER_EMAIL || ''
+const IDLE_MS = 30 * 60 * 1000
+
+const IdleGuard = () => {
+  const navigate = useNavigate()
+  useEffect(() => {
+    const user = getLocalUser()
+    if (!user || user.email === OWNER_EMAIL) return
+    let t: ReturnType<typeof setTimeout>
+    const reset = () => {
+      clearTimeout(t)
+      t = setTimeout(() => { localSignOut(); navigate('/auth', { replace: true }) }, IDLE_MS)
+    }
+    const events = ['mousemove', 'mousedown', 'keydown', 'touchstart', 'scroll'] as const
+    events.forEach(e => window.addEventListener(e, reset, { passive: true }))
+    reset()
+    return () => { clearTimeout(t); events.forEach(e => window.removeEventListener(e, reset)) }
+  }, [navigate])
+  return null
+}
 import Index from "./pages/Index";
 import Auth from "./pages/Auth";
 import Dashboard from "./pages/Dashboard";
@@ -21,6 +43,7 @@ import MaterialsLibrary from "./pages/MaterialsLibrary";
 import CheckoutSuccess from "./pages/CheckoutSuccess";
 import AcceptInvite from "./pages/AcceptInvite";
 import SetupPassword from "./pages/SetupPassword";
+import ResetPassword from "./pages/ResetPassword";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -46,6 +69,7 @@ const App = () => {
         <Toaster />
         <Sonner />
         <BrowserRouter>
+          <IdleGuard />
           <AIChatbot />
           <Routes>
             <Route path="/" element={<Index />} />
@@ -54,6 +78,7 @@ const App = () => {
             <Route path="/checkout-success" element={<CheckoutSuccess />} />
             <Route path="/accept-invite" element={<AcceptInvite />} />
             <Route path="/setup-password" element={<SetupPassword />} />
+            <Route path="/reset-password" element={<ResetPassword />} />
             <Route path="/app" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
             <Route path="/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
             <Route path="/project/new" element={<ProtectedRoute><NewProject /></ProtectedRoute>} />

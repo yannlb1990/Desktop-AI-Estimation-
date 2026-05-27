@@ -12,6 +12,7 @@ import { useSubscription } from "@/hooks/useSubscription";
 import { PLAN_NAMES } from "@/lib/subscription";
 import { MetricoreLogoMark } from "@/components/MetricoreLogoMark";
 import { getLocalUser, localSignOut, isSignedIn, getUserStorageKey, migrateUnscopedData } from "@/lib/localAuth";
+import { loadProjectsMerged, deleteProjectFromSupabase, lsSaveProjects, migrateLocalProjectsToSupabase } from "@/lib/db/projects";
 
 // ── helpers ─────────────────────────────────────────────────────────────────
 
@@ -82,14 +83,17 @@ const Dashboard = () => {
       return;
     }
     const user = getLocalUser();
-    if (user) migrateUnscopedData(user.email);
-    const raw = localStorage.getItem(getUserStorageKey('local_projects'));
-    const loaded: any[] = raw ? JSON.parse(raw) : [];
-    loaded.sort((a, b) =>
-      new Date(b.updated_at || b.created_at || 0).getTime() -
-      new Date(a.updated_at || a.created_at || 0).getTime()
-    );
-    setProjects(loaded);
+    if (user) {
+      migrateUnscopedData(user.email);
+      // One-time push of existing localStorage projects to Supabase
+      migrateLocalProjectsToSupabase(user.email);
+    }
+    // Load from Supabase (cross-device) merged with localStorage (offline)
+    loadProjectsMerged().then(loaded => {
+      setProjects(loaded);
+      // Keep localStorage in sync with what Supabase returned
+      lsSaveProjects(loaded);
+    });
   }, [navigate]);
 
   // ── derived stats ──────────────────────────────────────────────────────────
@@ -121,6 +125,7 @@ const Dashboard = () => {
     if (!confirm("Delete this project? This cannot be undone.")) return;
     const existing: any[] = JSON.parse(localStorage.getItem(getUserStorageKey('local_projects')) || '[]');
     localStorage.setItem(getUserStorageKey('local_projects'), JSON.stringify(existing.filter((p: any) => p.id !== projectId)));
+    deleteProjectFromSupabase(projectId);
     setProjects(prev => prev.filter(p => p.id !== projectId));
   };
 
@@ -132,15 +137,34 @@ const Dashboard = () => {
     navigate('/project/new');
   };
 
-  // Show banner: trialing OR expired OR starter hitting project limit
+  // Trial banner: show when ≤7 days left (urgent warning) or expired
   const showTrialBanner =
     !bannerDismissed &&
     sub.subscription !== null &&
-    (sub.isTrialing || sub.isTrialExpired);
+    (sub.isTrialExpired || (sub.isTrialing && sub.daysLeftInTrial <= 7));
+
+  // Past-due banner: payment failed, within 3-day grace period
+  const showPastDueBanner = sub.isPastDue;
 
   // ── render ─────────────────────────────────────────────────────────────────
   return (
     <div className="min-h-screen bg-muted/30">
+
+      {/* Past-due payment banner — amber, always visible during grace period */}
+      {showPastDueBanner && (
+        <div className="border-b border-amber-500/40 bg-amber-500/10 px-6 py-2.5 flex items-center justify-between text-sm text-amber-400">
+          <div className="flex items-center gap-2">
+            <AlertTriangle className="h-4 w-4 flex-shrink-0" />
+            {sub.pastDueGraceDaysLeft > 0
+              ? <>Payment failed — please update your payment method. Access continues for {sub.pastDueGraceDaysLeft} more day{sub.pastDueGraceDaysLeft !== 1 ? 's' : ''}.</>
+              : <>Payment overdue — your grace period has ended. Update your payment method to keep access.</>
+            }
+          </div>
+          <Button size="sm" variant="outline" className="h-7 text-xs border-amber-400/60 text-amber-400 hover:bg-amber-500/10" onClick={() => navigate('/settings')}>
+            Update Payment
+          </Button>
+        </div>
+      )}
 
       {/* Trial / expiry banner */}
       {showTrialBanner && (
@@ -148,8 +172,8 @@ const Dashboard = () => {
           sub.isTrialExpired
             ? 'bg-red-500/10 border-red-500/30 text-red-400'
             : sub.daysLeftInTrial <= 3
-            ? 'bg-amber-500/10 border-amber-500/30 text-amber-400'
-            : 'bg-primary/10 border-primary/30 text-primary'
+            ? 'bg-red-500/10 border-red-500/30 text-red-400'
+            : 'bg-amber-500/10 border-amber-500/30 text-amber-400'
         }`}>
           <div className="flex items-center gap-2">
             {sub.isTrialExpired
@@ -161,7 +185,7 @@ const Dashboard = () => {
             <Button size="sm" variant="outline" className="h-7 text-xs border-current text-current hover:bg-white/10" onClick={() => navigate('/pricing')}>
               {sub.isTrialExpired ? 'Choose a Plan' : 'Upgrade Now'}
             </Button>
-            {!sub.isTrialExpired && (
+            {!sub.isTrialExpired && sub.daysLeftInTrial > 3 && (
               <button onClick={() => setBannerDismissed(true)} className="opacity-60 hover:opacity-100">
                 <X className="h-4 w-4" />
               </button>

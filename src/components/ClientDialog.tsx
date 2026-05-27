@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { getUserStorageKey } from "@/lib/localAuth";
+import { syncClientToSupabase } from "@/lib/db/clients";
 import {
   Dialog,
   DialogContent,
@@ -84,6 +85,8 @@ export const ClientDialog = ({ open, onClose, editingClient }: ClientDialogProps
           c.id === editingClient.id ? { ...c, ...formData } : c
         );
         localStorage.setItem(getUserStorageKey(CLIENTS_BASE_KEY), JSON.stringify(updated));
+        const updatedClient = updated.find(c => c.id === editingClient.id);
+        if (updatedClient) syncClientToSupabase(updatedClient);
         toast.success("Client updated successfully");
       } else {
         const newClient = {
@@ -92,6 +95,7 @@ export const ClientDialog = ({ open, onClose, editingClient }: ClientDialogProps
           created_at: new Date().toISOString(),
         };
         localStorage.setItem(getUserStorageKey(CLIENTS_BASE_KEY), JSON.stringify([newClient, ...existing]));
+        syncClientToSupabase(newClient);
         toast.success("Client added successfully");
       }
 
