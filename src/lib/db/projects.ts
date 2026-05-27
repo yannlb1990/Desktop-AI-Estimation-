@@ -29,55 +29,61 @@ async function getAuthUserId(): Promise<string | null> {
   return session?.user?.id ?? null;
 }
 
-/** Push one project to Supabase (upsert). Never throws — fails silently. */
-export async function syncProjectToSupabase(project: any): Promise<void> {
+/** Push one project to Supabase (upsert). Retries up to 3 times with backoff. */
+export async function syncProjectToSupabase(project: any, retries = 3): Promise<void> {
   const userId = await getAuthUserId();
   if (!userId) return;
 
-  try {
-    const row = {
-      id: project.id,
-      user_id: userId,
-      name: project.name ?? 'Untitled',
-      client_name: project.client_name ?? null,
-      site_address: project.site_address ?? project.address ?? null,
-      address: project.address ?? project.site_address ?? null,
-      state: project.state ?? 'NSW',
-      postcode: project.postcode ?? '0000',
-      plan_file_name: project.plan_file_name ?? null,
-      plan_file_url: project.plan_file_url ?? null,
-      status: project.status ?? 'in_progress',
-      quote_status: project.quoteStatus ?? null,
-      due_date: project.due_date ?? null,
-      // Full project JSON for lossless round-trip
-      data: {
-        estimate_items: project.estimate_items ?? [],
-        consumables: project.consumables ?? [],
-        estimate_config: project.estimate_config ?? {},
-        overhead_total: project.overhead_total ?? 0,
-        grand_total: project.grand_total ?? 0,
-        total_materials: project.total_materials ?? 0,
-        total_labour: project.total_labour ?? 0,
-        total_markup: project.total_markup ?? 0,
-        labour_rates: project.labour_rates ?? {},
-        grouping_mode: project.grouping_mode ?? 'none',
-        // any other fields not explicitly mapped
-        ...Object.fromEntries(
-          Object.entries(project).filter(([k]) =>
-            !['id', 'user_id', 'name', 'client_name', 'site_address', 'address',
-              'state', 'postcode', 'plan_file_name', 'plan_file_url', 'status',
-              'quoteStatus', 'due_date', 'created_at', 'updated_at'].includes(k)
-          )
-        ),
-      },
-      updated_at: new Date().toISOString(),
-    };
+  const row = {
+    id: project.id,
+    user_id: userId,
+    name: project.name ?? 'Untitled',
+    client_name: project.client_name ?? null,
+    site_address: project.site_address ?? project.address ?? null,
+    address: project.address ?? project.site_address ?? null,
+    state: project.state ?? 'NSW',
+    postcode: project.postcode ?? '0000',
+    plan_file_name: project.plan_file_name ?? null,
+    plan_file_url: project.plan_file_url ?? null,
+    status: project.status ?? 'in_progress',
+    quote_status: project.quoteStatus ?? null,
+    due_date: project.due_date ?? null,
+    // Full project JSON for lossless round-trip
+    data: {
+      estimate_items: project.estimate_items ?? [],
+      consumables: project.consumables ?? [],
+      estimate_config: project.estimate_config ?? {},
+      overhead_total: project.overhead_total ?? 0,
+      grand_total: project.grand_total ?? 0,
+      total_materials: project.total_materials ?? 0,
+      total_labour: project.total_labour ?? 0,
+      total_markup: project.total_markup ?? 0,
+      labour_rates: project.labour_rates ?? {},
+      grouping_mode: project.grouping_mode ?? 'none',
+      // any other fields not explicitly mapped
+      ...Object.fromEntries(
+        Object.entries(project).filter(([k]) =>
+          !['id', 'user_id', 'name', 'client_name', 'site_address', 'address',
+            'state', 'postcode', 'plan_file_name', 'plan_file_url', 'status',
+            'quoteStatus', 'due_date', 'created_at', 'updated_at'].includes(k)
+        )
+      ),
+    },
+    updated_at: new Date().toISOString(),
+  };
 
-    await (supabase as any)
-      .from('projects')
-      .upsert(row, { onConflict: 'id' });
-  } catch {
-    // Silent — localStorage is the source of truth until fully migrated
+  for (let attempt = 1; attempt <= retries; attempt++) {
+    try {
+      const { error } = await (supabase as any)
+        .from('projects')
+        .upsert(row, { onConflict: 'id' });
+      if (!error) return;
+      throw new Error(error.message);
+    } catch {
+      if (attempt < retries) {
+        await new Promise(r => setTimeout(r, attempt * 500));
+      }
+    }
   }
 }
 
@@ -129,8 +135,9 @@ export async function loadProjectsFromSupabase(): Promise<any[]> {
 }
 
 /**
- * Merge strategy: Supabase wins for any project that exists there.
+ * Merge strategy: newer updated_at wins for projects that exist in both stores.
  * localStorage-only projects are kept (offline-created, not yet synced).
+ * If a localStorage version is newer than DB, it wins and gets synced back.
  */
 export async function loadProjectsMerged(): Promise<any[]> {
   const [dbProjects, lsProjects] = await Promise.all([
@@ -140,13 +147,36 @@ export async function loadProjectsMerged(): Promise<any[]> {
 
   if (dbProjects.length === 0) return lsProjects;
 
-  const dbIds = new Set(dbProjects.map((p: any) => p.id));
-  const lsOnly = lsProjects.filter((p: any) => !dbIds.has(p.id));
+  const lsById = new Map(lsProjects.map((p: any) => [p.id, p]));
+  const dbById = new Map(dbProjects.map((p: any) => [p.id, p]));
+  const merged: any[] = [];
 
-  // Background-sync localStorage-only projects to Supabase
-  lsOnly.forEach(p => syncProjectToSupabase(p));
+  for (const dbProject of dbProjects) {
+    const lsProject = lsById.get(dbProject.id);
+    if (lsProject) {
+      const dbTime = new Date(dbProject.updated_at || dbProject.created_at || 0).getTime();
+      const lsTime = new Date(lsProject.updated_at || lsProject.created_at || 0).getTime();
+      if (lsTime > dbTime) {
+        // Offline edit is newer — use it and sync back to DB
+        merged.push(lsProject);
+        syncProjectToSupabase(lsProject);
+      } else {
+        merged.push(dbProject);
+      }
+    } else {
+      merged.push(dbProject);
+    }
+  }
 
-  return [...dbProjects, ...lsOnly].sort(
+  // LS-only projects (offline-created, not yet synced)
+  for (const lsProject of lsProjects) {
+    if (!dbById.has(lsProject.id)) {
+      merged.push(lsProject);
+      syncProjectToSupabase(lsProject);
+    }
+  }
+
+  return merged.sort(
     (a, b) =>
       new Date(b.updated_at || b.created_at || 0).getTime() -
       new Date(a.updated_at || a.created_at || 0).getTime()

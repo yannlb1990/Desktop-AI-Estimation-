@@ -92,7 +92,7 @@ const LEGACY_KEYS = [
 
 export function getUserStorageKey(baseKey: string): string {
   const user = getLocalUser();
-  return user ? `${user.email}:${baseKey}` : baseKey;
+  return user ? `${user.email}:${baseKey}` : `__anon__:${baseKey}`;
 }
 
 // Runs once per user. If the old unscoped data belongs to this user (email matches),
@@ -102,6 +102,12 @@ export function getUserStorageKey(baseKey: string): string {
 export function migrateUnscopedData(userEmail: string): void {
   const migrationFlag = `${userEmail}:migrated_v1`;
   if (localStorage.getItem(migrationFlag)) return;
+
+  // Mutex: prevent simultaneous migration across browser tabs (5-second TTL)
+  const lockKey = `${userEmail}:migration-lock`;
+  const existingLock = localStorage.getItem(lockKey);
+  if (existingLock && Date.now() - parseInt(existingLock, 10) < 5000) return;
+  localStorage.setItem(lockKey, String(Date.now()));
 
   try {
     // Determine who owned the old unscoped data
@@ -125,11 +131,13 @@ export function migrateUnscopedData(userEmail: string): void {
         localStorage.removeItem(key);
       }
     }
+
+    localStorage.setItem(migrationFlag, 'done');
   } catch {
     // Never crash on migration failure — just proceed with clean slate
+  } finally {
+    localStorage.removeItem(lockKey);
   }
-
-  localStorage.setItem(migrationFlag, 'done');
 }
 
 export function localSignOut(): void {
