@@ -62,6 +62,53 @@ const STAGE_CONFIG: Record<Stage, { color: string; dot: string; bg: string }> = 
   'Sent':         { color: 'text-purple-400', dot: 'bg-purple-400', bg: 'bg-purple-400/10 border-purple-400/30' },
 };
 
+// ── Project completion score ─────────────────────────────────────────────────
+
+interface CompletionStep {
+  key: string;
+  label: string;       // shown in tooltip
+  action: string;      // "next step" label shown in UI
+  done: boolean;
+}
+
+function getProjectCompletion(p: any): {
+  steps: CompletionStep[];
+  score: number;
+  total: number;
+  nextAction: string;
+  pct: number;
+} {
+  const hasPlan   = !!(p.plan_file_name || p.plan_file_url);
+  const items: any[] = p.estimate_items ?? [];
+  const hasItems  = items.length > 0;
+  const hasPrices = hasItems && items.some(
+    (i: any) => (i.unit_price ?? 0) > 0 || (i.labour_rate ?? 0) > 0 ||
+                (i.total ?? 0) > 0 || (i.totalCost ?? 0) > 0
+  );
+  const grandTotal = (p.grand_total ?? 0) > 0
+    ? p.grand_total
+    : getProjectValue(p);
+  const hasTotals = grandTotal > 0;
+  const isSent    = ['sent', 'won', 'lost'].includes(p.quoteStatus ?? '');
+
+  const steps: CompletionStep[] = [
+    { key: 'created',  label: 'Project created',   action: 'Created',          done: true },
+    { key: 'plan',     label: 'Plan uploaded',      action: 'Upload plan',      done: hasPlan },
+    { key: 'items',    label: 'Estimate started',   action: 'Start estimate',   done: hasItems },
+    { key: 'priced',   label: 'Items priced',       action: 'Set item pricing', done: hasTotals || hasPrices },
+    { key: 'sent',     label: 'Quote sent',         action: 'Send quote',       done: isSent },
+  ];
+
+  const score = steps.filter(s => s.done).length;
+  const total = steps.length;
+  const pct   = Math.round((score / total) * 100);
+
+  const firstPending = steps.find(s => !s.done);
+  const nextAction   = firstPending ? firstPending.action : 'Complete';
+
+  return { steps, score, total, nextAction, pct };
+}
+
 // ── component ────────────────────────────────────────────────────────────────
 
 const Dashboard = () => {
@@ -321,6 +368,8 @@ const Dashboard = () => {
                   const value = getProjectValue(project);
                   const qs = (project.quoteStatus || 'draft') as QuoteStatus;
                   const qcfg = QUOTE_STATUS_CONFIG[qs];
+                  const completion = getProjectCompletion(project);
+                  const allDone = completion.score === completion.total;
                   return (
                     <div
                       key={project.id}
@@ -329,6 +378,30 @@ const Dashboard = () => {
                     >
                       <div>
                         <div className="font-medium text-sm group-hover:text-primary transition-colors">{project.name}</div>
+                        {/* Progress dots */}
+                        <div className="flex items-center gap-1 mt-1.5">
+                          {completion.steps.map((step, i) => (
+                            <div
+                              key={step.key}
+                              title={step.label}
+                              className={`w-2 h-2 rounded-full transition-colors ${
+                                step.done
+                                  ? i === completion.score - 1 && !allDone
+                                    ? 'bg-amber-400'          // current active step
+                                    : allDone
+                                    ? 'bg-green-500'          // all complete
+                                    : 'bg-primary/60'         // past done steps
+                                  : 'bg-muted-foreground/20' // pending
+                              }`}
+                            />
+                          ))}
+                          <span className={`text-xs ml-1 ${allDone ? 'text-green-500' : 'text-muted-foreground/60'}`}>
+                            {allDone
+                              ? '✓ Complete'
+                              : <span>→ {completion.nextAction}</span>
+                            }
+                          </span>
+                        </div>
                       </div>
                       <div className="flex items-center gap-1.5 text-sm text-muted-foreground">
                         <User className="h-3 w-3 shrink-0" />
