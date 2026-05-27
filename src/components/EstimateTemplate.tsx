@@ -21,7 +21,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { toast } from "sonner";
-import { Plus, Trash2, ChevronDown, ChevronRight, DollarSign, Edit2, Save, X, Link, Copy, CheckCircle, BookOpen } from "lucide-react";
+import { Plus, Trash2, ChevronDown, ChevronRight, DollarSign, Edit2, Save, X, Link, Copy, CheckCircle, BookOpen, Home, Droplets, Utensils, TreePine, Building2, LayoutTemplate } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { Textarea } from "@/components/ui/textarea";
@@ -31,6 +31,34 @@ import { LabourRatesSection } from "./LabourRatesSection";
 import { PricingHistory } from "./PricingHistory";
 import { CustomMaterialDialog } from "./CustomMaterialDialog";
 import { TourTip } from "@/components/TourTip";
+
+// ── Template icon + colour mapping (by template id) ───────────────────────────
+const TEMPLATE_STYLES: Record<string, { Icon: React.ElementType; bg: string; text: string }> = {
+  'new-build':         { Icon: Home,           bg: 'bg-blue-400/10',   text: 'text-blue-400' },
+  'bathroom-reno':     { Icon: Droplets,        bg: 'bg-teal-400/10',   text: 'text-teal-400' },
+  'kitchen-reno':      { Icon: Utensils,        bg: 'bg-amber-400/10',  text: 'text-amber-400' },
+  'deck-outdoor':      { Icon: TreePine,        bg: 'bg-green-400/10',  text: 'text-green-400' },
+  'commercial-fitout': { Icon: Building2,       bg: 'bg-purple-400/10', text: 'text-purple-400' },
+};
+const CUSTOM_STYLE = { Icon: LayoutTemplate, bg: 'bg-primary/10', text: 'text-primary' };
+
+function getTemplateStyle(id: string) {
+  return TEMPLATE_STYLES[id] ?? CUSTOM_STYLE;
+}
+
+// ── Custom template storage helpers ──────────────────────────────────────────
+const CUSTOM_TPL_KEY = 'custom_estimate_templates';
+
+function loadCustomTemplates(): EstimateTemplateData[] {
+  try {
+    const raw = localStorage.getItem(getUserStorageKey(CUSTOM_TPL_KEY));
+    return raw ? JSON.parse(raw) : [];
+  } catch { return []; }
+}
+
+function persistCustomTemplates(list: EstimateTemplateData[]) {
+  localStorage.setItem(getUserStorageKey(CUSTOM_TPL_KEY), JSON.stringify(list));
+}
 
 const AU_TRADES = [
   "Carpenter", "Plumber", "Electrician", "Bricklayer", "Plasterer",
@@ -177,6 +205,9 @@ export const EstimateTemplate = ({ projectId, estimateId }: EstimateTemplateProp
   const [groupingMode, setGroupingMode] = useState<'none' | 'trade' | 'room'>('none');
   const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set());
   const [showTemplateModal, setShowTemplateModal] = useState(false);
+  const [customTemplates, setCustomTemplates] = useState<EstimateTemplateData[]>(() => loadCustomTemplates());
+  const [showSaveModal, setShowSaveModal] = useState(false);
+  const [newTplName, setNewTplName] = useState('');
 
   useEffect(() => {
     loadOverheads();
@@ -706,6 +737,37 @@ export const EstimateTemplate = ({ projectId, estimateId }: EstimateTemplateProp
     }
     setShowTemplateModal(false);
     toast.success(`${template.items.length} items loaded from "${template.name}"`);
+  };
+
+  const handleSaveAsTemplate = () => {
+    if (!newTplName.trim() || items.length === 0) return;
+    const tpl: EstimateTemplateData = {
+      id: `custom-${Date.now()}`,
+      name: newTplName.trim(),
+      description: `${items.length} line item${items.length !== 1 ? 's' : ''}`,
+      category: 'custom' as any,
+      icon: 'custom',
+      items: items.map(i => ({
+        area: i.area, trade: i.trade, scope_of_work: i.scope_of_work,
+        material_type: i.material_type, quantity: i.quantity, unit: i.unit,
+        unit_price: i.unit_price, labour_hours: i.labour_hours,
+        material_wastage_pct: i.material_wastage_pct,
+        labour_wastage_pct: i.labour_wastage_pct, markup_pct: i.markup_pct,
+      })),
+    };
+    const updated = [...loadCustomTemplates(), tpl];
+    persistCustomTemplates(updated);
+    setCustomTemplates(updated);
+    setShowSaveModal(false);
+    setNewTplName('');
+    toast.success(`Template "${tpl.name}" saved`);
+  };
+
+  const handleDeleteCustomTemplate = (id: string) => {
+    const updated = loadCustomTemplates().filter(t => t.id !== id);
+    persistCustomTemplates(updated);
+    setCustomTemplates(updated);
+    toast.success('Template deleted');
   };
 
   const renderItem = (item: EstimateItem) => {
@@ -1425,6 +1487,12 @@ export const EstimateTemplate = ({ projectId, estimateId }: EstimateTemplateProp
                 </button>
               ))}
             </div>
+            <TourTip text="Save your current estimate as a reusable template for future jobs." position="left">
+              <Button variant="outline" size="sm" onClick={() => setShowSaveModal(true)} disabled={items.length === 0}>
+                <Save className="h-4 w-4 mr-2" />
+                Save as Template
+              </Button>
+            </TourTip>
             <TourTip text="Start your estimate from a pre-built template — New Build, Bathroom Reno, Kitchen, Deck, or Commercial Fitout. Loads all standard line items instantly." position="left">
               <Button variant="outline" size="sm" onClick={() => setShowTemplateModal(true)}>
                 <BookOpen className="h-4 w-4 mr-2" />
@@ -1444,17 +1512,30 @@ export const EstimateTemplate = ({ projectId, estimateId }: EstimateTemplateProp
                 <span className="text-xs text-muted-foreground">— or add items manually using the form above</span>
               </div>
               <div className="grid grid-cols-2 md:grid-cols-5 gap-2">
-                {ESTIMATE_TEMPLATES.map(t => (
-                  <button
-                    key={t.id}
-                    onClick={() => { loadTemplate(t); }}
-                    className="flex flex-col items-start gap-1 p-3 rounded-lg border border-border bg-background hover:border-primary/50 hover:bg-primary/5 transition-all text-left group"
-                  >
-                    <span className="text-xl">{t.icon}</span>
-                    <span className="text-xs font-semibold leading-tight group-hover:text-primary transition-colors">{t.name}</span>
-                    <span className="text-[10px] text-muted-foreground">{t.items.length} items</span>
-                  </button>
-                ))}
+                {/* Custom templates first */}
+                {customTemplates.map(t => {
+                  const { Icon, bg, text } = getTemplateStyle(t.id);
+                  return (
+                    <button key={t.id} onClick={() => loadTemplate(t)}
+                      className="flex flex-col items-start gap-1.5 p-3 rounded-lg border border-primary/30 bg-background hover:border-primary/60 hover:bg-primary/5 transition-all text-left group">
+                      <div className={`p-1.5 rounded-md ${bg}`}><Icon className={`h-4 w-4 ${text}`} /></div>
+                      <span className="text-xs font-semibold leading-tight group-hover:text-primary transition-colors">{t.name}</span>
+                      <span className="text-[10px] text-muted-foreground">{t.items.length} items</span>
+                    </button>
+                  );
+                })}
+                {/* Built-in templates */}
+                {ESTIMATE_TEMPLATES.map(t => {
+                  const { Icon, bg, text } = getTemplateStyle(t.id);
+                  return (
+                    <button key={t.id} onClick={() => loadTemplate(t)}
+                      className="flex flex-col items-start gap-1.5 p-3 rounded-lg border border-border bg-background hover:border-primary/50 hover:bg-primary/5 transition-all text-left group">
+                      <div className={`p-1.5 rounded-md ${bg}`}><Icon className={`h-4 w-4 ${text}`} /></div>
+                      <span className="text-xs font-semibold leading-tight group-hover:text-primary transition-colors">{t.name}</span>
+                      <span className="text-[10px] text-muted-foreground">{t.items.length} items</span>
+                    </button>
+                  );
+                })}
               </div>
             </div>
           </div>
@@ -1939,34 +2020,90 @@ export const EstimateTemplate = ({ projectId, estimateId }: EstimateTemplateProp
             </DialogTitle>
           </DialogHeader>
           <p className="text-sm text-muted-foreground -mt-1 mb-4">
-            Select a template to load its items into this project. Your current items will be replaced.
+            Select a template to load its items. Your current items will be replaced.
           </p>
-          <div className="grid gap-3">
-            {ESTIMATE_TEMPLATES.map(template => (
-              <div
-                key={template.id}
-                className="flex items-start gap-4 p-4 rounded-lg border border-border hover:border-primary/40 hover:bg-primary/5 transition-colors"
-              >
-                <div className="text-3xl flex-shrink-0 mt-0.5">{template.icon}</div>
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2 mb-1">
-                    <h4 className="font-semibold">{template.name}</h4>
-                    <span className="text-xs bg-muted text-muted-foreground px-2 py-0.5 rounded-full">
-                      {template.items.length} items
-                    </span>
-                  </div>
-                  <p className="text-sm text-muted-foreground">{template.description}</p>
-                </div>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="flex-shrink-0 mt-0.5"
-                  onClick={() => loadTemplate(template)}
-                >
-                  Load
-                </Button>
+
+          {/* My Templates section */}
+          {customTemplates.length > 0 && (
+            <div className="mb-5">
+              <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-2">My Templates</p>
+              <div className="grid gap-2">
+                {customTemplates.map(t => {
+                  const { Icon, bg, text } = getTemplateStyle(t.id);
+                  return (
+                    <div key={t.id} className="flex items-center gap-3 p-3 rounded-lg border border-primary/20 bg-primary/5 hover:border-primary/40 transition-colors">
+                      <div className={`p-2 rounded-lg flex-shrink-0 ${bg}`}><Icon className={`h-5 w-5 ${text}`} /></div>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2">
+                          <span className="font-semibold text-sm">{t.name}</span>
+                          <span className="text-xs bg-muted text-muted-foreground px-2 py-0.5 rounded-full">{t.items.length} items</span>
+                        </div>
+                        <p className="text-xs text-muted-foreground">{t.description}</p>
+                      </div>
+                      <div className="flex items-center gap-2 flex-shrink-0">
+                        <Button size="sm" variant="outline" onClick={() => loadTemplate(t)}>Load</Button>
+                        <Button size="sm" variant="ghost" className="text-destructive hover:text-destructive hover:bg-destructive/10 h-8 w-8 p-0" onClick={() => handleDeleteCustomTemplate(t.id)}>
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </Button>
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
-            ))}
+            </div>
+          )}
+
+          {/* Built-in templates */}
+          <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-2">Standard Templates</p>
+          <div className="grid gap-2">
+            {ESTIMATE_TEMPLATES.map(t => {
+              const { Icon, bg, text } = getTemplateStyle(t.id);
+              return (
+                <div key={t.id} className="flex items-center gap-3 p-3 rounded-lg border border-border hover:border-primary/40 hover:bg-primary/5 transition-colors">
+                  <div className={`p-2 rounded-lg flex-shrink-0 ${bg}`}><Icon className={`h-5 w-5 ${text}`} /></div>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2">
+                      <span className="font-semibold text-sm">{t.name}</span>
+                      <span className="text-xs bg-muted text-muted-foreground px-2 py-0.5 rounded-full">{t.items.length} items</span>
+                    </div>
+                    <p className="text-xs text-muted-foreground">{t.description}</p>
+                  </div>
+                  <Button size="sm" variant="outline" className="flex-shrink-0" onClick={() => loadTemplate(t)}>Load</Button>
+                </div>
+              );
+            })}
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Save as Template Modal */}
+      <Dialog open={showSaveModal} onOpenChange={setShowSaveModal}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Save className="h-4 w-4" />
+              Save as Template
+            </DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-muted-foreground -mt-1">
+            Saves all {items.length} current line items as a reusable template.
+          </p>
+          <div className="space-y-3 mt-2">
+            <div>
+              <label className="text-sm font-medium mb-1 block">Template name</label>
+              <input
+                className="w-full border border-border rounded-md px-3 py-2 text-sm bg-background focus:outline-none focus:ring-2 focus:ring-primary/50"
+                placeholder="e.g. Standard 4-bed House"
+                value={newTplName}
+                onChange={e => setNewTplName(e.target.value)}
+                onKeyDown={e => e.key === 'Enter' && handleSaveAsTemplate()}
+                autoFocus
+              />
+            </div>
+            <div className="flex gap-2 justify-end">
+              <Button variant="outline" size="sm" onClick={() => { setShowSaveModal(false); setNewTplName(''); }}>Cancel</Button>
+              <Button size="sm" onClick={handleSaveAsTemplate} disabled={!newTplName.trim()}>Save Template</Button>
+            </div>
           </div>
         </DialogContent>
       </Dialog>
