@@ -49,7 +49,7 @@ import { NCCComplianceCard } from "@/components/NCCComplianceCard";
 import { PlanAnalysisWizard } from "@/components/PlanAnalysisWizard";
 import { AIPlanAnalyzerEnhanced } from "@/components/AIPlanAnalyzerEnhanced";
 import { DocumentLibrary } from "@/components/DocumentLibrary";
-import { FixturesSummary } from "@/components/FixturesSummary";
+import { FFEModule } from "@/components/ffe/FFEModule";
 
 const ProjectDetail = () => {
   const { projectId } = useParams();
@@ -501,7 +501,7 @@ const ProjectDetail = () => {
               <ArrowLeft className="h-4 w-4 mr-1" />
               Back to Estimate
             </Button>
-            <FixturesSummary projectId={projectId!} pdfUrl={project?.plan_file_url} />
+            <FFEModule projectId={projectId!} projectName={project?.name} />
           </TabsContent>
 
           <TabsContent value="insights">
