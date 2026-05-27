@@ -237,10 +237,10 @@ export const PlanIntelligencePanel: React.FC<PlanIntelligencePanelProps> = ({
     setStatus('analyzing');
     setProgress('Analysing with AI…');
 
-    const msg = 'AI plan analysis requires a backend connection. This feature is not available in local mode.';
+    const msg = 'AI plan analysis is coming in a future update.';
     setError(msg);
     setStatus('error');
-    toast.error('AI analysis unavailable — backend not configured');
+    toast.info('AI plan analysis is coming in a future update');
   }, [pdfUrl, pageCount, projectName, projectType]);
 
   const handleDownload = () => {

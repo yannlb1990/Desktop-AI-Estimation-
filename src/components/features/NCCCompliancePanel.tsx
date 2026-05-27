@@ -254,7 +254,7 @@ export function NCCCompliancePanel({
                   <div className="flex-1">
                     <div className="flex items-center gap-2 mb-1">
                       <span className="font-medium text-sm">{item.trade}</span>
-                      <span className="text-muted-foreground">-</span>
+                      <span className="text-muted-foreground">·</span>
                       <span className="text-sm">{item.description}</span>
                       {item.mandatory && (
                         <Badge variant="destructive" className="text-xs">

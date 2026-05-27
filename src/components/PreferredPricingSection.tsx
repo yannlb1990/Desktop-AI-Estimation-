@@ -386,7 +386,7 @@ export const PreferredPricingSection = () => {
                   <TableCell className="text-right font-mono">
                     ${material.avg_price.toFixed(2)}
                   </TableCell>
-                  <TableCell>{material.supplier || "-"}</TableCell>
+                  <TableCell>{material.supplier || <span className="text-muted-foreground text-xs">No supplier</span>}</TableCell>
                   <TableCell className="text-right">
                     <div className="flex justify-end gap-2">
                       <Dialog>

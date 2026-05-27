@@ -878,15 +878,15 @@ export const PlanViewer = ({ planUrl, projectId, planPageId: propPlanPageId, wiz
 
   // Detect symbols using AI
   const handleDetectSymbols = () => {
-    toast.error("Symbol detection requires AI backend — not available in local mode");
+    toast.info("Symbol detection is coming in a future update");
   };
 
   const handleExtractSchedules = () => {
-    toast.error("Schedule extraction requires AI backend — not available in local mode");
+    toast.info("Schedule extraction is coming in a future update");
   };
 
   const handleLinkSymbols = () => {
-    toast.error("Symbol linking requires AI backend — not available in local mode");
+    toast.info("Symbol linking is coming in a future update");
   };
 
   // Render symbol overlays on canvas

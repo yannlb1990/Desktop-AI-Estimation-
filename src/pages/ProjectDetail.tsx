@@ -30,7 +30,7 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "sonner";
-import { ArrowLeft, FileText, DollarSign, Ruler, Loader2, Settings, Calculator, TrendingUp, ShieldCheck, MapPin, User, Calendar as CalendarIcon, Clock, Bell, Package, ChevronDown, ChevronUp, Users } from "lucide-react";
+import { ArrowLeft, FileText, DollarSign, Ruler, Loader2, Settings, Calculator, TrendingUp, ShieldCheck, MapPin, User, Calendar as CalendarIcon, Clock, Bell, Package, ChevronDown, ChevronUp, Users, FolderOpen, Sofa } from "lucide-react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { SubcontractorComparison } from "@/components/SubcontractorComparison";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
@@ -48,6 +48,8 @@ import { ProjectInsightsTab } from "@/components/ProjectInsightsTab";
 import { NCCComplianceCard } from "@/components/NCCComplianceCard";
 import { PlanAnalysisWizard } from "@/components/PlanAnalysisWizard";
 import { AIPlanAnalyzerEnhanced } from "@/components/AIPlanAnalyzerEnhanced";
+import { DocumentLibrary } from "@/components/DocumentLibrary";
+import { FixturesSummary } from "@/components/FixturesSummary";
 
 const ProjectDetail = () => {
   const { projectId } = useParams();
@@ -359,9 +361,11 @@ const ProjectDetail = () => {
           <div className="w-px bg-border mx-2 self-stretch" />
           {[
             { key: "overheads", label: "Overheads", icon: Settings },
+            { key: "ffe", label: "FF&E", icon: Sofa },
             { key: "insights", label: "Insights", icon: TrendingUp },
             { key: "compliance", label: "NCC", icon: ShieldCheck },
             { key: "subbies", label: "Subbies", icon: Users },
+            { key: "documents", label: "Docs", icon: FolderOpen },
           ].map((tool) => {
             const Icon = tool.icon;
             return (
@@ -390,6 +394,8 @@ const ProjectDetail = () => {
             <TabsTrigger value="insights" />
             <TabsTrigger value="compliance" />
             <TabsTrigger value="subbies" />
+            <TabsTrigger value="ffe" />
+            <TabsTrigger value="documents" />
             <TabsTrigger value="pricing" />
             {project.plan_file_url && <TabsTrigger value="plans" />}
           </TabsList>
@@ -490,6 +496,14 @@ const ProjectDetail = () => {
             <OverheadManager projectId={projectId!} />
           </TabsContent>
 
+          <TabsContent value="ffe">
+            <Button variant="ghost" size="sm" className="mb-4" onClick={() => setActiveMainTab("estimate")}>
+              <ArrowLeft className="h-4 w-4 mr-1" />
+              Back to Estimate
+            </Button>
+            <FixturesSummary projectId={projectId!} pdfUrl={project?.plan_file_url} />
+          </TabsContent>
+
           <TabsContent value="insights">
             <ProjectInsightsTab projectId={projectId!} />
           </TabsContent>
@@ -500,6 +514,15 @@ const ProjectDetail = () => {
 
           <TabsContent value="subbies">
             <SubcontractorComparison projectId={projectId!} />
+          </TabsContent>
+
+          <TabsContent value="documents">
+            <DocumentLibrary
+              projectId={projectId!}
+              projectName={project.name}
+              clientName={project.client_name}
+              siteAddress={project.site_address}
+            />
           </TabsContent>
 
           <TabsContent value="pricing">

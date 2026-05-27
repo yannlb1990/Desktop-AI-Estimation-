@@ -240,9 +240,9 @@ const LabourRateCell = ({ item, selectedState, onUpdateCostItem }: LabourRateCel
 };
 
 // Persistence keys
-const transferredKey = (projectId: string) => `transferred_cost_items_${projectId}`;
-const prefsKey = (projectId: string) => `cost_estimator_prefs_${projectId}`;
-const consumablesKey = (projectId: string) => `cost_estimator_consumables_${projectId}`;
+const transferredKey = (projectId: string) => getUserStorageKey(`transferred_cost_items_${projectId}`);
+const prefsKey = (projectId: string) => getUserStorageKey(`cost_estimator_prefs_${projectId}`);
+const consumablesKey = (projectId: string) => getUserStorageKey(`cost_estimator_consumables_${projectId}`);
 const getTransferred = (projectId: string): Set<string> =>
   new Set(JSON.parse(localStorage.getItem(transferredKey(projectId)) || '[]'));
 const saveTransferred = (projectId: string, ids: Set<string>) =>
@@ -1009,7 +1009,7 @@ export const CostEstimator = ({
                         <TableCell className="px-1 w-24">
                           <Select value={item.trade || ''} onValueChange={(v) => onUpdateCostItem(item.id, { trade: v })}>
                             <SelectTrigger className="h-8 text-xs w-full px-2">
-                              <SelectValue placeholder="-" />
+                              <SelectValue placeholder="Trade" />
                             </SelectTrigger>
                             <SelectContent className="bg-popover max-h-48">
                               {visibleTrades.map(t => <SelectItem key={t} value={t} className="text-xs">{t}</SelectItem>)}
@@ -1031,7 +1031,7 @@ export const CostEstimator = ({
                         <TableCell className="px-1 w-20">
                           <Select value={item.area || ''} onValueChange={(v: MeasurementArea) => onUpdateCostItem(item.id, { area: v })}>
                             <SelectTrigger className="h-8 text-xs px-2">
-                              <SelectValue placeholder="-" />
+                              <SelectValue placeholder="Area" />
                             </SelectTrigger>
                             <SelectContent className="bg-popover max-h-48">
                               {AREA_OPTIONS.map(a => <SelectItem key={a} value={a} className="text-xs">{a}</SelectItem>)}
@@ -1083,7 +1083,7 @@ export const CostEstimator = ({
                             />
                           ) : (
                             <Select value={item.material || ''} onValueChange={(v) => onUpdateCostItem(item.id, { material: v })}>
-                              <SelectTrigger className="h-8 text-xs w-full px-2"><SelectValue placeholder="-" /></SelectTrigger>
+                              <SelectTrigger className="h-8 text-xs w-full px-2"><SelectValue placeholder="Material" /></SelectTrigger>
                               <SelectContent className="bg-popover max-h-48">
                                 {(MATERIAL_OPTIONS[item.category] || MATERIAL_OPTIONS.General).map(m => (
                                   <SelectItem key={m} value={m} className="text-xs">{m}</SelectItem>

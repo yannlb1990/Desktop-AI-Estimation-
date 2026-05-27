@@ -13,7 +13,7 @@ import { UpgradeModal } from "@/components/UpgradeModal"
 
 interface FullTenderProps { project: any; estimate?: any }
 
-const LOAD_BRAND = () => { try { return JSON.parse(localStorage.getItem("quote_brand") || "{}") } catch { return {} } }
+const LOAD_BRAND = () => { try { return JSON.parse(localStorage.getItem(getUserStorageKey("quote_brand")) || "{}") } catch { return {} } }
 
 const DEFAULT_METHOD = `Our approach is built on three pillars:
 
@@ -288,30 +288,66 @@ export const FullTenderGenerator = ({ project, estimate }: FullTenderProps) => {
     const estimateItems: any[] = proj?.estimate_items || estimate?.estimate_items || []
     if (estimateItems.length === 0) return
 
-    const newBoqItems = estimateItems.map((item: any) => {
+    // Use current labour rates saved by EstimateTemplate
+    const cfgRates: Record<string, number> = proj?.estimate_config?.labourRates || {}
+    const cfgDefaultRate: number = proj?.estimate_config?.defaultLabourRate || 65
+
+    const newBoqItems: any[] = estimateItems.map((item: any) => {
       const qty = parseFloat(item.quantity) || 1
       const unitPrice = parseFloat(item.unit_price) || 0
       const labourHours = parseFloat(item.labour_hours) || 0
-      const labourRate = parseFloat(item.labour_rate) || 65
+      const labourRate = cfgRates[item.trade] || cfgDefaultRate || parseFloat(item.labour_rate) || 65
       const matWaste = (item.material_wastage_pct ?? 5) / 100
       const labWaste = (item.labour_wastage_pct ?? 10) / 100
       const markup = (item.markup_pct ?? 0) / 100
-      const matTotal = qty * unitPrice * (1 + matWaste)
+
+      let matTotal = qty * unitPrice * (1 + matWaste)
+      // Include confirmed related materials in this line's cost
+      if (Array.isArray(item.relatedMaterials)) {
+        item.relatedMaterials.forEach((rm: any) => {
+          if (rm.confirmed) matTotal += (rm.quantity || 0) * (rm.unit_price || 0)
+        })
+      }
+
       const labTotal = labourHours * labourRate * (1 + labWaste)
       const lineTotal = Math.round((matTotal + labTotal) * (1 + markup) * 100) / 100
       return {
         trade: item.trade || "General",
         description: [item.scope_of_work, item.material_type].filter(Boolean).join(" — ") || "Item",
-        qty: String(qty),
+        qty: Number(qty).toFixed(1),
         unit: item.unit || "m²",
         rate: String(Math.round((lineTotal / Math.max(qty, 1)) * 100) / 100),
         total: String(lineTotal),
       }
     })
 
-    const overheadFromStorage = proj?.overhead_total || 0
-    const itemsTotal = newBoqItems.reduce((s, b) => s + parseFloat(b.total || "0"), 0)
-    const exGstTotal = Math.round((itemsTotal + overheadFromStorage) * 100) / 100
+    // Add consumable rows
+    const projConsumables: any[] = proj?.consumables || []
+    projConsumables.forEach((c: any) => {
+      const total = Math.round((c.quantity || 0) * (c.unit_price || 0) * 100) / 100
+      if (total > 0) {
+        newBoqItems.push({
+          trade: "Site Consumables",
+          description: c.name || "Consumable",
+          qty: Number(c.quantity || 1).toFixed(1),
+          unit: c.unit || "ea",
+          rate: String(c.unit_price || 0),
+          total: String(total),
+        })
+      }
+    })
+
+    // Use persisted estimate_totals.taxable as the ex-GST subtotal so tender matches estimate exactly
+    const estimateTotals = proj?.estimate_totals
+    let exGstTotal: number
+    if (estimateTotals?.taxable) {
+      exGstTotal = Math.round(estimateTotals.taxable * 100) / 100
+    } else {
+      // Fallback: sum item lines + fixed overheads
+      const overheadFromStorage = proj?.overhead_total || 0
+      const itemsTotal = newBoqItems.reduce((s: number, b: any) => s + parseFloat(b.total || "0"), 0)
+      exGstTotal = Math.round((itemsTotal + overheadFromStorage) * 100) / 100
+    }
 
     setBoqItems(newBoqItems)
     setSubtotal(String(exGstTotal))
@@ -327,6 +363,63 @@ export const FullTenderGenerator = ({ project, estimate }: FullTenderProps) => {
   const totalIncGst = subtotalNum + gstAmount
   const today = new Date()
   const validUntil = new Date(today.getTime() + parseInt(validityDays) * 86400000)
+  const handlePrint = () => {
+    const el = document.getElementById('printable-tender')
+    if (!el) { toast.error("Content not found"); return }
+    // Clone and force full-width inline styles so Tailwind's max-w constraints don't create side margins
+    const clone = el.cloneNode(true) as HTMLElement
+    clone.style.cssText = 'width:100%!important;max-width:none!important;margin:0!important;padding:0!important;box-shadow:none!important;border-radius:0!important;'
+    const cssLinks = Array.from(document.querySelectorAll('link[rel="stylesheet"]'))
+      .map((l) => `<link rel="stylesheet" href="${(l as HTMLLinkElement).href}">`)
+      .join('\n')
+    const win = window.open('', '_blank', 'width=900,height=700')
+    if (!win) { toast.error("Pop-ups blocked — allow pop-ups and try again"); return }
+    const projectName = project?.name || 'Tender'
+    const dateStr = today.toLocaleDateString("en-AU", { day: "2-digit", month: "2-digit", year: "numeric" }).replace(/\//g, "-")
+    const docTitle = `${tenderNumber} - ${companyName} - ${projectName} - ${dateStr}`
+    const safeTitle = docTitle.replace(/'/g, "\\'")
+    const html = `<!DOCTYPE html>
+<html style="color-scheme:light"><head>
+<meta charset="utf-8">
+<title>${docTitle}</title>
+${cssLinks}
+<style>
+@page{size:A4;margin:0}
+*{-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important;box-sizing:border-box;word-wrap:break-word;overflow-wrap:break-word}
+html{color-scheme:light!important}
+body{margin:0!important;padding:0!important;width:210mm!important;background:#fff!important;color-scheme:light!important}
+#printable-tender{width:100%!important;max-width:none!important;padding:0!important;margin:0!important;box-shadow:none!important;border-radius:0!important}
+#printable-tender img{max-width:100%!important;height:auto}
+#printable-tender table{width:100%!important;table-layout:fixed!important}
+#printable-tender td,#printable-tender th{word-break:break-word!important}
+#printable-tender section{break-inside:avoid}
+#printable-tender tr{break-inside:avoid}
+</style>
+</head><body>
+${clone.outerHTML}
+<script>
+(function(){
+  var done=false;
+  function doPrint(){
+    if(done)return;
+    done=true;
+    document.title='${safeTitle}';
+    window.print();
+    window.addEventListener('afterprint',function(){window.close();},{once:true});
+  }
+  if(document.readyState==='complete'){
+    setTimeout(doPrint,600);
+  } else {
+    window.addEventListener('load',function(){setTimeout(doPrint,600);},{once:true});
+  }
+})();
+` + `</script>
+</body></html>`
+    win.document.write(html)
+    win.document.close()
+    toast.success("Print window opened — choose 'Save as PDF'")
+  }
+
   const fmt = (d: Date) => d.toLocaleDateString("en-AU", { day: "numeric", month: "long", year: "numeric" })
   const au$ = (n: number) => "$" + n.toLocaleString("en-AU", { minimumFractionDigits: 2 })
   const headerStyle = { background: `linear-gradient(135deg, ${primaryColor}f0 0%, ${primaryColor} 100%)` }
@@ -369,7 +462,7 @@ export const FullTenderGenerator = ({ project, estimate }: FullTenderProps) => {
           <DialogHeader className="px-6 py-4 border-b flex-shrink-0">
             <div className="flex items-center justify-between">
               <DialogTitle className="font-display text-xl">Tender Document Generator</DialogTitle>
-              <Button onClick={() => { window.print(); toast.success("Save as PDF from the print dialog") }} className="bg-accent text-accent-foreground hover:bg-accent/90">
+              <Button onClick={handlePrint} className="bg-accent text-accent-foreground hover:bg-accent/90">
                 <Printer className="mr-2 h-4 w-4" />Print / Save PDF
               </Button>
             </div>
@@ -916,7 +1009,7 @@ export const FullTenderGenerator = ({ project, estimate }: FullTenderProps) => {
                           )}
                         </div>
                       </div>
-                      <p className="text-xs text-gray-500 mb-4">Lump sum price inclusive of all labour, materials, plant, preliminaries and overheads. Contractor is registered for GST (ABN: {companyABN || "XX XXX XXX XXX"}).</p>
+                      <p className="text-xs text-gray-500 mb-4">Lump sum price inclusive of all labour, materials, plant, preliminaries and overheads. Contractor is registered for GST (ABN: {companyABN || "ABN not entered"}).</p>
                     </>
                   ) : (
                     <div className="border-2 border-dashed rounded-xl p-8 text-center text-gray-400 text-sm mb-4">Enter the tender sum in the Pricing tab to display here</div>
@@ -941,7 +1034,7 @@ export const FullTenderGenerator = ({ project, estimate }: FullTenderProps) => {
                             <tr key={i} className={i % 2 === 0 ? "bg-white" : "bg-gray-50"}>
                               <td className="p-2 font-medium text-gray-800 text-xs">{b.trade}</td>
                               <td className="p-2 text-gray-600 text-xs">{b.description}</td>
-                              <td className="p-2 text-right text-gray-600 text-xs font-mono">{b.qty}</td>
+                              <td className="p-2 text-right text-gray-600 text-xs font-mono">{isNaN(Number(b.qty)) ? b.qty : Number(b.qty).toFixed(1)}</td>
                               <td className="p-2 text-right text-gray-500 text-xs">{b.unit}</td>
                               <td className="p-2 text-right text-gray-600 text-xs font-mono">{b.rate ? `$${b.rate}` : "—"}</td>
                               <td className="p-2 text-right font-semibold text-gray-800 text-xs font-mono">{b.total ? `$${b.total}` : "—"}</td>
@@ -1187,14 +1280,6 @@ export const FullTenderGenerator = ({ project, estimate }: FullTenderProps) => {
         </DialogContent>
       </Dialog>
 
-      <style>{`
-        @media print {
-          body * { visibility: hidden !important; }
-          #printable-tender, #printable-tender * { visibility: visible !important; }
-          #printable-tender { position: fixed; top: 0; left: 0; width: 100%; }
-          .no-print { display: none !important; }
-        }
-      `}</style>
     </>
   )
 }

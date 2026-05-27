@@ -130,10 +130,10 @@ export const MaterialExtractorPanel: React.FC<MaterialExtractorPanelProps> = ({
     setStatus('analyzing');
     setProgress('Sending to AI for material extraction…');
 
-    const msg = 'AI material extraction requires a backend connection. This feature is not available in local mode.';
+    const msg = 'AI material extraction is coming in a future update.';
     setError(msg);
     setStatus('error');
-    toast.error('AI extraction unavailable — backend not configured');
+    toast.info('AI material extraction is coming in a future update');
   }, [pdfUrl, pageCount, projectName]);
 
   const toggleItem = (idx: number) => {
