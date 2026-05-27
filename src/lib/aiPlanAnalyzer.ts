@@ -1354,12 +1354,6 @@ function generateEstimation(
   // Wall plasterboard: ext wall internal face (net) + BOTH sides of internal partitions − wet areas
   const wallPlasterboard = Math.round(extWallNet + intWallSingleFace * 2 - wetAreaWall);
 
-    extWallGross, extWallNet,
-    intWallSingleFace, totalFramingArea,
-    totalWallInsulation, wallPlasterboard,
-    habitableArea, wetAreaWall,
-  });
-
   // Helper to add line item with proper SOW categorization
   const addItem = (
     rateCode: string,
