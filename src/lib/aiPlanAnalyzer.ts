@@ -1216,15 +1216,12 @@ function generateEstimation(
     hasEngineeredTimber, hasLouvreWindows, hasFeatureWeatherboard,
     hasAluminiumBattens, hasRender, hasBreezeBlock } = ctx;
 
-  console.log(`[AIAnalyzer] Building context:`, ctx);
 
   // === FLOOR AREA DETECTION ===
   let totalFloorArea = 0;
   let floorAreaSource: 'detected' | 'inferred' = 'inferred';
 
-  console.log(`[AIAnalyzer] Floor areas extracted: ${floorAreas.length} items`);
   if (floorAreas.length > 0) {
-    console.log(`[AIAnalyzer] Floor areas:`, floorAreas.map(a => `${a.name}: ${a.area}m²`).join(', '));
   }
 
   // Look for explicit TOTAL area first
@@ -1235,7 +1232,6 @@ function generateEstimation(
   if (totalArea && totalArea.area > 50 && totalArea.area < 10000) {
     totalFloorArea = totalArea.area;
     floorAreaSource = 'detected';
-    console.log(`[AIAnalyzer] Using TOTAL area: ${totalFloorArea}m²`);
   } else if (floorAreas.length > 0) {
     // Sum ALL valid individual room/space areas (cap per area, not total)
     const summed = floorAreas
@@ -1245,7 +1241,6 @@ function generateEstimation(
     if (summed > 50) {
       totalFloorArea = summed;
       floorAreaSource = 'detected';
-      console.log(`[AIAnalyzer] Summed floor areas: ${totalFloorArea}m² from ${floorAreas.length} items`);
     }
   }
 
@@ -1253,14 +1248,12 @@ function generateEstimation(
   if (totalFloorArea < 80 && ctx.totalGrossArea > 80) {
     totalFloorArea = ctx.totalGrossArea;
     floorAreaSource = 'detected';
-    console.log(`[AIAnalyzer] Using context-derived area: ${totalFloorArea}m²`);
   }
 
   // Final fallback: use reasonable default based on building type
   if (totalFloorArea < 80 || totalFloorArea > 8000) {
     totalFloorArea = isDuplex ? 400 : 175;
     floorAreaSource = 'inferred';
-    console.log(`[AIAnalyzer] Using default area: ${totalFloorArea}m² (isDuplex=${isDuplex})`);
   }
 
   totalFloorArea = Math.round(totalFloorArea);
@@ -1361,7 +1354,6 @@ function generateEstimation(
   // Wall plasterboard: ext wall internal face (net) + BOTH sides of internal partitions − wet areas
   const wallPlasterboard = Math.round(extWallNet + intWallSingleFace * 2 - wetAreaWall);
 
-  console.log('[Assembly Pathway]', {
     extWallGross, extWallNet,
     intWallSingleFace, totalFramingArea,
     totalWallInsulation, wallPlasterboard,
@@ -1381,7 +1373,6 @@ function generateEstimation(
 
     const rate = AUSTRALIAN_CONSTRUCTION_RATES.find(r => r.code === rateCode);
     if (!rate) {
-      console.warn(`Rate code ${rateCode} not found`);
       return;
     }
 
@@ -1876,7 +1867,6 @@ function generateEstimation(
   const totalEstimate = items.reduce((sum, item) => sum + item.totalCost, 0);
   const { low, mid, high } = calculateTypicalHouseCost(totalFloorArea);
 
-  console.log(`[AIAnalyzer] Estimate Summary:
     - Floor area: ${totalFloorArea}m² (source: ${floorAreaSource})
     - Building: ${isDuplex ? `Duplex — ${unitCount} units` : 'Single dwelling'}, ${storeyCount}-storey
     - Pool: ${hasPool}, Carport: ${hasCarport}
@@ -1889,9 +1879,7 @@ function generateEstimation(
   // Allow higher ratios for duplex/multi-unit builds
   const maxRatio = isDuplex ? 6 : 3;
   if (totalEstimate > high * maxRatio) {
-    console.warn(`[AIAnalyzer] WARNING: Estimate ${(totalEstimate / high).toFixed(1)}x above expected high — check floor area (${totalFloorArea}m²) and electrical.`);
   } else if (totalEstimate < low * 0.4) {
-    console.warn(`[AIAnalyzer] WARNING: Estimate ${(totalEstimate / low).toFixed(1)}x below expected low — likely missing items.`);
   }
 
   return items;
@@ -1909,14 +1897,12 @@ export interface AnalysisPDFResult {
  * Returns both the analysis result and the ArrayBuffer for viewer use
  */
 export async function analyzePDF(file: File): Promise<PlanAnalysisResult> {
-  console.log(`[AIAnalyzer] Starting analysis of ${file.name} (${(file.size / 1024 / 1024).toFixed(2)} MB)`);
 
   // Load PDF using centralized service
   const { result: pdfResult, arrayBuffer } = await loadPDFFromFile(file);
   const pdf = pdfResult.document;
   const pageCount = pdfResult.pageCount;
 
-  console.log(`[AIAnalyzer] PDF loaded: ${pageCount} pages`);
 
   // Store arrayBuffer for viewer use (will be cached in service)
   const fileUrl = URL.createObjectURL(file);
@@ -2162,7 +2148,6 @@ export async function analyzePDF(file: File): Promise<PlanAnalysisResult> {
  * This ensures the PDF is only loaded once and shared between analysis and viewer
  */
 export async function analyzePDFWithData(file: File): Promise<AnalysisPDFResult> {
-  console.log(`[AIAnalyzer] Starting analysis with data return for ${file.name}`);
 
   // Load PDF using centralized service
   const { result: pdfResult, arrayBuffer } = await loadPDFFromFile(file);
@@ -2170,7 +2155,6 @@ export async function analyzePDFWithData(file: File): Promise<AnalysisPDFResult>
   // Run analysis (will use cached PDF from service)
   const analysis = await analyzePDF(file);
 
-  console.log(`[AIAnalyzer] Analysis complete. ArrayBuffer size: ${(arrayBuffer.byteLength / 1024 / 1024).toFixed(2)} MB`);
 
   return {
     analysis,

@@ -458,7 +458,6 @@ export const PDFTakeoff = ({ projectId, estimateId, onAddCostItems }: PDFTakeoff
 
   const handleTextExtracted = useCallback((text: string) => {
     // Text can be used for drawing title detection, notes, etc.
-    console.log('Extracted text:', text.substring(0, 200));
   }, []);
 
   const handleRoomAreasImported = useCallback((areas: RoomArea[]) => {

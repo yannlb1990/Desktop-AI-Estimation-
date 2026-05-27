@@ -322,7 +322,6 @@ export function PDFAnalysisViewer({
   useEffect(() => {
     // Guard: Don't try to load if pdfData is invalid
     if (!pdfData || pdfData.byteLength === 0) {
-      console.warn('[PDFAnalysisViewer] No valid pdfData provided');
       setLoadError('No PDF data provided');
       setIsLoading(false);
       return;
@@ -335,12 +334,10 @@ export function PDFAnalysisViewer({
       setLoadError(null);
 
       try {
-        console.log(`[PDFAnalysisViewer] Loading PDF (${(pdfData.byteLength / 1024 / 1024).toFixed(2)} MB)...`);
 
         const result = await loadPDFFromArrayBuffer(pdfData);
 
         if (cancelled) {
-          console.log('[PDFAnalysisViewer] Load cancelled, component unmounted');
           return;
         }
 
@@ -349,7 +346,6 @@ export function PDFAnalysisViewer({
         setPageDimensions(result.pageDimensions);
         setCurrentPage(1);
 
-        console.log(`[PDFAnalysisViewer] PDF loaded: ${result.pageCount} pages`);
       } catch (error) {
         if (cancelled) return;
 
@@ -478,7 +474,6 @@ export function PDFAnalysisViewer({
       }));
 
       setCvProgress(100);
-      console.log(`CV Analysis complete for page ${currentPage}:`, result);
 
       // Clean up
       cvCanvas.remove();
@@ -703,7 +698,6 @@ export function PDFAnalysisViewer({
     // Notify parent component with current page calibration and all calibrations
     onCalibrationChanged?.(newCalibration);
     onCalibrationsChanged?.(updatedCalibrations);
-    console.log(`Calibration applied for page ${currentPage}:`, newCalibration);
   }, [calibrationPoints, calibrationDistance, calibrationUnit, canvasSize, currentPage, calibrations, onCalibrationChanged, onCalibrationsChanged]);
 
   // Cancel measurement

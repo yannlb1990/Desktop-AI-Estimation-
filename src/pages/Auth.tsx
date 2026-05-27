@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -52,6 +52,8 @@ const PLAN_TAGLINES: Record<PlanId, string> = {
 const Auth = () => {
   const navigate = useNavigate();
   const [params] = useSearchParams();
+  // Prevents both handleSignIn and onAuthStateChange from navigating simultaneously
+  const navigatedRef = useRef(false);
 
   const planParam = (params.get("plan") as PlanId | null) || "pro";
   const billingParam = (params.get("billing") as BillingPeriod | null) || "monthly";
@@ -81,6 +83,8 @@ const Auth = () => {
   useEffect(() => {
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       if (session?.user?.email_confirmed_at && session.user.email) {
+        if (navigatedRef.current) return;
+        navigatedRef.current = true;
         migrateUnscopedData(session.user.email);
         activateTrialIfNeeded(session.user.email);
         toast.success("Email verified — welcome aboard!");
@@ -116,6 +120,8 @@ const Auth = () => {
         return;
       }
 
+      if (navigatedRef.current) return;
+      navigatedRef.current = true;
       migrateUnscopedData(data.email);
       activateTrialIfNeeded(data.email);
       toast.success("Welcome back!");

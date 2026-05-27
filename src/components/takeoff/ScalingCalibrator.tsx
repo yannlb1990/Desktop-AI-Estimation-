@@ -63,7 +63,6 @@ export const ScalingCalibrator = ({
       scaleToUse = `1:${customRatio}`;
     }
 
-    console.log('Preset scale using PDF width:', pageWidth, 'Drawing area:', drawingAreaPercent + '%', 'Scale:', scaleToUse);
 
     const scale = calculatePresetScaleWorld(scaleToUse, pageWidth, drawingAreaPercent / 100);
     onScaleSet(scale);
@@ -89,7 +88,6 @@ export const ScalingCalibrator = ({
       unit
     );
 
-    console.log('Manual calibration:', {
       points: manualPoints,
       distance,
       unit,

@@ -1,9 +1,10 @@
-import { useState } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { Upload, FileText, AlertCircle, CloudOff } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { toast } from 'sonner';
 import { PDFFile } from '@/lib/takeoff/types';
+import { savePlanToLibrary } from '@/components/DocumentLibrary';
 
 interface PDFUploadManagerProps {
   projectId: string;
@@ -14,6 +15,14 @@ interface PDFUploadManagerProps {
 export const PDFUploadManager = ({ projectId, onUploadComplete, onError }: PDFUploadManagerProps) => {
   const [uploading, setUploading] = useState(false);
   const [validationError, setValidationError] = useState<string | null>(null);
+  const currentBlobUrl = useRef<string | null>(null);
+
+  // Revoke blob URL on unmount to free memory
+  useEffect(() => {
+    return () => {
+      if (currentBlobUrl.current) URL.revokeObjectURL(currentBlobUrl.current);
+    };
+  }, []);
 
   const validateFile = (file: File): string | null => {
     if (file.size > 50 * 1024 * 1024) return 'File size must be less than 50MB';
@@ -48,11 +57,21 @@ export const PDFUploadManager = ({ projectId, onUploadComplete, onError }: PDFUp
 
     try {
       const pageCount = await getPageCount(file);
+      // Revoke previous blob URL before creating a new one
+      if (currentBlobUrl.current) URL.revokeObjectURL(currentBlobUrl.current);
       const url = URL.createObjectURL(file);
+      currentBlobUrl.current = url;
       // Stable identifier that survives blob URL expiry: name + byte size.
       const planId = `${file.name}_${file.size}`;
 
       toast.success(`Plan loaded — ${pageCount} page${pageCount > 1 ? 's' : ''}`);
+
+      savePlanToLibrary(projectId, {
+        planId,
+        filename: file.name,
+        uploadedAt: new Date().toISOString(),
+        pageCount,
+      });
 
       onUploadComplete({ file, url, name: file.name, pageCount, planId });
     } catch (err) {

@@ -724,7 +724,6 @@ async function processImageData(
 
   const processingTimeMs = performance.now() - startTime;
 
-  console.log(`CV Analysis complete: ${shapes.length} shapes (${arcs.length} door arcs, ${lines.length} lines, ${contours.length} contours) in ${processingTimeMs.toFixed(0)}ms`);
 
   return {
     pageNumber,

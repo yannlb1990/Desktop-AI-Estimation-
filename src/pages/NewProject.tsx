@@ -96,11 +96,9 @@ const NewProject = () => {
     try {
       // Analyze the PDF and get both analysis result and ArrayBuffer
       toast.info("Analyzing PDF - extracting text, symbols, and schedules...");
-      console.log(`[NewProject] Starting analysis of ${uploadedFile.name}`);
 
       const { analysis: result, arrayBuffer } = await analyzePDFWithData(uploadedFile);
 
-      console.log(`[NewProject] Analysis complete. ArrayBuffer: ${arrayBuffer.byteLength} bytes, Pages: ${result.totalPages}`);
 
       // Set state in correct order
       setPdfData(arrayBuffer);

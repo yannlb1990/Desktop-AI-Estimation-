@@ -252,7 +252,6 @@ export const InteractiveCanvas = ({
       setError(null);
 
       try {
-        console.log('Loading PDF from:', pdfUrl);
         const loadingTask = pdfjsLib.getDocument(pdfUrl);
         const pdf = await loadingTask.promise;
         const page = await pdf.getPage(pageIndex + 1);
@@ -260,7 +259,6 @@ export const InteractiveCanvas = ({
         // Get base dimensions for coordinate system (always scale 1.0)
         const baseViewport = page.getViewport({ scale: 1.0, rotation: transform.rotation });
 
-        console.log('PDF base viewport:', {
           width: baseViewport.width,
           height: baseViewport.height
         });

@@ -1,4 +1,5 @@
 import React, { useState, useCallback, useEffect } from 'react';
+import DOMPurify from 'dompurify';
 import { Loader2, Sparkles, FileSearch, Table2, Ruler, AlertCircle, CheckCircle2, ChevronDown, ChevronUp, DoorOpen, LayoutDashboard } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
@@ -331,7 +332,7 @@ export const AIExtractionPanel: React.FC<AIExtractionPanelProps> = ({
                     {table.html && (
                       <div
                         className="text-xs overflow-auto max-h-24 border rounded p-1 bg-muted/30"
-                        dangerouslySetInnerHTML={{ __html: table.html }}
+                        dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(table.html) }}
                       />
                     )}
                   </div>

@@ -34,47 +34,58 @@ export async function redirectToStripeCheckout(
 
 // Reads the user's paid subscription from Supabase DB and merges it into localStorage.
 // Called on app start and after a successful checkout.
-export async function syncSubscriptionFromDB(): Promise<void> {
+// Returns true if sync succeeded, false otherwise.
+export async function syncSubscriptionFromDB(retries = 3): Promise<boolean> {
   const { data: { session } } = await supabase.auth.getSession();
-  if (!session?.user) return;
+  if (!session?.user) return false;
 
-  try {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { data, error } = await (supabase as any)
-      .from("subscriptions")
-      .select("plan_id, billing_period, status, current_period_end, created_at")
-      .eq("user_id", session.user.id)
-      .single();
+  for (let attempt = 1; attempt <= retries; attempt++) {
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { data, error } = await (supabase as any)
+        .from("subscriptions")
+        .select("plan_id, billing_period, status, current_period_end, created_at")
+        .eq("user_id", session.user.id)
+        .single();
 
-    if (error || !data || data.status === "canceled") return;
+      if (error || !data || data.status === "canceled") return false;
 
-    // Update the user's scoped localStorage subscription key so the rest of the
-    // app (which is synchronous) sees the paid plan immediately.
-    const storageKey = `${session.user.email}:estimate_subscription`;
-    const raw = localStorage.getItem(storageKey);
-    const existing = raw ? JSON.parse(raw) : null;
+      const storageKey = `${session.user.email}:estimate_subscription`;
+      const raw = localStorage.getItem(storageKey);
+      const existing = raw ? JSON.parse(raw) : null;
 
-    const now = new Date().toISOString();
-    const updated = existing
-      ? {
-          ...existing,
-          activePlan: data.plan_id,
-          billingPeriod: data.billing_period,
-          subscribedAt: existing.subscribedAt ?? data.created_at ?? now,
-        }
-      : {
-          email: session.user.email ?? "",
-          displayName: session.user.user_metadata?.displayName ?? "",
-          activePlan: data.plan_id,
-          selectedPlan: data.plan_id,
-          billingPeriod: data.billing_period,
-          trialStartedAt: data.created_at ?? now,
-          trialEndsAt: data.created_at ?? now, // already past trial
-          subscribedAt: data.created_at ?? now,
-        };
+      const now = new Date().toISOString();
+      const isPastDue = data.status === "past_due";
 
-    localStorage.setItem(storageKey, JSON.stringify(updated));
-  } catch {
-    // Never crash — fall back to localStorage state
+      const updated = existing
+        ? {
+            ...existing,
+            activePlan: data.plan_id,
+            billingPeriod: data.billing_period,
+            subscribedAt: existing.subscribedAt ?? data.created_at ?? now,
+            stripeStatus: data.status,
+            pastDueSince: isPastDue ? (existing.pastDueSince ?? now) : undefined,
+          }
+        : {
+            email: session.user.email ?? "",
+            displayName: session.user.user_metadata?.displayName ?? "",
+            activePlan: data.plan_id,
+            selectedPlan: data.plan_id,
+            billingPeriod: data.billing_period,
+            trialStartedAt: data.created_at ?? now,
+            trialEndsAt: data.created_at ?? now,
+            subscribedAt: data.created_at ?? now,
+            stripeStatus: data.status,
+            pastDueSince: isPastDue ? now : undefined,
+          };
+
+      localStorage.setItem(storageKey, JSON.stringify(updated));
+      return true;
+    } catch {
+      if (attempt < retries) {
+        await new Promise(r => setTimeout(r, attempt * 1000));
+      }
+    }
   }
+  return false;
 }

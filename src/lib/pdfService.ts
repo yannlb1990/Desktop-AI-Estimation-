@@ -52,11 +52,9 @@ export async function loadPDFFromArrayBuffer(data: ArrayBuffer): Promise<PDFLoad
   // Check cache first
   const cached = pdfCache.get(cacheKey);
   if (cached) {
-    console.log('[PDFService] Using cached PDF document');
     return cached;
   }
 
-  console.log(`[PDFService] Loading PDF from ArrayBuffer (${(data.byteLength / 1024 / 1024).toFixed(2)} MB)`);
 
   try {
     // Clone the ArrayBuffer to prevent detached buffer issues
@@ -82,7 +80,6 @@ export async function loadPDFFromArrayBuffer(data: ArrayBuffer): Promise<PDFLoad
     // Cache the result
     pdfCache.set(cacheKey, result);
 
-    console.log(`[PDFService] PDF loaded successfully: ${document.numPages} pages`);
     return result;
   } catch (error) {
     console.error('[PDFService] Failed to load PDF:', error);
@@ -94,7 +91,6 @@ export async function loadPDFFromArrayBuffer(data: ArrayBuffer): Promise<PDFLoad
  * Load PDF from File object
  */
 export async function loadPDFFromFile(file: File): Promise<{ result: PDFLoadResult; arrayBuffer: ArrayBuffer }> {
-  console.log(`[PDFService] Loading PDF from file: ${file.name} (${(file.size / 1024 / 1024).toFixed(2)} MB)`);
 
   const arrayBuffer = await file.arrayBuffer();
   const result = await loadPDFFromArrayBuffer(arrayBuffer);
@@ -106,7 +102,6 @@ export async function loadPDFFromFile(file: File): Promise<{ result: PDFLoadResu
  * Load PDF from URL (Object URL or remote URL)
  */
 export async function loadPDFFromURL(url: string): Promise<PDFLoadResult> {
-  console.log(`[PDFService] Loading PDF from URL: ${url.substring(0, 50)}...`);
 
   try {
     const loadingTask = pdfjs.getDocument(url);
@@ -120,7 +115,6 @@ export async function loadPDFFromURL(url: string): Promise<PDFLoadResult> {
       pageDimensions[i] = { width: viewport.width, height: viewport.height };
     }
 
-    console.log(`[PDFService] PDF loaded from URL: ${document.numPages} pages`);
 
     return {
       document,
@@ -220,7 +214,6 @@ export async function renderPageToCanvas(
  */
 export function clearPDFCache(): void {
   pdfCache.clear();
-  console.log('[PDFService] PDF cache cleared');
 }
 
 /**
