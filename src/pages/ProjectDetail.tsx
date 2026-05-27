@@ -30,7 +30,7 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "sonner";
-import { ArrowLeft, FileText, DollarSign, Ruler, Loader2, Settings, Calculator, TrendingUp, ShieldCheck, MapPin, User, Calendar as CalendarIcon, Clock, Bell, Package, ChevronDown, ChevronUp, Users, FolderOpen, Sofa } from "lucide-react";
+import { ArrowLeft, FileText, DollarSign, Ruler, Loader2, Settings, Calculator, TrendingUp, ShieldCheck, MapPin, User, Calendar as CalendarIcon, Clock, Bell, Package, ChevronDown, ChevronUp, Users, FolderOpen, Sofa, BookOpen } from "lucide-react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { SubcontractorComparison } from "@/components/SubcontractorComparison";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
@@ -224,6 +224,18 @@ const ProjectDetail = () => {
               Back to Dashboard
             </Button>
             <div className="flex gap-2">
+              <TourTip text="Start your estimate from a pre-built template — New Build, Bathroom, Kitchen, Deck or Commercial Fitout. Loads all standard line items instantly." position="bottom">
+                <Button
+                  variant="outline"
+                  onClick={() => {
+                    setActiveMainTab("estimate");
+                    setTimeout(() => window.dispatchEvent(new Event("open-template-modal")), 100);
+                  }}
+                >
+                  <BookOpen className="h-4 w-4 mr-2" />
+                  Templates
+                </Button>
+              </TourTip>
               <TourTip text="Generate a branded PDF quote — 2-page proposal with your logo, scope summary, pricing breakdown and signature block." position="bottom">
                 <QuoteGenerator project={project} estimate={estimate} />
               </TourTip>

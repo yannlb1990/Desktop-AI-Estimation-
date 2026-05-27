@@ -246,6 +246,13 @@ export const EstimateTemplate = ({ projectId, estimateId }: EstimateTemplateProp
     return () => window.removeEventListener('estimate-updated', handler);
   }, [projectId]);
 
+  // Allow external callers (e.g. top nav button) to open the template modal
+  useEffect(() => {
+    const handler = () => setShowTemplateModal(true);
+    window.addEventListener('open-template-modal', handler);
+    return () => window.removeEventListener('open-template-modal', handler);
+  }, []);
+
   const loadItems = () => {
     // Load from localStorage — also ensure project entry exists so Takeoff can push items
     const projects = JSON.parse(localStorage.getItem(getUserStorageKey('local_projects')) || '[]');
