@@ -41,6 +41,7 @@ import { DimensionExtraction, ExtractedTable, RoomArea } from '@/lib/api/pdfExtr
 import { AppProfile, loadProfile } from '@/lib/takeoff/profile';
 import { useSubscription } from '@/hooks/useSubscription';
 import { UpgradeModal } from '@/components/UpgradeModal';
+import { getCachedPDF } from '@/lib/takeoff/pdfCache';
 
 interface PDFTakeoffProps {
   projectId: string;
@@ -92,6 +93,31 @@ export const PDFTakeoff = ({ projectId, estimateId, onAddCostItems }: PDFTakeoff
       initialFitDoneRef.current = false;
     }
   }, [state.pdfFile?.url]);
+
+  // Restore PDF from IndexedDB when navigating back to a project.
+  // Blob URLs don't survive component unmount; this recreates one from the cached ArrayBuffer.
+  React.useEffect(() => {
+    if (state.pdfFile) return; // already loaded
+    if (!projectId) return;
+    let cancelled = false;
+    try {
+      const raw = localStorage.getItem(`takeoff_${projectId}`);
+      if (!raw) return;
+      const persisted = JSON.parse(raw);
+      const planId: string | undefined = persisted.planId;
+      if (!planId) return;
+      getCachedPDF(planId).then(cached => {
+        if (cancelled || !cached) return;
+        const blob = new Blob([cached.data], { type: 'application/pdf' });
+        const url = URL.createObjectURL(blob);
+        dispatch({
+          type: 'SET_PDF_FILE',
+          payload: { file: null as any, url, name: cached.name, pageCount: cached.pageCount, planId },
+        });
+      }).catch(() => { /* cache unavailable — user will need to re-upload */ });
+    } catch { /* ignore parse errors */ }
+    return () => { cancelled = true; };
+  }, [projectId, state.pdfFile, dispatch]);
 
   // Sidebar list: only show measurements belonging to the current plan.
   const currentPlanId = state.pdfFile?.planId;

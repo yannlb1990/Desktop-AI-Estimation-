@@ -5,6 +5,7 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 import { toast } from 'sonner';
 import { PDFFile } from '@/lib/takeoff/types';
 import { savePlanToLibrary } from '@/components/DocumentLibrary';
+import { cachePDF } from '@/lib/takeoff/pdfCache';
 
 interface PDFUploadManagerProps {
   projectId: string;
@@ -31,15 +32,6 @@ export const PDFUploadManager = ({ projectId, onUploadComplete, onError }: PDFUp
     return null;
   };
 
-  const getPageCount = async (file: File): Promise<number> => {
-    if (file.type !== 'application/pdf') return 1;
-    const pdfjsLib = await import('pdfjs-dist');
-    pdfjsLib.GlobalWorkerOptions.workerSrc = '/pdf.worker.min.mjs';
-    const arrayBuffer = await file.arrayBuffer();
-    const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
-    return pdf.numPages;
-  };
-
   const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -56,13 +48,28 @@ export const PDFUploadManager = ({ projectId, onUploadComplete, onError }: PDFUp
     setUploading(true);
 
     try {
-      const pageCount = await getPageCount(file);
+      // Read once — reuse for pdfjs page count + IndexedDB cache
+      const arrayBuffer = await file.arrayBuffer();
+
+      let pageCount = 1;
+      if (file.type === 'application/pdf') {
+        const pdfjsLib = await import('pdfjs-dist');
+        pdfjsLib.GlobalWorkerOptions.workerSrc = '/pdf.worker.min.mjs';
+        // Pass a copy so pdfjs won't detach the original buffer
+        const pdf = await pdfjsLib.getDocument({ data: arrayBuffer.slice(0) }).promise;
+        pageCount = pdf.numPages;
+      }
+
+      // Stable identifier that survives blob URL expiry: name + byte size.
+      const planId = `${file.name}_${file.size}`;
+
+      // Persist to IndexedDB so the plan can be restored after navigation/refresh
+      await cachePDF(planId, arrayBuffer, file.name, pageCount);
+
       // Revoke previous blob URL before creating a new one
       if (currentBlobUrl.current) URL.revokeObjectURL(currentBlobUrl.current);
       const url = URL.createObjectURL(file);
       currentBlobUrl.current = url;
-      // Stable identifier that survives blob URL expiry: name + byte size.
-      const planId = `${file.name}_${file.size}`;
 
       toast.success(`Plan loaded — ${pageCount} page${pageCount > 1 ? 's' : ''}`);
 
@@ -122,7 +129,7 @@ export const PDFUploadManager = ({ projectId, onUploadComplete, onError }: PDFUp
       <Alert className="border-amber-200 bg-amber-50">
         <CloudOff className="h-4 w-4 text-amber-600" />
         <AlertDescription className="text-amber-700">
-          Plans load locally for your session. Measurements are saved and will persist across page refreshes.
+          Plans are stored locally in your browser. Your PDF and all measurements will be restored automatically when you return to this project.
         </AlertDescription>
       </Alert>
 
