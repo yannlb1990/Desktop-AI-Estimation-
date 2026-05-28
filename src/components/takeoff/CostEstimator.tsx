@@ -8,7 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { Calculator, DollarSign, Plus, Trash2, FileDown, Percent, Clock, ExternalLink, ChevronDown, ChevronRight, Wrench, CheckCircle2, Package, Link2, Unlink, Combine, BookmarkPlus, BookOpen } from 'lucide-react';
+import { Calculator, DollarSign, Plus, Trash2, FileDown, Percent, Clock, ExternalLink, ChevronDown, ChevronRight, Wrench, CheckCircle2, Package, Link2, Unlink, Combine, BookmarkPlus, BookOpen, RotateCcw } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { getUserStorageKey } from '@/lib/localAuth';
 import { Measurement, CostItem, MeasurementArea, TRADE_OPTIONS, RelatedMaterial, ConsumableItem } from '@/lib/takeoff/types';
@@ -114,6 +114,11 @@ const LabourRateCell = ({ item, selectedState, onUpdateCostItem }: LabourRateCel
 
   const currentLabourTrade = item.labourTrade || CATEGORY_TO_TRADE[item.category] || 'Carpenter';
 
+  // Profile default = custom saved rate, or market typical adjusted for state
+  const profileRate = getEffectiveRate(currentLabourTrade, selectedState);
+  const currentRate = item.hourlyRate ?? profileRate;
+  const isOverride = Math.round(currentRate) !== Math.round(profileRate);
+
   const [savedDefault, setSavedDefault] = useState<number | null>(() => {
     const cr = getCustomRates();
     return cr[currentLabourTrade] ?? null;
@@ -123,8 +128,9 @@ const LabourRateCell = ({ item, selectedState, onUpdateCostItem }: LabourRateCel
   const mult = LABOUR_MULT[selectedState] ?? 1;
   const adj = (rate: number) => Math.round(rate * mult);
 
+  // Picking a trade auto-fills its profile rate (custom or market typical)
   const handleLabourTradeChange = (tradeName: string) => {
-    const rate = getStateRate(tradeName, selectedState as AustralianState);
+    const rate = getEffectiveRate(tradeName, selectedState);
     onUpdateCostItem(item.id, { labourTrade: tradeName, hourlyRate: rate });
   };
 
@@ -141,11 +147,14 @@ const LabourRateCell = ({ item, selectedState, onUpdateCostItem }: LabourRateCel
     setOpen(false);
   };
 
+  const resetToProfile = () => {
+    onUpdateCostItem(item.id, { hourlyRate: profileRate });
+  };
+
   const saveDefault = () => {
-    const rate = item.hourlyRate ?? (rateInfo ? adj(rateInfo.typical) : 65);
-    setCustomRate(currentLabourTrade, rate);
-    setSavedDefault(rate);
-    toast.success(`$${rate}/hr saved as default for ${currentLabourTrade}`);
+    setCustomRate(currentLabourTrade, currentRate);
+    setSavedDefault(currentRate);
+    toast.success(`$${currentRate}/hr saved as profile default for ${currentLabourTrade} — applies to all new items`);
   };
 
   const resetDefault = () => {
@@ -156,7 +165,7 @@ const LabourRateCell = ({ item, selectedState, onUpdateCostItem }: LabourRateCel
 
   return (
     <div className="space-y-0.5">
-      {/* Trade picker — select tradesperson, auto-fills market rate */}
+      {/* Trade picker — shows profile rate for each trade */}
       <Select value={currentLabourTrade} onValueChange={handleLabourTradeChange}>
         <SelectTrigger className="h-6 text-[10px] px-1.5 w-full border-dashed">
           <span className="truncate text-[10px]">{currentLabourTrade}</span>
@@ -169,7 +178,7 @@ const LabourRateCell = ({ item, selectedState, onUpdateCostItem }: LabourRateCel
                 <SelectItem key={r.trade} value={r.trade} className="text-xs pl-4">
                   <span className="flex items-center justify-between gap-3">
                     <span>{r.trade}</span>
-                    <span className="text-muted-foreground font-mono text-[10px]">${getStateRate(r.trade, selectedState as AustralianState)}/hr</span>
+                    <span className="text-muted-foreground font-mono text-[10px]">${getEffectiveRate(r.trade, selectedState)}/hr</span>
                   </span>
                 </SelectItem>
               ))}
@@ -178,14 +187,19 @@ const LabourRateCell = ({ item, selectedState, onUpdateCostItem }: LabourRateCel
         </SelectContent>
       </Select>
 
-      {/* Rate input — click to open benchmark popover */}
+      {/* Rate input — amber when overriding profile default */}
       <Popover open={open} onOpenChange={handleOpenChange}>
         <PopoverTrigger asChild>
           <Input
             type="number"
-            value={item.hourlyRate ?? 65}
+            value={currentRate}
             onChange={(e) => onUpdateCostItem(item.id, { hourlyRate: Number(e.target.value) })}
-            className="h-7 text-xs text-right font-mono border-border px-2 w-full"
+            className={cn(
+              "h-7 text-xs text-right font-mono px-2 w-full",
+              isOverride
+                ? "border-amber-400 bg-amber-50/40 dark:bg-amber-950/20 text-amber-700 dark:text-amber-400"
+                : "border-border"
+            )}
             onFocus={() => setOpen(true)}
           />
         </PopoverTrigger>
@@ -198,7 +212,12 @@ const LabourRateCell = ({ item, selectedState, onUpdateCostItem }: LabourRateCel
                 <p className="text-sm font-semibold">{rateInfo.trade}</p>
                 <p className="text-xs text-muted-foreground">{rateInfo.desc}</p>
               </div>
-              <p className="text-[11px] text-muted-foreground">{selectedState} market rates — click to apply</p>
+              {/* Profile default reference row */}
+              <div className="flex items-center justify-between text-xs bg-muted/50 rounded px-2 py-1.5">
+                <span className="text-muted-foreground">Profile default ({selectedState})</span>
+                <span className="font-mono font-semibold">${profileRate}/hr</span>
+              </div>
+              <p className="text-[11px] text-muted-foreground">Market benchmarks — click to apply to this item</p>
               <div className="grid grid-cols-4 gap-1">
                 {([
                   { label: 'Award', rate: rateInfo.award, cls: 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-200' },
@@ -218,7 +237,7 @@ const LabourRateCell = ({ item, selectedState, onUpdateCostItem }: LabourRateCel
               </div>
               <div className="flex items-center gap-1 pt-1 border-t border-border">
                 <Button size="sm" variant="outline" className="h-7 text-xs flex-1" onClick={saveDefault}>
-                  Save ${item.hourlyRate ?? adj(rateInfo.typical)}/hr as default
+                  Save ${currentRate}/hr as profile default
                 </Button>
                 {savedDefault !== null && (
                   <Button size="sm" variant="ghost" className="h-7 text-xs text-muted-foreground shrink-0" onClick={resetDefault}>
@@ -228,13 +247,30 @@ const LabourRateCell = ({ item, selectedState, onUpdateCostItem }: LabourRateCel
               </div>
               {savedDefault !== null && (
                 <p className="text-[11px] text-muted-foreground">
-                  My default: <span className="font-semibold text-foreground">${savedDefault}/hr</span>
+                  Saved profile default: <span className="font-semibold text-foreground">${savedDefault}/hr</span>
                 </p>
               )}
             </div>
           )}
         </PopoverContent>
       </Popover>
+
+      {/* Override indicator / profile label */}
+      {isOverride ? (
+        <div className="flex items-center justify-between">
+          <span className="text-[9px] text-amber-600 font-semibold uppercase tracking-wide">override</span>
+          <button
+            className="flex items-center gap-0.5 text-[9px] text-amber-600 hover:text-amber-800"
+            onClick={resetToProfile}
+            title={`Reset to profile rate ($${profileRate}/hr)`}
+          >
+            <RotateCcw className="h-2.5 w-2.5" />
+            <span>${profileRate}</span>
+          </button>
+        </div>
+      ) : (
+        <p className="text-[9px] text-muted-foreground text-center leading-none">from profile</p>
+      )}
     </div>
   );
 };

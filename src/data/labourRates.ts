@@ -1,3 +1,5 @@
+import { getUserStorageKey } from '@/lib/localAuth';
+
 export interface LabourTrade {
   trade: string;
   icon: string;
@@ -34,7 +36,8 @@ export const LABOUR_RATES: LabourTrade[] = [
   { trade: "General Labour",     icon: "👷", category: "Structural", award: 33, low: 45,  typical: 58,  high: 75,  desc: "Site labour, labouring, clean-up" },
 ];
 
-const CUSTOM_RATES_KEY = "user_labour_rates";
+const CUSTOM_RATES_BASE_KEY = 'user_labour_rates';
+const customRatesKey = () => getUserStorageKey(CUSTOM_RATES_BASE_KEY);
 
 export interface CustomRates {
   [trade: string]: number;
@@ -42,7 +45,7 @@ export interface CustomRates {
 
 export function getCustomRates(): CustomRates {
   try {
-    return JSON.parse(localStorage.getItem(CUSTOM_RATES_KEY) || "{}");
+    return JSON.parse(localStorage.getItem(customRatesKey()) || '{}');
   } catch {
     return {};
   }
@@ -51,13 +54,13 @@ export function getCustomRates(): CustomRates {
 export function setCustomRate(trade: string, rate: number) {
   const rates = getCustomRates();
   rates[trade] = rate;
-  localStorage.setItem(CUSTOM_RATES_KEY, JSON.stringify(rates));
+  localStorage.setItem(customRatesKey(), JSON.stringify(rates));
 }
 
 export function clearCustomRate(trade: string) {
   const rates = getCustomRates();
   delete rates[trade];
-  localStorage.setItem(CUSTOM_RATES_KEY, JSON.stringify(rates));
+  localStorage.setItem(customRatesKey(), JSON.stringify(rates));
 }
 
 export function getEffectiveRate(trade: string, state = "QLD"): number {
