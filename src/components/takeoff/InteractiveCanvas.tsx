@@ -277,9 +277,13 @@ export const InteractiveCanvas = ({
         onViewportReady(pdfViewport);
 
         // Render at high resolution so zooming stays sharp.
-        // Cap so the canvas stays under ~12 000px (browser canvas limit safety margin).
+        // Cap by both max dimension AND total area to stay within browser canvas memory limits
+        // (~256 MB). A single-dimension cap allows 100 M+ pixel canvases for A1/A0 plans,
+        // which causes RangeError on getImageData. Area cap keeps allocations ≤ 200 MB.
         const maxDim = Math.max(baseViewport.width, baseViewport.height);
-        const renderQuality = Math.max(3.0, Math.min(6.0, 12000 / maxDim));
+        const dimQuality = 12000 / maxDim;
+        const areaQuality = Math.sqrt(50_000_000 / (baseViewport.width * baseViewport.height));
+        const renderQuality = Math.max(2.0, Math.min(6.0, Math.min(dimQuality, areaQuality)));
         const hiResViewport = page.getViewport({ scale: renderQuality, rotation: transform.rotation });
 
         const tempCanvas = document.createElement('canvas');
@@ -343,9 +347,15 @@ export const InteractiveCanvas = ({
       } catch (err) {
         console.error('Error loading PDF:', err);
         const message = err instanceof Error ? err.message : String(err);
-        const isExpiredBlob = pdfUrl.startsWith('blob:');
+        // Only show "session expired" for the specific pdfjs error that means the blob
+        // URL was revoked (MissingPDFException). Everything else — canvas OOM, parse
+        // errors, render failures — shows the real message so it's diagnosable.
+        const isActuallyMissing = pdfUrl.startsWith('blob:') && (
+          message.includes('Missing PDF') ||
+          message.toLowerCase().includes('failed to fetch')
+        );
         setError(
-          isExpiredBlob
+          isActuallyMissing
             ? 'Plan file is no longer available (session expired). Please re-upload your PDF.'
             : `Failed to load PDF: ${message}`
         );
