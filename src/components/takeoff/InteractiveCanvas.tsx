@@ -255,13 +255,11 @@ export const InteractiveCanvas = ({
         const loadingTask = pdfjsLib.getDocument(pdfUrl);
         const pdf = await loadingTask.promise;
 
-        // Force all Optional Content Groups (PDF layers) on.
-        // ArchiCAD/AutoCAD exports often have drawing geometry in a layer that
-        // is off in display mode — enabling all groups ensures everything renders.
-        const optionalContentConfig = await (pdf as any).getOptionalContentConfig({ intent: 'print' });
-        if (optionalContentConfig?.setVisibility) {
-          try { optionalContentConfig.setVisibility('all', true); } catch { /* not all PDFs support this */ }
-        }
+        // 'any' intent forces ALL Optional Content Groups visible regardless of their
+        // display/print default state. ArchiCAD/AutoCAD PDFs often have wall/structural
+        // layers marked off in print mode — 'any' is the only intent that exposes them.
+        // Both calls must use the same intent (pdfjs v5 requirement).
+        const optionalContentConfig = await (pdf as any).getOptionalContentConfig({ intent: 'any' });
 
         const page = await pdf.getPage(pageIndex + 1);
 
@@ -296,12 +294,10 @@ export const InteractiveCanvas = ({
         context.imageSmoothingEnabled = true;
         (context as any).imageSmoothingQuality = 'high';
 
-        // 'print' intent renders hairlines (0.1–0.25pt) that 'display' intent skips.
-        // Pass optional content config so all PDF layers are forced on.
         await page.render({
           canvasContext: context,
           viewport: hiResViewport,
-          intent: 'print',
+          intent: 'any',
           optionalContentConfigPromise: Promise.resolve(optionalContentConfig),
         } as any).promise;
 
