@@ -259,10 +259,6 @@ export const InteractiveCanvas = ({
         // Get base dimensions for coordinate system (always scale 1.0)
         const baseViewport = page.getViewport({ scale: 1.0, rotation: transform.rotation });
 
-          width: baseViewport.width,
-          height: baseViewport.height
-        });
-
         const pdfViewport: PDFViewportData = {
           width: baseViewport.width,
           height: baseViewport.height,

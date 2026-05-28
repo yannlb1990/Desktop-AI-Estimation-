@@ -1859,23 +1859,6 @@ function generateEstimation(
 
   // === SANITY CHECK ===
   const totalEstimate = items.reduce((sum, item) => sum + item.totalCost, 0);
-  const { low, mid, high } = calculateTypicalHouseCost(totalFloorArea);
-
-    - Floor area: ${totalFloorArea}m² (source: ${floorAreaSource})
-    - Building: ${isDuplex ? `Duplex — ${unitCount} units` : 'Single dwelling'}, ${storeyCount}-storey
-    - Pool: ${hasPool}, Carport: ${hasCarport}
-    - Cladding: weatherboard=${hasFeatureWeatherboard}, battens=${hasAluminiumBattens}, render=${hasRender}, breezeblock=${hasBreezeBlock}
-    - Total items: ${items.length}
-    - Total cost: $${totalEstimate.toLocaleString()}
-    - Expected range: $${low.toLocaleString()} - $${high.toLocaleString()} (× ${unitCount} units)
-  `);
-
-  // Allow higher ratios for duplex/multi-unit builds
-  const maxRatio = isDuplex ? 6 : 3;
-  if (totalEstimate > high * maxRatio) {
-  } else if (totalEstimate < low * 0.4) {
-  }
-
   return items;
 }
 

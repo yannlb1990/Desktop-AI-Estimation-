@@ -88,12 +88,6 @@ export const ScalingCalibrator = ({
       unit
     );
 
-      points: manualPoints,
-      distance,
-      unit,
-      unitsPerMetre: scale.unitsPerMetre
-    });
-
     onScaleSet(scale);
     toast.success('Manual calibration complete');
     setManualDistance('');
