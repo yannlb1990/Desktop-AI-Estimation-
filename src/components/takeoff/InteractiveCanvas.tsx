@@ -86,6 +86,8 @@ export const InteractiveCanvas = ({
   const fabricCanvasRef = useRef<FabricCanvas | null>(null);
   // Cached patched ArrayBuffer for this plan — avoids repeated IndexedDB fetches
   const patchedBufferRef = useRef<ArrayBuffer | null>(null);
+  // Guard: auto-fit runs once per mount (remount happens on page/plan change via key prop)
+  const hasAutoFittedRef = useRef(false);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [viewport, setViewport] = useState<PDFViewportData | null>(null);
@@ -373,6 +375,30 @@ export const InteractiveCanvas = ({
           fabricCanvasRef.current.requestRenderAll();
         }
 
+        // Auto-fit: runs once per mount. Reads the container's live dimensions so the
+        // zoom is always accurate regardless of when or which tab is visible.
+        // Also auto-orients: if rotating 90° fills the canvas ≥15% better, apply it.
+        if (!hasAutoFittedRef.current && containerRef.current) {
+          hasAutoFittedRef.current = true;
+          const canvasW = containerRef.current.clientWidth;
+          const canvasH = containerRef.current.clientHeight;
+          if (canvasW > 0 && canvasH > 0) {
+            const vpW = baseViewport.width;
+            const vpH = baseViewport.height;
+            const fit0  = Math.min(canvasW / vpW, canvasH / vpH);
+            const fit90 = Math.min(canvasW / vpH, canvasH / vpW);
+            const autoRotate = fit90 > fit0 * 1.15;
+            const fitW = autoRotate ? vpH : vpW;
+            const fitH = autoRotate ? vpW : vpH;
+            const fitZoom = Math.min(canvasW / fitW, canvasH / fitH) * 0.95;
+            const panX = (canvasW - fitW * fitZoom) / 2;
+            const panY = (canvasH - fitH * fitZoom) / 2;
+            const update: Parameters<typeof onTransformChange>[0] = { zoom: fitZoom, panX, panY };
+            if (autoRotate) update.rotation = (transform.rotation + 90) % 360;
+            onTransformChange(update);
+          }
+        }
+
         setIsLoading(false);
       } catch (err) {
         console.error('Error loading PDF:', err);
@@ -394,7 +420,7 @@ export const InteractiveCanvas = ({
     };
 
     loadPDF();
-  }, [pdfUrl, pageIndex, transform.rotation, onViewportReady]);
+  }, [pdfUrl, pageIndex, transform.rotation, onViewportReady, onTransformChange]);
 
   // Apply zoom and pan transforms - SINGLE SOURCE OF TRUTH
   // Re-render measurements when transform changes for stability

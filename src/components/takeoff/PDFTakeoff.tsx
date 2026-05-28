@@ -84,15 +84,7 @@ export const PDFTakeoff = ({ projectId, estimateId, onAddCostItems }: PDFTakeoff
   const sub = useSubscription();
   const canvasContainerRef = useRef<HTMLDivElement | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
-  const initialFitDoneRef = useRef(false);
   const canvasExportRef = useRef<{ export: () => void } | null>(null);
-
-  // Reset initial fit when PDF changes
-  React.useEffect(() => {
-    if (state.pdfFile) {
-      initialFitDoneRef.current = false;
-    }
-  }, [state.pdfFile?.url]);
 
   // Restore PDF from IndexedDB when navigating back to a project.
   // Blob URLs don't survive component unmount; this recreates one from the cached ArrayBuffer.
@@ -405,26 +397,7 @@ export const PDFTakeoff = ({ projectId, estimateId, onAddCostItems }: PDFTakeoff
 
   const handleViewportReady = useCallback((viewport: PDFViewportData) => {
     setPdfViewport({ width: viewport.width, height: viewport.height });
-    
-    // CRITICAL: Only fit on initial load, not on every callback
-    if (!initialFitDoneRef.current) {
-      initialFitDoneRef.current = true;
-      
-      // Use setTimeout to ensure container has been laid out
-      setTimeout(() => {
-        const container = canvasContainerRef.current;
-        const containerWidth = container?.clientWidth || 1200;
-        const containerHeight = container?.clientHeight || 800;
-        
-        const fitZoom = Math.min(
-          containerWidth / viewport.width,
-          containerHeight / viewport.height
-        );
-        
-        dispatch({ type: 'SET_TRANSFORM', payload: { zoom: fitZoom, panX: 0, panY: 0 } });
-      }, 50);
-    }
-  }, [dispatch]);
+  }, []);
 
   // New callbacks for upgraded components
   const handleCalibrationCancel = useCallback(() => {
