@@ -258,7 +258,7 @@ export const InteractiveCanvas = ({
         // Force all Optional Content Groups (PDF layers) on.
         // ArchiCAD/AutoCAD exports often have drawing geometry in a layer that
         // is off in display mode — enabling all groups ensures everything renders.
-        const optionalContentConfig = await (pdf as any).getOptionalContentConfig();
+        const optionalContentConfig = await (pdf as any).getOptionalContentConfig({ intent: 'print' });
         if (optionalContentConfig?.setVisibility) {
           try { optionalContentConfig.setVisibility('all', true); } catch { /* not all PDFs support this */ }
         }
