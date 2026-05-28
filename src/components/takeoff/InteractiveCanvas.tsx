@@ -254,6 +254,15 @@ export const InteractiveCanvas = ({
       try {
         const loadingTask = pdfjsLib.getDocument(pdfUrl);
         const pdf = await loadingTask.promise;
+
+        // Force all Optional Content Groups (PDF layers) on.
+        // ArchiCAD/AutoCAD exports often have drawing geometry in a layer that
+        // is off in display mode — enabling all groups ensures everything renders.
+        const optionalContentConfig = await (pdf as any).getOptionalContentConfig();
+        if (optionalContentConfig?.setVisibility) {
+          try { optionalContentConfig.setVisibility('all', true); } catch { /* not all PDFs support this */ }
+        }
+
         const page = await pdf.getPage(pageIndex + 1);
 
         // Get base dimensions for coordinate system (always scale 1.0)
@@ -284,21 +293,29 @@ export const InteractiveCanvas = ({
         (context as any).imageSmoothingQuality = 'high';
 
         // 'print' intent renders hairlines (0.1–0.25pt) that 'display' intent skips.
-        // Essential for architectural PDFs from ArchiCAD / AutoCAD / Revit.
-        await page.render({ canvasContext: context, viewport: hiResViewport, intent: 'print' } as any).promise;
+        // Pass optional content config so all PDF layers are forced on.
+        await page.render({
+          canvasContext: context,
+          viewport: hiResViewport,
+          intent: 'print',
+          optionalContentConfigPromise: Promise.resolve(optionalContentConfig),
+        } as any).promise;
 
-        // Contrast boost — pull near-white pixels to white and darken everything else.
-        // Architectural drawings often use 3–10% gray lines that become invisible at
-        // screen scale without this pass.
+        // White-preserving darkening pass.
+        // Architectural lines are often encoded as 170–230 luma (light gray) and
+        // become nearly invisible on screen. Rule: pure/near-white (> 250) stays
+        // white; everything else is multiplied by 0.55 to bring lines into a clearly
+        // visible range without destroying the white background or room fills.
         const W = tempCanvas.width, H = tempCanvas.height;
         const imageData = context.getImageData(0, 0, W, H);
         const d = imageData.data;
-        const FACTOR = 2.8; // contrast multiplier — tuned for hairline drawings
         for (let i = 0; i < d.length; i += 4) {
           const luma = 0.299 * d[i] + 0.587 * d[i + 1] + 0.114 * d[i + 2];
-          const stretched = Math.max(0, Math.min(255, FACTOR * (luma - 128) + 128));
-          d[i] = d[i + 1] = d[i + 2] = stretched;
-          // alpha unchanged
+          if (luma < 250) {
+            d[i]     = Math.round(d[i]     * 0.55);
+            d[i + 1] = Math.round(d[i + 1] * 0.55);
+            d[i + 2] = Math.round(d[i + 2] * 0.55);
+          }
         }
         context.putImageData(imageData, 0, 0);
 
