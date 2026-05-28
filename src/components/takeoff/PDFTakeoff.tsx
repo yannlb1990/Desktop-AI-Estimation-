@@ -812,6 +812,7 @@ export const PDFTakeoff = ({ projectId, estimateId, onAddCostItems }: PDFTakeoff
         <InteractiveCanvas
           key={`${state.currentPageIndex}-${state.pdfFile?.planId ?? 'none'}`}
           pdfUrl={state.pdfFile.url}
+          planId={state.pdfFile?.planId}
           pageIndex={state.currentPageIndex}
           transform={state.transform}
           activeTool={state.activeTool}
@@ -1183,6 +1184,7 @@ export const PDFTakeoff = ({ projectId, estimateId, onAddCostItems }: PDFTakeoff
                   <InteractiveCanvas
                     key={`${state.currentPageIndex}-${state.pdfFile?.planId ?? 'none'}`}
                     pdfUrl={state.pdfFile.url}
+                    planId={state.pdfFile?.planId}
                     pageIndex={state.currentPageIndex}
                     transform={state.transform}
                     activeTool={state.activeTool}

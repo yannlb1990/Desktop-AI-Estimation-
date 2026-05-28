@@ -7,6 +7,8 @@ import { WorldPoint, ViewPoint, Transform, PDFViewportData, Measurement, ToolTyp
 import { calculateLinearWorld, calculateRectangleAreaWorld, calculatePolygonAreaWorld, calculateCentroidWorld, calculateCircleAreaWorld } from '@/lib/takeoff/calculations';
 import { viewToWorld } from '@/lib/takeoff/coordinates';
 import { DetectedOpening } from '@/lib/takeoff/pdfTextExtractor';
+import { getCachedPDF } from '@/lib/takeoff/pdfCache';
+import { patchPaletteJP2Tiles } from '@/lib/takeoff/jp2Patch';
 
 // PDF.js worker served from /public — no CDN, no Vite ?url magic
 pdfjsLib.GlobalWorkerOptions.workerSrc = '/pdf.worker.min.mjs';
@@ -35,6 +37,7 @@ function snapToSquare(from: WorldPoint, to: WorldPoint): WorldPoint {
 
 interface InteractiveCanvasProps {
   pdfUrl: string | null;
+  planId?: string;
   pageIndex: number;
   transform: Transform;
   activeTool: ToolType;
@@ -58,6 +61,7 @@ interface InteractiveCanvasProps {
 
 export const InteractiveCanvas = ({
   pdfUrl,
+  planId,
   pageIndex,
   transform,
   activeTool,
@@ -80,6 +84,8 @@ export const InteractiveCanvas = ({
   const containerRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const fabricCanvasRef = useRef<FabricCanvas | null>(null);
+  // Cached patched ArrayBuffer for this plan — avoids repeated IndexedDB fetches
+  const patchedBufferRef = useRef<ArrayBuffer | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [viewport, setViewport] = useState<PDFViewportData | null>(null);
@@ -252,7 +258,20 @@ export const InteractiveCanvas = ({
       setError(null);
 
       try {
-        const loadingTask = pdfjsLib.getDocument(pdfUrl);
+        // Prefer a patched ArrayBuffer when planId is available: palette-indexed
+        // JPEG2000 tiles have a colr=sRGB header that contradicts the single-channel
+        // image data, causing pdfjs/OpenJPEG to silently skip them (blank tile areas).
+        // patchPaletteJP2Tiles fixes the colr declaration so the tiles decode correctly.
+        if (planId && !patchedBufferRef.current) {
+          try {
+            const cached = await getCachedPDF(planId);
+            if (cached) patchedBufferRef.current = patchPaletteJP2Tiles(cached.data);
+          } catch { /* IndexedDB unavailable — fall back to blob URL */ }
+        }
+        const pdfSource = patchedBufferRef.current
+          ? { data: patchedBufferRef.current.slice(0) } // slice gives pdfjs its own copy
+          : pdfUrl;
+        const loadingTask = pdfjsLib.getDocument(pdfSource);
         const pdf = await loadingTask.promise;
 
         // 'any' intent forces ALL Optional Content Groups visible regardless of their
