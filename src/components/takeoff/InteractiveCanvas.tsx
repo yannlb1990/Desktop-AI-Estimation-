@@ -301,23 +301,38 @@ export const InteractiveCanvas = ({
           optionalContentConfigPromise: Promise.resolve(optionalContentConfig),
         } as any).promise;
 
-        // White-preserving darkening pass.
-        // Architectural lines are often encoded as 170–230 luma (light gray) and
-        // become nearly invisible on screen. Rule: pure/near-white (> 250) stays
-        // white; everything else is multiplied by 0.55 to bring lines into a clearly
-        // visible range without destroying the white background or room fills.
+        // Adaptive darkening pass.
+        // Vector PDFs (ArchiCAD/AutoCAD exports) render hairlines as light gray
+        // (luma 150–230) — a 0.55 multiply makes them clearly visible.
+        // Image-based PDFs (JPEG2000 tiles, macOS print-to-PDF, scanned plans) already
+        // encode correct contrast; applying the multiply smears compression artefacts
+        // and degrades quality. We detect which type we have by sampling 1-in-8 pixels:
+        // if non-white pixels already average below luma 80, the content is dark enough
+        // and we skip the pass entirely.
         const W = tempCanvas.width, H = tempCanvas.height;
         const imageData = context.getImageData(0, 0, W, H);
         const d = imageData.data;
-        for (let i = 0; i < d.length; i += 4) {
+
+        let lumaSum = 0, lumaCount = 0;
+        for (let i = 0; i < d.length; i += 32) { // sample every 8th pixel
           const luma = 0.299 * d[i] + 0.587 * d[i + 1] + 0.114 * d[i + 2];
-          if (luma < 250) {
-            d[i]     = Math.round(d[i]     * 0.55);
-            d[i + 1] = Math.round(d[i + 1] * 0.55);
-            d[i + 2] = Math.round(d[i + 2] * 0.55);
-          }
+          if (luma < 240) { lumaSum += luma; lumaCount++; }
         }
-        context.putImageData(imageData, 0, 0);
+        const avgNonWhite = lumaCount > 0 ? lumaSum / lumaCount : 0;
+
+        if (avgNonWhite > 80) {
+          // Washed-out vector content — darken to make hairlines visible
+          for (let i = 0; i < d.length; i += 4) {
+            const luma = 0.299 * d[i] + 0.587 * d[i + 1] + 0.114 * d[i + 2];
+            if (luma < 250) {
+              d[i]     = Math.round(d[i]     * 0.55);
+              d[i + 1] = Math.round(d[i + 1] * 0.55);
+              d[i + 2] = Math.round(d[i + 2] * 0.55);
+            }
+          }
+          context.putImageData(imageData, 0, 0);
+        }
+        // else: image-based PDF — leave pixels untouched, already correct contrast
 
         const dataUrl = tempCanvas.toDataURL('image/png');
         const img = await FabricImage.fromURL(dataUrl);
