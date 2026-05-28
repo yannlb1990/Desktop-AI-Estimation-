@@ -73,6 +73,8 @@ export const PDFUploadManager = ({ projectId, onUploadComplete, onError }: PDFUp
         pageCount,
       });
 
+      // Transfer ownership to parent — clear ref so unmount cleanup doesn't revoke the live URL
+      currentBlobUrl.current = null;
       onUploadComplete({ file, url, name: file.name, pageCount, planId });
     } catch (err) {
       const errorMsg = err instanceof Error ? err.message : 'Upload failed';
