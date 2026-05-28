@@ -447,7 +447,7 @@ const ProjectDetail = () => {
           {/* Step 1 — PDF Takeoff — forceMount keeps PDF alive when switching to Estimate/Tender */}
           <TabsContent value="takeoff" forceMount className="space-y-4">
             <TakeoffErrorBoundary>
-              <AIPlanAnalyzerEnhanced projectId={projectId!} estimateId={estimate?.id} />
+              <AIPlanAnalyzerEnhanced key={projectId} projectId={projectId!} estimateId={estimate?.id} />
             </TakeoffErrorBoundary>
             <Card className="p-4 border-dashed border-primary/30 bg-primary/5">
               <div className="flex items-center justify-between">
