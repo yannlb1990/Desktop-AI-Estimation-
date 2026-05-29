@@ -11,6 +11,7 @@ export const TOOL_SHORTCUT_MAP: Readonly<Record<string, ToolType>> = {
   c: 'circle',
   n: 'count',
   t: 'wall-line',
+  a: 'arc-wall',
   g: 'offset',
 };
 

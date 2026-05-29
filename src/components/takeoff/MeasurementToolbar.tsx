@@ -1,9 +1,9 @@
-import { MousePointer, Move, Eraser, Minus, Square, Pentagon, Circle, Hash, Undo, Redo, Columns, DoorOpen, AppWindow, PenLine, Columns3, Crosshair } from 'lucide-react';
+import { useState } from 'react';
+import { MousePointer, Move, Eraser, Minus, Square, Pentagon, Circle, Hash, Undo, Redo, Columns, DoorOpen, AppWindow, PenLine, Columns3, Crosshair, Spline } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { Badge } from '@/components/ui/badge';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { ToolType } from '@/lib/takeoff/types';
 import { cn } from '@/lib/utils';
 
@@ -21,6 +21,8 @@ interface MeasurementToolbarProps {
   onWallThicknessChange?: (mm: number) => void;
 }
 
+const WALL_PRESETS = [64, 70, 90, 92, 110, 150];
+
 export const MeasurementToolbar = ({
   activeTool,
   onToolSelect,
@@ -34,6 +36,7 @@ export const MeasurementToolbar = ({
   wallThicknessMm = 90,
   onWallThicknessChange,
 }: MeasurementToolbarProps) => {
+  const [customInput, setCustomInput] = useState('');
   type ModId = 'wall' | 'door' | 'window' | 'custom';
   const navigationTools = [
     { id: 'select' as const, icon: MousePointer, label: 'Select (V)', shortcut: 'V' },
@@ -47,6 +50,7 @@ export const MeasurementToolbar = ({
     { id: 'circle' as const, icon: Circle, label: 'Circle (C)', shortcut: 'C', color: 'bg-purple-500' },
     { id: 'count' as const, icon: Hash, label: 'Count (N)', shortcut: 'N', color: 'bg-orange-500' },
     { id: 'wall-line' as const, icon: Columns3, label: 'Wall Line (T)', shortcut: 'T', color: 'bg-amber-700' },
+    { id: 'arc-wall' as const, icon: Spline, label: 'Arc Wall (A) — 3 clicks: start → end → curve', shortcut: 'A', color: 'bg-orange-500' },
     { id: 'offset' as const, icon: Crosshair, label: 'Reference Line (G)', shortcut: 'G', color: 'bg-sky-400' },
   ];
 
@@ -126,19 +130,42 @@ export const MeasurementToolbar = ({
             </Badge>
           )}
 
-          {activeTool === 'wall-line' && onWallThicknessChange && (
-            <div className="flex items-center gap-1 ml-1">
-              <span className="text-xs text-muted-foreground shrink-0">Thickness:</span>
-              <Select value={String(wallThicknessMm)} onValueChange={v => onWallThicknessChange(Number(v))}>
-                <SelectTrigger className="h-7 w-20 text-xs">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {[64, 70, 90, 92, 110, 150].map(mm => (
-                    <SelectItem key={mm} value={String(mm)}>{mm} mm</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+          {(activeTool === 'wall-line' || activeTool === 'arc-wall') && onWallThicknessChange && (
+            <div className="flex items-center gap-1.5 ml-1">
+              <span className="text-xs text-muted-foreground shrink-0">mm:</span>
+              {WALL_PRESETS.map(mm => (
+                <button
+                  key={mm}
+                  onClick={() => { onWallThicknessChange(mm); setCustomInput(''); }}
+                  className={cn(
+                    'h-6 px-1.5 rounded text-xs font-mono transition-colors',
+                    wallThicknessMm === mm
+                      ? 'bg-amber-600 text-white'
+                      : 'bg-muted text-muted-foreground hover:bg-muted/80'
+                  )}
+                >
+                  {mm}
+                </button>
+              ))}
+              <input
+                type="number"
+                min="10"
+                max="500"
+                placeholder="custom"
+                value={customInput}
+                onChange={e => setCustomInput(e.target.value)}
+                onKeyDown={e => {
+                  if (e.key === 'Enter') {
+                    const v = parseInt(customInput, 10);
+                    if (!isNaN(v) && v > 0) { onWallThicknessChange(v); setCustomInput(''); }
+                  }
+                }}
+                onBlur={() => {
+                  const v = parseInt(customInput, 10);
+                  if (!isNaN(v) && v > 0) { onWallThicknessChange(v); setCustomInput(''); }
+                }}
+                className="h-6 w-16 text-xs border border-input rounded px-1.5 bg-background focus:outline-none focus:border-ring"
+              />
             </div>
           )}
 

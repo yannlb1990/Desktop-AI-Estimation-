@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
-import { Canvas as FabricCanvas, FabricImage, Circle, Line, Rect, Polygon, Text, Point as FabricPoint, util as fabricUtil } from 'fabric';
+import { Canvas as FabricCanvas, FabricImage, Circle, Line, Path, Rect, Polygon, Text, Point as FabricPoint, util as fabricUtil } from 'fabric';
 import * as pdfjsLib from 'pdfjs-dist';
 import { Loader2, Check, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -47,6 +47,50 @@ function wallGeometry(p1: WorldPoint, p2: WorldPoint, thicknessMm: number, upm: 
     l2p1: { x: p1.x - nx * hw, y: p1.y - ny * hw },
     l2p2: { x: p2.x - nx * hw, y: p2.y - ny * hw },
     hw,
+  };
+}
+
+/** Quadratic bezier arc-wall geometry given start, end, a through-point (ctrl), thickness mm, and upm. */
+function arcWallGeometry(
+  p1: WorldPoint, p2: WorldPoint, ctrl: WorldPoint,
+  thicknessMm: number, upm: number | null
+) {
+  // hw in world units; if uncalibrated use 1/3 of chord as placeholder
+  const chord = Math.hypot(p2.x - p1.x, p2.y - p1.y) || 1;
+  const hw = upm ? (thicknessMm / 1000) * upm / 2 : chord * 0.06;
+
+  // Bezier control point so the curve passes through ctrl at t=0.5:
+  //   ctrl = 0.25*p1 + 0.5*Q + 0.25*p2  => Q = 2*ctrl - (p1+p2)/2
+  const Qx = 2 * ctrl.x - (p1.x + p2.x) / 2;
+  const Qy = 2 * ctrl.y - (p1.y + p2.y) / 2;
+
+  // Tangent normals at p1 and p2
+  const t1x = Qx - p1.x, t1y = Qy - p1.y;
+  const t1l = Math.sqrt(t1x * t1x + t1y * t1y) || 1;
+  const n1 = { x: -t1y / t1l, y: t1x / t1l };
+
+  const t2x = p2.x - Qx, t2y = p2.y - Qy;
+  const t2l = Math.sqrt(t2x * t2x + t2y * t2y) || 1;
+  const n2 = { x: -t2y / t2l, y: t2x / t2l };
+
+  // Average normal at Q
+  const nqx = (n1.x + n2.x) / 2, nqy = (n1.y + n2.y) / 2;
+  const nql = Math.sqrt(nqx * nqx + nqy * nqy) || 1;
+  const nq = { x: nqx / nql, y: nqy / nql };
+
+  return {
+    hw,
+    Q: { x: Qx, y: Qy },
+    outer: {
+      p1: { x: p1.x + n1.x * hw, y: p1.y + n1.y * hw },
+      Q:  { x: Qx + nq.x * hw,  y: Qy + nq.y * hw },
+      p2: { x: p2.x + n2.x * hw, y: p2.y + n2.y * hw },
+    },
+    inner: {
+      p1: { x: p1.x - n1.x * hw, y: p1.y - n1.y * hw },
+      Q:  { x: Qx - nq.x * hw,  y: Qy - nq.y * hw },
+      p2: { x: p2.x - n2.x * hw, y: p2.y - n2.y * hw },
+    },
   };
 }
 
@@ -105,6 +149,13 @@ export const InteractiveCanvas = ({
   const patchedBufferRef = useRef<ArrayBuffer | null>(null);
   const wallThicknessRef = useRef(wallThickness);
   useEffect(() => { wallThicknessRef.current = wallThickness; }, [wallThickness]);
+  const unitsPerMetreRef = useRef(unitsPerMetre);
+  useEffect(() => { unitsPerMetreRef.current = unitsPerMetre; }, [unitsPerMetre]);
+  // Arc-wall 3-click state: phase 0=idle, 1=placed P1 (waiting for P2), 2=placed P1+P2 (move for control)
+  const arcStateRef = useRef<{ phase: 0 | 1 | 2; p1: WorldPoint | null; p2: WorldPoint | null }>({
+    phase: 0, p1: null, p2: null,
+  });
+  const arcMarkerRef = useRef<any>(null); // small dot showing P1 while in phase 1
   // Guard: auto-fit runs once per mount (remount happens on page/plan change via key prop)
   const hasAutoFittedRef = useRef(false);
   const [isLoading, setIsLoading] = useState(false);
@@ -474,6 +525,17 @@ export const InteractiveCanvas = ({
       canvas.defaultCursor = 'crosshair';
       canvas.hoverCursor = 'crosshair';
     }
+
+    // Reset arc state when tool changes away from arc-wall
+    if (activeTool !== 'arc-wall') {
+      if (arcStateRef.current.phase !== 0) {
+        arcStateRef.current = { phase: 0, p1: null, p2: null };
+        if (canvas && arcMarkerRef.current) {
+          try { canvas.remove(arcMarkerRef.current); } catch (_) {}
+          arcMarkerRef.current = null;
+        }
+      }
+    }
   }, [activeTool, calibrationMode]);
 
   // Clear calibration markers when calibration is complete
@@ -587,9 +649,24 @@ export const InteractiveCanvas = ({
 
       if (measurement.type === 'line') {
         const [s, e] = measurement.worldPoints;
-        if ((measurement as any).wallThickness && unitsPerMetre) {
+        if ((measurement as any).wallThickness && unitsPerMetreRef.current) {
+          // Arc-wall restore (has arcControlPoint)
+          if ((measurement as any).arcControlPoint && unitsPerMetreRef.current) {
+            const ctrl = (measurement as any).arcControlPoint as WorldPoint;
+            const geo = arcWallGeometry(s, e, ctrl, (measurement as any).wallThickness || 90, unitsPerMetreRef.current);
+            const makeArcPath = (pts: { p1: WorldPoint; Q: WorldPoint; p2: WorldPoint }) =>
+              `M ${pts.p1.x} ${pts.p1.y} Q ${pts.Q.x} ${pts.Q.y} ${pts.p2.x} ${pts.p2.y}`;
+            const outerArc = new Path(makeArcPath(geo.outer), { stroke: color, strokeWidth: strokeWidth * 1.5, fill: '', selectable: false, evented: false, hasControls: true, hasBorders: true, lockRotation: true, cornerColor: '#2563eb', cornerStyle: 'circle' as const, cornerSize: 10, transparentCorners: false, borderColor: '#2563eb' });
+            const innerArc = new Path(makeArcPath(geo.inner), { stroke: color, strokeWidth: strokeWidth * 1.5, fill: '', selectable: false, evented: false });
+            const capS = new Line([geo.outer.p1.x, geo.outer.p1.y, geo.inner.p1.x, geo.inner.p1.y], { stroke: color, strokeWidth, selectable: false, evented: false });
+            const capE = new Line([geo.outer.p2.x, geo.outer.p2.y, geo.inner.p2.x, geo.inner.p2.y], { stroke: color, strokeWidth, selectable: false, evented: false });
+            [outerArc, innerArc, capS, capE].forEach(l => canvas.add(l));
+            measurementObjectsRef.current.set(measurement.id, [outerArc, innerArc, capS, capE]);
+            shapeToMeasurementIdRef.current.set(outerArc, measurement.id);
+            return;
+          }
           // Restore wall-line as 4 fabric objects
-          const geo = wallGeometry(s, e, (measurement as any).wallThickness, unitsPerMetre);
+          const geo = wallGeometry(s, e, (measurement as any).wallThickness, unitsPerMetreRef.current);
           const wl1 = new Line([geo.l1p1.x, geo.l1p1.y, geo.l1p2.x, geo.l1p2.y], { stroke: color, strokeWidth: strokeWidth * 1.5, selectable: false, evented: false, hasControls: true, hasBorders: true, lockRotation: true, cornerColor: '#2563eb', cornerStyle: 'circle' as const, cornerSize: 10, transparentCorners: false, borderColor: '#2563eb' });
           const wl2 = new Line([geo.l2p1.x, geo.l2p1.y, geo.l2p2.x, geo.l2p2.y], { stroke: color, strokeWidth: strokeWidth * 1.5, selectable: false, evented: false });
           const wc1 = new Line([geo.l1p1.x, geo.l1p1.y, geo.l2p1.x, geo.l2p1.y], { stroke: color, strokeWidth, selectable: false, evented: false });
@@ -1265,6 +1342,18 @@ export const InteractiveCanvas = ({
   // Delete key — remove a single selected count marker and update the count
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
+      // Escape: cancel arc-wall drawing in progress
+      if (e.key === 'Escape' && arcStateRef.current.phase !== 0) {
+        arcStateRef.current = { phase: 0, p1: null, p2: null };
+        const canvas = fabricCanvasRef.current;
+        if (canvas && arcMarkerRef.current) {
+          try { canvas.remove(arcMarkerRef.current); } catch (_) {}
+          arcMarkerRef.current = null;
+          canvas.renderAll();
+        }
+        return;
+      }
+
       if (e.key !== 'Delete' && e.key !== 'Backspace') return;
       const canvas = fabricCanvasRef.current;
       if (!canvas) return;
@@ -1696,6 +1785,77 @@ export const InteractiveCanvas = ({
       return;
     }
 
+    // Arc-wall 3-click flow — intercept before normal draw logic
+    if (activeTool === 'arc-wall') {
+      const phase = arcStateRef.current.phase;
+      const arcZoom = fabricCanvasRef.current?.getZoom() || 1;
+      if (phase === 0) {
+        // Click 1: place P1
+        arcStateRef.current = { phase: 1, p1: worldPoint, p2: null };
+        // Place a small dot marker at P1
+        if (arcMarkerRef.current) { try { canvas.remove(arcMarkerRef.current); } catch (_) {} }
+        const dot = new Circle({ left: worldPoint.x - 4 / arcZoom, top: worldPoint.y - 4 / arcZoom, radius: 4 / arcZoom, fill: '#f97316', stroke: '', selectable: false, evented: false });
+        canvas.add(dot);
+        arcMarkerRef.current = dot;
+        canvas.renderAll();
+        return; // don't start normal drawing
+      } else if (phase === 1) {
+        // Click 2: place P2
+        arcStateRef.current.p2 = worldPoint;
+        arcStateRef.current.phase = 2;
+        canvas.renderAll();
+        return; // don't start normal drawing
+      } else if (phase === 2 && arcStateRef.current.p1 && arcStateRef.current.p2) {
+        // Click 3: control point = worldPoint → complete arc
+        const p1 = arcStateRef.current.p1;
+        const p2 = arcStateRef.current.p2;
+        const ctrl = worldPoint;
+        const eu = unitsPerMetreRef.current;
+        const arcStrokeWidth = getZoomAwareSize(2);
+        const geo = arcWallGeometry(p1, p2, ctrl, wallThicknessRef.current, eu);
+
+        const arcColor = drawColorRef.current || '#f97316';
+        const makeArcPath = (pts: { p1: WorldPoint; Q: WorldPoint; p2: WorldPoint }) =>
+          `M ${pts.p1.x} ${pts.p1.y} Q ${pts.Q.x} ${pts.Q.y} ${pts.p2.x} ${pts.p2.y}`;
+        const outerArc = new Path(makeArcPath(geo.outer), { stroke: arcColor, strokeWidth: arcStrokeWidth * 1.5, fill: '', selectable: false, evented: false, hasControls: true, hasBorders: true, lockRotation: true, cornerColor: '#2563eb', cornerStyle: 'circle' as const, cornerSize: 10, transparentCorners: false, borderColor: '#2563eb' });
+        const innerArc = new Path(makeArcPath(geo.inner), { stroke: arcColor, strokeWidth: arcStrokeWidth * 1.5, fill: '', selectable: false, evented: false });
+        const capS = new Line([geo.outer.p1.x, geo.outer.p1.y, geo.inner.p1.x, geo.inner.p1.y], { stroke: arcColor, strokeWidth: arcStrokeWidth, selectable: false, evented: false });
+        const capE = new Line([geo.outer.p2.x, geo.outer.p2.y, geo.inner.p2.x, geo.inner.p2.y], { stroke: arcColor, strokeWidth: arcStrokeWidth, selectable: false, evented: false });
+        [outerArc, innerArc, capS, capE].forEach(s => canvas.add(s));
+
+        // Remove P1 marker
+        if (arcMarkerRef.current) { try { canvas.remove(arcMarkerRef.current); } catch (_) {} arcMarkerRef.current = null; }
+
+        // Reset arc state BEFORE emitting measurement so subsequent draws start fresh
+        arcStateRef.current = { phase: 0, p1: null, p2: null };
+
+        const chord = Math.hypot(p2.x - p1.x, p2.y - p1.y);
+        const result = eu
+          ? { realValue: chord / eu, unit: 'm' as const }
+          : { realValue: chord, unit: 'px' as const };
+
+        const id = crypto.randomUUID();
+        measurementObjectsRef.current.set(id, [outerArc, innerArc, capS, capE]);
+        shapeToMeasurementIdRef.current.set(outerArc, id);
+
+        onMeasurementComplete?.({
+          id,
+          type: 'line',
+          label: `Arc wall ${wallThicknessRef.current}mm`,
+          worldPoints: [p1, p2],
+          arcControlPoint: ctrl,
+          realValue: result.realValue,
+          unit: 'LM',
+          color: arcColor,
+          pageIndex,
+          wallThickness: wallThicknessRef.current,
+        } as any);
+
+        canvas.renderAll();
+        return;
+      }
+    }
+
     setIsDrawing(true);
     setStartPoint(worldPoint);
 
@@ -1870,6 +2030,23 @@ export const InteractiveCanvas = ({
       viewport
     );
 
+    // Endpoint snap: if cursor is within ~12 screen px of any measurement endpoint, snap to it
+    const zoom = fabricCanvasRef.current?.getZoom() || 1;
+    const snapThreshWorld = 12 / zoom;
+    let snappedToEndpoint = false;
+    for (const m of measurements) {
+      if (!m.worldPoints) continue;
+      for (const ep of m.worldPoints) {
+        const dist = Math.hypot(currentWorldPoint.x - ep.x, currentWorldPoint.y - ep.y);
+        if (dist < snapThreshWorld) {
+          currentWorldPoint = { x: ep.x, y: ep.y };
+          snappedToEndpoint = true;
+          break;
+        }
+      }
+      if (snappedToEndpoint) break;
+    }
+
     // Shift-snap: 45° for line, square for rectangle
     if (e.e.shiftKey && startPoint) {
       if (activeTool === 'line') currentWorldPoint = snapEndpointToAngle(startPoint, currentWorldPoint, 45);
@@ -1881,6 +2058,10 @@ export const InteractiveCanvas = ({
       // Clean up wall preview extras
       if ((previewShape as any)?._wallPreviews) {
         ((previewShape as any)._wallPreviews as any[]).forEach((s: any) => canvas.remove(s));
+      }
+      // Clean up arc-wall preview extras
+      if ((previewShape as any)?._arcPreviews) {
+        ((previewShape as any)._arcPreviews as any[]).forEach((s: any) => canvas.remove(s));
       }
       canvas.remove(previewShape);
     }
@@ -1929,8 +2110,9 @@ export const InteractiveCanvas = ({
         evented: false,
       });
     } else if (activeTool === 'wall-line') {
-      const eu = unitsPerMetre || 1;
-      const geo = wallGeometry(startPoint, currentWorldPoint, wallThicknessRef.current, eu);
+      if (e.e.shiftKey) currentWorldPoint = snapEndpointToAngle(startPoint, currentWorldPoint, 45);
+      const eu = unitsPerMetreRef.current;
+      const geo = wallGeometry(startPoint, currentWorldPoint, wallThicknessRef.current, eu || 1);
       const wallColor = drawColorRef.current || '#f59e0b';
       const wallShapes: any[] = [
         new Line([geo.l1p1.x, geo.l1p1.y, geo.l1p2.x, geo.l1p2.y], { stroke: wallColor, strokeWidth, strokeDashArray: [dashSize, dashSize], selectable: false, evented: false }),
@@ -1942,7 +2124,7 @@ export const InteractiveCanvas = ({
       shape = wallShapes[0];
       (shape as any)._wallPreviews = wallShapes.slice(1);
 
-      const eu2 = unitsPerMetre || 1;
+      const eu2 = unitsPerMetreRef.current || 1;
       const r = calculateLinearWorld(startPoint, currentWorldPoint, eu2);
       const t = isCalibrated ? `${r.realValue.toFixed(2)} m  (${wallThicknessRef.current}mm wall)` : `${r.worldValue.toFixed(0)} px`;
       previewLabelRef.current = { text: t, worldX: (startPoint.x + currentWorldPoint.x) / 2, worldY: (startPoint.y + currentWorldPoint.y) / 2, color: wallColor };
@@ -1959,10 +2141,44 @@ export const InteractiveCanvas = ({
       const r = calculateLinearWorld(startPoint, currentWorldPoint, eu);
       const t = isCalibrated ? `Ref: ${r.realValue.toFixed(2)} m` : `Ref: ${r.worldValue.toFixed(0)} px`;
       previewLabelRef.current = { text: t, worldX: (startPoint.x + currentWorldPoint.x) / 2, worldY: (startPoint.y + currentWorldPoint.y) / 2, color: offsetColor };
+    } else if (activeTool === 'arc-wall') {
+      const phase = arcStateRef.current.phase;
+      if (phase === 1 && arcStateRef.current.p1) {
+        // Phase 1: straight preview from P1 to cursor
+        const p1 = arcStateRef.current.p1;
+        const arcColor = '#f97316'; // orange-500
+        shape = new Line([p1.x, p1.y, currentWorldPoint.x, currentWorldPoint.y], {
+          stroke: arcColor, strokeWidth, strokeDashArray: [dashSize, dashSize],
+          selectable: false, evented: false,
+        });
+        const eu = unitsPerMetreRef.current;
+        const r = calculateLinearWorld(p1, currentWorldPoint, eu || 1);
+        const t = eu ? `${r.realValue.toFixed(2)} m` : `${r.worldValue.toFixed(0)} px`;
+        previewLabelRef.current = { text: t, worldX: (p1.x + currentWorldPoint.x) / 2, worldY: (p1.y + currentWorldPoint.y) / 2, color: arcColor };
+      } else if (phase === 2 && arcStateRef.current.p1 && arcStateRef.current.p2) {
+        // Phase 2: arc preview — cursor IS the control point
+        const p1 = arcStateRef.current.p1;
+        const p2 = arcStateRef.current.p2;
+        const eu = unitsPerMetreRef.current;
+        const geo = arcWallGeometry(p1, p2, currentWorldPoint, wallThicknessRef.current, eu);
+        const arcColor = '#f97316';
+        const makeArcPath = (pts: { p1: WorldPoint; Q: WorldPoint; p2: WorldPoint }) =>
+          `M ${pts.p1.x} ${pts.p1.y} Q ${pts.Q.x} ${pts.Q.y} ${pts.p2.x} ${pts.p2.y}`;
+        const outerArc = new Path(makeArcPath(geo.outer), { stroke: arcColor, strokeWidth, strokeDashArray: [dashSize, dashSize], fill: '', selectable: false, evented: false });
+        const innerArc = new Path(makeArcPath(geo.inner), { stroke: arcColor, strokeWidth, strokeDashArray: [dashSize, dashSize], fill: '', selectable: false, evented: false });
+        const capS = new Line([geo.outer.p1.x, geo.outer.p1.y, geo.inner.p1.x, geo.inner.p1.y], { stroke: arcColor, strokeWidth: strokeWidth * 0.5, strokeDashArray: [dashSize, dashSize], selectable: false, evented: false });
+        const capE = new Line([geo.outer.p2.x, geo.outer.p2.y, geo.inner.p2.x, geo.inner.p2.y], { stroke: arcColor, strokeWidth: strokeWidth * 0.5, strokeDashArray: [dashSize, dashSize], selectable: false, evented: false });
+        [outerArc, innerArc, capS, capE].forEach(s => canvas.add(s));
+        shape = outerArc;
+        (shape as any)._arcPreviews = [innerArc, capS, capE];
+        const chord = Math.hypot(p2.x - p1.x, p2.y - p1.y);
+        const t = eu ? `${(chord / eu).toFixed(2)} m arc` : `${chord.toFixed(0)} px arc`;
+        previewLabelRef.current = { text: t, worldX: (p1.x + p2.x) / 2, worldY: (p1.y + p2.y) / 2, color: arcColor };
+      }
     }
 
     if (shape) {
-      if (!(activeTool === 'wall-line')) {
+      if (!(activeTool === 'wall-line') && !(activeTool === 'arc-wall')) {
         canvas.add(shape);
       }
       setPreviewShape(shape);
@@ -1984,7 +2200,7 @@ export const InteractiveCanvas = ({
       const r = calculateCircleAreaWorld(startPoint, currentWorldPoint, eu);
       const t = isCalibrated ? `${r.realValue.toFixed(2)} m²` : `${r.worldValue.toFixed(0)} px²`;
       previewLabelRef.current = { text: t, worldX: startPoint.x, worldY: startPoint.y, color: isCalibrated ? 'purple' : 'orange' };
-    } else if (activeTool === 'wall-line' || activeTool === 'offset') {
+    } else if (activeTool === 'wall-line' || activeTool === 'offset' || activeTool === 'arc-wall') {
       // previewLabelRef already set in the shape-building block above — leave it alone
     } else {
       previewLabelRef.current = null;
@@ -1995,7 +2211,7 @@ export const InteractiveCanvas = ({
     viewport, transform, isPanning, lastClientPos, isDrawing, startPoint,
     previewShape, activeTool, isCalibrated, unitsPerMetre, onTransformChange,
     calibrationMode, isCalibrationDragging, calibrationStartPoint, handleCalibrationMouseMove,
-    getZoomAwareSize, polygonPoints
+    getZoomAwareSize, polygonPoints, measurements
   ]);
 
   // Handle mouse up
@@ -2036,6 +2252,10 @@ export const InteractiveCanvas = ({
       // Clean up wall preview extras
       if ((previewShape as any)?._wallPreviews) {
         ((previewShape as any)._wallPreviews as any[]).forEach((s: any) => canvas.remove(s));
+      }
+      // Clean up arc-wall preview extras
+      if ((previewShape as any)?._arcPreviews) {
+        ((previewShape as any)._arcPreviews as any[]).forEach((s: any) => canvas.remove(s));
       }
       canvas.remove(previewShape);
       setPreviewShape(null);
@@ -2109,12 +2329,14 @@ export const InteractiveCanvas = ({
 
       onMeasurementComplete(measurement);
     } else if (activeTool === 'wall-line') {
+      if (e.e.shiftKey) worldEndPoint = snapEndpointToAngle(startPoint, worldEndPoint, 45);
+
       const minDist = 5 / transform.zoom;
       const dx0 = worldEndPoint.x - startPoint.x;
       const dy0 = worldEndPoint.y - startPoint.y;
       if (Math.sqrt(dx0 * dx0 + dy0 * dy0) < minDist) { abortDraw(); return; }
 
-      const eu = unitsPerMetre || 1;
+      const eu = unitsPerMetreRef.current || 1;
       const thickness = wallThicknessRef.current;
       const geo = wallGeometry(startPoint, worldEndPoint, thickness, eu);
       const wallColor = drawColorRef.current || '#f59e0b';

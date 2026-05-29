@@ -44,7 +44,7 @@ export interface PDFViewportData {
 // === MEASUREMENT TYPES ===
 export type MeasurementType = 'line' | 'rectangle' | 'polygon' | 'circle';
 export type MeasurementUnit = string;
-export type ToolType = 'select' | 'pan' | 'eraser' | 'line' | 'rectangle' | 'polygon' | 'circle' | 'count' | 'wall-line' | 'offset' | null;
+export type ToolType = 'select' | 'pan' | 'eraser' | 'line' | 'rectangle' | 'polygon' | 'circle' | 'count' | 'wall-line' | 'arc-wall' | 'offset' | null;
 
 // Area options for measurements
 export type MeasurementArea = 'Kitchen' | 'Bathroom' | 'Bedroom' | 'Living Room' | 'Dining Room' | 'Laundry' | 'Garage' | 'Patio' | 'Balcony' | 'Hallway' | 'Entry' | 'Office' | 'Storage' | 'Utility' | 'Ensuite' | 'WC' | 'External' | 'Other';
@@ -95,7 +95,8 @@ export interface Measurement {
   linkedCostItem?: string;
   pageIndex: number;
   planId?: string;       // Which plan this measurement belongs to (name + filesize key)
-  wallThickness?: number;  // mm — set by wall-line tool
+  wallThickness?: number;      // mm — set by wall-line tool
+  arcControlPoint?: WorldPoint; // control point for arc-wall tool (passes through this point)
   timestamp: Date;
 
   // Enhanced fields for takeoff table
