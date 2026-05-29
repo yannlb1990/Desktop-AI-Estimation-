@@ -528,13 +528,24 @@ export const InteractiveCanvas = ({
 
     // Reset arc state when tool changes away from arc-wall
     if (activeTool !== 'arc-wall') {
-      if (arcStateRef.current.phase !== 0) {
-        arcStateRef.current = { phase: 0, p1: null, p2: null };
-        if (canvas && arcMarkerRef.current) {
+      arcStateRef.current = { phase: 0, p1: null, p2: null };
+      if (canvas) {
+        if (arcMarkerRef.current) {
           try { canvas.remove(arcMarkerRef.current); } catch (_) {}
           arcMarkerRef.current = null;
         }
+        // Remove any lingering arc-wall preview objects left on canvas
+        const toRemove: any[] = [];
+        canvas.getObjects().forEach((obj: any) => {
+          if (obj._arcPreviews) {
+            (obj._arcPreviews as any[]).forEach((s: any) => toRemove.push(s));
+            toRemove.push(obj);
+          }
+        });
+        toRemove.forEach(obj => { try { canvas.remove(obj); } catch (_) {} });
+        if (toRemove.length > 0) canvas.requestRenderAll();
       }
+      previewLabelRef.current = null;
     }
   }, [activeTool, calibrationMode]);
 
@@ -807,7 +818,7 @@ export const InteractiveCanvas = ({
       // Sits tight above the anchor dot so it stays close to the measurement line.
       const drawLabel = (text: string, anchorX: number, anchorY: number, color: string) => {
         const lx = anchorX;
-        const ly = anchorY - dotR - 6 / zoom;
+        const ly = anchorY - dotR - 3 / zoom;
 
         // Anchor dot
         ctx.beginPath();
@@ -888,6 +899,12 @@ export const InteractiveCanvas = ({
         let anchorX = center.x;
         let anchorY = center.y;
 
+        // Arc-wall: anchor at worldPoints midpoint (Path bounding-box center drifts too far)
+        if ((measurement as any).arcControlPoint && measurement.worldPoints?.length >= 2) {
+          anchorX = (measurement.worldPoints[0].x + measurement.worldPoints[1].x) / 2;
+          anchorY = (measurement.worldPoints[0].y + measurement.worldPoints[1].y) / 2;
+        }
+
         const mType = (measurement as any).measurementType as string | undefined;
         const lbl = measurement.label || '';
         const isModMarkup =
@@ -908,7 +925,7 @@ export const InteractiveCanvas = ({
           const len = Math.sqrt(dx * dx + dy * dy) || 1;
           const perpX = -dy / len;
           const perpY = dx / len;
-          const offset = 14 / zoom;
+          const offset = 8 / zoom;
           // Always push label toward negative-Y (upward on screen) for consistency.
           // If perp already points up (perpY < 0) use it as-is; otherwise flip.
           sideSign = perpY <= 0 ? 1 : -1;
@@ -1346,9 +1363,20 @@ export const InteractiveCanvas = ({
       if (e.key === 'Escape' && arcStateRef.current.phase !== 0) {
         arcStateRef.current = { phase: 0, p1: null, p2: null };
         const canvas = fabricCanvasRef.current;
-        if (canvas && arcMarkerRef.current) {
-          try { canvas.remove(arcMarkerRef.current); } catch (_) {}
-          arcMarkerRef.current = null;
+        if (canvas) {
+          if (arcMarkerRef.current) {
+            try { canvas.remove(arcMarkerRef.current); } catch (_) {}
+            arcMarkerRef.current = null;
+          }
+          const toRemove: any[] = [];
+          canvas.getObjects().forEach((obj: any) => {
+            if (obj._arcPreviews) {
+              (obj._arcPreviews as any[]).forEach((s: any) => toRemove.push(s));
+              toRemove.push(obj);
+            }
+          });
+          toRemove.forEach(obj => { try { canvas.remove(obj); } catch (_) {} });
+          previewLabelRef.current = null;
           canvas.renderAll();
         }
         return;

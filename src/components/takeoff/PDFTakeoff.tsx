@@ -1354,7 +1354,9 @@ export const PDFTakeoff = ({ projectId, estimateId, onAddCostItems }: PDFTakeoff
                                     });
                                   }}
                                 />
-                                <span className="capitalize">{m.type}</span>
+                                <span className="capitalize">
+                                  {(m as any).arcControlPoint ? 'Arc Wall' : (m as any).wallThickness ? 'Wall' : m.type}
+                                </span>
                                 {m.addedToEstimate && (
                                   <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 text-[10px] font-medium">
                                     ✓ In estimate

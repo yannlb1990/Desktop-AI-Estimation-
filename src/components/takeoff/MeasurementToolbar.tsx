@@ -151,18 +151,18 @@ export const MeasurementToolbar = ({
                 type="number"
                 min="10"
                 max="500"
-                placeholder="custom"
+                placeholder="≥10mm"
                 value={customInput}
                 onChange={e => setCustomInput(e.target.value)}
                 onKeyDown={e => {
                   if (e.key === 'Enter') {
                     const v = parseInt(customInput, 10);
-                    if (!isNaN(v) && v > 0) { onWallThicknessChange(v); setCustomInput(''); }
+                    if (!isNaN(v) && v >= 10) { onWallThicknessChange(v); setCustomInput(''); }
                   }
                 }}
                 onBlur={() => {
                   const v = parseInt(customInput, 10);
-                  if (!isNaN(v) && v > 0) { onWallThicknessChange(v); setCustomInput(''); }
+                  if (!isNaN(v) && v >= 10) { onWallThicknessChange(v); setCustomInput(''); }
                 }}
                 className="h-6 w-16 text-xs border border-input rounded px-1.5 bg-background focus:outline-none focus:border-ring"
               />
