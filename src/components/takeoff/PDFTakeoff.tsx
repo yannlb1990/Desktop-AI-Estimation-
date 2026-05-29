@@ -1,11 +1,10 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { Download, ZoomIn, ZoomOut, RotateCw, Maximize2, Minimize2, ChevronLeft, ChevronRight, ChevronUp, ChevronDown, Trash2, FileText, SlidersHorizontal, Combine, Ruler, X } from 'lucide-react';
+import { Download, ZoomIn, ZoomOut, RotateCw, RotateCcw, Maximize2, Minimize2, ChevronLeft, ChevronRight, ChevronUp, ChevronDown, Trash2, FileText, SlidersHorizontal, Combine, Ruler, X, CheckCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { PDFUploadManager } from './PDFUploadManager';
 import { InteractiveCanvas } from './InteractiveCanvas';
-import { ScalingCalibrator } from './ScalingCalibrator';
 import { MeasurementToolbar } from './MeasurementToolbar';
 import { ViewportControls } from './ViewportControls';
 import { Magnifier } from './Magnifier';
@@ -34,7 +33,6 @@ import { ModificationDialog } from './ModificationDialog';
 import { AddToEstimateDialog } from './AddToEstimateDialog';
 import { Card } from '@/components/ui/card';
 import { Checkbox } from '@/components/ui/checkbox';
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
@@ -719,30 +717,27 @@ export const PDFTakeoff = ({ projectId, estimateId, onAddCostItems }: PDFTakeoff
           <Button variant="ghost" size="sm" onClick={handleRotate} className="h-8 text-gray-200 hover:bg-gray-700"><RotateCw className="h-4 w-4" /></Button>
           <Button variant="ghost" size="sm" onClick={handleFitToScreen} className="h-8 text-gray-200 hover:bg-gray-700" title="Fit to screen"><Maximize2 className="h-4 w-4" /></Button>
         </div>
-        {/* Scale popover */}
-        <div className="border-l border-gray-600 pl-2 ml-1">
-          <Popover>
-            <PopoverTrigger asChild>
-              <Button
-                variant="ghost"
-                size="sm"
-                className={`h-8 gap-1.5 ${state.isCalibrated ? 'text-green-400 hover:bg-green-950/40' : 'text-amber-400 hover:bg-amber-950/40'}`}
-                title="Scale calibration"
-              >
+        {/* Scale */}
+        <div className="flex items-center gap-1 border-l border-gray-600 pl-2 ml-1">
+          {state.isCalibrated ? (
+            <>
+              <span className="text-xs font-medium text-green-400 flex items-center gap-1">
+                <CheckCircle className="h-3.5 w-3.5" />
+                {state.currentScale?.scaleFactor ? `1:${state.currentScale.scaleFactor}` : 'Calibrated'}
+              </span>
+              <Button variant="ghost" size="icon" className="h-7 w-7 text-gray-400 hover:text-white hover:bg-gray-700" onClick={() => dispatch({ type: 'SET_CALIBRATION_MODE', payload: 'manual' })} title="Re-calibrate">
                 <Ruler className="h-3.5 w-3.5" />
-                {state.isCalibrated ? (state.currentScale?.name ?? 'Calibrated') : 'Set Scale'}
               </Button>
-            </PopoverTrigger>
-            <PopoverContent className="w-80 p-0 z-[10000]" align="start">
-              <ScalingCalibrator
-                currentScale={state.currentScale}
-                isCalibrated={state.isCalibrated}
-                onManualCalibrationStart={() => dispatch({ type: 'SET_CALIBRATION_MODE', payload: 'manual' })}
-                onResetScale={handleResetScale}
-                onStartVerify={handleStartVerify}
-              />
-            </PopoverContent>
-          </Popover>
+              <Button variant="ghost" size="icon" className="h-7 w-7 text-gray-400 hover:text-white hover:bg-gray-700" onClick={handleResetScale} title="Reset scale">
+                <RotateCcw className="h-3 w-3" />
+              </Button>
+            </>
+          ) : (
+            <Button variant="ghost" size="sm" className="h-8 gap-1.5 text-amber-400 hover:bg-amber-950/40" onClick={() => dispatch({ type: 'SET_CALIBRATION_MODE', payload: 'manual' })} title="Calibrate scale">
+              <Ruler className="h-3.5 w-3.5" />
+              Set Scale
+            </Button>
+          )}
         </div>
         {/* Page navigation */}
         {state.pdfFile.pageCount > 1 && (
@@ -878,8 +873,7 @@ export const PDFTakeoff = ({ projectId, estimateId, onAddCostItems }: PDFTakeoff
   ) : null;
   // ────────────────────────────────────────────────────────────────────────────
 
-  // Calibration overlay — rendered inside whichever canvas container is active.
-  // Appears on top of the canvas so the user never loses the input when the Popover closes.
+  // Calibration overlay — floats above the canvas during manual calibration.
   const calibrationBar = state.calibrationMode === 'manual' ? (
     <div className="absolute top-3 left-1/2 -translate-x-1/2 z-40 flex items-center gap-2.5
                     bg-gray-900/95 border border-blue-500/50 rounded-lg px-4 py-2.5
@@ -1122,29 +1116,26 @@ export const PDFTakeoff = ({ projectId, estimateId, onAddCostItems }: PDFTakeoff
                     </Button>
                   </div>
 
-                  {/* Scale popover */}
-                  <Popover>
-                    <PopoverTrigger asChild>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        className={`h-8 gap-1.5 ${state.isCalibrated ? 'border-green-600 text-green-400' : 'border-amber-500 text-amber-400'}`}
-                        title="Scale calibration"
-                      >
+                  {/* Scale */}
+                  {state.isCalibrated ? (
+                    <div className="flex items-center gap-1">
+                      <span className="text-xs font-medium text-green-600 dark:text-green-400 flex items-center gap-1">
+                        <CheckCircle className="h-3.5 w-3.5" />
+                        {state.currentScale?.scaleFactor ? `1:${state.currentScale.scaleFactor}` : 'Calibrated'}
+                      </span>
+                      <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => dispatch({ type: 'SET_CALIBRATION_MODE', payload: 'manual' })} title="Re-calibrate">
                         <Ruler className="h-3.5 w-3.5" />
-                        {state.isCalibrated ? (state.currentScale?.name ?? 'Calibrated') : 'Set Scale'}
                       </Button>
-                    </PopoverTrigger>
-                    <PopoverContent className="w-80 p-0" align="start">
-                      <ScalingCalibrator
-                        currentScale={state.currentScale}
-                        isCalibrated={state.isCalibrated}
-                        onManualCalibrationStart={() => dispatch({ type: 'SET_CALIBRATION_MODE', payload: 'manual' })}
-                        onResetScale={handleResetScale}
-                        onStartVerify={handleStartVerify}
-                      />
-                    </PopoverContent>
-                  </Popover>
+                      <Button variant="ghost" size="icon" className="h-7 w-7" onClick={handleResetScale} title="Reset scale">
+                        <RotateCcw className="h-3 w-3" />
+                      </Button>
+                    </div>
+                  ) : (
+                    <Button variant="outline" size="sm" className="h-8 gap-1.5 border-amber-500 text-amber-500 hover:bg-amber-50 dark:hover:bg-amber-950/20" onClick={() => dispatch({ type: 'SET_CALIBRATION_MODE', payload: 'manual' })}>
+                      <Ruler className="h-3.5 w-3.5" />
+                      Set Scale
+                    </Button>
+                  )}
 
                   {/* Export markup button */}
                   {state.pdfFile && (
