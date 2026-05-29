@@ -35,6 +35,21 @@ function snapToSquare(from: WorldPoint, to: WorldPoint): WorldPoint {
   return { x: from.x + Math.sign(dx) * side, y: from.y + Math.sign(dy) * side };
 }
 
+/** Compute the four corner points for a wall-line given two endpoints, thickness in mm, and unitsPerMetre. */
+function wallGeometry(p1: WorldPoint, p2: WorldPoint, thicknessMm: number, upm: number) {
+  const dx = p2.x - p1.x, dy = p2.y - p1.y;
+  const len = Math.sqrt(dx * dx + dy * dy) || 1;
+  const nx = -dy / len, ny = dx / len;
+  const hw = (thicknessMm / 1000) * upm / 2;
+  return {
+    l1p1: { x: p1.x + nx * hw, y: p1.y + ny * hw },
+    l1p2: { x: p2.x + nx * hw, y: p2.y + ny * hw },
+    l2p1: { x: p1.x - nx * hw, y: p1.y - ny * hw },
+    l2p2: { x: p2.x - nx * hw, y: p2.y - ny * hw },
+    hw,
+  };
+}
+
 interface InteractiveCanvasProps {
   pdfUrl: string | null;
   planId?: string;
@@ -57,6 +72,7 @@ interface InteractiveCanvasProps {
   onMeasurementSelect?: (id: string, screenX: number, screenY: number) => void;
   /** Parent passes a ref; canvas fills `.current` with an `{ export }` handle. */
   canvasExportRef?: React.RefObject<{ export: () => void } | null>;
+  wallThickness?: number;
 }
 
 export const InteractiveCanvas = ({
@@ -80,12 +96,15 @@ export const InteractiveCanvas = ({
   onDeleteMeasurement,
   onMeasurementSelect,
   canvasExportRef,
+  wallThickness = 90,
 }: InteractiveCanvasProps) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const fabricCanvasRef = useRef<FabricCanvas | null>(null);
   // Cached patched ArrayBuffer for this plan — avoids repeated IndexedDB fetches
   const patchedBufferRef = useRef<ArrayBuffer | null>(null);
+  const wallThicknessRef = useRef(wallThickness);
+  useEffect(() => { wallThicknessRef.current = wallThickness; }, [wallThickness]);
   // Guard: auto-fit runs once per mount (remount happens on page/plan change via key prop)
   const hasAutoFittedRef = useRef(false);
   const [isLoading, setIsLoading] = useState(false);
@@ -568,8 +587,33 @@ export const InteractiveCanvas = ({
 
       if (measurement.type === 'line') {
         const [s, e] = measurement.worldPoints;
+        if ((measurement as any).wallThickness && unitsPerMetre) {
+          // Restore wall-line as 4 fabric objects
+          const geo = wallGeometry(s, e, (measurement as any).wallThickness, unitsPerMetre);
+          const wl1 = new Line([geo.l1p1.x, geo.l1p1.y, geo.l1p2.x, geo.l1p2.y], { stroke: color, strokeWidth: strokeWidth * 1.5, selectable: false, evented: false, hasControls: true, hasBorders: true, lockRotation: true, cornerColor: '#2563eb', cornerStyle: 'circle' as const, cornerSize: 10, transparentCorners: false, borderColor: '#2563eb' });
+          const wl2 = new Line([geo.l2p1.x, geo.l2p1.y, geo.l2p2.x, geo.l2p2.y], { stroke: color, strokeWidth: strokeWidth * 1.5, selectable: false, evented: false });
+          const wc1 = new Line([geo.l1p1.x, geo.l1p1.y, geo.l2p1.x, geo.l2p1.y], { stroke: color, strokeWidth, selectable: false, evented: false });
+          const wc2 = new Line([geo.l1p2.x, geo.l1p2.y, geo.l2p2.x, geo.l2p2.y], { stroke: color, strokeWidth, selectable: false, evented: false });
+          [wl1, wl2, wc1, wc2].forEach(l => canvas.add(l));
+          measurementObjectsRef.current.set(measurement.id, [wl1, wl2, wc1, wc2]);
+          shapeToMeasurementIdRef.current.set(wl1, measurement.id);
+          return; // skip the generic shape = ... and canvas.add(shape) below
+        }
+        const isRefLine = measurement.color === '#38bdf8';
         shape = new Line([s.x, s.y, e.x, e.y], {
-          stroke: color, strokeWidth, selectable: false, evented: false,
+          stroke: color,
+          strokeWidth: isRefLine ? strokeWidth * 0.75 : strokeWidth,
+          strokeDashArray: isRefLine ? [getZoomAwareSize(8), getZoomAwareSize(4)] : undefined,
+          selectable: false,
+          evented: false,
+          hasControls: true,
+          hasBorders: true,
+          lockRotation: true,
+          cornerColor: '#2563eb',
+          cornerStyle: 'circle' as const,
+          cornerSize: 10,
+          transparentCorners: false,
+          borderColor: '#2563eb',
         });
       } else if (measurement.type === 'rectangle') {
         const [s, e] = measurement.worldPoints;
@@ -775,29 +819,30 @@ export const InteractiveCanvas = ({
           lbl.startsWith('Door ') || lbl === 'Door' ||
           lbl.startsWith('Window ') || lbl === 'Window';
 
+        let sideSign: number | undefined;
         if (shape.type === 'line') {
-          // Use worldPoints (stored in world coords at draw/resize time) for a reliable anchor.
-          // calcTransformMatrix() can drift when Fabric's DPR/viewport state differs from
-          // the manual setTransform(dpr)+transform(vt) context we draw labels into.
-          const wpts = measurement.worldPoints;
-          let p1: { x: number; y: number };
-          let p2: { x: number; y: number };
-          if (wpts && wpts.length >= 2) {
-            p1 = wpts[0];
-            p2 = wpts[1];
-          } else {
-            const mat = shape.calcTransformMatrix();
-            p1 = fabricUtil.transformPoint({ x: (shape as any).x1, y: (shape as any).y1 }, mat);
-            p2 = fabricUtil.transformPoint({ x: (shape as any).x2, y: (shape as any).y2 }, mat);
-          }
+          // Always derive from calcTransformMatrix so the label tracks the shape
+          // in real-time during drag, not just after object:modified fires.
+          const mat = shape.calcTransformMatrix();
+          const p1 = fabricUtil.transformPoint(new FabricPoint((shape as any).x1, (shape as any).y1), mat);
+          const p2 = fabricUtil.transformPoint(new FabricPoint((shape as any).x2, (shape as any).y2), mat);
           const dx = p2.x - p1.x;
           const dy = p2.y - p1.y;
           const len = Math.sqrt(dx * dx + dy * dy) || 1;
           const perpX = -dy / len;
           const perpY = dx / len;
-          const offset = 10 / zoom;
-          anchorX = (p1.x + p2.x) / 2 + perpX * offset;
-          anchorY = (p1.y + p2.y) / 2 + perpY * offset;
+          const offset = 14 / zoom;
+          // Always push label toward negative-Y (upward on screen) for consistency.
+          // If perp already points up (perpY < 0) use it as-is; otherwise flip.
+          sideSign = perpY <= 0 ? 1 : -1;
+          anchorX = (p1.x + p2.x) / 2 + perpX * offset * sideSign;
+          anchorY = (p1.y + p2.y) / 2 + perpY * offset * sideSign;
+
+          // Small endpoint squares at each line end for clean drafting look
+          const sqR = 3 / zoom;
+          ctx.fillStyle = measurement.color || '#FF6B6B';
+          ctx.fillRect(p1.x - sqR, p1.y - sqR, sqR * 2, sqR * 2);
+          ctx.fillRect(p2.x - sqR, p2.y - sqR, sqR * 2, sqR * 2);
 
           // Architectural symbols for door/window (always drawn, label suppressed)
           const lbl = measurement.label || '';
@@ -1833,6 +1878,10 @@ export const InteractiveCanvas = ({
 
     // Remove previous preview
     if (previewShape) {
+      // Clean up wall preview extras
+      if ((previewShape as any)?._wallPreviews) {
+        ((previewShape as any)._wallPreviews as any[]).forEach((s: any) => canvas.remove(s));
+      }
       canvas.remove(previewShape);
     }
 
@@ -1879,10 +1928,43 @@ export const InteractiveCanvas = ({
         selectable: false,
         evented: false,
       });
+    } else if (activeTool === 'wall-line') {
+      const eu = unitsPerMetre || 1;
+      const geo = wallGeometry(startPoint, currentWorldPoint, wallThicknessRef.current, eu);
+      const wallColor = drawColorRef.current || '#f59e0b';
+      const wallShapes: any[] = [
+        new Line([geo.l1p1.x, geo.l1p1.y, geo.l1p2.x, geo.l1p2.y], { stroke: wallColor, strokeWidth, strokeDashArray: [dashSize, dashSize], selectable: false, evented: false }),
+        new Line([geo.l2p1.x, geo.l2p1.y, geo.l2p2.x, geo.l2p2.y], { stroke: wallColor, strokeWidth, strokeDashArray: [dashSize, dashSize], selectable: false, evented: false }),
+        new Line([geo.l1p1.x, geo.l1p1.y, geo.l2p1.x, geo.l2p1.y], { stroke: wallColor, strokeWidth: strokeWidth * 0.5, strokeDashArray: [dashSize, dashSize], selectable: false, evented: false }),
+        new Line([geo.l1p2.x, geo.l1p2.y, geo.l2p2.x, geo.l2p2.y], { stroke: wallColor, strokeWidth: strokeWidth * 0.5, strokeDashArray: [dashSize, dashSize], selectable: false, evented: false }),
+      ];
+      wallShapes.forEach(s => canvas.add(s));
+      shape = wallShapes[0];
+      (shape as any)._wallPreviews = wallShapes.slice(1);
+
+      const eu2 = unitsPerMetre || 1;
+      const r = calculateLinearWorld(startPoint, currentWorldPoint, eu2);
+      const t = isCalibrated ? `${r.realValue.toFixed(2)} m  (${wallThicknessRef.current}mm wall)` : `${r.worldValue.toFixed(0)} px`;
+      previewLabelRef.current = { text: t, worldX: (startPoint.x + currentWorldPoint.x) / 2, worldY: (startPoint.y + currentWorldPoint.y) / 2, color: wallColor };
+    } else if (activeTool === 'offset') {
+      const offsetColor = '#38bdf8';
+      shape = new Line([startPoint.x, startPoint.y, currentWorldPoint.x, currentWorldPoint.y], {
+        stroke: offsetColor,
+        strokeWidth: strokeWidth * 0.75,
+        strokeDashArray: [dashSize * 2, dashSize],
+        selectable: false,
+        evented: false,
+      });
+      const eu = unitsPerMetre || 1;
+      const r = calculateLinearWorld(startPoint, currentWorldPoint, eu);
+      const t = isCalibrated ? `Ref: ${r.realValue.toFixed(2)} m` : `Ref: ${r.worldValue.toFixed(0)} px`;
+      previewLabelRef.current = { text: t, worldX: (startPoint.x + currentWorldPoint.x) / 2, worldY: (startPoint.y + currentWorldPoint.y) / 2, color: offsetColor };
     }
 
     if (shape) {
-      canvas.add(shape);
+      if (!(activeTool === 'wall-line')) {
+        canvas.add(shape);
+      }
       setPreviewShape(shape);
     }
 
@@ -1902,6 +1984,8 @@ export const InteractiveCanvas = ({
       const r = calculateCircleAreaWorld(startPoint, currentWorldPoint, eu);
       const t = isCalibrated ? `${r.realValue.toFixed(2)} m²` : `${r.worldValue.toFixed(0)} px²`;
       previewLabelRef.current = { text: t, worldX: startPoint.x, worldY: startPoint.y, color: isCalibrated ? 'purple' : 'orange' };
+    } else if (activeTool === 'wall-line' || activeTool === 'offset') {
+      // previewLabelRef already set in the shape-building block above — leave it alone
     } else {
       previewLabelRef.current = null;
     }
@@ -1949,6 +2033,10 @@ export const InteractiveCanvas = ({
 
     // Remove preview shape
     if (previewShape) {
+      // Clean up wall preview extras
+      if ((previewShape as any)?._wallPreviews) {
+        ((previewShape as any)._wallPreviews as any[]).forEach((s: any) => canvas.remove(s));
+      }
       canvas.remove(previewShape);
       setPreviewShape(null);
     }
@@ -2019,6 +2107,100 @@ export const InteractiveCanvas = ({
         timestamp: new Date(),
       };
 
+      onMeasurementComplete(measurement);
+    } else if (activeTool === 'wall-line') {
+      const minDist = 5 / transform.zoom;
+      const dx0 = worldEndPoint.x - startPoint.x;
+      const dy0 = worldEndPoint.y - startPoint.y;
+      if (Math.sqrt(dx0 * dx0 + dy0 * dy0) < minDist) { abortDraw(); return; }
+
+      const eu = unitsPerMetre || 1;
+      const thickness = wallThicknessRef.current;
+      const geo = wallGeometry(startPoint, worldEndPoint, thickness, eu);
+      const wallColor = drawColorRef.current || '#f59e0b';
+      const result = calculateLinearWorld(startPoint, worldEndPoint, eu);
+
+      const wallLine1 = new Line([geo.l1p1.x, geo.l1p1.y, geo.l1p2.x, geo.l1p2.y], {
+        stroke: wallColor, strokeWidth: strokeWidth * 1.5, selectable: false, evented: false,
+        hasControls: true, hasBorders: true, lockRotation: true,
+        cornerColor: '#2563eb', cornerStyle: 'circle' as const, cornerSize: 10,
+        transparentCorners: false, borderColor: '#2563eb',
+      });
+      const wallLine2 = new Line([geo.l2p1.x, geo.l2p1.y, geo.l2p2.x, geo.l2p2.y], {
+        stroke: wallColor, strokeWidth: strokeWidth * 1.5, selectable: false, evented: false,
+        hasControls: false, hasBorders: false,
+      });
+      const cap1 = new Line([geo.l1p1.x, geo.l1p1.y, geo.l2p1.x, geo.l2p1.y], {
+        stroke: wallColor, strokeWidth, selectable: false, evented: false,
+      });
+      const cap2 = new Line([geo.l1p2.x, geo.l1p2.y, geo.l2p2.x, geo.l2p2.y], {
+        stroke: wallColor, strokeWidth, selectable: false, evented: false,
+      });
+      [wallLine1, wallLine2, cap1, cap2].forEach(l => canvas.add(l));
+
+      const measurementId = crypto.randomUUID();
+      measurementObjectsRef.current.set(measurementId, [wallLine1, wallLine2, cap1, cap2]);
+      shapeToMeasurementIdRef.current.set(wallLine1, measurementId);
+
+      const labelText = isCalibrated ? `${result.realValue.toFixed(2)} m` : `${result.worldValue.toFixed(0)} px`;
+      const measurement: Measurement = {
+        id: measurementId,
+        type: 'line',
+        worldPoints: [startPoint, worldEndPoint],
+        worldValue: result.worldValue,
+        realValue: isCalibrated ? result.realValue : result.worldValue,
+        unit: 'LM',
+        color: wallColor,
+        label: labelText,
+        wallThickness: thickness,
+        pageIndex,
+        timestamp: new Date(),
+      };
+      onMeasurementComplete(measurement);
+    } else if (activeTool === 'offset') {
+      const minDist = 5 / transform.zoom;
+      const dx0 = worldEndPoint.x - startPoint.x;
+      const dy0 = worldEndPoint.y - startPoint.y;
+      if (Math.sqrt(dx0 * dx0 + dy0 * dy0) < minDist) { abortDraw(); return; }
+
+      const eu = unitsPerMetre || 1;
+      const result = calculateLinearWorld(startPoint, worldEndPoint, eu);
+      const refColor = '#38bdf8';
+
+      const refLine = new Line([startPoint.x, startPoint.y, worldEndPoint.x, worldEndPoint.y], {
+        stroke: refColor,
+        strokeWidth: strokeWidth * 0.75,
+        strokeDashArray: [getZoomAwareSize(8), getZoomAwareSize(4)],
+        selectable: false,
+        evented: false,
+        hasControls: true,
+        hasBorders: true,
+        lockRotation: true,
+        cornerColor: '#2563eb',
+        cornerStyle: 'circle' as const,
+        cornerSize: 10,
+        transparentCorners: false,
+        borderColor: '#2563eb',
+      });
+      canvas.add(refLine);
+
+      const measurementId = crypto.randomUUID();
+      measurementObjectsRef.current.set(measurementId, [refLine]);
+      shapeToMeasurementIdRef.current.set(refLine, measurementId);
+
+      const labelText = isCalibrated ? `Ref: ${result.realValue.toFixed(2)} m` : '';
+      const measurement: Measurement = {
+        id: measurementId,
+        type: 'line',
+        worldPoints: [startPoint, worldEndPoint],
+        worldValue: result.worldValue,
+        realValue: isCalibrated ? result.realValue : result.worldValue,
+        unit: 'LM',
+        color: refColor,
+        label: labelText,
+        pageIndex,
+        timestamp: new Date(),
+      };
       onMeasurementComplete(measurement);
     } else if (activeTool === 'rectangle') {
       // Ignore accidental clicks — require minimum drag in both axes

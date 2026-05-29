@@ -75,6 +75,7 @@ export const PDFTakeoff = ({ projectId, estimateId, onAddCostItems }: PDFTakeoff
   const [sidebarSelectedIds, setSidebarSelectedIds] = useState<Set<string>>(new Set());
   const [upgradeModal, setUpgradeModal] = useState<{ open: boolean; feature: string }>({ open: false, feature: '' });
   const [modMode, setModMode] = useState<'wall' | 'door' | 'window' | 'custom' | null>(null);
+  const [wallThicknessMm, setWallThicknessMm] = useState(90);
   const [pendingModMeasurement, setPendingModMeasurement] = useState<Measurement | null>(null);
   const [pendingModIsNew, setPendingModIsNew] = useState(true);
   // Custom line: after draw, ask "add to estimate?"
@@ -692,6 +693,8 @@ export const PDFTakeoff = ({ projectId, estimateId, onAddCostItems }: PDFTakeoff
             setModMode(mod);
             dispatch({ type: 'SET_ACTIVE_TOOL', payload: 'line' });
           }}
+          wallThicknessMm={wallThicknessMm}
+          onWallThicknessChange={setWallThicknessMm}
         />
         {/* Zoom + rotate + fit */}
         <div className="flex items-center gap-1 border-l border-gray-600 pl-2 ml-1">
@@ -813,6 +816,7 @@ export const PDFTakeoff = ({ projectId, estimateId, onAddCostItems }: PDFTakeoff
           onDeleteMeasurement={handleDeleteMeasurement}
           onMeasurementSelect={handleMeasurementSelect}
           canvasExportRef={canvasExportRef}
+          wallThickness={wallThicknessMm}
         />
       </div>
 
@@ -1015,6 +1019,8 @@ export const PDFTakeoff = ({ projectId, estimateId, onAddCostItems }: PDFTakeoff
                     setModMode(mod);
                     dispatch({ type: 'SET_ACTIVE_TOOL', payload: 'line' });
                   }}
+                  wallThicknessMm={wallThicknessMm}
+                  onWallThicknessChange={setWallThicknessMm}
                 />
 
                 {/* Canvas Controls */}
@@ -1185,6 +1191,7 @@ export const PDFTakeoff = ({ projectId, estimateId, onAddCostItems }: PDFTakeoff
                     onDeleteMeasurement={handleDeleteMeasurement}
                     onMeasurementSelect={handleMeasurementSelect}
                     canvasExportRef={canvasExportRef}
+                    wallThickness={wallThicknessMm}
                   />
                 </div>
               </div>

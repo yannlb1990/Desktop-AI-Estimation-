@@ -10,6 +10,8 @@ export const TOOL_SHORTCUT_MAP: Readonly<Record<string, ToolType>> = {
   p: 'polygon',
   c: 'circle',
   n: 'count',
+  t: 'wall-line',
+  g: 'offset',
 };
 
 /** Resolve a keyboard event key to the matching tool, or null. Case-insensitive. */

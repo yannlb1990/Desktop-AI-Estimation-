@@ -44,7 +44,7 @@ export interface PDFViewportData {
 // === MEASUREMENT TYPES ===
 export type MeasurementType = 'line' | 'rectangle' | 'polygon' | 'circle';
 export type MeasurementUnit = string;
-export type ToolType = 'select' | 'pan' | 'eraser' | 'line' | 'rectangle' | 'polygon' | 'circle' | 'count' | null;
+export type ToolType = 'select' | 'pan' | 'eraser' | 'line' | 'rectangle' | 'polygon' | 'circle' | 'count' | 'wall-line' | 'offset' | null;
 
 // Area options for measurements
 export type MeasurementArea = 'Kitchen' | 'Bathroom' | 'Bedroom' | 'Living Room' | 'Dining Room' | 'Laundry' | 'Garage' | 'Patio' | 'Balcony' | 'Hallway' | 'Entry' | 'Office' | 'Storage' | 'Utility' | 'Ensuite' | 'WC' | 'External' | 'Other';
@@ -95,6 +95,7 @@ export interface Measurement {
   linkedCostItem?: string;
   pageIndex: number;
   planId?: string;       // Which plan this measurement belongs to (name + filesize key)
+  wallThickness?: number;  // mm — set by wall-line tool
   timestamp: Date;
 
   // Enhanced fields for takeoff table

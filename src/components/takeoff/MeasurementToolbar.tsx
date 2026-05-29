@@ -1,8 +1,9 @@
-import { MousePointer, Move, Eraser, Minus, Square, Pentagon, Circle, Hash, Undo, Redo, Columns, DoorOpen, AppWindow, PenLine } from 'lucide-react';
+import { MousePointer, Move, Eraser, Minus, Square, Pentagon, Circle, Hash, Undo, Redo, Columns, DoorOpen, AppWindow, PenLine, Columns3, Crosshair } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { Badge } from '@/components/ui/badge';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { ToolType } from '@/lib/takeoff/types';
 import { cn } from '@/lib/utils';
 
@@ -16,6 +17,8 @@ interface MeasurementToolbarProps {
   disabled: boolean;
   modMode?: 'wall' | 'door' | 'window' | 'custom' | null;
   onModSelect?: (mod: 'wall' | 'door' | 'window' | 'custom') => void;
+  wallThicknessMm?: number;
+  onWallThicknessChange?: (mm: number) => void;
 }
 
 export const MeasurementToolbar = ({
@@ -28,6 +31,8 @@ export const MeasurementToolbar = ({
   disabled,
   modMode = null,
   onModSelect,
+  wallThicknessMm = 90,
+  onWallThicknessChange,
 }: MeasurementToolbarProps) => {
   type ModId = 'wall' | 'door' | 'window' | 'custom';
   const navigationTools = [
@@ -41,6 +46,8 @@ export const MeasurementToolbar = ({
     { id: 'polygon' as const, icon: Pentagon, label: 'Polygon (P)', shortcut: 'P', color: 'bg-blue-500' },
     { id: 'circle' as const, icon: Circle, label: 'Circle (C)', shortcut: 'C', color: 'bg-purple-500' },
     { id: 'count' as const, icon: Hash, label: 'Count (N)', shortcut: 'N', color: 'bg-orange-500' },
+    { id: 'wall-line' as const, icon: Columns3, label: 'Wall Line (T)', shortcut: 'T', color: 'bg-amber-700' },
+    { id: 'offset' as const, icon: Crosshair, label: 'Reference Line (G)', shortcut: 'G', color: 'bg-sky-400' },
   ];
 
   const modTools: Array<{ id: ModId; icon: React.ComponentType<{ className?: string }>; label: string; color: string; ring: string }> = [
@@ -117,6 +124,22 @@ export const MeasurementToolbar = ({
             <Badge variant="secondary" className="ml-1 text-xs shrink-0">
               Set scale first
             </Badge>
+          )}
+
+          {activeTool === 'wall-line' && onWallThicknessChange && (
+            <div className="flex items-center gap-1 ml-1">
+              <span className="text-xs text-muted-foreground shrink-0">Thickness:</span>
+              <Select value={String(wallThicknessMm)} onValueChange={v => onWallThicknessChange(Number(v))}>
+                <SelectTrigger className="h-7 w-20 text-xs">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {[64, 70, 90, 92, 110, 150].map(mm => (
+                    <SelectItem key={mm} value={String(mm)}>{mm} mm</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
           )}
 
           <Separator orientation="vertical" className="h-6 mx-1 shrink-0" />
