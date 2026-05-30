@@ -914,20 +914,18 @@ export const InteractiveCanvas = ({
           lbl.startsWith('Window ') || lbl === 'Window';
 
         let sideSign: number | undefined;
-        if (shape.type === 'line') {
-          // Always derive from calcTransformMatrix so the label tracks the shape
-          // in real-time during drag, not just after object:modified fires.
-          const mat = shape.calcTransformMatrix();
-          const p1 = fabricUtil.transformPoint(new FabricPoint((shape as any).x1, (shape as any).y1), mat);
-          const p2 = fabricUtil.transformPoint(new FabricPoint((shape as any).x2, (shape as any).y2), mat);
+        if (shape.type === 'line' && measurement.worldPoints?.length >= 2) {
+          // Use stored worldPoints directly — avoids Fabric.js calcTransformMatrix()
+          // double-applying the object's position offset which caused labels to drift right.
+          const p1 = measurement.worldPoints[0];
+          const p2 = measurement.worldPoints[1];
           const dx = p2.x - p1.x;
           const dy = p2.y - p1.y;
           const len = Math.sqrt(dx * dx + dy * dy) || 1;
           const perpX = -dy / len;
           const perpY = dx / len;
           const offset = 8 / zoom;
-          // Always push label toward negative-Y (upward on screen) for consistency.
-          // If perp already points up (perpY < 0) use it as-is; otherwise flip.
+          // Push label toward negative-Y (upward on screen) for consistency.
           sideSign = perpY <= 0 ? 1 : -1;
           anchorX = (p1.x + p2.x) / 2 + perpX * offset * sideSign;
           anchorY = (p1.y + p2.y) / 2 + perpY * offset * sideSign;
@@ -939,7 +937,6 @@ export const InteractiveCanvas = ({
           ctx.fillRect(p2.x - sqR, p2.y - sqR, sqR * 2, sqR * 2);
 
           // Architectural symbols for door/window (always drawn, label suppressed)
-          const lbl = measurement.label || '';
           const isDoor = mType === 'Door' || lbl.startsWith('Door ') || lbl.startsWith('Door—') || lbl === 'Door';
           const isWindow = mType === 'Window' || lbl.startsWith('Window ') || lbl.startsWith('Window—') || lbl === 'Window';
           if (isDoor) drawDoorSymbol(p1, p2, measurement.color || '#8b5cf6');
