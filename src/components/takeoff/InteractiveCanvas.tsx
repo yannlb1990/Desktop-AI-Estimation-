@@ -918,30 +918,34 @@ export const InteractiveCanvas = ({
           lbl.startsWith('Door ') || lbl === 'Door' ||
           lbl.startsWith('Window ') || lbl === 'Window';
 
-        if (shape.type === 'line' && measurement.worldPoints?.length >= 2) {
-          const p1 = measurement.worldPoints[0];
-          const p2 = measurement.worldPoints[1];
-          const dx = p2.x - p1.x;
-          const dy = p2.y - p1.y;
+        // Fabric v6 Line type is 'Line' (capital L). Use calcLinePoints()+calcTransformMatrix()
+        // so the anchor is always correct even if the object was scaled or repositioned.
+        const fabricLineLocalPts = (shape as any).calcLinePoints?.();
+        if (fabricLineLocalPts && measurement.worldPoints?.length >= 2) {
+          const mat = (shape as any).calcTransformMatrix();
+          const wP1: WorldPoint = fabricUtil.transformPoint({ x: fabricLineLocalPts.x1, y: fabricLineLocalPts.y1 }, mat);
+          const wP2: WorldPoint = fabricUtil.transformPoint({ x: fabricLineLocalPts.x2, y: fabricLineLocalPts.y2 }, mat);
+          const dx = wP2.x - wP1.x;
+          const dy = wP2.y - wP1.y;
           const len = Math.sqrt(dx * dx + dy * dy) || 1;
           const perpX = -dy / len;
           const perpY = dx / len;
           // 8 CSS-px perpendicular offset expressed in world units
           const worldOffset = 8 / zoom;
           const sideSign = perpY <= 0 ? 1 : -1;
-          worldAnchorX = (p1.x + p2.x) / 2 + perpX * worldOffset * sideSign;
-          worldAnchorY = (p1.y + p2.y) / 2 + perpY * worldOffset * sideSign;
+          worldAnchorX = (wP1.x + wP2.x) / 2 + perpX * worldOffset * sideSign;
+          worldAnchorY = (wP1.y + wP2.y) / 2 + perpY * worldOffset * sideSign;
 
           // Endpoint squares (3 CSS px)
           const sqR = 3 * dpr;
           ctx.fillStyle = measurement.color || '#FF6B6B';
-          ctx.fillRect(tpx(p1.x) - sqR, tpy(p1.y) - sqR, sqR * 2, sqR * 2);
-          ctx.fillRect(tpx(p2.x) - sqR, tpy(p2.y) - sqR, sqR * 2, sqR * 2);
+          ctx.fillRect(tpx(wP1.x) - sqR, tpy(wP1.y) - sqR, sqR * 2, sqR * 2);
+          ctx.fillRect(tpx(wP2.x) - sqR, tpy(wP2.y) - sqR, sqR * 2, sqR * 2);
 
           const isDoor = mType === 'Door' || lbl.startsWith('Door ') || lbl.startsWith('Door—') || lbl === 'Door';
           const isWindow = mType === 'Window' || lbl.startsWith('Window ') || lbl.startsWith('Window—') || lbl === 'Window';
-          if (isDoor) drawDoorSymbol(p1, p2, measurement.color || '#8b5cf6');
-          else if (isWindow) drawWindowSymbol(p1, p2, measurement.color || '#06b6d4');
+          if (isDoor) drawDoorSymbol(wP1, wP2, measurement.color || '#8b5cf6');
+          else if (isWindow) drawWindowSymbol(wP1, wP2, measurement.color || '#06b6d4');
         } else if ((measurement as any).type === 'count') {
           let sx = 0, sy = 0;
           objects.forEach(o => { const c = o.getCenterPoint(); sx += c.x; sy += c.y; });
@@ -1112,12 +1116,14 @@ export const InteractiveCanvas = ({
       const objects = measurementObjectsRef.current.get(measurementId);
 
       // Get the transformed coordinates
-      if (target.type === 'line') {
-        // For lines, we need to apply the transformation matrix to get actual coordinates
-        // Fabric.js lines store x1,y1,x2,y2 relative to their origin
+      // Fabric v6 Line type is 'Line' (capital L). Use calcLinePoints() for local coords —
+      // target.x1/y1 are the original world coords, not local, so transformPoint with them
+      // would double-offset by the center translation.
+      if ((target as any).calcLinePoints) {
         const matrix = target.calcTransformMatrix();
-        const p1 = fabricUtil.transformPoint({ x: target.x1, y: target.y1 }, matrix);
-        const p2 = fabricUtil.transformPoint({ x: target.x2, y: target.y2 }, matrix);
+        const localPts = (target as any).calcLinePoints();
+        const p1 = fabricUtil.transformPoint({ x: localPts.x1, y: localPts.y1 }, matrix);
+        const p2 = fabricUtil.transformPoint({ x: localPts.x2, y: localPts.y2 }, matrix);
 
         const startPoint: WorldPoint = { x: p1.x, y: p1.y };
         const endPoint: WorldPoint = { x: p2.x, y: p2.y };
@@ -1264,10 +1270,11 @@ export const InteractiveCanvas = ({
       let worldX = 0;
       let worldY = 0;
 
-      if (target.type === 'line') {
+      if ((target as any).calcLinePoints) {
         const matrix = target.calcTransformMatrix();
-        const p1 = fabricUtil.transformPoint({ x: target.x1, y: target.y1 }, matrix);
-        const p2 = fabricUtil.transformPoint({ x: target.x2, y: target.y2 }, matrix);
+        const localPts = (target as any).calcLinePoints();
+        const p1 = fabricUtil.transformPoint({ x: localPts.x1, y: localPts.y1 }, matrix);
+        const p2 = fabricUtil.transformPoint({ x: localPts.x2, y: localPts.y2 }, matrix);
         const sp: WorldPoint = { x: p1.x, y: p1.y };
         const ep: WorldPoint = { x: p2.x, y: p2.y };
         const result = calculateLinearWorld(sp, ep, effectiveUnits);
