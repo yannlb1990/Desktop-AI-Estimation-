@@ -801,90 +801,93 @@ export const InteractiveCanvas = ({
       if (!ctx) return;
       const vt = canvas.viewportTransform || [1, 0, 0, 1, 0, 0];
       const zoom = vt[0] || 1;
-
+      const panX = vt[4] || 0;
+      const panY = vt[5] || 0;
       const dpr = window.devicePixelRatio || 1;
+
+      // Draw in raw physical pixels (identity transform) to avoid Fabric 6 DPR/CSS
+      // ambiguity: viewportTransform pan is in CSS pixels but ctx.setTransform(dpr)
+      // would double-scale it, displacing every label.
       ctx.save();
-      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-      ctx.transform(vt[0], vt[1], vt[2], vt[3], vt[4], vt[5]);
+      ctx.setTransform(1, 0, 0, 1, 0, 0);
 
-      const worldFontSize = 10 / zoom;
-      const dotR = 2.5 / zoom;
+      // World-coord → physical-pixel helpers (world * zoom + pan gives CSS pixel,
+      // multiply by dpr gives physical canvas pixel).
+      const tpx = (wx: number) => (wx * zoom + panX) * dpr;
+      const tpy = (wy: number) => (wy * zoom + panY) * dpr;
 
-      ctx.font = `700 ${worldFontSize}px system-ui, -apple-system, sans-serif`;
+      const fontSize = 10 * dpr;
+      const dotR = 2.5 * dpr;
+
+      ctx.font = `700 ${fontSize}px system-ui, -apple-system, sans-serif`;
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
 
-      // Clean inline label: no box — white halo stroke for contrast, colored fill.
-      // Sits tight above the anchor dot so it stays close to the measurement line.
-      const drawLabel = (text: string, anchorX: number, anchorY: number, color: string) => {
-        const lx = anchorX;
-        const ly = anchorY - dotR - 3 / zoom;
+      const drawLabel = (text: string, worldAnchorX: number, worldAnchorY: number, color: string) => {
+        const ax = tpx(worldAnchorX);
+        const ay = tpy(worldAnchorY);
+        const ly = ay - dotR - 3 * dpr;
 
-        // Anchor dot
         ctx.beginPath();
-        ctx.arc(anchorX, anchorY, dotR, 0, Math.PI * 2);
+        ctx.arc(ax, ay, dotR, 0, Math.PI * 2);
         ctx.fillStyle = color;
         ctx.fill();
 
-        // White halo for legibility over any plan background
-        ctx.lineWidth = 3 / zoom;
+        ctx.lineWidth = 3 * dpr;
         ctx.strokeStyle = 'rgba(255,255,255,0.88)';
         ctx.lineJoin = 'round';
-        ctx.strokeText(text, lx, ly);
+        ctx.strokeText(text, ax, ly);
 
-        // Colored text on top
         ctx.fillStyle = color;
-        ctx.fillText(text, lx, ly);
+        ctx.fillText(text, ax, ly);
       };
 
-      // ── Door/window architectural symbols ───────────────────────────────
-      const drawDoorSymbol = (p1: { x: number; y: number }, p2: { x: number; y: number }, color: string) => {
-        const dx = p2.x - p1.x;
-        const dy = p2.y - p1.y;
+      // Door/window symbols — p1/p2 in world coords, converted inside
+      const drawDoorSymbol = (p1: WorldPoint, p2: WorldPoint, color: string) => {
+        const x1 = tpx(p1.x), y1 = tpy(p1.y);
+        const x2 = tpx(p2.x), y2 = tpy(p2.y);
+        const dx = x2 - x1, dy = y2 - y1;
         const len = Math.sqrt(dx * dx + dy * dy);
         if (len < 1) return;
         const lineAngle = Math.atan2(dy, dx);
-        // Quarter-circle arc: hinge at p1, swing from p2 direction
         ctx.beginPath();
-        ctx.arc(p1.x, p1.y, len, lineAngle, lineAngle + Math.PI / 2, false);
+        ctx.arc(x1, y1, len, lineAngle, lineAngle + Math.PI / 2, false);
         ctx.strokeStyle = color + 'cc';
-        ctx.lineWidth = 1 / zoom;
-        ctx.setLineDash([4 / zoom, 3 / zoom]);
+        ctx.lineWidth = 1 * dpr;
+        ctx.setLineDash([4 * dpr, 3 * dpr]);
         ctx.stroke();
         ctx.setLineDash([]);
-        // Short radial line to show door panel at the 90° position
         const endAngle = lineAngle + Math.PI / 2;
         ctx.beginPath();
-        ctx.moveTo(p1.x, p1.y);
-        ctx.lineTo(p1.x + len * Math.cos(endAngle), p1.y + len * Math.sin(endAngle));
+        ctx.moveTo(x1, y1);
+        ctx.lineTo(x1 + len * Math.cos(endAngle), y1 + len * Math.sin(endAngle));
         ctx.strokeStyle = color + '88';
-        ctx.lineWidth = 1 / zoom;
+        ctx.lineWidth = 1 * dpr;
         ctx.stroke();
       };
 
-      const drawWindowSymbol = (p1: { x: number; y: number }, p2: { x: number; y: number }, color: string) => {
-        const dx = p2.x - p1.x;
-        const dy = p2.y - p1.y;
+      const drawWindowSymbol = (p1: WorldPoint, p2: WorldPoint, color: string) => {
+        const x1 = tpx(p1.x), y1 = tpy(p1.y);
+        const x2 = tpx(p2.x), y2 = tpy(p2.y);
+        const dx = x2 - x1, dy = y2 - y1;
         const len = Math.sqrt(dx * dx + dy * dy) || 1;
         const perpX = -dy / len;
         const perpY = dx / len;
-        const offset = 5 / zoom; // parallel line offset
-        // Two parallel outer lines
+        const offPx = 5 * dpr;
         for (const sign of [-1, 1]) {
           ctx.beginPath();
-          ctx.moveTo(p1.x + perpX * offset * sign, p1.y + perpY * offset * sign);
-          ctx.lineTo(p2.x + perpX * offset * sign, p2.y + perpY * offset * sign);
+          ctx.moveTo(x1 + perpX * offPx * sign, y1 + perpY * offPx * sign);
+          ctx.lineTo(x2 + perpX * offPx * sign, y2 + perpY * offPx * sign);
           ctx.strokeStyle = color + 'bb';
-          ctx.lineWidth = 1 / zoom;
+          ctx.lineWidth = 1 * dpr;
           ctx.stroke();
         }
-        // Short tick marks at each end
-        for (const pt of [p1, p2]) {
+        for (const pt of [{ x: x1, y: y1 }, { x: x2, y: y2 }]) {
           ctx.beginPath();
-          ctx.moveTo(pt.x - perpX * offset, pt.y - perpY * offset);
-          ctx.lineTo(pt.x + perpX * offset, pt.y + perpY * offset);
+          ctx.moveTo(pt.x - perpX * offPx, pt.y - perpY * offPx);
+          ctx.lineTo(pt.x + perpX * offPx, pt.y + perpY * offPx);
           ctx.strokeStyle = color;
-          ctx.lineWidth = 1.5 / zoom;
+          ctx.lineWidth = 1.5 * dpr;
           ctx.stroke();
         }
       };
@@ -895,14 +898,16 @@ export const InteractiveCanvas = ({
         if (!measurement) return;
         const shape = objects[0];
         if (!shape) return;
-        const center = shape.getCenterPoint();
-        let anchorX = center.x;
-        let anchorY = center.y;
 
-        // Arc-wall: anchor at worldPoints midpoint (Path bounding-box center drifts too far)
+        // Default anchor: shape center in world coords
+        const center = shape.getCenterPoint();
+        let worldAnchorX = center.x;
+        let worldAnchorY = center.y;
+
+        // Arc-wall: use worldPoints midpoint (Path bounding-box center drifts)
         if ((measurement as any).arcControlPoint && measurement.worldPoints?.length >= 2) {
-          anchorX = (measurement.worldPoints[0].x + measurement.worldPoints[1].x) / 2;
-          anchorY = (measurement.worldPoints[0].y + measurement.worldPoints[1].y) / 2;
+          worldAnchorX = (measurement.worldPoints[0].x + measurement.worldPoints[1].x) / 2;
+          worldAnchorY = (measurement.worldPoints[0].y + measurement.worldPoints[1].y) / 2;
         }
 
         const mType = (measurement as any).measurementType as string | undefined;
@@ -913,10 +918,7 @@ export const InteractiveCanvas = ({
           lbl.startsWith('Door ') || lbl === 'Door' ||
           lbl.startsWith('Window ') || lbl === 'Window';
 
-        let sideSign: number | undefined;
         if (shape.type === 'line' && measurement.worldPoints?.length >= 2) {
-          // Use stored worldPoints directly — avoids Fabric.js calcTransformMatrix()
-          // double-applying the object's position offset which caused labels to drift right.
           const p1 = measurement.worldPoints[0];
           const p2 = measurement.worldPoints[1];
           const dx = p2.x - p1.x;
@@ -924,19 +926,18 @@ export const InteractiveCanvas = ({
           const len = Math.sqrt(dx * dx + dy * dy) || 1;
           const perpX = -dy / len;
           const perpY = dx / len;
-          const offset = 8 / zoom;
-          // Push label toward negative-Y (upward on screen) for consistency.
-          sideSign = perpY <= 0 ? 1 : -1;
-          anchorX = (p1.x + p2.x) / 2 + perpX * offset * sideSign;
-          anchorY = (p1.y + p2.y) / 2 + perpY * offset * sideSign;
+          // 8 CSS-px perpendicular offset expressed in world units
+          const worldOffset = 8 / zoom;
+          const sideSign = perpY <= 0 ? 1 : -1;
+          worldAnchorX = (p1.x + p2.x) / 2 + perpX * worldOffset * sideSign;
+          worldAnchorY = (p1.y + p2.y) / 2 + perpY * worldOffset * sideSign;
 
-          // Small endpoint squares at each line end for clean drafting look
-          const sqR = 3 / zoom;
+          // Endpoint squares (3 CSS px)
+          const sqR = 3 * dpr;
           ctx.fillStyle = measurement.color || '#FF6B6B';
-          ctx.fillRect(p1.x - sqR, p1.y - sqR, sqR * 2, sqR * 2);
-          ctx.fillRect(p2.x - sqR, p2.y - sqR, sqR * 2, sqR * 2);
+          ctx.fillRect(tpx(p1.x) - sqR, tpy(p1.y) - sqR, sqR * 2, sqR * 2);
+          ctx.fillRect(tpx(p2.x) - sqR, tpy(p2.y) - sqR, sqR * 2, sqR * 2);
 
-          // Architectural symbols for door/window (always drawn, label suppressed)
           const isDoor = mType === 'Door' || lbl.startsWith('Door ') || lbl.startsWith('Door—') || lbl === 'Door';
           const isWindow = mType === 'Window' || lbl.startsWith('Window ') || lbl.startsWith('Window—') || lbl === 'Window';
           if (isDoor) drawDoorSymbol(p1, p2, measurement.color || '#8b5cf6');
@@ -944,23 +945,22 @@ export const InteractiveCanvas = ({
         } else if ((measurement as any).type === 'count') {
           let sx = 0, sy = 0;
           objects.forEach(o => { const c = o.getCenterPoint(); sx += c.x; sy += c.y; });
-          anchorX = sx / objects.length;
-          anchorY = sy / objects.length;
+          worldAnchorX = sx / objects.length;
+          worldAnchorY = sy / objects.length;
         }
 
-        // Wall / Door / Window have empty labels — only show symbols, no text.
-        // Regular measurements: draw label only if label text is non-empty.
         if (measurement.label && !isModMarkup) {
-          drawLabel(measurement.label, anchorX, anchorY, measurement.color || '#FF6B6B');
+          drawLabel(measurement.label, worldAnchorX, worldAnchorY, measurement.color || '#FF6B6B');
         }
 
         if ((measurement as any).type === 'count') {
           ctx.fillStyle = 'white';
+          ctx.font = `700 ${fontSize}px system-ui, -apple-system, sans-serif`;
           ctx.textAlign = 'center';
           ctx.textBaseline = 'middle';
           objects.forEach((obj, i) => {
             const c = obj.getCenterPoint();
-            ctx.fillText(String(i + 1), c.x, c.y);
+            ctx.fillText(String(i + 1), tpx(c.x), tpy(c.y));
           });
         }
       });
