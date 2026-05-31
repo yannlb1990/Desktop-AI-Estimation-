@@ -387,11 +387,38 @@ export const InteractiveCanvas = ({
             if (cached) patchedBufferRef.current = patchPaletteJP2Tiles(cached.data);
           } catch { /* IndexedDB unavailable — fall back to blob URL */ }
         }
-        const pdfSource = patchedBufferRef.current
-          ? { data: patchedBufferRef.current.slice(0) } // slice gives pdfjs its own copy
-          : pdfUrl;
-        const loadingTask = pdfjsLib.getDocument(pdfSource);
-        const pdf = await loadingTask.promise;
+
+        // Try to load PDF — cascade through sources if one fails:
+        // 1. Patched ArrayBuffer from IndexedDB (best quality, JP2 tiles work)
+        // 2. Raw blob URL (skip patch; JP2 tiles may be blank but page loads)
+        // 3. Error shown to user with re-upload prompt
+        let pdf: any = null;
+        const sourcesToTry: Array<{ data: ArrayBuffer } | string> = [];
+        if (patchedBufferRef.current) sourcesToTry.push({ data: patchedBufferRef.current.slice(0) });
+        if (pdfUrl) sourcesToTry.push(pdfUrl);
+
+        for (const src of sourcesToTry) {
+          try {
+            const task = pdfjsLib.getDocument(src);
+            pdf = await task.promise;
+            break; // success — stop trying
+          } catch (loadErr) {
+            const msg = loadErr instanceof Error ? loadErr.message : String(loadErr);
+            // If the patched buffer failed, clear it so the blob URL is tried next
+            if (src !== pdfUrl && patchedBufferRef.current) {
+              console.warn('[InteractiveCanvas] Patched buffer rejected, falling back to blob URL:', msg);
+              patchedBufferRef.current = null;
+            }
+          }
+        }
+
+        if (!pdf) {
+          // All sources exhausted
+          const isExpired = pdfUrl && pdfUrl.startsWith('blob:');
+          throw new Error(isExpired
+            ? 'Plan file is no longer available (session expired). Please re-upload your PDF.'
+            : 'Could not load PDF from any available source.');
+        }
 
         // 'any' intent forces ALL Optional Content Groups visible regardless of their
         // display/print default state. ArchiCAD/AutoCAD PDFs often have wall/structural
@@ -520,21 +547,11 @@ export const InteractiveCanvas = ({
       } catch (err) {
         console.error('Error loading PDF:', err);
         const message = err instanceof Error ? err.message : String(err);
-        // Only show "session expired" for the specific pdfjs error that means the blob
-        // URL was revoked (MissingPDFException). Everything else — canvas OOM, parse
-        // errors, render failures — shows the real message so it's diagnosable.
-        const isActuallyMissing = pdfUrl.startsWith('blob:') && (
-          message.includes('Missing PDF') ||
-          message.toLowerCase().includes('failed to fetch') ||
-          message.toLowerCase().includes('invalid pdf structure') ||
-          message.toLowerCase().includes('invalid pdf') ||
-          message.toLowerCase().includes('unexpected server response')
-        );
-        setError(
-          isActuallyMissing
-            ? 'Plan file is no longer available (session expired). Please re-upload your PDF.'
-            : `Failed to load PDF: ${message}`
-        );
+        // Human-readable messages thrown above (session-expired / all-sources-exhausted)
+        // pass through as-is. Unexpected errors show the raw message for debugging.
+        setError(message.startsWith('Plan file') || message.startsWith('Could not load')
+          ? message
+          : `Failed to load PDF: ${message}`);
         setIsLoading(false);
       }
     };
