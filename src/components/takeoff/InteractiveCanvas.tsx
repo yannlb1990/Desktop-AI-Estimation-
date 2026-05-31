@@ -35,6 +35,51 @@ function snapToSquare(from: WorldPoint, to: WorldPoint): WorldPoint {
   return { x: from.x + Math.sign(dx) * side, y: from.y + Math.sign(dy) * side };
 }
 
+/** In-place update of a Fabric Line's world endpoints (no scale/skew accumulation). */
+function setFabricLineCoords(line: any, x1: number, y1: number, x2: number, y2: number) {
+  line.set({
+    x1, y1, x2, y2,
+    left: (x1 + x2) / 2,
+    top: (y1 + y2) / 2,
+    width: Math.abs(x2 - x1),
+    height: Math.abs(y2 - y1),
+    scaleX: 1, scaleY: 1,
+  });
+  line.setCoords();
+}
+
+/**
+ * Sync the three companion wall objects (wl2, cap1, cap2) to match wl1's current
+ * rendered position. wl1 is always the +normal side (l1 in wallGeometry).
+ */
+function syncWallCompanions(
+  wl1: any,
+  objects: any[],
+  wallThickness: number,
+  upm: number,
+) {
+  if (objects.length < 4) return;
+  const [, wl2, wc1, wc2] = objects;
+
+  const matrix = wl1.calcTransformMatrix();
+  const local = (wl1 as any).calcLinePoints();
+  const p1 = fabricUtil.transformPoint({ x: local.x1, y: local.y1 }, matrix);
+  const p2 = fabricUtil.transformPoint({ x: local.x2, y: local.y2 }, matrix);
+
+  // wl1 sits at axis + normal*hw; derive axis by subtracting normal
+  const dx = p2.x - p1.x, dy = p2.y - p1.y;
+  const len = Math.sqrt(dx * dx + dy * dy) || 1;
+  const nx = -dy / len, ny = dx / len;
+  const hw = (wallThickness / 1000) * upm / 2;
+  const axisP1 = { x: p1.x - nx * hw, y: p1.y - ny * hw };
+  const axisP2 = { x: p2.x - nx * hw, y: p2.y - ny * hw };
+
+  const geo = wallGeometry(axisP1, axisP2, wallThickness, upm);
+  setFabricLineCoords(wl2, geo.l2p1.x, geo.l2p1.y, geo.l2p2.x, geo.l2p2.y);
+  setFabricLineCoords(wc1, geo.l1p1.x, geo.l1p1.y, geo.l2p1.x, geo.l2p1.y);
+  setFabricLineCoords(wc2, geo.l1p2.x, geo.l1p2.y, geo.l2p2.x, geo.l2p2.y);
+}
+
 /** Compute the four corner points for a wall-line given two endpoints, thickness in mm, and unitsPerMetre. */
 function wallGeometry(p1: WorldPoint, p2: WorldPoint, thicknessMm: number, upm: number) {
   const dx = p2.x - p1.x, dy = p2.y - p1.y;
@@ -177,6 +222,8 @@ export const InteractiveCanvas = ({
   const previewLabelRef = useRef<{ text: string; worldX: number; worldY: number; color: string } | null>(null);
   // Canvas objects for detected-opening overlay (separate from measurements)
   const openingOverlayObjectsRef = useRef<any[]>([]);
+  // Perpendicular-snap guide: rendered in after:render when drawing a wall-line
+  const perpSnapRef = useRef<{ from: WorldPoint; to: WorldPoint } | null>(null);
 
   // Always-current draw color — avoids stale closure in mouse callbacks
   const drawColorRef = useRef<string | undefined>(selectedColor);
@@ -682,6 +729,10 @@ export const InteractiveCanvas = ({
           const wl2 = new Line([geo.l2p1.x, geo.l2p1.y, geo.l2p2.x, geo.l2p2.y], { stroke: color, strokeWidth: strokeWidth * 1.5, selectable: false, evented: false });
           const wc1 = new Line([geo.l1p1.x, geo.l1p1.y, geo.l2p1.x, geo.l2p1.y], { stroke: color, strokeWidth, selectable: false, evented: false });
           const wc2 = new Line([geo.l1p2.x, geo.l1p2.y, geo.l2p2.x, geo.l2p2.y], { stroke: color, strokeWidth, selectable: false, evented: false });
+          (wl1 as any)._isWallPrimary = true;
+          (wl2 as any)._isWallSecondary = true;
+          (wc1 as any)._isWallSecondary = true;
+          (wc2 as any)._isWallSecondary = true;
           [wl1, wl2, wc1, wc2].forEach(l => canvas.add(l));
           measurementObjectsRef.current.set(measurement.id, [wl1, wl2, wc1, wc2]);
           shapeToMeasurementIdRef.current.set(wl1, measurement.id);
@@ -796,14 +847,19 @@ export const InteractiveCanvas = ({
     const canvas = fabricCanvasRef.current;
     if (!canvas) return;
 
-    const drawLabels = () => {
-      const ctx = (canvas as any).contextContainer as CanvasRenderingContext2D;
+    const drawLabels = (evt?: { ctx?: CanvasRenderingContext2D }) => {
+      // Use the event ctx so export (toCanvasElement) gets labels drawn to its off-screen
+      // canvas instead of the live display canvas. Falls back to contextContainer for
+      // normal after:render calls.
+      const ctx = (evt as any)?.ctx ?? ((canvas as any).contextContainer as CanvasRenderingContext2D);
       if (!ctx) return;
       const vt = canvas.viewportTransform || [1, 0, 0, 1, 0, 0];
       const zoom = vt[0] || 1;
       const panX = vt[4] || 0;
       const panY = vt[5] || 0;
-      const dpr = window.devicePixelRatio || 1;
+      // During export Fabric sets enableRetinaScaling=false (DPR=1). Using
+      // getRetinaScaling() instead of window.devicePixelRatio keeps the formula correct.
+      const dpr = (canvas as any).getRetinaScaling?.() ?? (window.devicePixelRatio || 1);
 
       // Draw in raw physical pixels (identity transform) to avoid Fabric 6 DPR/CSS
       // ambiguity: viewportTransform pan is in CSS pixels but ctx.setTransform(dpr)
@@ -974,6 +1030,20 @@ export const InteractiveCanvas = ({
         drawLabel(text, worldX, worldY, color);
       }
 
+      // Draw perpendicular-snap guide (dashed cyan line through the snapped endpoint)
+      const snapGuide = perpSnapRef.current;
+      if (snapGuide) {
+        ctx.save();
+        ctx.strokeStyle = '#22d3ee';
+        ctx.lineWidth = 1.5 * dpr;
+        ctx.setLineDash([6 * dpr, 4 * dpr]);
+        ctx.beginPath();
+        ctx.moveTo(tpx(snapGuide.from.x), tpy(snapGuide.from.y));
+        ctx.lineTo(tpx(snapGuide.to.x), tpy(snapGuide.to.y));
+        ctx.stroke();
+        ctx.restore();
+      }
+
       ctx.restore();
     };
 
@@ -1000,6 +1070,12 @@ export const InteractiveCanvas = ({
       objects.forEach(obj => {
         if (!obj || typeof obj.set !== 'function') return;
         if (obj.type === 'text' || obj.type === 'i-text') return;
+
+        // Wall companion lines are always non-interactive; only wl1 (_isWallPrimary) gets handles
+        if ((obj as any)._isWallSecondary) {
+          obj.set({ selectable: false, evented: false, hasControls: false, hasBorders: false });
+          return;
+        }
 
         if ((obj as any)._isCountMarker) {
           // Count markers: movable but NOT resizable
@@ -1125,12 +1201,30 @@ export const InteractiveCanvas = ({
         const p1 = fabricUtil.transformPoint({ x: localPts.x1, y: localPts.y1 }, matrix);
         const p2 = fabricUtil.transformPoint({ x: localPts.x2, y: localPts.y2 }, matrix);
 
-        const startPoint: WorldPoint = { x: p1.x, y: p1.y };
-        const endPoint: WorldPoint = { x: p2.x, y: p2.y };
+        const existingMeasurement = measurementMapRef.current.get(measurementId);
+        const isWallPrimary = (target as any)._isWallPrimary;
+
+        // For wall-lines wl1 sits at axis+normal*hw; derive axis to keep worldPoints
+        // as centerline coords (used by wallGeometry on restore).
+        let startPoint: WorldPoint;
+        let endPoint: WorldPoint;
+        if (isWallPrimary && (existingMeasurement as any)?.wallThickness) {
+          const dx = p2.x - p1.x, dy = p2.y - p1.y;
+          const len = Math.sqrt(dx * dx + dy * dy) || 1;
+          const nx = -dy / len, ny = dx / len;
+          const upm = effectiveUnits;
+          const hw = ((existingMeasurement as any).wallThickness / 1000) * upm / 2;
+          startPoint = { x: p1.x - nx * hw, y: p1.y - ny * hw };
+          endPoint   = { x: p2.x - nx * hw, y: p2.y - ny * hw };
+          // Sync companion objects immediately after commit
+          if (objects) syncWallCompanions(target, objects, (existingMeasurement as any).wallThickness, upm);
+        } else {
+          startPoint = { x: p1.x, y: p1.y };
+          endPoint   = { x: p2.x, y: p2.y };
+        }
+
         const result = calculateLinearWorld(startPoint, endPoint, effectiveUnits);
 
-        const existingMeasurement = measurementMapRef.current.get(measurementId);
-        const existingLabel = existingMeasurement?.label ?? '';
         // Wall/Door/Window keep empty labels so no text appears on canvas
         const mTypeForLabel = (existingMeasurement as any)?.measurementType as string | undefined;
         const isModLine = mTypeForLabel === 'Wall' || mTypeForLabel === 'Door' || mTypeForLabel === 'Window';
@@ -1248,6 +1342,35 @@ export const InteractiveCanvas = ({
       canvas.off('object:modified', handleObjectModified);
     };
   }, [onMeasurementUpdate, unitsPerMetre, isCalibrated]);
+
+  // Live sync of wall companion objects (wl2, cap1, cap2) while dragging wl1.
+  // Without this the 4 independent Fabric lines separate during a move/scale.
+  useEffect(() => {
+    const canvas = fabricCanvasRef.current;
+    if (!canvas) return;
+
+    const syncWall = (e: any) => {
+      const target = e.target;
+      if (!target || !(target as any)._isWallPrimary) return;
+      const measurementId = shapeToMeasurementIdRef.current.get(target);
+      if (!measurementId) return;
+      const objects = measurementObjectsRef.current.get(measurementId);
+      const measurement = measurementMapRef.current.get(measurementId);
+      if (!objects || !measurement) return;
+      const upm = unitsPerMetreRef.current || 1;
+      const thickness = (measurement as any).wallThickness ?? 90;
+      syncWallCompanions(target, objects, thickness, upm);
+      canvas.requestRenderAll();
+    };
+
+    canvas.on('object:moving', syncWall);
+    canvas.on('object:scaling', syncWall);
+
+    return () => {
+      canvas.off('object:moving', syncWall);
+      canvas.off('object:scaling', syncWall);
+    };
+  }, []);
 
   // Live measurement label during resize / move — updates previewLabelRef on every
   // object:scaling / object:moving frame so after:render draws the live value.
@@ -2142,7 +2265,48 @@ export const InteractiveCanvas = ({
         evented: false,
       });
     } else if (activeTool === 'wall-line') {
-      if (e.e.shiftKey) currentWorldPoint = snapEndpointToAngle(startPoint, currentWorldPoint, 45);
+      if (e.e.shiftKey) {
+        currentWorldPoint = snapEndpointToAngle(startPoint, currentWorldPoint, 45);
+        perpSnapRef.current = null;
+      } else {
+        // Perpendicular snap: check all existing wall measurements for a 90° alignment
+        perpSnapRef.current = null;
+        const measurements = measurementMapRef.current;
+        const SNAP_DEG = 8; // degrees tolerance for perp snap
+        let bestSnap: { snapped: WorldPoint; guideFrom: WorldPoint; guideTo: WorldPoint } | null = null;
+        let bestDelta = Infinity;
+        measurements.forEach((m) => {
+          if (!(m as any).wallThickness || m.worldPoints.length < 2) return;
+          const wA = m.worldPoints[0], wB = m.worldPoints[1];
+          const wallAngle = Math.atan2(wB.y - wA.y, wB.x - wA.x);
+          const perpAngle = wallAngle + Math.PI / 2;
+          // Try both perpendicular directions
+          [perpAngle, perpAngle + Math.PI].forEach(targetAngle => {
+            const curAngle = Math.atan2(currentWorldPoint.y - startPoint.y, currentWorldPoint.x - startPoint.x);
+            let delta = Math.abs(curAngle - targetAngle);
+            while (delta > Math.PI) delta = Math.abs(delta - 2 * Math.PI);
+            if (delta < (SNAP_DEG * Math.PI / 180) && delta < bestDelta) {
+              bestDelta = delta;
+              const dist = Math.hypot(currentWorldPoint.x - startPoint.x, currentWorldPoint.y - startPoint.y);
+              const snapped = {
+                x: startPoint.x + dist * Math.cos(targetAngle),
+                y: startPoint.y + dist * Math.sin(targetAngle),
+              };
+              // Guide line extends ±20% of canvas width along the perp direction
+              const guideLen = (canvas.getWidth() / (canvas.viewportTransform?.[0] || 1)) * 0.3;
+              bestSnap = {
+                snapped,
+                guideFrom: { x: snapped.x - Math.cos(targetAngle) * guideLen, y: snapped.y - Math.sin(targetAngle) * guideLen },
+                guideTo:   { x: snapped.x + Math.cos(targetAngle) * guideLen, y: snapped.y + Math.sin(targetAngle) * guideLen },
+              };
+            }
+          });
+        });
+        if (bestSnap) {
+          currentWorldPoint = (bestSnap as any).snapped;
+          perpSnapRef.current = { from: (bestSnap as any).guideFrom, to: (bestSnap as any).guideTo };
+        }
+      }
       const eu = unitsPerMetreRef.current;
       const geo = wallGeometry(startPoint, currentWorldPoint, wallThicknessRef.current, eu || 1);
       const wallColor = drawColorRef.current || '#f59e0b';
@@ -2296,6 +2460,7 @@ export const InteractiveCanvas = ({
     // Helper: abort drawing cleanly (clears preview label + ghost state)
     const abortDraw = () => {
       previewLabelRef.current = null;
+      perpSnapRef.current = null;
       canvas.requestRenderAll();
       setIsDrawing(false);
       setStartPoint(null);
@@ -2390,6 +2555,11 @@ export const InteractiveCanvas = ({
       const cap2 = new Line([geo.l1p2.x, geo.l1p2.y, geo.l2p2.x, geo.l2p2.y], {
         stroke: wallColor, strokeWidth, selectable: false, evented: false,
       });
+      // Tag so selectability loop only makes wl1 interactive
+      (wallLine1 as any)._isWallPrimary = true;
+      (wallLine2 as any)._isWallSecondary = true;
+      (cap1 as any)._isWallSecondary = true;
+      (cap2 as any)._isWallSecondary = true;
       [wallLine1, wallLine2, cap1, cap2].forEach(l => canvas.add(l));
 
       const measurementId = crypto.randomUUID();
@@ -2581,6 +2751,7 @@ export const InteractiveCanvas = ({
     }
 
     previewLabelRef.current = null;
+    perpSnapRef.current = null;
     setIsDrawing(false);
     setStartPoint(null);
     canvas.requestRenderAll();
