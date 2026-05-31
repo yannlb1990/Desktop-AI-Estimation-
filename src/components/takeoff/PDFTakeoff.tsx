@@ -704,6 +704,74 @@ export const PDFTakeoff = ({ projectId, estimateId, onAddCostItems }: PDFTakeoff
     }
   }, [state.measurements, dispatch]);
 
+  // Calibration overlay — floats above the canvas during manual calibration.
+  const calibrationBar = state.calibrationMode === 'manual' ? (
+    <div className="absolute top-3 left-1/2 -translate-x-1/2 z-40 flex items-center gap-2.5
+                    bg-gray-900/95 border border-blue-500/50 rounded-lg px-4 py-2.5
+                    shadow-2xl backdrop-blur-sm text-sm select-none pointer-events-auto">
+      <Ruler className="h-4 w-4 text-blue-400 shrink-0" />
+      {!manualCalibrationPoints ? (
+        calibInstructVisible ? (
+          <>
+            <span className="text-gray-300">Draw a line on any known dimension</span>
+            <button
+              onClick={handleCalibrationCancel}
+              className="ml-1 h-5 w-5 flex items-center justify-center rounded text-gray-500 hover:text-gray-200 hover:bg-gray-700 transition-colors"
+              title="Cancel"
+            >
+              <X className="h-3.5 w-3.5" />
+            </button>
+          </>
+        ) : null
+      ) : (
+        <>
+          <span className="text-gray-500 text-xs tabular-nums shrink-0">
+            {Math.hypot(
+              manualCalibrationPoints[1].x - manualCalibrationPoints[0].x,
+              manualCalibrationPoints[1].y - manualCalibrationPoints[0].y
+            ).toFixed(0)} px =
+          </span>
+          <input
+            autoFocus
+            type="number"
+            placeholder="0.0"
+            value={manualDistance}
+            onChange={e => setManualDistance(e.target.value)}
+            onKeyDown={e => { if (e.key === 'Enter') applyManualCalibration(); if (e.key === 'Escape') handleCalibrationCancel(); }}
+            className="w-20 h-7 text-sm bg-gray-800 border border-gray-600 rounded px-2 text-gray-100 focus:outline-none focus:border-blue-400"
+            min="0"
+            step="0.01"
+          />
+          <select
+            value={manualUnit}
+            onChange={e => setManualUnit(e.target.value as DistanceUnit)}
+            className="h-7 text-sm bg-gray-800 border border-gray-600 rounded px-1.5 text-gray-100 focus:outline-none focus:border-blue-400 cursor-pointer"
+          >
+            <option value="m">m</option>
+            <option value="mm">mm</option>
+            <option value="cm">cm</option>
+            <option value="ft">ft</option>
+            <option value="in">in</option>
+          </select>
+          <button
+            onClick={applyManualCalibration}
+            disabled={!manualDistance || parseFloat(manualDistance) <= 0}
+            className="px-3 h-7 bg-blue-600 hover:bg-blue-500 disabled:opacity-40 disabled:cursor-not-allowed text-white rounded text-xs font-medium transition-colors"
+          >
+            Apply
+          </button>
+          <button
+            onClick={handleCalibrationCancel}
+            className="h-5 w-5 flex items-center justify-center rounded text-gray-500 hover:text-gray-200 hover:bg-gray-700 transition-colors"
+            title="Cancel"
+          >
+            <X className="h-3.5 w-3.5" />
+          </button>
+        </>
+      )}
+    </div>
+  ) : null;
+
   // ── Fullscreen portal ───────────────────────────────────────────────────────
   const fullscreenPortal = isTakeoffFullscreen && state.pdfFile ? createPortal(
     <div className="fixed inset-0 z-[9999] bg-[#0f172a] text-white flex flex-col">
@@ -893,76 +961,6 @@ export const PDFTakeoff = ({ projectId, estimateId, onAddCostItems }: PDFTakeoff
     </div>,
     document.body
   ) : null;
-  // ────────────────────────────────────────────────────────────────────────────
-
-  // Calibration overlay — floats above the canvas during manual calibration.
-  const calibrationBar = state.calibrationMode === 'manual' ? (
-    <div className="absolute top-3 left-1/2 -translate-x-1/2 z-40 flex items-center gap-2.5
-                    bg-gray-900/95 border border-blue-500/50 rounded-lg px-4 py-2.5
-                    shadow-2xl backdrop-blur-sm text-sm select-none pointer-events-auto">
-      <Ruler className="h-4 w-4 text-blue-400 shrink-0" />
-      {!manualCalibrationPoints ? (
-        calibInstructVisible ? (
-          <>
-            <span className="text-gray-300">Draw a line on any known dimension</span>
-            <button
-              onClick={handleCalibrationCancel}
-              className="ml-1 h-5 w-5 flex items-center justify-center rounded text-gray-500 hover:text-gray-200 hover:bg-gray-700 transition-colors"
-              title="Cancel"
-            >
-              <X className="h-3.5 w-3.5" />
-            </button>
-          </>
-        ) : null
-      ) : (
-        <>
-          <span className="text-gray-500 text-xs tabular-nums shrink-0">
-            {Math.hypot(
-              manualCalibrationPoints[1].x - manualCalibrationPoints[0].x,
-              manualCalibrationPoints[1].y - manualCalibrationPoints[0].y
-            ).toFixed(0)} px =
-          </span>
-          <input
-            autoFocus
-            type="number"
-            placeholder="0.0"
-            value={manualDistance}
-            onChange={e => setManualDistance(e.target.value)}
-            onKeyDown={e => { if (e.key === 'Enter') applyManualCalibration(); if (e.key === 'Escape') handleCalibrationCancel(); }}
-            className="w-20 h-7 text-sm bg-gray-800 border border-gray-600 rounded px-2 text-gray-100 focus:outline-none focus:border-blue-400"
-            min="0"
-            step="0.01"
-          />
-          <select
-            value={manualUnit}
-            onChange={e => setManualUnit(e.target.value as DistanceUnit)}
-            className="h-7 text-sm bg-gray-800 border border-gray-600 rounded px-1.5 text-gray-100 focus:outline-none focus:border-blue-400 cursor-pointer"
-          >
-            <option value="m">m</option>
-            <option value="mm">mm</option>
-            <option value="cm">cm</option>
-            <option value="ft">ft</option>
-            <option value="in">in</option>
-          </select>
-          <button
-            onClick={applyManualCalibration}
-            disabled={!manualDistance || parseFloat(manualDistance) <= 0}
-            className="px-3 h-7 bg-blue-600 hover:bg-blue-500 disabled:opacity-40 disabled:cursor-not-allowed text-white rounded text-xs font-medium transition-colors"
-          >
-            Apply
-          </button>
-          <button
-            onClick={handleCalibrationCancel}
-            className="h-5 w-5 flex items-center justify-center rounded text-gray-500 hover:text-gray-200 hover:bg-gray-700 transition-colors"
-            title="Cancel"
-          >
-            <X className="h-3.5 w-3.5" />
-          </button>
-        </>
-      )}
-    </div>
-  ) : null;
-
   return (
     <>
     {fullscreenPortal}
