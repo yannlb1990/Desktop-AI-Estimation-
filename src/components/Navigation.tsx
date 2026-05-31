@@ -10,8 +10,8 @@ const Navigation = () => {
   const [mobileOpen, setMobileOpen] = useState(false);
   const signedIn = isSignedIn();
 
-  const handleSignOut = () => {
-    localSignOut();
+  const handleSignOut = async () => {
+    await localSignOut();
     navigate("/");
   };
 

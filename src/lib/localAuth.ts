@@ -140,13 +140,11 @@ export function migrateUnscopedData(userEmail: string): void {
   }
 }
 
-export function localSignOut(): void {
-  // Wipe any leftover unscoped keys before signing out so the next user
-  // who signs in on this browser starts with a clean slate.
+export async function localSignOut(): Promise<void> {
   for (const key of LEGACY_KEYS) {
     localStorage.removeItem(key);
   }
-  supabase.auth.signOut();
+  await supabase.auth.signOut();
 }
 
 export function isSignedIn(): boolean {

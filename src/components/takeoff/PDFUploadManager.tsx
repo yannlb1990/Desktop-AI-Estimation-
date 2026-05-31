@@ -29,7 +29,8 @@ async function uploadToCloud(
     if (!session) return null; // not signed in — skip cloud upload
 
     const uid = session.user.id;
-    const path = `${uid}/${planId}.${ext}`;
+    const fileId = crypto.randomUUID();
+    const path = `${uid}/${fileId}.${ext}`;
 
     onProgress?.(30);
 

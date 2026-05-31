@@ -122,8 +122,8 @@ const Dashboard = () => {
   const localUser = getLocalUser();
   const { tourEnabled, toggleTour } = useTour();
 
-  const handleSignOut = () => {
-    localSignOut();
+  const handleSignOut = async () => {
+    await localSignOut();
     navigate("/");
   };
 

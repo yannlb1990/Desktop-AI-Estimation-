@@ -10,19 +10,17 @@ import { isSignedIn, getLocalUser, localSignOut } from "@/lib/localAuth";
 import { getSubscriptionStatus } from "@/lib/subscription";
 import { syncSubscriptionFromDB } from "@/lib/stripeCheckout";
 
-// Owner email is exempt from idle timeout — all other accounts are logged out after 30 min of inactivity
-const OWNER_EMAIL = import.meta.env.VITE_OWNER_EMAIL || ''
 const IDLE_MS = 30 * 60 * 1000
 
 const IdleGuard = () => {
   const navigate = useNavigate()
   useEffect(() => {
     const user = getLocalUser()
-    if (!user || user.email === OWNER_EMAIL) return
+    if (!user) return
     let t: ReturnType<typeof setTimeout>
     const reset = () => {
       clearTimeout(t)
-      t = setTimeout(() => { localSignOut(); navigate('/auth', { replace: true }) }, IDLE_MS)
+      t = setTimeout(async () => { await localSignOut(); navigate('/auth', { replace: true }) }, IDLE_MS)
     }
     const events = ['mousemove', 'mousedown', 'keydown', 'touchstart', 'scroll'] as const
     events.forEach(e => window.addEventListener(e, reset, { passive: true }))
