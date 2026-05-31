@@ -1,9 +1,19 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-};
+const ALLOWED_ORIGINS = [
+  "https://www.metricore.com.au",
+  "https://metricore.com.au",
+  "http://localhost:3001",
+  "http://localhost:8080",
+];
+
+function getCors(origin: string) {
+  const allowed = ALLOWED_ORIGINS.includes(origin) ? origin : ALLOWED_ORIGINS[0];
+  return {
+    "Access-Control-Allow-Origin": allowed,
+    "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+  };
+}
 
 const MATERIAL_SUPPLIERS: Record<string, { supplier: string; priceRange: string; url: string; description: string; benchmark: "low" | "medium" | "high" }[]> = {
   "timber_screws": [
@@ -34,8 +44,9 @@ const MATERIAL_SUPPLIERS: Record<string, { supplier: string; priceRange: string;
 };
 
 serve(async (req) => {
+  const cors = getCors(req.headers.get("origin") ?? "");
   if (req.method === 'OPTIONS') {
-    return new Response(null, { headers: corsHeaders });
+    return new Response(null, { headers: cors });
   }
 
   try {
@@ -77,7 +88,7 @@ serve(async (req) => {
           results: []
         }), {
           status: 402,
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          headers: { ...cors, 'Content-Type': 'application/json' },
         });
       }
       if (aiResponse.status === 429) {
@@ -87,7 +98,7 @@ serve(async (req) => {
           results: []
         }), {
           status: 429,
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          headers: { ...cors, 'Content-Type': 'application/json' },
         });
       }
       const errorText = await aiResponse.text();
@@ -115,7 +126,7 @@ serve(async (req) => {
           }
         ]
       }), {
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        headers: { ...cors, 'Content-Type': 'application/json' },
       });
     }
 
@@ -158,7 +169,7 @@ serve(async (req) => {
       needsClarification: false,
       results
     }), {
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      headers: { ...cors, 'Content-Type': 'application/json' },
     });
 
   } catch (error) {
@@ -170,7 +181,7 @@ serve(async (req) => {
       results: []
     }), {
       status: 500,
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      headers: { ...cors, 'Content-Type': 'application/json' },
     });
   }
 });

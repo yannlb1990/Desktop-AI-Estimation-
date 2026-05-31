@@ -1,25 +1,47 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-};
+const ALLOWED_ORIGINS = [
+  "https://www.metricore.com.au",
+  "https://metricore.com.au",
+  "http://localhost:3001",
+  "http://localhost:8080",
+];
+
+function corsHeaders(origin: string) {
+  const allowed = ALLOWED_ORIGINS.includes(origin) ? origin : ALLOWED_ORIGINS[0];
+  return {
+    "Access-Control-Allow-Origin": allowed,
+    "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+  };
+}
+
+function sanitizeDescription(input: unknown): string {
+  if (typeof input !== 'string') return '';
+  return input
+    .slice(0, 2000)
+    .replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, '')
+    .trim();
+}
 
 serve(async (req) => {
+  const origin = req.headers.get('origin') ?? '';
+  const cors = corsHeaders(origin);
+
   if (req.method === 'OPTIONS') {
-    return new Response(null, { headers: corsHeaders });
+    return new Response(null, { headers: cors });
   }
 
   try {
-    const { projectId, planDescription, analysisType } = await req.json();
+    const { projectId, planDescription: rawDescription, analysisType } = await req.json();
+    const planDescription = sanitizeDescription(rawDescription);
 
     const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
     if (!LOVABLE_API_KEY) {
       console.error("LOVABLE_API_KEY is not configured");
       return new Response(
         JSON.stringify({ error: "AI service not configured" }),
-        { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        { status: 500, headers: { ...cors, "Content-Type": "application/json" } }
       );
     }
 
@@ -27,7 +49,7 @@ serve(async (req) => {
     if (!authHeader) {
       return new Response(
         JSON.stringify({ error: "Missing authorization" }),
-        { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        { status: 401, headers: { ...cors, "Content-Type": "application/json" } }
       );
     }
 
@@ -41,7 +63,7 @@ serve(async (req) => {
     if (userError || !user) {
       return new Response(
         JSON.stringify({ error: "Unauthorized" }),
-        { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        { status: 401, headers: { ...cors, "Content-Type": "application/json" } }
       );
     }
 
@@ -62,7 +84,7 @@ Return structured data in JSON format with categories, items, quantities, and un
 
       userPrompt = `Analyze the following construction project and generate a detailed quantity takeoff:
 
-Project Description: ${planDescription}
+Project Description: <user_input>${planDescription}</user_input>
 
 Provide a comprehensive takeoff with:
 - Site preparation and earthworks
@@ -101,7 +123,7 @@ Provide pricing estimates considering:
 
       userPrompt = `Provide pricing estimates for the following project:
 
-Project: ${planDescription}
+Project: <user_input>${planDescription}</user_input>
 
 Generate realistic Australian pricing including:
 - Material costs (current market rates)
@@ -133,7 +155,7 @@ Identify potential compliance issues and provide recommendations.`;
 
       userPrompt = `Review this project for NCC/BCA compliance:
 
-Project: ${planDescription}
+Project: <user_input>${planDescription}</user_input>
 
 Check for:
 - Structural requirements
@@ -171,14 +193,14 @@ Return JSON with compliance items and recommendations.`;
       if (status === 429) {
         return new Response(
           JSON.stringify({ error: "Rate limit exceeded. Please try again in a moment." }),
-          { status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          { status: 429, headers: { ...cors, "Content-Type": "application/json" } }
         );
       }
       
       if (status === 402) {
         return new Response(
           JSON.stringify({ error: "AI credits exhausted. Please add credits to your workspace." }),
-          { status: 402, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          { status: 402, headers: { ...cors, "Content-Type": "application/json" } }
         );
       }
 
@@ -186,7 +208,7 @@ Return JSON with compliance items and recommendations.`;
       console.error("AI response error:", errorText);
       return new Response(
         JSON.stringify({ error: "AI analysis failed" }),
-        { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        { status: 500, headers: { ...cors, "Content-Type": "application/json" } }
       );
     }
 
@@ -213,7 +235,7 @@ Return JSON with compliance items and recommendations.`;
       console.error("Database error:", dbError);
       return new Response(
         JSON.stringify({ error: "Failed to save analysis" }),
-        { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        { status: 500, headers: { ...cors, "Content-Type": "application/json" } }
       );
     }
 
@@ -223,14 +245,14 @@ Return JSON with compliance items and recommendations.`;
         analysis: analysisResult,
         analysisId: analysis.id
       }),
-      { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      { headers: { ...cors, "Content-Type": "application/json" } }
     );
 
   } catch (error) {
     console.error("analyze-plan error:", error);
     return new Response(
       JSON.stringify({ error: error instanceof Error ? error.message : "Unknown error" }),
-      { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      { status: 500, headers: { ...cors, "Content-Type": "application/json" } }
     );
   }
 });

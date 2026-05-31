@@ -1,7 +1,32 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const RESEND_API_KEY = Deno.env.get("RESEND_API_KEY") ?? "";
 const FROM_EMAIL = "Metricore <noreply@metricore.com.au>";
+
+const ALLOWED_ORIGINS = [
+  "https://www.metricore.com.au",
+  "https://metricore.com.au",
+  "http://localhost:3001",
+  "http://localhost:8080",
+];
+
+function corsHeaders(origin: string) {
+  const allowed = ALLOWED_ORIGINS.includes(origin) ? origin : ALLOWED_ORIGINS[0];
+  return {
+    "Access-Control-Allow-Origin": allowed,
+    "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+  };
+}
+
+function he(s: unknown): string {
+  return String(s ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#x27;");
+}
 
 type EmailType =
   | "trial_ending"
@@ -17,13 +42,6 @@ interface EmailPayload {
   name?: string;
   data?: Record<string, any>;
 }
-
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
-};
-
-// ── Templates ─────────────────────────────────────────────────────────────────
 
 function buildHtml(subject: string, body: string): string {
   return `<!DOCTYPE html>
@@ -55,7 +73,7 @@ function buildHtml(subject: string, body: string): string {
 }
 
 function getTemplate(payload: EmailPayload): { subject: string; html: string } {
-  const name = payload.name || "there";
+  const name = he(payload.name || "there");
   const d = payload.data ?? {};
 
   switch (payload.type) {
@@ -79,11 +97,11 @@ function getTemplate(payload: EmailPayload): { subject: string; html: string } {
 
     case "trial_ending":
       return {
-        subject: `Your Metricore trial ends in ${d.daysLeft ?? 3} days`,
+        subject: `Your Metricore trial ends in ${he(d.daysLeft) ?? 3} days`,
         html: buildHtml("Trial ending soon", `
           <p>Hi ${name},</p>
-          <p>Your free trial ends in <strong>${d.daysLeft ?? 3} day${d.daysLeft !== 1 ? 's' : ''}</strong>. After that, you'll need an active subscription to keep accessing your projects and estimates.</p>
-          <p>Your selected plan: <span class="plan-badge">${d.planName ?? 'Pro'}</span></p>
+          <p>Your free trial ends in <strong>${he(d.daysLeft) ?? 3} day${d.daysLeft !== 1 ? 's' : ''}</strong>. After that, you'll need an active subscription to keep accessing your projects and estimates.</p>
+          <p>Your selected plan: <span class="plan-badge">${he(d.planName ?? 'Pro')}</span></p>
           <p>Subscribing takes less than 2 minutes — no data is lost when you upgrade.</p>
           <a href="https://www.metricore.com.au/pricing" class="cta">Subscribe now →</a>
           <p>– The Metricore Team</p>
@@ -104,17 +122,17 @@ function getTemplate(payload: EmailPayload): { subject: string; html: string } {
 
     case "payment_receipt":
       return {
-        subject: `Receipt — ${d.planName ?? 'Metricore'} subscription`,
+        subject: `Receipt — ${he(d.planName ?? 'Metricore')} subscription`,
         html: buildHtml("Payment receipt", `
           <p>Hi ${name},</p>
           <p>Thanks for subscribing to Metricore. Here's your receipt.</p>
-          <p class="amount">${d.amount ?? '$0.00'}</p>
-          <p><span class="plan-badge">${d.planName ?? 'Pro'}</span></p>
+          <p class="amount">${he(d.amount ?? '$0.00')}</p>
+          <p><span class="plan-badge">${he(d.planName ?? 'Pro')}</span></p>
           <p>
-            Plan: ${d.planName ?? 'Pro'}<br/>
-            Billing: ${d.billing ?? 'Monthly'}<br/>
-            Next payment: ${d.nextDate ?? 'N/A'}<br/>
-            Invoice ID: ${d.invoiceId ?? 'N/A'}
+            Plan: ${he(d.planName ?? 'Pro')}<br/>
+            Billing: ${he(d.billing ?? 'Monthly')}<br/>
+            Next payment: ${he(d.nextDate ?? 'N/A')}<br/>
+            Invoice ID: ${he(d.invoiceId ?? 'N/A')}
           </p>
           <a href="https://www.metricore.com.au/settings" class="cta">Manage subscription →</a>
           <p>– The Metricore Team</p>
@@ -133,37 +151,71 @@ function getTemplate(payload: EmailPayload): { subject: string; html: string } {
         `),
       };
 
-    case "quote_sent":
+    case "quote_sent": {
+      const replyEmail = he(d.replyEmail ?? '');
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      const safeReplyEmail = emailRegex.test(d.replyEmail ?? '') ? replyEmail : '';
       return {
-        subject: `Quote from ${d.companyName ?? 'your estimator'} — ${d.projectName ?? 'your project'}`,
+        subject: `Quote from ${he(d.companyName ?? 'your estimator')} — ${he(d.projectName ?? 'your project')}`,
         html: buildHtml("Quote ready", `
-          <p>Hi ${d.clientName ?? name},</p>
-          <p>You've received a quote from <strong>${d.companyName ?? 'your estimator'}</strong> for <strong>${d.projectName ?? 'your project'}</strong>.</p>
-          ${d.totalAmount ? `<p class="amount">${d.totalAmount}</p>` : ''}
+          <p>Hi ${he(d.clientName ?? (payload.name || 'there'))},</p>
+          <p>You've received a quote from <strong>${he(d.companyName ?? 'your estimator')}</strong> for <strong>${he(d.projectName ?? 'your project')}</strong>.</p>
+          ${d.totalAmount ? `<p class="amount">${he(d.totalAmount)}</p>` : ''}
           <p>Please review and get back to them directly.</p>
-          ${d.replyEmail ? `<a href="mailto:${d.replyEmail}" class="cta">Reply to estimator →</a>` : ''}
+          ${safeReplyEmail ? `<a href="mailto:${safeReplyEmail}" class="cta">Reply to estimator →</a>` : ''}
         `),
       };
+    }
 
     default:
       return { subject: "Metricore notification", html: buildHtml("Notification", `<p>Hi ${name},</p><p>You have a notification from Metricore.</p>`) };
   }
 }
 
-// ── Handler ───────────────────────────────────────────────────────────────────
-
 serve(async (req) => {
+  const origin = req.headers.get("origin") ?? "";
+  const cors = corsHeaders(origin);
+
   if (req.method === "OPTIONS") {
-    return new Response("ok", { headers: corsHeaders });
+    return new Response("ok", { headers: cors });
   }
 
   if (req.method !== "POST") {
-    return new Response("Method not allowed", { status: 405, headers: corsHeaders });
+    return new Response("Method not allowed", { status: 405, headers: cors });
   }
+
+  // ── Auth: accept service-role key (internal calls) or valid user JWT ────────
+  const authHeader = req.headers.get("Authorization");
+  if (!authHeader) {
+    return new Response(JSON.stringify({ error: "Unauthorized" }), {
+      status: 401, headers: { ...cors, "Content-Type": "application/json" },
+    });
+  }
+
+  const token = authHeader.replace(/^Bearer\s+/i, "");
+  const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
+  let isAuthorized = token === serviceRoleKey;
+
+  if (!isAuthorized) {
+    const supabase = createClient(
+      Deno.env.get("SUPABASE_URL") ?? "",
+      Deno.env.get("SUPABASE_ANON_KEY") ?? "",
+      { global: { headers: { Authorization: authHeader } } },
+    );
+    const { data: { user } } = await supabase.auth.getUser();
+    isAuthorized = !!user;
+  }
+
+  if (!isAuthorized) {
+    return new Response(JSON.stringify({ error: "Unauthorized" }), {
+      status: 401, headers: { ...cors, "Content-Type": "application/json" },
+    });
+  }
+  // ────────────────────────────────────────────────────────────────────────────
 
   if (!RESEND_API_KEY) {
     return new Response(JSON.stringify({ error: "RESEND_API_KEY not configured" }), {
-      status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      status: 500, headers: { ...cors, "Content-Type": "application/json" },
     });
   }
 
@@ -172,13 +224,14 @@ serve(async (req) => {
     payload = await req.json();
   } catch {
     return new Response(JSON.stringify({ error: "Invalid JSON body" }), {
-      status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      status: 400, headers: { ...cors, "Content-Type": "application/json" },
     });
   }
 
-  if (!payload.to || !payload.type) {
-    return new Response(JSON.stringify({ error: "Missing required fields: to, type" }), {
-      status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  if (!payload.to || !payload.type || !emailRegex.test(payload.to)) {
+    return new Response(JSON.stringify({ error: "Missing or invalid required fields: to, type" }), {
+      status: 400, headers: { ...cors, "Content-Type": "application/json" },
     });
   }
 
@@ -198,11 +251,11 @@ serve(async (req) => {
   if (!res.ok) {
     console.error("Resend error:", result);
     return new Response(JSON.stringify({ error: result }), {
-      status: res.status, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      status: res.status, headers: { ...cors, "Content-Type": "application/json" },
     });
   }
 
   return new Response(JSON.stringify({ success: true, id: result.id }), {
-    status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" },
+    status: 200, headers: { ...cors, "Content-Type": "application/json" },
   });
 });

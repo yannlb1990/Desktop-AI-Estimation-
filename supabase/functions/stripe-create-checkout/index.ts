@@ -2,10 +2,20 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import Stripe from "https://esm.sh/stripe@14.21.0";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
-};
+const ALLOWED_ORIGINS = [
+  "https://www.metricore.com.au",
+  "https://metricore.com.au",
+  "http://localhost:3001",
+  "http://localhost:8080",
+];
+
+function corsHeaders(origin: string) {
+  const allowed = ALLOWED_ORIGINS.includes(origin) ? origin : ALLOWED_ORIGINS[0];
+  return {
+    "Access-Control-Allow-Origin": allowed,
+    "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+  };
+}
 
 // Map plan:billing → Stripe Price ID (set as Edge Function secrets)
 const PRICE_IDS: Record<string, string | undefined> = {
@@ -18,15 +28,18 @@ const PRICE_IDS: Record<string, string | undefined> = {
 };
 
 serve(async (req) => {
+  const origin = req.headers.get("origin") ?? "";
+  const cors = corsHeaders(origin);
+
   if (req.method === "OPTIONS") {
-    return new Response(null, { headers: corsHeaders });
+    return new Response(null, { headers: cors });
   }
 
   try {
     // ── Auth ──────────────────────────────────────────────────────────────────
     const authHeader = req.headers.get("Authorization");
     if (!authHeader) {
-      return json({ error: "Unauthorized" }, 401);
+      return json({ error: "Unauthorized" }, 401, cors);
     }
 
     const supabaseUser = createClient(
@@ -37,19 +50,19 @@ serve(async (req) => {
 
     const { data: { user }, error: authError } = await supabaseUser.auth.getUser();
     if (authError || !user) {
-      return json({ error: "Unauthorized" }, 401);
+      return json({ error: "Unauthorized" }, 401, cors);
     }
 
     // ── Parse body ────────────────────────────────────────────────────────────
-    const { plan_id, billing_period, success_url, cancel_url } = await req.json();
+    const { plan_id, billing_period } = await req.json();
 
     if (!plan_id || !billing_period) {
-      return json({ error: "Missing plan_id or billing_period" }, 400);
+      return json({ error: "Missing plan_id or billing_period" }, 400, cors);
     }
 
     const priceId = PRICE_IDS[`${plan_id}:${billing_period}`];
     if (!priceId) {
-      return json({ error: `No Stripe price configured for ${plan_id}:${billing_period}. Set the secret STRIPE_PRICE_${plan_id.toUpperCase()}_${billing_period.toUpperCase()}.` }, 400);
+      return json({ error: `No Stripe price configured for ${plan_id}:${billing_period}. Set the secret STRIPE_PRICE_${plan_id.toUpperCase()}_${billing_period.toUpperCase()}.` }, 400, cors);
     }
 
     // ── Stripe ────────────────────────────────────────────────────────────────
@@ -85,15 +98,13 @@ serve(async (req) => {
       }
     }
 
-    const origin = req.headers.get("origin") ?? "https://metricore.com.au";
-
     const session = await stripe.checkout.sessions.create({
       customer: customerId,
       mode: "subscription",
       payment_method_types: ["card"],
       line_items: [{ price: priceId, quantity: 1 }],
-      success_url: success_url ?? `${origin}/checkout-success`,
-      cancel_url: cancel_url ?? `${origin}/pricing`,
+      success_url: "https://www.metricore.com.au/checkout-success",
+      cancel_url: "https://www.metricore.com.au/pricing",
       allow_promotion_codes: true,
       metadata: {
         user_id: user.id,
@@ -109,16 +120,16 @@ serve(async (req) => {
       },
     });
 
-    return json({ url: session.url });
+    return json({ url: session.url }, 200, cors);
   } catch (err) {
     console.error("stripe-create-checkout error:", err);
-    return json({ error: String(err) }, 500);
+    return json({ error: String(err) }, 500, cors);
   }
 });
 
-function json(body: unknown, status = 200) {
+function json(body: unknown, status = 200, cors: Record<string, string> = {}) {
   return new Response(JSON.stringify(body), {
     status,
-    headers: { ...corsHeaders, "Content-Type": "application/json" },
+    headers: { ...cors, "Content-Type": "application/json" },
   });
 }
