@@ -8,6 +8,7 @@ import { PDFFile } from '@/lib/takeoff/types';
 import { savePlanToLibrary } from '@/components/DocumentLibrary';
 import { cachePDF } from '@/lib/takeoff/pdfCache';
 import { supabase } from '@/integrations/supabase/client';
+import { renderDxfToBlob } from '@/lib/takeoff/dxfRenderer';
 
 interface PDFUploadManagerProps {
   projectId: string;
@@ -15,11 +16,12 @@ interface PDFUploadManagerProps {
   onError: (error: string) => void;
 }
 
-/** Upload a PDF/image to Supabase Storage and return its permanent public URL.
+/** Upload a blob/file to Supabase Storage and return its permanent public URL.
  *  Falls back gracefully if the bucket doesn't exist or the user is not signed in. */
 async function uploadToCloud(
-  file: File,
+  blob: Blob,
   planId: string,
+  ext: string,
   onProgress?: (pct: number) => void,
 ): Promise<string | null> {
   try {
@@ -27,15 +29,13 @@ async function uploadToCloud(
     if (!session) return null; // not signed in — skip cloud upload
 
     const uid = session.user.id;
-    const ext = file.name.split('.').pop() ?? 'pdf';
     const path = `${uid}/${planId}.${ext}`;
 
-    // Report ~30% while uploading
     onProgress?.(30);
 
     const { error } = await (supabase as any).storage
       .from('plan-pdfs')
-      .upload(path, file, { upsert: true, contentType: file.type });
+      .upload(path, blob, { upsert: true, contentType: blob.type || 'application/octet-stream' });
 
     if (error) {
       console.warn('[PDFUpload] Supabase Storage upload failed:', error.message);
@@ -67,8 +67,9 @@ export const PDFUploadManager = ({ projectId, onUploadComplete, onError }: PDFUp
 
   const validateFile = (file: File): string | null => {
     if (file.size > 50 * 1024 * 1024) return 'File size must be less than 50MB';
+    const isDxf = file.name.toLowerCase().endsWith('.dxf');
     const validTypes = ['application/pdf', 'image/png', 'image/jpeg', 'image/jpg'];
-    if (!validTypes.includes(file.type)) return 'File must be PDF, PNG, or JPG';
+    if (!isDxf && !validTypes.includes(file.type)) return 'File must be PDF, PNG, JPG, or DXF';
     return null;
   };
 
@@ -89,52 +90,71 @@ export const PDFUploadManager = ({ projectId, onUploadComplete, onError }: PDFUp
     setUploading(true);
     setUploadPct(5);
 
+    const isDxf = file.name.toLowerCase().endsWith('.dxf');
+
     try {
-      // Read once — reuse for pdfjs page count + IndexedDB cache + cloud upload
-      const arrayBuffer = await file.arrayBuffer();
-      setUploadPct(15);
+      if (isDxf) {
+        // ── DXF path ──────────────────────────────────────────────────────────
+        setUploadPct(15);
+        const { blob: pngBlob } = await renderDxfToBlob(file);
+        setUploadPct(40);
 
-      let pageCount = 1;
-      if (file.type === 'application/pdf') {
-        const pdfjsLib = await import('pdfjs-dist');
-        pdfjsLib.GlobalWorkerOptions.workerSrc = '/pdf.worker.min.mjs';
-        const pdf = await pdfjsLib.getDocument({ data: arrayBuffer.slice(0) }).promise;
-        pageCount = pdf.numPages;
+        const planId = `${file.name}_${file.size}`;
+
+        // Cache the rendered PNG bytes in IndexedDB so it survives navigation
+        const pngBuffer = await pngBlob.arrayBuffer();
+        await cachePDF(planId, pngBuffer, file.name, 1);
+        setUploadPct(55);
+
+        // Upload rendered PNG to Supabase (always .png regardless of .dxf source)
+        const cloudUrl = await uploadToCloud(pngBlob, planId, 'png', setUploadPct);
+        setCloudSaved(cloudUrl !== null);
+        setUploadPct(90);
+
+        if (currentBlobUrl.current) URL.revokeObjectURL(currentBlobUrl.current);
+        const blobUrl = URL.createObjectURL(pngBlob);
+        currentBlobUrl.current = blobUrl;
+        const urlToUse = cloudUrl ?? blobUrl;
+
+        toast.success(`DXF imported${cloudUrl ? ' · saved to cloud' : ''}`);
+        savePlanToLibrary(projectId, { planId, filename: file.name, uploadedAt: new Date().toISOString(), pageCount: 1 });
+        setUploadPct(100);
+        currentBlobUrl.current = cloudUrl ? null : blobUrl;
+        onUploadComplete({ file, url: urlToUse, name: file.name, pageCount: 1, planId });
+
+      } else {
+        // ── PDF / image path ──────────────────────────────────────────────────
+        const arrayBuffer = await file.arrayBuffer();
+        setUploadPct(15);
+
+        let pageCount = 1;
+        if (file.type === 'application/pdf') {
+          const pdfjsLib = await import('pdfjs-dist');
+          pdfjsLib.GlobalWorkerOptions.workerSrc = '/pdf.worker.min.mjs';
+          const pdf = await pdfjsLib.getDocument({ data: arrayBuffer.slice(0) }).promise;
+          pageCount = pdf.numPages;
+        }
+
+        const planId = `${file.name}_${file.size}`;
+        await cachePDF(planId, arrayBuffer, file.name, pageCount);
+        setUploadPct(25);
+
+        const ext = file.name.split('.').pop() ?? 'pdf';
+        const cloudUrl = await uploadToCloud(file, planId, ext, setUploadPct);
+        setCloudSaved(cloudUrl !== null);
+        setUploadPct(90);
+
+        if (currentBlobUrl.current) URL.revokeObjectURL(currentBlobUrl.current);
+        const blobUrl = URL.createObjectURL(file);
+        currentBlobUrl.current = blobUrl;
+        const urlToUse = cloudUrl ?? blobUrl;
+
+        toast.success(`Plan loaded — ${pageCount} page${pageCount > 1 ? 's' : ''}${cloudUrl ? ' · saved to cloud' : ''}`);
+        savePlanToLibrary(projectId, { planId, filename: file.name, uploadedAt: new Date().toISOString(), pageCount });
+        setUploadPct(100);
+        currentBlobUrl.current = cloudUrl ? null : blobUrl;
+        onUploadComplete({ file, url: urlToUse, name: file.name, pageCount, planId });
       }
-
-      // Stable identifier: name + byte size
-      const planId = `${file.name}_${file.size}`;
-
-      // 1. Persist to IndexedDB (instant local restore after navigation)
-      await cachePDF(planId, arrayBuffer, file.name, pageCount);
-      setUploadPct(25);
-
-      // 2. Upload to Supabase Storage for permanent cross-session URL
-      const cloudUrl = await uploadToCloud(file, planId, setUploadPct);
-      setCloudSaved(cloudUrl !== null);
-      setUploadPct(90);
-
-      // 3. Create blob URL for immediate display (no latency)
-      if (currentBlobUrl.current) URL.revokeObjectURL(currentBlobUrl.current);
-      const blobUrl = URL.createObjectURL(file);
-      currentBlobUrl.current = blobUrl;
-
-      // Use the permanent cloud URL if available — survives page refresh forever.
-      // Fall back to blob URL for the current session only.
-      const urlToUse = cloudUrl ?? blobUrl;
-
-      toast.success(`Plan loaded — ${pageCount} page${pageCount > 1 ? 's' : ''}${cloudUrl ? ' · saved to cloud' : ''}`);
-
-      savePlanToLibrary(projectId, {
-        planId,
-        filename: file.name,
-        uploadedAt: new Date().toISOString(),
-        pageCount,
-      });
-
-      setUploadPct(100);
-      currentBlobUrl.current = cloudUrl ? null : blobUrl; // cloud owns the URL now
-      onUploadComplete({ file, url: urlToUse, name: file.name, pageCount, planId });
     } catch (err) {
       const errorMsg = err instanceof Error ? err.message : 'Upload failed';
       setValidationError(errorMsg);
@@ -152,7 +172,7 @@ export const PDFUploadManager = ({ projectId, onUploadComplete, onError }: PDFUp
         <input
           type="file"
           id="pdf-upload"
-          accept=".pdf,.png,.jpg,.jpeg"
+          accept=".pdf,.png,.jpg,.jpeg,.dxf"
           onChange={handleFileSelect}
           className="hidden"
           disabled={uploading}
@@ -172,8 +192,8 @@ export const PDFUploadManager = ({ projectId, onUploadComplete, onError }: PDFUp
               <>
                 <Upload className="h-12 w-12 text-muted-foreground" />
                 <div>
-                  <p className="text-lg font-medium">Upload PDF or Image</p>
-                  <p className="text-sm text-muted-foreground mt-1">PDF, PNG, or JPG up to 50MB</p>
+                  <p className="text-lg font-medium">Upload Plan</p>
+                  <p className="text-sm text-muted-foreground mt-1">PDF, PNG, JPG, or DXF up to 50MB</p>
                 </div>
                 <Button type="button" variant="secondary">Choose File</Button>
               </>

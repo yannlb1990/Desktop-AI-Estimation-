@@ -164,6 +164,8 @@ interface InteractiveCanvasProps {
   wallThickness?: number;
   /** Called when the user clicks "Re-upload PDF" on the session-expired error screen. */
   onReupload?: () => void;
+  /** Original file name — used to choose between PDF.js and direct image loading. */
+  fileName?: string;
 }
 
 export const InteractiveCanvas = ({
@@ -189,6 +191,7 @@ export const InteractiveCanvas = ({
   canvasExportRef,
   wallThickness = 90,
   onReupload,
+  fileName,
 }: InteractiveCanvasProps) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -371,9 +374,52 @@ export const InteractiveCanvas = ({
     };
   }, [canvasExportRef, viewport, pageIndex]);
 
-  // Load PDF page
+  // Load PDF page (or raster image / DXF-converted PNG)
   useEffect(() => {
     if (!pdfUrl || !fabricCanvasRef.current) return;
+
+    const isImageFile = /\.(png|jpe?g|dxf)$/i.test(fileName ?? '');
+
+    // ── Image / DXF-rendered-PNG path ────────────────────────────────────────
+    if (isImageFile) {
+      const loadImage = async () => {
+        setIsLoading(true);
+        setError(null);
+        try {
+          const img = await FabricImage.fromURL(pdfUrl);
+          const imgW = (img.width ?? 1000);
+          const imgH = (img.height ?? 1000);
+
+          const pdfViewport: PDFViewportData = { width: imgW, height: imgH, scale: 1.0 };
+          setViewport(pdfViewport);
+          onViewportReady(pdfViewport);
+
+          img.set({ left: 0, top: 0, originX: 'left', originY: 'top', selectable: false, evented: false, objectCaching: false });
+
+          if (fabricCanvasRef.current) {
+            fabricCanvasRef.current.backgroundImage = img;
+            fabricCanvasRef.current.requestRenderAll();
+          }
+
+          if (!hasAutoFittedRef.current && containerRef.current) {
+            hasAutoFittedRef.current = true;
+            const cW = containerRef.current.clientWidth;
+            const cH = containerRef.current.clientHeight;
+            if (cW > 0 && cH > 0) {
+              const fitZoom = Math.min(cW / imgW, cH / imgH) * 0.95;
+              onTransformChange({ zoom: fitZoom, panX: (cW - imgW * fitZoom) / 2, panY: (cH - imgH * fitZoom) / 2 });
+            }
+          }
+          setIsLoading(false);
+        } catch (err) {
+          const msg = err instanceof Error ? err.message : String(err);
+          setError(`Failed to load image: ${msg}`);
+          setIsLoading(false);
+        }
+      };
+      loadImage();
+      return;
+    }
 
     const loadPDF = async () => {
       setIsLoading(true);
