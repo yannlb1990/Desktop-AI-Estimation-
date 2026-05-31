@@ -525,7 +525,10 @@ export const InteractiveCanvas = ({
         // errors, render failures — shows the real message so it's diagnosable.
         const isActuallyMissing = pdfUrl.startsWith('blob:') && (
           message.includes('Missing PDF') ||
-          message.toLowerCase().includes('failed to fetch')
+          message.toLowerCase().includes('failed to fetch') ||
+          message.toLowerCase().includes('invalid pdf structure') ||
+          message.toLowerCase().includes('invalid pdf') ||
+          message.toLowerCase().includes('unexpected server response')
         );
         setError(
           isActuallyMissing
