@@ -23,7 +23,7 @@ serve(async (req) => {
 
   try {
     const authHeader = req.headers.get("Authorization");
-    if (!authHeader) return json({ error: "Unauthorized" }, 401);
+    if (!authHeader) return json({ error: "Unauthorized" }, 401, cors);
 
     const supabaseUser = createClient(
       Deno.env.get("SUPABASE_URL") ?? "",
@@ -31,7 +31,7 @@ serve(async (req) => {
       { global: { headers: { Authorization: authHeader } } },
     );
     const { data: { user }, error: authError } = await supabaseUser.auth.getUser();
-    if (authError || !user) return json({ error: "Unauthorized" }, 401);
+    if (authError || !user) return json({ error: "Unauthorized" }, 401, cors);
 
     const supabaseAdmin = createClient(
       Deno.env.get("SUPABASE_URL") ?? "",
@@ -45,9 +45,9 @@ serve(async (req) => {
       .eq("user_id", user.id)
       .single();
 
-    if (subError || !sub) return json({ error: "No active subscription found" }, 404);
-    if (sub.status === "canceled") return json({ error: "Subscription is already canceled" }, 400);
-    if (!sub.stripe_subscription_id) return json({ error: "No Stripe subscription ID on record" }, 400);
+    if (subError || !sub) return json({ error: "No active subscription found" }, 404, cors);
+    if (sub.status === "canceled") return json({ error: "Subscription is already canceled" }, 400, cors);
+    if (!sub.stripe_subscription_id) return json({ error: "No Stripe subscription ID on record" }, 400, cors);
 
     const stripe = new Stripe(Deno.env.get("STRIPE_SECRET_KEY") ?? "", {
       apiVersion: "2024-06-20",
@@ -64,14 +64,14 @@ serve(async (req) => {
     // For now just return the period end so the UI can display it
     console.log(`Subscription set to cancel at period end for user ${user.id}: ${periodEnd}`);
 
-    return json({ success: true, cancel_at: periodEnd });
+    return json({ success: true, cancel_at: periodEnd }, 200, cors);
   } catch (err) {
     console.error("stripe-cancel-subscription error:", err);
-    return json({ error: String(err) }, 500);
+    return json({ error: String(err) }, 500, cors);
   }
 });
 
-function json(body: unknown, status = 200) {
+function json(body: unknown, status = 200, cors: Record<string, string> = {}) {
   return new Response(JSON.stringify(body), {
     status,
     headers: { ...cors, "Content-Type": "application/json" },

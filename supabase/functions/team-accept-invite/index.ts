@@ -22,7 +22,7 @@ serve(async (req) => {
 
   try {
     const authHeader = req.headers.get("Authorization");
-    if (!authHeader) return json({ error: "Unauthorized" }, 401);
+    if (!authHeader) return json({ error: "Unauthorized" }, 401, cors);
 
     const supabaseUser = createClient(
       Deno.env.get("SUPABASE_URL") ?? "",
@@ -30,7 +30,7 @@ serve(async (req) => {
       { global: { headers: { Authorization: authHeader } } },
     );
     const { data: { user }, error: authError } = await supabaseUser.auth.getUser();
-    if (authError || !user) return json({ error: "Unauthorized" }, 401);
+    if (authError || !user) return json({ error: "Unauthorized" }, 401, cors);
 
     const supabaseAdmin = createClient(
       Deno.env.get("SUPABASE_URL") ?? "",
@@ -46,7 +46,7 @@ serve(async (req) => {
       .single();
 
     if (inviteError || !invite) {
-      return json({ error: "No pending invite found for this account" }, 404);
+      return json({ error: "No pending invite found for this account" }, 404, cors);
     }
 
     const now = new Date().toISOString();
@@ -72,14 +72,14 @@ serve(async (req) => {
     );
 
     console.log(`Team invite accepted by ${user.email} for team ${invite.team_id}`);
-    return json({ success: true, team_id: invite.team_id });
+    return json({ success: true, team_id: invite.team_id }, 200, cors);
   } catch (err) {
     console.error("team-accept-invite error:", err);
-    return json({ error: String(err) }, 500);
+    return json({ error: String(err) }, 500, cors);
   }
 });
 
-function json(body: unknown, status = 200) {
+function json(body: unknown, status = 200, cors: Record<string, string> = {}) {
   return new Response(JSON.stringify(body), {
     status,
     headers: { ...cors, "Content-Type": "application/json" },
