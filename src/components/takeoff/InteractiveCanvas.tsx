@@ -162,6 +162,8 @@ interface InteractiveCanvasProps {
   /** Parent passes a ref; canvas fills `.current` with an `{ export }` handle. */
   canvasExportRef?: React.RefObject<{ export: () => void } | null>;
   wallThickness?: number;
+  /** Called when the user clicks "Re-upload PDF" on the session-expired error screen. */
+  onReupload?: () => void;
 }
 
 export const InteractiveCanvas = ({
@@ -186,6 +188,7 @@ export const InteractiveCanvas = ({
   onMeasurementSelect,
   canvasExportRef,
   wallThickness = 90,
+  onReupload,
 }: InteractiveCanvasProps) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -2878,7 +2881,14 @@ export const InteractiveCanvas = ({
       )}
       {error && (
         <div className="absolute inset-0 flex items-center justify-center bg-background/80 z-10">
-          <p className="text-destructive">{error}</p>
+          <div className="flex flex-col items-center gap-3 max-w-sm text-center px-6">
+            <p className="text-destructive text-sm">{error}</p>
+            {onReupload && error.includes('session expired') && (
+              <Button size="sm" onClick={onReupload}>
+                Re-upload PDF
+              </Button>
+            )}
+          </div>
         </div>
       )}
       {!isCalibrated && activeTool && activeTool !== 'pan' && (

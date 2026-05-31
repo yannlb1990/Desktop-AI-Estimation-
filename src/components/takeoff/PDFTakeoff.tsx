@@ -814,6 +814,11 @@ export const PDFTakeoff = ({ projectId, estimateId, onAddCostItems }: PDFTakeoff
           onMeasurementSelect={handleMeasurementSelect}
           canvasExportRef={canvasExportRef}
           wallThickness={wallThicknessMm}
+          onReupload={() => {
+            dispatch({ type: 'SET_PDF_FILE', payload: null as any });
+            setIsTakeoffFullscreen(false);
+            setActiveTab('upload');
+          }}
         />
       </div>
 
@@ -1239,6 +1244,10 @@ export const PDFTakeoff = ({ projectId, estimateId, onAddCostItems }: PDFTakeoff
                     onMeasurementSelect={handleMeasurementSelect}
                     canvasExportRef={canvasExportRef}
                     wallThickness={wallThicknessMm}
+                    onReupload={() => {
+                      dispatch({ type: 'SET_PDF_FILE', payload: null as any });
+                      setActiveTab('upload');
+                    }}
                   />
                 </div>
               </div>
