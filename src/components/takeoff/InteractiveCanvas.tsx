@@ -212,6 +212,9 @@ export const InteractiveCanvas = ({
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [viewport, setViewport] = useState<PDFViewportData | null>(null);
+  // Auto-dismiss tool hints after 3 s
+  const [hintVisible, setHintVisible] = useState(true);
+  const hintTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Track canvas objects by measurement ID for sync
   const measurementObjectsRef = useRef<Map<string, any[]>>(new Map());
@@ -230,10 +233,20 @@ export const InteractiveCanvas = ({
   const openingOverlayObjectsRef = useRef<any[]>([]);
   // Perpendicular-snap guide: rendered in after:render when drawing a wall-line
   const perpSnapRef = useRef<{ from: WorldPoint; to: WorldPoint } | null>(null);
+  // Last endpoint snapped to perpendicular — carried from mouse:move into mouse:up
+  const snappedWallEndRef = useRef<WorldPoint | null>(null);
 
   // Always-current draw color — avoids stale closure in mouse callbacks
   const drawColorRef = useRef<string | undefined>(selectedColor);
   useEffect(() => { drawColorRef.current = selectedColor; }, [selectedColor]);
+
+  // Reset and auto-dismiss hint banner whenever tool changes
+  useEffect(() => {
+    setHintVisible(true);
+    if (hintTimerRef.current) clearTimeout(hintTimerRef.current);
+    hintTimerRef.current = setTimeout(() => setHintVisible(false), 3000);
+    return () => { if (hintTimerRef.current) clearTimeout(hintTimerRef.current); };
+  }, [activeTool]);
 
   // Set of measurement IDs that are Wall/Door/Window markup — labels suppressed on canvas.
   // Stored as a ref so the after:render handler (registered once) can read it without stale closure.
@@ -2336,6 +2349,7 @@ export const InteractiveCanvas = ({
     } else if (activeTool === 'wall-line') {
       if (e.e.shiftKey) {
         currentWorldPoint = snapEndpointToAngle(startPoint, currentWorldPoint, 45);
+        snappedWallEndRef.current = null;
         perpSnapRef.current = null;
       } else {
         // Perpendicular snap: check all existing wall measurements for a 90° alignment
@@ -2373,7 +2387,10 @@ export const InteractiveCanvas = ({
         });
         if (bestSnap) {
           currentWorldPoint = (bestSnap as any).snapped;
+          snappedWallEndRef.current = (bestSnap as any).snapped;
           perpSnapRef.current = { from: (bestSnap as any).guideFrom, to: (bestSnap as any).guideTo };
+        } else {
+          snappedWallEndRef.current = null;
         }
       }
       const eu = unitsPerMetreRef.current;
@@ -2596,6 +2613,8 @@ export const InteractiveCanvas = ({
       onMeasurementComplete(measurement);
     } else if (activeTool === 'wall-line') {
       if (e.e.shiftKey) worldEndPoint = snapEndpointToAngle(startPoint, worldEndPoint, 45);
+      else if (snappedWallEndRef.current) worldEndPoint = snappedWallEndRef.current;
+      snappedWallEndRef.current = null;
 
       const minDist = 5 / transform.zoom;
       const dx0 = worldEndPoint.x - startPoint.x;
@@ -2821,6 +2840,7 @@ export const InteractiveCanvas = ({
 
     previewLabelRef.current = null;
     perpSnapRef.current = null;
+    snappedWallEndRef.current = null;
     setIsDrawing(false);
     setStartPoint(null);
     canvas.requestRenderAll();
@@ -2967,8 +2987,8 @@ export const InteractiveCanvas = ({
       )}
 
       {/* Polygon hint when drawing */}
-      {activeTool === 'polygon' && polygonPoints.length > 0 && polygonPoints.length < 3 && (
-        <div className="absolute bottom-4 left-1/2 transform -translate-x-1/2 bg-blue-500/90 text-white px-4 py-2 rounded-md text-sm font-medium z-10 shadow-lg">
+      {activeTool === 'polygon' && polygonPoints.length > 0 && polygonPoints.length < 3 && hintVisible && (
+        <div className="absolute bottom-4 left-1/2 transform -translate-x-1/2 bg-blue-500/90 text-white px-4 py-2 rounded-md text-sm font-medium z-10 shadow-lg transition-opacity duration-500">
           Click to add points ({polygonPoints.length}/3 minimum)
         </div>
       )}
@@ -3014,22 +3034,22 @@ export const InteractiveCanvas = ({
       )}
 
       {/* Count hint when tool is active */}
-      {activeTool === 'count' && countPoints.length === 0 && (
-        <div className="absolute bottom-4 left-1/2 transform -translate-x-1/2 bg-orange-500/90 text-white px-4 py-2 rounded-md text-sm font-medium z-10 shadow-lg">
+      {activeTool === 'count' && countPoints.length === 0 && hintVisible && (
+        <div className="absolute bottom-4 left-1/2 transform -translate-x-1/2 bg-orange-500/90 text-white px-4 py-2 rounded-md text-sm font-medium z-10 shadow-lg transition-opacity duration-500">
           Click to count items (toilets, windows, doors, etc.) - select type then click "Finish"
         </div>
       )}
 
       {/* Eraser hint */}
-      {activeTool === 'eraser' && (
-        <div className="absolute bottom-4 left-1/2 transform -translate-x-1/2 bg-red-500/90 text-white px-4 py-2 rounded-md text-sm font-medium z-10 shadow-lg">
+      {activeTool === 'eraser' && hintVisible && (
+        <div className="absolute bottom-4 left-1/2 transform -translate-x-1/2 bg-red-500/90 text-white px-4 py-2 rounded-md text-sm font-medium z-10 shadow-lg transition-opacity duration-500">
           Click on a measurement to delete it, or click empty space to delete last
         </div>
       )}
 
       {/* Select tool hint */}
-      {activeTool === 'select' && (
-        <div className="absolute bottom-4 left-1/2 transform -translate-x-1/2 bg-blue-600/90 text-white px-4 py-2 rounded-md text-sm font-medium z-10 shadow-lg">
+      {activeTool === 'select' && hintVisible && (
+        <div className="absolute bottom-4 left-1/2 transform -translate-x-1/2 bg-blue-600/90 text-white px-4 py-2 rounded-md text-sm font-medium z-10 shadow-lg transition-opacity duration-500">
           Click shapes to select - drag corners to resize, drag center to move
         </div>
       )}

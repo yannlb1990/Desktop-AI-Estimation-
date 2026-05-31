@@ -55,6 +55,8 @@ export const PDFTakeoff = ({ projectId, estimateId, onAddCostItems }: PDFTakeoff
   const [manualCalibrationPoints, setManualCalibrationPoints] = useState<[WorldPoint, WorldPoint] | null>(null);
   const [manualDistance, setManualDistance] = useState('');
   const [manualUnit, setManualUnit] = useState<DistanceUnit>('m');
+  const [calibInstructVisible, setCalibInstructVisible] = useState(true);
+  const calibInstructTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [pdfViewport, setPdfViewport] = useState<{ width: number; height: number } | null>(null);
   const [pageFilter, setPageFilter] = useState<number | 'all'>('all');
   const [showMagnifier, setShowMagnifier] = useState(false);
@@ -428,6 +430,20 @@ export const PDFTakeoff = ({ projectId, estimateId, onAddCostItems }: PDFTakeoff
     dispatch({ type: 'UPDATE_MEASUREMENT', payload: { id, updates } });
     toast.success('Measurement updated');
   }, [dispatch]);
+
+  // Auto-dismiss the "Draw a line…" calibration instruction after 5 s.
+  // Phase (b) — the distance input — is never auto-dismissed.
+  useEffect(() => {
+    if (state.calibrationMode === 'manual' && !manualCalibrationPoints) {
+      setCalibInstructVisible(true);
+      if (calibInstructTimerRef.current) clearTimeout(calibInstructTimerRef.current);
+      calibInstructTimerRef.current = setTimeout(() => setCalibInstructVisible(false), 5000);
+    } else {
+      if (calibInstructTimerRef.current) clearTimeout(calibInstructTimerRef.current);
+      setCalibInstructVisible(true); // always show phase (b)
+    }
+    return () => { if (calibInstructTimerRef.current) clearTimeout(calibInstructTimerRef.current); };
+  }, [state.calibrationMode, manualCalibrationPoints]);
 
   const handleFetchNCCCode = useCallback(async (id: string, area: string, materials: string[]) => {
     return await fetchNCCCode(area, materials);
@@ -886,16 +902,18 @@ export const PDFTakeoff = ({ projectId, estimateId, onAddCostItems }: PDFTakeoff
                     shadow-2xl backdrop-blur-sm text-sm select-none pointer-events-auto">
       <Ruler className="h-4 w-4 text-blue-400 shrink-0" />
       {!manualCalibrationPoints ? (
-        <>
-          <span className="text-gray-300">Draw a line on any known dimension</span>
-          <button
-            onClick={handleCalibrationCancel}
-            className="ml-1 h-5 w-5 flex items-center justify-center rounded text-gray-500 hover:text-gray-200 hover:bg-gray-700 transition-colors"
-            title="Cancel"
-          >
-            <X className="h-3.5 w-3.5" />
-          </button>
-        </>
+        calibInstructVisible ? (
+          <>
+            <span className="text-gray-300">Draw a line on any known dimension</span>
+            <button
+              onClick={handleCalibrationCancel}
+              className="ml-1 h-5 w-5 flex items-center justify-center rounded text-gray-500 hover:text-gray-200 hover:bg-gray-700 transition-colors"
+              title="Cancel"
+            >
+              <X className="h-3.5 w-3.5" />
+            </button>
+          </>
+        ) : null
       ) : (
         <>
           <span className="text-gray-500 text-xs tabular-nums shrink-0">
