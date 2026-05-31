@@ -1,5 +1,4 @@
-// eslint-disable-next-line @typescript-eslint/no-require-imports
-const DxfParser = require('dxf-parser');
+import DxfParser from 'dxf-parser';
 
 interface Vec2 { x: number; y: number }
 
