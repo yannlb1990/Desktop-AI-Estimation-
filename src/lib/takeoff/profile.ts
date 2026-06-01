@@ -1,4 +1,5 @@
 import { TRADE_OPTIONS } from './types';
+import { getUserStorageKey } from '@/lib/localAuth';
 
 export type ProjectType = 'residential' | 'commercial' | 'industrial';
 
@@ -7,7 +8,7 @@ export interface AppProfile {
   enabledTrades: string[];
 }
 
-const PROFILE_KEY = 'app_profile';
+const getProfileKey = () => getUserStorageKey('app_profile');
 
 export const PROJECT_TYPE_LABELS: Record<ProjectType, string> = {
   residential: 'Residential',
@@ -86,7 +87,7 @@ export const RATE_TRADE_TO_OPTION: Record<string, string> = {
 
 export function loadProfile(): AppProfile {
   try {
-    const raw = localStorage.getItem(PROFILE_KEY);
+    const raw = localStorage.getItem(getProfileKey());
     if (raw) {
       const parsed = JSON.parse(raw) as AppProfile;
       if (parsed.projectType && Array.isArray(parsed.enabledTrades)) return parsed;
@@ -96,5 +97,5 @@ export function loadProfile(): AppProfile {
 }
 
 export function saveProfile(profile: AppProfile): void {
-  localStorage.setItem(PROFILE_KEY, JSON.stringify(profile));
+  localStorage.setItem(getProfileKey(), JSON.stringify(profile));
 }

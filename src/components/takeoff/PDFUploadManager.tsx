@@ -97,7 +97,8 @@ export const PDFUploadManager = ({ projectId, onUploadComplete, onError }: PDFUp
       if (isDxf) {
         // ── DXF path ──────────────────────────────────────────────────────────
         setUploadPct(15);
-        const { blob: pngBlob } = await renderDxfToBlob(file);
+        const { blob: pngBlob, truncated } = await renderDxfToBlob(file);
+        if (truncated) console.warn(`DXF truncated to ${50_000} entities for rendering`);
         setUploadPct(40);
 
         const planId = `${file.name}_${file.size}`;

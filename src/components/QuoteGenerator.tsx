@@ -7,8 +7,9 @@ import { Textarea } from "@/components/ui/textarea"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Checkbox } from "@/components/ui/checkbox"
-import { FileText, Printer, X, Plus, Trash2, ChevronRight, Upload, RefreshCw, GripVertical, Pencil, Check, History, RotateCcw } from "lucide-react"
+import { FileText, Printer, X, Plus, Trash2, ChevronRight, Upload, RefreshCw, GripVertical, Pencil, Check, History, RotateCcw, BookmarkPlus } from "lucide-react"
 import { toast } from "sonner"
+import { saveQuoteToLibrary } from "@/components/DocumentLibrary"
 
 interface QuoteGeneratorProps {
   project: any
@@ -23,6 +24,7 @@ interface QuoteLine {
   unitPrice: number
   included: boolean
   fromEstimate: boolean
+  trade?: string
   isEditing?: boolean
 }
 
@@ -72,15 +74,18 @@ export const QuoteGenerator = ({ project, estimate }: QuoteGeneratorProps) => {
   const [open, setOpen] = useState(false)
   const [activeTab, setActiveTab] = useState("details")
   const logoInputRef = useRef<HTMLInputElement>(null)
+  // Declared early so the useEffect dependency array can reference it without TDZ error
+  const [absorbOverheads, setAbsorbOverheads] = useState(false)
 
-  // Auto-load estimate lines whenever the dialog opens
+  // Auto-load estimate lines whenever the dialog opens or pricing mode changes
   useEffect(() => {
     if (open) autoLoadEstimateLines()
-  }, [open])
+  }, [open, absorbOverheads])
 
   // Brand
   const brand = LOAD_BRAND()
   const [logoDataUrl, setLogoDataUrl] = useState<string>(brand.logo || "")
+  const [logoSize, setLogoSize] = useState<number>(brand.logoSize || 64)
   const [primaryColor, setPrimaryColor] = useState<string>(brand.primary || "#0f4c81")
   const [accentColor, setAccentColor] = useState<string>(brand.accent || "#f59e0b")
   const [companyTagline, setCompanyTagline] = useState<string>(brand.tagline || "")
@@ -123,28 +128,100 @@ export const QuoteGenerator = ({ project, estimate }: QuoteGeneratorProps) => {
     const projects: any[] = JSON.parse(localStorage.getItem(getUserStorageKey("local_projects")) || "[]")
     const proj = projects.find((p: any) => p.id === project?.id)
     const estimateItems: any[] = proj?.estimate_items || estimate?.estimate_items || []
-    return estimateItems.map((item: any) => {
+    // Use current labour rates saved by EstimateTemplate (falls back to stored item rate)
+    const cfgRates: Record<string, number> = proj?.estimate_config?.labourRates || {}
+    const cfgDefaultRate: number = proj?.estimate_config?.defaultLabourRate || 65
+
+    const lines: QuoteLine[] = []
+    let itemsSubtotal = 0
+
+    estimateItems.forEach((item: any) => {
       const qty = parseFloat(item.quantity) || 1
       const unitPrice = parseFloat(item.unit_price) || 0
       const labourHours = parseFloat(item.labour_hours) || 0
-      const labourRate = parseFloat(item.labour_rate) || 65
+      const labourRate = cfgRates[item.trade] || cfgDefaultRate || parseFloat(item.labour_rate) || 65
       const matWaste = (item.material_wastage_pct ?? 5) / 100
       const labWaste = (item.labour_wastage_pct ?? 10) / 100
       const markup = (item.markup_pct ?? 0) / 100
-      const matTotal = qty * unitPrice * (1 + matWaste)
+
+      let matTotal = qty * unitPrice * (1 + matWaste)
+      // Include confirmed related materials in this line's cost
+      if (Array.isArray(item.relatedMaterials)) {
+        item.relatedMaterials.forEach((rm: any) => {
+          if (rm.confirmed) matTotal += (rm.quantity || 0) * (rm.unit_price || 0)
+        })
+      }
+
       const labTotal = labourHours * labourRate * (1 + labWaste)
       const lineTotal = (matTotal + labTotal) * (1 + markup)
-      const lineUnitPrice = lineTotal / Math.max(qty, 1)
-      return {
+      itemsSubtotal += lineTotal
+
+      lines.push({
         id: item.id || crypto.randomUUID(),
         description: [item.scope_of_work, item.material_type].filter(Boolean).join(" — ") || item.trade || "Item",
         qty,
         unit: item.unit || "m²",
-        unitPrice: Math.round(lineUnitPrice * 100) / 100,
+        unitPrice: Math.round((lineTotal / Math.max(qty, 1)) * 100) / 100,
         included: true,
         fromEstimate: true,
+        trade: item.trade || "General",
+      })
+    })
+
+    // Consumable lines
+    const projConsumables: any[] = proj?.consumables || []
+    let consumablesSubtotal = 0
+    projConsumables.forEach((c: any) => {
+      const lineTotal = (c.quantity || 0) * (c.unit_price || 0)
+      if (lineTotal > 0) {
+        consumablesSubtotal += lineTotal
+        lines.push({
+          id: c.id || crypto.randomUUID(),
+          description: `Consumables — ${c.name}`,
+          qty: parseFloat(c.quantity) || 1,
+          unit: c.unit || "ea",
+          unitPrice: Math.round((c.unit_price || 0) * 100) / 100,
+          included: true,
+          fromEstimate: true,
+          trade: "Site Consumables",
+        })
       }
     })
+
+    const estimateTotals = proj?.estimate_totals
+    const linesBaseTotal = itemsSubtotal + consumablesSubtotal
+
+    if (absorbOverheads) {
+      // ── Absorbed mode: scale every line price so sum = estimate_totals.taxable ──
+      // Overheads/margin/supervision are baked into line prices — invisible to client
+      if (estimateTotals?.taxable && linesBaseTotal > 0) {
+        const scaleFactor = estimateTotals.taxable / linesBaseTotal
+        return lines.map(l => ({
+          ...l,
+          unitPrice: Math.round(l.unitPrice * scaleFactor * 100) / 100,
+        }))
+      }
+      return lines
+    }
+
+    // ── Default mode: show a separate "Overheads & Margin" line ──
+    if (estimateTotals?.taxable) {
+      const bridgeAmount = estimateTotals.taxable - linesBaseTotal
+      if (bridgeAmount > 0.01) {
+        lines.push({
+          id: "overhead-margin-bridge",
+          description: "Project Management, Site Overheads & Margin",
+          qty: 1,
+          unit: "item",
+          unitPrice: Math.round(bridgeAmount * 100) / 100,
+          included: true,
+          fromEstimate: true,
+          trade: "Project Costs",
+        })
+      }
+    }
+
+    return lines
   }
 
   // Silent auto-load on dialog open — preserve existing custom lines
@@ -228,14 +305,105 @@ export const QuoteGenerator = ({ project, estimate }: QuoteGeneratorProps) => {
   }
 
   const saveBrand = () => {
-    const data = { logo: logoDataUrl, primary: primaryColor, accent: accentColor, tagline: companyTagline, companyName, abn: companyABN, acn: companyACN, licence: builderLicence, phone: companyPhone, email: companyEmail, address: companyAddress, liability: liabilityInsurance }
+    const data = { logo: logoDataUrl, logoSize, primary: primaryColor, accent: accentColor, tagline: companyTagline, companyName, abn: companyABN, acn: companyACN, licence: builderLicence, phone: companyPhone, email: companyEmail, address: companyAddress, liability: liabilityInsurance }
     localStorage.setItem(getUserStorageKey("quote_brand"), JSON.stringify(data))
     toast.success("Branding saved for all future quotes")
   }
 
   const handlePrint = () => {
-    window.print()
-    toast.success("Print dialog opened — choose 'Save as PDF'")
+    const el = document.getElementById('printable-quote')
+    if (!el) { toast.error("Content not found"); return }
+    // Clone and force full-width inline styles so Tailwind's max-w-[780px] / mx-auto don't create side margins
+    const clone = el.cloneNode(true) as HTMLElement
+    clone.style.cssText = 'width:100%!important;max-width:none!important;margin:0!important;padding:0!important;box-shadow:none!important;border-radius:0!important;'
+    const cssLinks = Array.from(document.querySelectorAll('link[rel="stylesheet"]'))
+      .map((l) => `<link rel="stylesheet" href="${(l as HTMLLinkElement).href}">`)
+      .join('\n')
+    const win = window.open('', '_blank', 'width=900,height=700')
+    if (!win) { toast.error("Pop-ups blocked — allow pop-ups and try again"); return }
+    const projectName = project?.name || 'Quote'
+    const dateStr = today.toLocaleDateString("en-AU", { day: "2-digit", month: "2-digit", year: "numeric" }).replace(/\//g, "-")
+    const docTitle = `${quoteNumber} - ${companyName} - ${projectName} - ${dateStr}`
+    const safeTitle = docTitle.replace(/'/g, "\\'")
+    const html = `<!DOCTYPE html>
+<html style="color-scheme:light"><head>
+<meta charset="utf-8">
+<title>${docTitle}</title>
+${cssLinks}
+<style>
+@page{size:A4;margin:0}
+*{-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important;box-sizing:border-box;word-wrap:break-word;overflow-wrap:break-word}
+html{color-scheme:light!important}
+body{margin:0!important;padding:0!important;width:210mm!important;background:#fff!important;color-scheme:light!important}
+#printable-quote{width:100%!important;max-width:none!important;padding:0!important;margin:0!important;box-shadow:none!important;border-radius:0!important}
+#printable-quote img{max-width:100%!important;height:auto}
+#printable-quote table{width:100%!important;table-layout:fixed!important}
+#printable-quote td,#printable-quote th{word-break:break-word!important}
+#printable-quote section{break-inside:avoid}
+#printable-quote tr{break-inside:avoid}
+</style>
+</head><body>
+${clone.outerHTML}
+<script>
+(function(){
+  var done=false;
+  function doPrint(){
+    if(done)return;
+    done=true;
+    document.title='${safeTitle}';
+    window.print();
+    window.addEventListener('afterprint',function(){window.close();},{once:true});
+  }
+  if(document.readyState==='complete'){
+    setTimeout(doPrint,600);
+  } else {
+    window.addEventListener('load',function(){setTimeout(doPrint,600);},{once:true});
+  }
+})();
+` + `</script>
+</body></html>`
+    win.document.write(html)
+    win.document.close()
+    toast.success("Print window opened — choose 'Save as PDF'")
+  }
+
+  const handleSaveToLibrary = () => {
+    if (!project?.id) return
+    if (includedLines.length === 0) {
+      toast.error("Add at least one line before saving to library")
+      return
+    }
+    saveQuoteToLibrary(project.id, {
+      name: `Quote ${quoteNumber}`,
+      quoteNumber,
+      totalIncGST: totalIncGst,
+      subtotal: subtotalNum,
+      itemCount: includedLines.length,
+      lines: quoteLines,
+      brand: {},
+      companyName,
+      companyABN,
+      companyPhone,
+      companyEmail,
+      companyAddress,
+      builderLicence,
+      liabilityInsurance,
+      primaryColor,
+      accentColor,
+      logoDataUrl,
+      inclusions,
+      exclusions,
+      terms,
+      scopeNotes,
+      depositPct,
+      progressPct,
+      finalPct,
+      validityDays,
+      projectName: project?.name || "",
+      clientName: project?.client_name || "",
+      siteAddress: project?.site_address || "",
+    })
+    toast.success(`Quote saved to Document Library — ${au$(totalIncGst)}`)
   }
 
   // Version history
@@ -296,6 +464,9 @@ export const QuoteGenerator = ({ project, estimate }: QuoteGeneratorProps) => {
                 <Button variant="outline" size="sm" onClick={saveVersion} disabled={quoteLines.length === 0}>
                   <History className="mr-1.5 h-3.5 w-3.5" />Save Version
                 </Button>
+                <Button variant="outline" size="sm" onClick={handleSaveToLibrary} disabled={includedLines.length === 0}>
+                  <BookmarkPlus className="mr-1.5 h-3.5 w-3.5" />Save to Library
+                </Button>
                 <Button onClick={handlePrint} className="bg-accent text-accent-foreground hover:bg-accent/90">
                   <Printer className="mr-2 h-4 w-4" />Print / Save PDF
                 </Button>
@@ -327,7 +498,25 @@ export const QuoteGenerator = ({ project, estimate }: QuoteGeneratorProps) => {
                     }
                   </div>
                   <input ref={logoInputRef} type="file" accept="image/png,image/jpeg,image/svg+xml" className="hidden" onChange={handleLogoUpload} />
-                  {logoDataUrl && <Button variant="outline" size="sm" className="w-full text-xs h-7" onClick={() => setLogoDataUrl("")}>Remove Logo</Button>}
+                  {logoDataUrl && (
+                    <>
+                      <Button variant="outline" size="sm" className="w-full text-xs h-7" onClick={() => setLogoDataUrl("")}>Remove Logo</Button>
+                      <div className="space-y-1">
+                        <div className="flex justify-between items-center">
+                          <Label className="text-xs">Logo Size</Label>
+                          <span className="text-xs text-muted-foreground font-mono">{logoSize}px</span>
+                        </div>
+                        <input
+                          type="range"
+                          min={32}
+                          max={160}
+                          value={logoSize}
+                          onChange={e => setLogoSize(Number(e.target.value))}
+                          className="w-full h-2 accent-primary cursor-pointer"
+                        />
+                      </div>
+                    </>
+                  )}
 
                   <p className="text-xs text-muted-foreground font-medium uppercase tracking-wide pt-2">Colour Scheme</p>
                   <div className="grid grid-cols-2 gap-3">
@@ -394,6 +583,29 @@ export const QuoteGenerator = ({ project, estimate }: QuoteGeneratorProps) => {
                 {/* Lines tab */}
                 <TabsContent value="lines" className="space-y-3 mt-0">
 
+                  {/* Pricing mode toggle */}
+                  <div
+                    className={`rounded-lg border p-3 cursor-pointer transition-colors select-none ${absorbOverheads ? "border-primary/60 bg-primary/5" : "border-border bg-muted/20"}`}
+                    onClick={() => setAbsorbOverheads(v => !v)}
+                  >
+                    <div className="flex items-center justify-between gap-3">
+                      <div>
+                        <p className="text-xs font-semibold text-foreground">
+                          {absorbOverheads ? "All-inclusive pricing" : "Itemised pricing"}
+                        </p>
+                        <p className="text-xs text-muted-foreground mt-0.5">
+                          {absorbOverheads
+                            ? "Overheads & margin absorbed into each line price — client sees clean trade rates only"
+                            : "Overheads & margin shown as a separate line — transparent cost breakdown"}
+                        </p>
+                      </div>
+                      {/* Toggle pill */}
+                      <div className={`relative flex-shrink-0 w-10 h-5 rounded-full transition-colors ${absorbOverheads ? "bg-primary" : "bg-muted-foreground/30"}`}>
+                        <span className={`absolute top-0.5 h-4 w-4 rounded-full bg-white shadow transition-transform ${absorbOverheads ? "translate-x-5" : "translate-x-0.5"}`} />
+                      </div>
+                    </div>
+                  </div>
+
                   {/* Action buttons — always visible */}
                   <div className="grid grid-cols-2 gap-2">
                     <button
@@ -426,8 +638,22 @@ export const QuoteGenerator = ({ project, estimate }: QuoteGeneratorProps) => {
                         <button className="underline hover:text-foreground" onClick={() => toggleAll(false)}>All off</button>
                       </div>
 
-                      <div className="space-y-1.5">
-                        {quoteLines.map(line => (
+                      <div className="space-y-3">
+                        {(() => {
+                          const tradeOrder: string[] = []
+                          const tradeGroups: Record<string, QuoteLine[]> = {}
+                          quoteLines.forEach(line => {
+                            const t = line.trade || (line.fromEstimate ? "General" : "Manual")
+                            if (!tradeGroups[t]) { tradeGroups[t] = []; tradeOrder.push(t) }
+                            tradeGroups[t].push(line)
+                          })
+                          return tradeOrder.map(trade => (
+                            <div key={`grp-${trade}`}>
+                              <div className="px-2 py-1 mb-1.5 text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
+                                {trade}
+                              </div>
+                              <div className="space-y-1.5">
+                                {tradeGroups[trade].map(line => (
                           <div key={line.id} className={`rounded-lg border text-xs transition-colors ${line.included ? "bg-background" : "bg-muted/30 opacity-55"}`}>
                             {editingLineId === line.id ? (
                               /* ── EDIT MODE ── */
@@ -485,7 +711,7 @@ export const QuoteGenerator = ({ project, estimate }: QuoteGeneratorProps) => {
                                 <div className="flex-1 min-w-0">
                                   <div className="font-medium truncate leading-tight">{line.description}</div>
                                   <div className="flex items-center gap-1.5 mt-0.5 text-muted-foreground text-[11px] font-mono flex-wrap">
-                                    <span>{line.qty} {line.unit}</span>
+                                    <span>{Number(line.qty).toFixed(1)} {line.unit}</span>
                                     <span>×</span>
                                     <span>{au$(line.unitPrice)}</span>
                                     <span>=</span>
@@ -504,7 +730,11 @@ export const QuoteGenerator = ({ project, estimate }: QuoteGeneratorProps) => {
                               </div>
                             )}
                           </div>
-                        ))}
+                                ))}
+                              </div>
+                            </div>
+                          ))
+                        })()}
                       </div>
 
                       <div className="pt-2 border-t space-y-1 text-xs font-mono">
@@ -621,7 +851,7 @@ export const QuoteGenerator = ({ project, estimate }: QuoteGeneratorProps) => {
                 <div style={{ background: headerGradient }} className="p-10 text-white">
                   <div className="flex justify-between items-start">
                     <div className="flex items-center gap-4">
-                      {logoDataUrl && <img src={logoDataUrl} alt="Logo" className="h-16 w-auto object-contain bg-white/10 rounded-lg p-2" />}
+                      {logoDataUrl && <img src={logoDataUrl} alt="Logo" style={{ height: logoSize + 'px' }} className="w-auto object-contain bg-white/10 rounded-lg p-2" />}
                       <div>
                         <div className="text-xs uppercase tracking-widest mb-1" style={{ color: accentColor }}>Quotation</div>
                         <h1 className="text-2xl font-bold">{companyName}</h1>
@@ -696,15 +926,44 @@ export const QuoteGenerator = ({ project, estimate }: QuoteGeneratorProps) => {
                           </tr>
                         </thead>
                         <tbody>
-                          {includedLines.map((line, i) => (
-                            <tr key={line.id} className={i % 2 === 1 ? "bg-gray-50/60" : ""}>
-                              <td className="py-2.5 px-3 text-gray-800 border-b border-gray-100">{line.description}</td>
-                              <td className="py-2.5 px-3 text-right text-gray-600 border-b border-gray-100 font-mono text-xs">{line.qty}</td>
-                              <td className="py-2.5 px-3 text-right text-gray-500 border-b border-gray-100 text-xs">{line.unit}</td>
-                              <td className="py-2.5 px-3 text-right text-gray-600 border-b border-gray-100 font-mono text-xs">{au$(line.unitPrice)}</td>
-                              <td className="py-2.5 px-3 text-right font-semibold border-b border-gray-100 font-mono text-xs" style={{ color: primaryColor }}>{au$(line.qty * line.unitPrice)}</td>
-                            </tr>
-                          ))}
+                          {(() => {
+                            const tradeOrder: string[] = []
+                            const tradeGroups: Record<string, typeof includedLines> = {}
+                            includedLines.forEach(line => {
+                              const t = line.trade || "General"
+                              if (!tradeGroups[t]) { tradeGroups[t] = []; tradeOrder.push(t) }
+                              tradeGroups[t].push(line)
+                            })
+                            return tradeOrder.map((trade, sectionIdx) => {
+                              const sectionLines = tradeGroups[trade]
+                              const sectionSubtotal = sectionLines.reduce((sum, l) => sum + l.qty * l.unitPrice, 0)
+                              return (
+                                <>
+                                  <tr key={`sec-${trade}`}>
+                                    <td colSpan={5} className="py-2 px-3 text-xs font-bold uppercase tracking-wide" style={{ background: primaryColor + "18", color: primaryColor }}>
+                                      {trade}
+                                    </td>
+                                  </tr>
+                                  {sectionLines.map((line, lineIdx) => (
+                                    <tr key={line.id} className={lineIdx % 2 === 1 ? "bg-gray-50/60" : ""}>
+                                      <td className="py-2.5 px-3 text-gray-800 border-b border-gray-100">
+                                        <span className="font-mono text-[10px] text-gray-400 mr-2">{sectionIdx + 1}.{String(lineIdx + 1).padStart(2, "0")}</span>
+                                        {line.description}
+                                      </td>
+                                      <td className="py-2.5 px-3 text-right text-gray-600 border-b border-gray-100 font-mono text-xs">{Number(line.qty).toFixed(1)}</td>
+                                      <td className="py-2.5 px-3 text-right text-gray-500 border-b border-gray-100 text-xs">{line.unit}</td>
+                                      <td className="py-2.5 px-3 text-right text-gray-600 border-b border-gray-100 font-mono text-xs">{au$(line.unitPrice)}</td>
+                                      <td className="py-2.5 px-3 text-right font-semibold border-b border-gray-100 font-mono text-xs" style={{ color: primaryColor }}>{au$(line.qty * line.unitPrice)}</td>
+                                    </tr>
+                                  ))}
+                                  <tr key={`sub-${trade}`}>
+                                    <td colSpan={4} className="py-1.5 px-3 text-right text-xs font-medium text-gray-400 italic">{trade} subtotal</td>
+                                    <td className="py-1.5 px-3 text-right font-mono text-xs font-semibold" style={{ color: primaryColor + "cc" }}>{au$(sectionSubtotal)}</td>
+                                  </tr>
+                                </>
+                              )
+                            })
+                          })()}
                         </tbody>
                         <tfoot>
                           <tr>
@@ -762,7 +1021,7 @@ export const QuoteGenerator = ({ project, estimate }: QuoteGeneratorProps) => {
                         <div className="w-1 h-6 rounded-full" style={{ background: primaryColor }} />
                         <h2 className="text-lg font-bold text-gray-900">Payment Schedule</h2>
                       </div>
-                      <div className="grid grid-cols-3 gap-4">
+                      <div className="payment-cards grid grid-cols-3 gap-4">
                         {[
                           { label: "Deposit", pct: depositPct, amount: depositAmount, note: "Due upon acceptance" },
                           { label: "Progress Payment", pct: progressPct, amount: progressAmount, note: "Due at practical completion stage" },
@@ -811,11 +1070,24 @@ export const QuoteGenerator = ({ project, estimate }: QuoteGeneratorProps) => {
                       <div className="w-1 h-6 rounded-full" style={{ background: primaryColor }} />
                       <h2 className="text-lg font-bold text-gray-900">Terms & Conditions</h2>
                     </div>
-                    <div className="text-xs text-gray-600 leading-relaxed whitespace-pre-line">{terms}</div>
+                    <ol className="list-none p-0 m-0 space-y-2">
+                      {terms.split(/\n(?=\d+\.)/).filter(Boolean).map((clause, i) => {
+                        const match = clause.match(/^(\d+)\.\s*([^:]+):\s*([\s\S]+)/)
+                        if (match) {
+                          return (
+                            <li key={i} className="flex gap-3 text-xs text-gray-600 leading-relaxed">
+                              <span className="flex-shrink-0 font-bold text-gray-800 w-5">{match[1]}.</span>
+                              <span><span className="font-semibold text-gray-800">{match[2]}:</span> {match[3].trim()}</span>
+                            </li>
+                          )
+                        }
+                        return <li key={i} className="text-xs text-gray-600 leading-relaxed">{clause.trim()}</li>
+                      })}
+                    </ol>
                   </section>}
 
                   {/* Acceptance */}
-                  <section className="border-2 rounded-xl p-6" style={{ borderColor: accentColor + "60" }}>
+                  <section className="acceptance-section border-2 rounded-xl p-6" style={{ borderColor: accentColor + "60" }}>
                     <div className="flex items-center gap-3 mb-3">
                       <div className="w-1 h-6 rounded-full" style={{ background: accentColor }} />
                       <h2 className="text-lg font-bold text-gray-900">Acceptance</h2>
@@ -860,14 +1132,6 @@ export const QuoteGenerator = ({ project, estimate }: QuoteGeneratorProps) => {
         </DialogContent>
       </Dialog>
 
-      <style>{`
-        @media print {
-          body * { visibility: hidden !important; }
-          #printable-quote, #printable-quote * { visibility: visible !important; }
-          #printable-quote { position: fixed; top: 0; left: 0; width: 100%; }
-          .no-print { display: none !important; }
-        }
-      `}</style>
     </>
   )
 }

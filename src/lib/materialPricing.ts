@@ -462,7 +462,7 @@ export function calculateSavings(
   const mostExpensive = matches[matches.length - 1];
   const savingsPerUnit = mostExpensive.basePrice - cheapest.basePrice;
   const totalSavings = savingsPerUnit * quantity;
-  const savingsPercent = (savingsPerUnit / mostExpensive.basePrice) * 100;
+  const savingsPercent = mostExpensive.basePrice > 0 ? (savingsPerUnit / mostExpensive.basePrice) * 100 : 0;
 
   return {
     cheapest,
@@ -488,6 +488,7 @@ export function analyzePriceTrend(material: MaterialPrice): {
   const oldest = sorted[0];
   const newest = sorted[sorted.length - 1];
 
+  if (oldest.price === 0) return { trend: 'stable', changePercent: 0, periodMonths: 0 };
   const changePercent = ((newest.price - oldest.price) / oldest.price) * 100;
   const periodMonths = Math.round(
     (newest.date.getTime() - oldest.date.getTime()) / (1000 * 60 * 60 * 24 * 30)

@@ -312,7 +312,7 @@ export const TakeoffTable = ({
 
         {/* Qty */}
         <div className="col-span-1 font-mono text-sm font-semibold">
-          {m.realValue.toFixed(0)} EA
+          {m.realValue.toFixed(0)} {getComputedValue(m).unit}
         </div>
 
         {/* Size */}

@@ -4,6 +4,7 @@
 import { ScaleCalibration, MeasuredLine, MeasuredArea } from './scaleCalibration';
 import { EstimatedLineItem, AUSTRALIAN_RATES } from './aiPlanAnalyzer';
 import { lookupMaterial } from './materialLookup';
+import { getUserStorageKey } from './localAuth';
 
 // Room types with their associated work items
 export type RoomType =
@@ -286,7 +287,7 @@ export function saveProjectToStorage(project: ProjectState): void {
   };
 
   // Save to localStorage
-  localStorage.setItem(`estimation-project-${project.id}`, JSON.stringify(projectData));
+  localStorage.setItem(getUserStorageKey(`estimation-project-${project.id}`), JSON.stringify(projectData));
 
   // Update project list
   const projectList = getProjectList();
@@ -305,12 +306,12 @@ export function saveProjectToStorage(project: ProjectState): void {
     projectList.push(summary);
   }
 
-  localStorage.setItem('estimation-projects', JSON.stringify(projectList));
+  localStorage.setItem(getUserStorageKey('estimation-projects'), JSON.stringify(projectList));
 }
 
 // Load project from localStorage
 export function loadProjectFromStorage(projectId: string): ProjectState | null {
-  const data = localStorage.getItem(`estimation-project-${projectId}`);
+  const data = localStorage.getItem(getUserStorageKey(`estimation-project-${projectId}`));
   if (!data) return null;
 
   try {
@@ -338,7 +339,7 @@ export interface ProjectSummary {
 }
 
 export function getProjectList(): ProjectSummary[] {
-  const data = localStorage.getItem('estimation-projects');
+  const data = localStorage.getItem(getUserStorageKey('estimation-projects'));
   if (!data) return [];
 
   try {
@@ -354,10 +355,10 @@ export function getProjectList(): ProjectSummary[] {
 
 // Delete a project
 export function deleteProject(projectId: string): void {
-  localStorage.removeItem(`estimation-project-${projectId}`);
+  localStorage.removeItem(getUserStorageKey(`estimation-project-${projectId}`));
 
   const projectList = getProjectList().filter(p => p.id !== projectId);
-  localStorage.setItem('estimation-projects', JSON.stringify(projectList));
+  localStorage.setItem(getUserStorageKey('estimation-projects'), JSON.stringify(projectList));
 }
 
 // Export project to JSON file

@@ -7,15 +7,16 @@ export type BillingPeriod = 'monthly' | 'annual';
 export interface Subscription {
   email: string;
   displayName: string;
-  // What they're on right now
   activePlan: PlanId | 'trial';
-  // What they chose at signup (billing target after trial)
   selectedPlan: PlanId;
   billingPeriod: BillingPeriod;
-  // Trial window
   trialStartedAt: string;  // ISO
   trialEndsAt: string;     // ISO
   subscribedAt?: string;
+  // Stripe payment status — set by syncSubscriptionFromDB
+  stripeStatus?: 'active' | 'past_due' | 'canceled';
+  // ISO timestamp when past_due was first detected (for 3-day grace period)
+  pastDueSince?: string;
 }
 
 // ── Prices (AUD, monthly base) ────────────────────────────────────────────────
@@ -128,19 +129,22 @@ export function createTrialSubscription(
 // ── Derived status ────────────────────────────────────────────────────────────
 export interface SubscriptionStatus {
   subscription: Subscription | null;
-  isActive: boolean;       // has any valid access
+  isActive: boolean;
   isTrialing: boolean;
   isTrialExpired: boolean;
   daysLeftInTrial: number;
-  effectivePlan: PlanId;   // what caps to apply (selectedPlan after trial)
+  effectivePlan: PlanId;
   caps: PlanCaps;
+  isPastDue: boolean;          // payment failed, within 3-day grace period
+  pastDueGraceDaysLeft: number; // days remaining in grace period (0 = grace expired)
 }
 
 export function getSubscriptionStatus(): SubscriptionStatus {
   const sub = loadSubscription();
 
+  const GRACE_MS = 3 * 86_400_000
+
   if (!sub) {
-    // No account — treat as expired trial (no access)
     return {
       subscription: null,
       isActive: false,
@@ -149,6 +153,8 @@ export function getSubscriptionStatus(): SubscriptionStatus {
       daysLeftInTrial: 0,
       effectivePlan: 'starter',
       caps: PLAN_CAPS.starter,
+      isPastDue: false,
+      pastDueGraceDaysLeft: 0,
     };
   }
 
@@ -156,13 +162,16 @@ export function getSubscriptionStatus(): SubscriptionStatus {
   const trialEnd = new Date(sub.trialEndsAt).getTime();
   const isTrialing = sub.activePlan === 'trial' && now < trialEnd;
   const isTrialExpired = sub.activePlan === 'trial' && now >= trialEnd;
-  const daysLeft = isTrialing
-    ? Math.ceil((trialEnd - now) / 86_400_000)
+  const daysLeft = isTrialing ? Math.ceil((trialEnd - now) / 86_400_000) : 0;
+
+  const isPastDue = sub.stripeStatus === 'past_due';
+  const pastDueSinceMs = isPastDue && sub.pastDueSince ? new Date(sub.pastDueSince).getTime() : 0;
+  const pastDueGraceDaysLeft = isPastDue
+    ? Math.max(0, Math.ceil((pastDueSinceMs + GRACE_MS - now) / 86_400_000))
     : 0;
 
-  // If subscribed to a paid plan use that; if trialing use Pro caps
   let effectivePlan: PlanId = sub.selectedPlan;
-  if (isTrialExpired) effectivePlan = 'starter'; // degraded to starter on expiry
+  if (isTrialExpired) effectivePlan = 'starter';
 
   const caps: PlanCaps =
     isTrialing ? TRIAL_CAPS
@@ -177,5 +186,7 @@ export function getSubscriptionStatus(): SubscriptionStatus {
     daysLeftInTrial: daysLeft,
     effectivePlan,
     caps,
+    isPastDue,
+    pastDueGraceDaysLeft,
   };
 }

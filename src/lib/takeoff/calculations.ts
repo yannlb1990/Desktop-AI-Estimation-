@@ -83,9 +83,10 @@ export function calculateLinearWorld(
   p2: WorldPoint,
   unitsPerMetre: number
 ): { worldValue: number; realValue: number; unit: 'LM' } {
+  if (unitsPerMetre <= 0) return { worldValue: 0, realValue: 0, unit: 'LM' };
   const worldDistance = Math.hypot(p2.x - p1.x, p2.y - p1.y);
   const realMetres = worldDistance / unitsPerMetre;
-  
+
   return {
     worldValue: worldDistance,
     realValue: realMetres,
@@ -101,11 +102,12 @@ export function calculateRectangleAreaWorld(
   p2: WorldPoint,
   unitsPerMetre: number
 ): { worldValue: number; realValue: number; unit: 'M2'; dimensions: { width: number; height: number } } {
+  if (unitsPerMetre <= 0) return { worldValue: 0, realValue: 0, unit: 'M2', dimensions: { width: 0, height: 0 } };
   const width = Math.abs(p2.x - p1.x);
   const height = Math.abs(p2.y - p1.y);
   const worldArea = width * height;
   const realArea = worldArea / (unitsPerMetre * unitsPerMetre);
-  
+
   return {
     worldValue: worldArea,
     realValue: realArea,
@@ -124,7 +126,7 @@ export function calculatePolygonAreaWorld(
   points: WorldPoint[],
   unitsPerMetre: number
 ): { worldValue: number; realValue: number; unit: 'M2' } {
-  if (points.length < 3) {
+  if (points.length < 3 || unitsPerMetre <= 0) {
     return { worldValue: 0, realValue: 0, unit: 'M2' };
   }
 
@@ -154,6 +156,7 @@ export function calculateCircleAreaWorld(
   edgePoint: WorldPoint,
   unitsPerMetre: number
 ): { worldValue: number; realValue: number; radiusMetres: number; unit: 'M2' } {
+  if (unitsPerMetre <= 0) return { worldValue: 0, realValue: 0, radiusMetres: 0, unit: 'M2' };
   const radiusWorld = Math.hypot(edgePoint.x - center.x, edgePoint.y - center.y);
   const radiusMetres = radiusWorld / unitsPerMetre;
   const realArea = Math.PI * radiusMetres * radiusMetres;

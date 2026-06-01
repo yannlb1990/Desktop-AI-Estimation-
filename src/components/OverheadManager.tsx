@@ -23,7 +23,7 @@ import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
 import { Plus, Trash2, Settings, Bookmark, BookmarkCheck, ChevronDown, ChevronRight } from "lucide-react";
 
-const TEMPLATES_KEY = "overhead_templates";
+const getTemplatesKey = () => getUserStorageKey("overhead_templates");
 
 interface OverheadTemplate {
   id: string;
@@ -35,10 +35,10 @@ interface OverheadTemplate {
 }
 
 const loadTemplates = (): OverheadTemplate[] => {
-  try { return JSON.parse(localStorage.getItem(TEMPLATES_KEY) || "[]"); } catch { return []; }
+  try { return JSON.parse(localStorage.getItem(getTemplatesKey()) || "[]"); } catch { return []; }
 };
 const saveTemplates = (tpls: OverheadTemplate[]) =>
-  localStorage.setItem(TEMPLATES_KEY, JSON.stringify(tpls));
+  localStorage.setItem(getTemplatesKey(), JSON.stringify(tpls));
 
 const OVERHEAD_CATEGORIES = [
   "Insurance",
@@ -66,7 +66,7 @@ interface OverheadManagerProps {
   projectId: string;
 }
 
-const storageKey = (projectId: string) => `overhead_items_${projectId}`;
+const storageKey = (projectId: string) => getUserStorageKey(`overhead_items_${projectId}`);
 
 const loadFromStorage = (projectId: string): OverheadItem[] => {
   try {

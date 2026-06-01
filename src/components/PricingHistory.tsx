@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { getUserStorageKey } from "@/lib/localAuth";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -27,7 +28,7 @@ interface PricingHistoryProps {
 
 function deriveHistoryFromLocalProjects(currentProjectId: string): PricingRecord[] {
   try {
-    const allProjects: any[] = JSON.parse(localStorage.getItem('local_projects') || '[]');
+    const allProjects: any[] = JSON.parse(localStorage.getItem(getUserStorageKey('local_projects')) || '[]');
     const aggregated: Record<string, PricingRecord> = {};
 
     allProjects
