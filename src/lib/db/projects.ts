@@ -5,6 +5,7 @@
  */
 import { supabase } from '@/integrations/supabase/client';
 import { getUserStorageKey } from '@/lib/localAuth';
+import { getSignedPlanUrl } from '@/lib/takeoff/signedPlanUrl';
 
 const LS_KEY = 'local_projects';
 
@@ -44,7 +45,8 @@ export async function syncProjectToSupabase(project: any, retries = 3): Promise<
     state: project.state ?? 'NSW',
     postcode: project.postcode ?? '0000',
     plan_file_name: project.plan_file_name ?? null,
-    plan_file_url: project.plan_file_url ?? null,
+    // Store the storage path (not a signed URL) so it can be re-signed on any load
+    plan_file_url: project.plan_file_path ?? project.plan_file_url ?? null,
     status: project.status ?? 'in_progress',
     quote_status: project.quoteStatus ?? null,
     due_date: project.due_date ?? null,
@@ -110,25 +112,36 @@ export async function loadProjectsFromSupabase(): Promise<any[]> {
 
     if (error || !data) return [];
 
-    return data.map((row: any) => ({
-      // Typed columns
-      id: row.id,
-      name: row.name,
-      client_name: row.client_name,
-      site_address: row.site_address,
-      address: row.address,
-      state: row.state,
-      postcode: row.postcode,
-      plan_file_name: row.plan_file_name,
-      plan_file_url: row.plan_file_url,
-      status: row.status,
-      quoteStatus: row.quote_status,
-      due_date: row.due_date,
-      created_at: row.created_at,
-      updated_at: row.updated_at,
-      // Embedded JSON fields
-      ...(row.data ?? {}),
-    }));
+    // Resolve storage paths → signed URLs in parallel before returning
+    const rows = data as any[];
+    const withUrls = await Promise.all(
+      rows.map(async (row: any) => {
+        const storedValue: string | null = row.plan_file_url ?? null;
+        // If it looks like a storage path (no scheme), sign it; otherwise leave as-is
+        const plan_file_url = storedValue
+          ? await getSignedPlanUrl(storedValue).catch(() => storedValue)
+          : null;
+        return {
+          id: row.id,
+          name: row.name,
+          client_name: row.client_name,
+          site_address: row.site_address,
+          address: row.address,
+          state: row.state,
+          postcode: row.postcode,
+          plan_file_name: row.plan_file_name,
+          plan_file_path: storedValue,  // raw path for re-signing
+          plan_file_url,                // signed (or legacy public) URL for display
+          status: row.status,
+          quoteStatus: row.quote_status,
+          due_date: row.due_date,
+          created_at: row.created_at,
+          updated_at: row.updated_at,
+          ...(row.data ?? {}),
+        };
+      })
+    );
+    return withUrls;
   } catch {
     return [];
   }

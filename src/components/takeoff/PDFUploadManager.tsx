@@ -9,6 +9,7 @@ import { savePlanToLibrary } from '@/components/DocumentLibrary';
 import { cachePDF } from '@/lib/takeoff/pdfCache';
 import { supabase } from '@/integrations/supabase/client';
 import { renderDxfToBlob } from '@/lib/takeoff/dxfRenderer';
+import { getSignedPlanUrl, invalidateSignedUrl } from '@/lib/takeoff/signedPlanUrl';
 
 interface PDFUploadManagerProps {
   projectId: string;
@@ -16,8 +17,9 @@ interface PDFUploadManagerProps {
   onError: (error: string) => void;
 }
 
-/** Upload a blob/file to Supabase Storage and return its permanent public URL.
- *  Falls back gracefully if the bucket doesn't exist or the user is not signed in. */
+/** Upload a blob/file to Supabase Storage and return the storage path.
+ *  Returns null if the user is not signed in or the upload fails.
+ *  Call getSignedPlanUrl(path) to get a usable URL. */
 async function uploadToCloud(
   blob: Blob,
   planId: string,
@@ -26,7 +28,7 @@ async function uploadToCloud(
 ): Promise<string | null> {
   try {
     const { data: { session } } = await supabase.auth.getSession();
-    if (!session) return null; // not signed in — skip cloud upload
+    if (!session) return null;
 
     const uid = session.user.id;
     const fileId = crypto.randomUUID();
@@ -44,9 +46,7 @@ async function uploadToCloud(
     }
 
     onProgress?.(80);
-
-    const { data } = (supabase as any).storage.from('plan-pdfs').getPublicUrl(path);
-    return data?.publicUrl ?? null;
+    return path;
   } catch (err) {
     console.warn('[PDFUpload] Cloud upload error:', err);
     return null;
@@ -109,20 +109,24 @@ export const PDFUploadManager = ({ projectId, onUploadComplete, onError }: PDFUp
         setUploadPct(55);
 
         // Upload rendered PNG to Supabase (always .png regardless of .dxf source)
-        const cloudUrl = await uploadToCloud(pngBlob, planId, 'png', setUploadPct);
-        setCloudSaved(cloudUrl !== null);
+        const cloudPath = await uploadToCloud(pngBlob, planId, 'png', setUploadPct);
+        setCloudSaved(cloudPath !== null);
         setUploadPct(90);
 
         if (currentBlobUrl.current) URL.revokeObjectURL(currentBlobUrl.current);
         const blobUrl = URL.createObjectURL(pngBlob);
         currentBlobUrl.current = blobUrl;
-        const urlToUse = cloudUrl ?? blobUrl;
 
-        toast.success(`DXF imported${cloudUrl ? ' · saved to cloud' : ''}`);
+        // If uploaded, get a signed URL for immediate use; fall back to blob URL
+        const signedUrl = cloudPath ? await getSignedPlanUrl(cloudPath) : null;
+        const urlToUse = signedUrl ?? blobUrl;
+
+        toast.success(`DXF imported${cloudPath ? ' · saved to cloud' : ''}`);
         savePlanToLibrary(projectId, { planId, filename: file.name, uploadedAt: new Date().toISOString(), pageCount: 1 });
         setUploadPct(100);
-        currentBlobUrl.current = cloudUrl ? null : blobUrl;
-        onUploadComplete({ file, url: urlToUse, name: file.name, pageCount: 1, planId });
+        currentBlobUrl.current = signedUrl ? null : blobUrl;
+        // Store path (not URL) in project so it can be re-signed later
+        onUploadComplete({ file, url: urlToUse, cloudPath: cloudPath ?? undefined, name: file.name, pageCount: 1, planId });
 
       } else {
         // ── PDF / image path ──────────────────────────────────────────────────
@@ -142,20 +146,22 @@ export const PDFUploadManager = ({ projectId, onUploadComplete, onError }: PDFUp
         setUploadPct(25);
 
         const ext = file.name.split('.').pop() ?? 'pdf';
-        const cloudUrl = await uploadToCloud(file, planId, ext, setUploadPct);
-        setCloudSaved(cloudUrl !== null);
+        const cloudPath = await uploadToCloud(file, planId, ext, setUploadPct);
+        setCloudSaved(cloudPath !== null);
         setUploadPct(90);
 
         if (currentBlobUrl.current) URL.revokeObjectURL(currentBlobUrl.current);
         const blobUrl = URL.createObjectURL(file);
         currentBlobUrl.current = blobUrl;
-        const urlToUse = cloudUrl ?? blobUrl;
 
-        toast.success(`Plan loaded — ${pageCount} page${pageCount > 1 ? 's' : ''}${cloudUrl ? ' · saved to cloud' : ''}`);
+        const signedUrl = cloudPath ? await getSignedPlanUrl(cloudPath) : null;
+        const urlToUse = signedUrl ?? blobUrl;
+
+        toast.success(`Plan loaded — ${pageCount} page${pageCount > 1 ? 's' : ''}${cloudPath ? ' · saved to cloud' : ''}`);
         savePlanToLibrary(projectId, { planId, filename: file.name, uploadedAt: new Date().toISOString(), pageCount });
         setUploadPct(100);
-        currentBlobUrl.current = cloudUrl ? null : blobUrl;
-        onUploadComplete({ file, url: urlToUse, name: file.name, pageCount, planId });
+        currentBlobUrl.current = signedUrl ? null : blobUrl;
+        onUploadComplete({ file, url: urlToUse, cloudPath: cloudPath ?? undefined, name: file.name, pageCount, planId });
       }
     } catch (err) {
       const errorMsg = err instanceof Error ? err.message : 'Upload failed';

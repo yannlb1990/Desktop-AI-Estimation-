@@ -51,6 +51,7 @@ import { AIPlanAnalyzerEnhanced } from "@/components/AIPlanAnalyzerEnhanced";
 import { DocumentLibrary } from "@/components/DocumentLibrary";
 import { FFEModule } from "@/components/ffe/FFEModule";
 import { syncProjectToSupabase } from "@/lib/db/projects";
+import { getSignedPlanUrl } from "@/lib/takeoff/signedPlanUrl";
 import { TourTip } from "@/components/TourTip";
 
 const ProjectDetail = () => {
@@ -63,6 +64,8 @@ const ProjectDetail = () => {
   const [dueDate, setDueDate] = useState<Date | undefined>();
   const [activeMainTab, setActiveMainTab] = useState("takeoff");
   const [showSuppliers, setShowSuppliers] = useState(false);
+  // Signed URL for plan display — refreshed whenever the plans tab is opened
+  const [activePlanUrl, setActivePlanUrl] = useState<string | null>(null);
 
   const preferredSuppliers: any[] = (() => {
     try { return JSON.parse(localStorage.getItem(getUserStorageKey("preferred_suppliers")) || "[]"); }
@@ -189,6 +192,15 @@ const ProjectDetail = () => {
 
       if (projectData.due_date) {
         setDueDate(new Date(projectData.due_date));
+      }
+
+      // Resolve plan URL: prefer freshly-signed URL from DB load, fall back to re-signing the path
+      if (projectData.plan_file_url) {
+        setActivePlanUrl(projectData.plan_file_url);
+      } else if (projectData.plan_file_path) {
+        getSignedPlanUrl(projectData.plan_file_path)
+          .then(url => { if (url) setActivePlanUrl(url); })
+          .catch(() => {});
       }
     } catch (error) {
       console.error("Error loading project:", error);
@@ -429,7 +441,18 @@ const ProjectDetail = () => {
           })}
         </div>
 
-        <Tabs value={activeMainTab} onValueChange={setActiveMainTab} className="space-y-6">
+        <Tabs
+          value={activeMainTab}
+          onValueChange={async (tab) => {
+            setActiveMainTab(tab);
+            // Refresh signed URL whenever the plans tab is opened
+            if (tab === 'plans' && project?.plan_file_path) {
+              const url = await getSignedPlanUrl(project.plan_file_path).catch(() => null);
+              if (url) setActivePlanUrl(url);
+            }
+          }}
+          className="space-y-6"
+        >
           <TabsList className="hidden">
             <TabsTrigger value="takeoff" />
             <TabsTrigger value="estimate" />
@@ -441,7 +464,7 @@ const ProjectDetail = () => {
             <TabsTrigger value="ffe" />
             <TabsTrigger value="documents" />
             <TabsTrigger value="pricing" />
-            {project.plan_file_url && <TabsTrigger value="plans" />}
+            {(project.plan_file_url || activePlanUrl) && <TabsTrigger value="plans" />}
           </TabsList>
 
           {/* Step 1 — PDF Takeoff — forceMount keeps PDF alive when switching to Estimate/Tender */}
@@ -576,9 +599,9 @@ const ProjectDetail = () => {
             </Card>
           </TabsContent>
 
-          {project.plan_file_url && (
+          {activePlanUrl && (
             <TabsContent value="plans">
-              <PlanAnalysisWizard planUrl={project.plan_file_url} projectId={projectId!} />
+              <PlanAnalysisWizard planUrl={activePlanUrl} projectId={projectId!} />
             </TabsContent>
           )}
         </Tabs>

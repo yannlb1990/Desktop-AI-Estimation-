@@ -240,7 +240,8 @@ export interface PDFFile {
   url: string;
   name: string;
   pageCount: number;
-  planId?: string;   // stable identifier: name + size, survives blob URL expiry
+  planId?: string;    // stable identifier: name + size, survives blob URL expiry
+  cloudPath?: string; // storage path in plan-pdfs bucket (use getSignedPlanUrl to load)
 }
 
 // === PDF STATE ===
