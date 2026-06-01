@@ -15,6 +15,8 @@ import {
 } from "@/lib/subscription";
 import { localSignIn, isSignedIn, migrateUnscopedData } from "@/lib/localAuth";
 import { supabase } from "@/integrations/supabase/client";
+import { onboardUser } from "@/lib/api/auth";
+import { EdgeFunctionError } from "@/lib/api/client";
 
 // Resets the trial end date to 14 days from now on the user's first real sign-in,
 // so the clock doesn't count down the days they spent waiting to verify their email.
@@ -149,40 +151,26 @@ const Auth = () => {
         projectType,
       });
 
-      const res = await fetch(
-        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/user-onboard`,
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            name: data.name,
-            email: data.email,
-            phone: data.phone,
-            project_type: data.projectType,
-            plan_id: selectedPlan,
-            billing_period: billing,
-          }),
-        }
-      );
-
-      if (res.status === 409) {
-        toast.error("That email is already registered — please sign in instead");
-        setIsLogin(true);
-        setEmail(email.trim());
-        return;
-      }
-
-      if (!res.ok) {
-        const body = await res.json().catch(() => ({}));
-        toast.error(body.error ?? "Something went wrong — please try again");
-        return;
-      }
+      await onboardUser({
+        name: data.name,
+        email: data.email,
+        phone: data.phone,
+        project_type: data.projectType,
+        plan_id: selectedPlan,
+        billing_period: billing,
+      });
 
       setPendingEmail(data.email);
       setVerificationSent(true);
     } catch (error) {
       if (error instanceof z.ZodError) {
         toast.error(error.errors[0].message);
+      } else if (error instanceof EdgeFunctionError && error.status === 409) {
+        toast.error("That email is already registered — please sign in instead");
+        setIsLogin(true);
+        setEmail(email.trim());
+      } else if (error instanceof EdgeFunctionError) {
+        toast.error(error.message);
       } else {
         toast.error("Something went wrong — please try again");
       }

@@ -1,36 +1,9 @@
 import { supabase } from "@/integrations/supabase/client";
+import type { Database } from "@/integrations/supabase/types";
 
-const FUNCTIONS_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1`;
+export { redirectToStripeCheckout } from "@/lib/api/stripe";
 
-export async function redirectToStripeCheckout(
-  planId: string,
-  billingPeriod: string,
-): Promise<void> {
-  const { data: { session } } = await supabase.auth.getSession();
-  if (!session) throw new Error("You must be signed in to subscribe");
-
-  const res = await fetch(`${FUNCTIONS_URL}/stripe-create-checkout`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${session.access_token}`,
-    },
-    body: JSON.stringify({
-      plan_id: planId,
-      billing_period: billingPeriod,
-      success_url: `${window.location.origin}/checkout-success`,
-      cancel_url: `${window.location.origin}/pricing`,
-    }),
-  });
-
-  if (!res.ok) {
-    const body = await res.json().catch(() => ({}));
-    throw new Error(body.error ?? `Checkout request failed (${res.status})`);
-  }
-
-  const { url } = await res.json();
-  window.location.href = url;
-}
+type SubscriptionRow = Database["public"]["Tables"]["subscriptions"]["Row"];
 
 // Reads the user's paid subscription from Supabase DB and merges it into localStorage.
 // Called on app start and after a successful checkout.
@@ -41,12 +14,11 @@ export async function syncSubscriptionFromDB(retries = 3): Promise<boolean> {
 
   for (let attempt = 1; attempt <= retries; attempt++) {
     try {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const { data, error } = await (supabase as any)
+      const { data, error } = await supabase
         .from("subscriptions")
         .select("plan_id, billing_period, status, current_period_end, created_at")
         .eq("user_id", session.user.id)
-        .single();
+        .single<Pick<SubscriptionRow, "plan_id" | "billing_period" | "status" | "current_period_end" | "created_at">>();
 
       if (error || !data || data.status === "canceled") return false;
 

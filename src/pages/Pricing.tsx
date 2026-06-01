@@ -11,7 +11,7 @@ import Navigation from "@/components/Navigation";
 import Footer from "@/components/Footer";
 import { PLAN_PRICES, PLAN_NAMES, PlanId, TRIAL_DAYS, getSubscriptionStatus } from "@/lib/subscription";
 import { isSignedIn } from "@/lib/localAuth";
-import { redirectToStripeCheckout } from "@/lib/stripeCheckout";
+import { redirectToStripeCheckout } from "@/lib/api/stripe";
 import { toast } from "sonner";
 
 // ── Plan definitions ──────────────────────────────────────────────────────────

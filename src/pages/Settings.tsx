@@ -4,6 +4,7 @@ import { getLocalUser, isSignedIn, getUserStorageKey } from "@/lib/localAuth";
 import { getSubscriptionStatus, PLAN_NAMES, loadSubscription } from "@/lib/subscription";
 import { supabase } from "@/integrations/supabase/client";
 import { syncSubscriptionFromDB } from "@/lib/stripeCheckout";
+import { inviteTeamMember } from "@/lib/api/team";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -19,27 +20,12 @@ import {
 } from "lucide-react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
-const FUNCTIONS_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1`;
-
 // ── Types ─────────────────────────────────────────────────────────────────────
 
 interface LabourPreset { id: string; name: string; rate: string }
 interface Supplier { id: string; name: string; contact: string; phone: string; account: string; notes: string }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
-
-async function callFunction(name: string, body?: object) {
-  const { data: { session } } = await supabase.auth.getSession();
-  if (!session) throw new Error("Not authenticated");
-  const res = await fetch(`${FUNCTIONS_URL}/${name}`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json", Authorization: `Bearer ${session.access_token}` },
-    body: body ? JSON.stringify(body) : undefined,
-  });
-  const json = await res.json();
-  if (!res.ok) throw new Error(json.error ?? `Request failed (${res.status})`);
-  return json;
-}
 
 const formatABN = (val: string) => {
   const d = val.replace(/\D/g, "").slice(0, 11);
@@ -208,7 +194,7 @@ const Settings = () => {
     if (!isBusinessPlan) return;
     setTeamLoading(true);
     try {
-      const { data, error } = await (supabase as any)
+      const { data, error } = await supabase
         .from("team_members")
         .select("id, email, role, status, invited_at, joined_at")
         .order("invited_at", { ascending: true });
@@ -366,7 +352,7 @@ const Settings = () => {
     if (!inviteEmail) { toast.error("Enter an email address"); return; }
     setInviting(true);
     try {
-      const result = await callFunction("team-invite", { email: inviteEmail });
+      const result = await inviteTeamMember(inviteEmail);
       toast.success(`Invite sent to ${inviteEmail} (${result.seats_used}/${result.seats_total} seats used)`);
       setInviteEmail("");
       await loadTeamMembers();
@@ -380,7 +366,7 @@ const Settings = () => {
   const handleRemoveMember = async (memberId: string, email: string) => {
     setRemovingId(memberId);
     try {
-      await (supabase as any).from("team_members").update({ status: "removed" }).eq("id", memberId);
+      await supabase.from("team_members").update({ status: "removed" }).eq("id", memberId);
       toast.success(`${email} removed from the team`);
       await loadTeamMembers();
     } catch (err: any) {

@@ -1,3 +1,13 @@
+// Edge function client
+export { callEdge, EdgeFunctionError } from './client';
+export type { EdgeError } from './client';
+
+// Typed edge function wrappers
+export { redirectToStripeCheckout, cancelSubscription } from './stripe';
+export { inviteTeamMember, acceptTeamInvite } from './team';
+export { onboardUser } from './auth';
+export type { OnboardReq } from './auth';
+
 // PDF Extraction API
 export {
   pdfExtractionApi,

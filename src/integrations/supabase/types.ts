@@ -1225,6 +1225,72 @@ export type Database = {
         }
         Relationships: []
       }
+      subscriptions: {
+        Row: {
+          id: string
+          user_id: string
+          plan_id: string
+          billing_period: string
+          status: string
+          current_period_end: string | null
+          created_at: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          id?: string
+          user_id: string
+          plan_id: string
+          billing_period: string
+          status: string
+          current_period_end?: string | null
+          created_at?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          id?: string
+          user_id?: string
+          plan_id?: string
+          billing_period?: string
+          status?: string
+          current_period_end?: string | null
+          created_at?: string | null
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
+      team_members: {
+        Row: {
+          id: string
+          team_id: string
+          email: string
+          role: string
+          status: string
+          invited_at: string | null
+          joined_at: string | null
+          invited_by: string | null
+        }
+        Insert: {
+          id?: string
+          team_id: string
+          email: string
+          role?: string
+          status?: string
+          invited_at?: string | null
+          joined_at?: string | null
+          invited_by?: string | null
+        }
+        Update: {
+          id?: string
+          team_id?: string
+          email?: string
+          role?: string
+          status?: string
+          invited_at?: string | null
+          joined_at?: string | null
+          invited_by?: string | null
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never

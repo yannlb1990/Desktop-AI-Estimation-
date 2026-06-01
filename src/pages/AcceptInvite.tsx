@@ -5,8 +5,8 @@ import { Button } from "@/components/ui/button";
 import { MetricoreLogoMark } from "@/components/MetricoreLogoMark";
 import { supabase } from "@/integrations/supabase/client";
 import { syncSubscriptionFromDB } from "@/lib/stripeCheckout";
-
-const FUNCTIONS_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1`;
+import { acceptTeamInvite } from "@/lib/api/team";
+import { EdgeFunctionError } from "@/lib/api/client";
 
 const AcceptInvite = () => {
   const navigate = useNavigate();
@@ -26,30 +26,18 @@ const AcceptInvite = () => {
       }
 
       try {
-        const res = await fetch(`${FUNCTIONS_URL}/team-accept-invite`, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${session.access_token}`,
-          },
-        });
-
-        const body = await res.json();
-
-        if (!res.ok) {
-          setStatus("error");
-          setMessage(body.error ?? "Failed to accept invite");
-          return;
-        }
-
+        await acceptTeamInvite();
         // Sync subscription so dashboard access is immediate
         await syncSubscriptionFromDB();
         setStatus("success");
-
         setTimeout(() => navigate("/dashboard"), 2500);
-      } catch (err: any) {
+      } catch (err) {
         setStatus("error");
-        setMessage(err.message ?? "Something went wrong");
+        setMessage(
+          err instanceof EdgeFunctionError
+            ? err.message
+            : (err as Error).message ?? "Something went wrong",
+        );
       }
     };
 
