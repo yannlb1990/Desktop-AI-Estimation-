@@ -1,5 +1,12 @@
 import { useReducer, useEffect } from 'react';
-import { TakeoffState, TakeoffAction } from '@/lib/takeoff/types';
+import { TakeoffState, TakeoffAction, Measurement } from '@/lib/takeoff/types';
+import { getEffectiveQuantity } from '@/lib/takeoff/calculations';
+
+// Fields on Measurement whose change should cascade to linked cost item quantities
+const QUANTITY_FIELDS = new Set<keyof Measurement>([
+  'realValue', 'height', 'concreteDepth', 'computedM2', 'computedM3',
+  'measurementType', 'isConcreteFloor', 'unit',
+]);
 
 const initialState: TakeoffState = {
   pdfFile: null,
@@ -202,22 +209,77 @@ function takeoffReducer(state: TakeoffState, action: TakeoffAction): TakeoffStat
       };
     }
 
-    case 'UPDATE_MEASUREMENT':
-      return {
-        ...state,
-        measurements: state.measurements.map(m =>
-          m.id === action.payload.id ? { ...m, ...action.payload.updates } : m
-        )
-      };
+    case 'UPDATE_MEASUREMENT': {
+      const { id, updates } = action.payload;
 
-    case 'DELETE_MEASUREMENT':
+      const updatedMeasurements = state.measurements.map(m =>
+        m.id === id ? { ...m, ...updates } : m
+      );
+
+      // Only cascade to cost items when a quantity-relevant field changed
+      const affectsQty = (Object.keys(updates) as (keyof Measurement)[])
+        .some(k => QUANTITY_FIELDS.has(k));
+
+      if (!affectsQty) {
+        return { ...state, measurements: updatedMeasurements };
+      }
+
+      const updatedM = updatedMeasurements.find(m => m.id === id);
+      if (!updatedM) return { ...state, measurements: updatedMeasurements };
+
+      const costItems = state.costItems.map(item => {
+        if (!item.linkedMeasurements.includes(id)) return item;
+
+        // Sum effective qty across ALL linked measurements; use updated value for this id
+        const totalQty = item.linkedMeasurements.reduce((sum, mId) => {
+          const m = mId === id ? updatedM : state.measurements.find(x => x.id === mId);
+          return m ? sum + getEffectiveQuantity(m) : sum;
+        }, 0);
+
+        const newQty = totalQty * item.wasteFactor;
+        return { ...item, quantity: newQty, subtotal: newQty * item.unitCost };
+      });
+
+      return { ...state, measurements: updatedMeasurements, costItems };
+    }
+
+    case 'DELETE_MEASUREMENT': {
+      const deletedId = action.payload;
+      const updatedMeasurements = state.measurements.filter(m => m.id !== deletedId);
+
+      // Cascade: remove deleted id from linked lists; recalculate for affected items
+      const costItems = state.costItems.map(item => {
+        if (!item.linkedMeasurements.includes(deletedId)) return item;
+
+        const remaining = item.linkedMeasurements.filter(id => id !== deletedId);
+        if (remaining.length === 0) {
+          // No links left — keep existing quantity so the user can decide
+          return { ...item, linkedMeasurements: [] };
+        }
+
+        const totalQty = remaining.reduce((sum, mId) => {
+          const m = updatedMeasurements.find(x => x.id === mId);
+          return m ? sum + getEffectiveQuantity(m) : sum;
+        }, 0);
+
+        const newQty = totalQty * item.wasteFactor;
+        return {
+          ...item,
+          linkedMeasurements: remaining,
+          quantity: newQty,
+          subtotal: newQty * item.unitCost,
+        };
+      });
+
       return {
         ...state,
-        measurements: state.measurements.filter(m => m.id !== action.payload),
-        selectedMeasurementId: state.selectedMeasurementId === action.payload
+        measurements: updatedMeasurements,
+        costItems,
+        selectedMeasurementId: state.selectedMeasurementId === deletedId
           ? null
-          : state.selectedMeasurementId
+          : state.selectedMeasurementId,
       };
+    }
 
     case 'SELECT_MEASUREMENT':
       return { ...state, selectedMeasurementId: action.payload };

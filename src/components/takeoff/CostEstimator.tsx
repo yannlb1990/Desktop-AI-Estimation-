@@ -16,6 +16,7 @@ import { cn } from '@/lib/utils';
 import { SCOPE_OF_WORK_RATES, type AustralianState } from '@/data/scopeOfWorkRates';
 import { MARKET_LABOUR_RATES, getStateRate } from '@/data/marketLabourRates';
 import { exportToBOQCsv } from '@/lib/takeoff/export';
+import { getEffectiveQuantity } from '@/lib/takeoff/calculations';
 import { RATE_TRADE_TO_OPTION } from '@/lib/takeoff/profile';
 import { toast } from 'sonner';
 import { MaterialPickerDialog } from './MaterialPickerDialog';
@@ -583,16 +584,6 @@ export const CostEstimator = ({
     return measurements.filter(m => !linkedIds.has(m.id));
   }, [measurements, costItems]);
 
-  // Get effective quantity from measurement
-  const getEffectiveQuantity = (m: Measurement): number => {
-    if (m.measurementType === 'Wall' && m.height && m.unit === 'LM') {
-      return m.computedM2 || (m.realValue * m.height);
-    }
-    if (m.measurementType === 'Floor' && m.isConcreteFloor && m.concreteDepth) {
-      return m.computedM3 || (m.realValue * m.concreteDepth);
-    }
-    return m.realValue;
-  };
 
   // Handle adding from SOW
   const handleAddFromSOW = () => {

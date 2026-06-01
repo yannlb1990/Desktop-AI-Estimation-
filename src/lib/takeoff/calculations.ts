@@ -250,3 +250,18 @@ export function snapWorldToGrid(point: WorldPoint, gridSize: number): WorldPoint
     y: Math.round(point.y / gridSize) * gridSize,
   };
 }
+
+/**
+ * Returns the effective quantity for a measurement — the canonical value used for cost item quantity.
+ * Accounts for wall height (LM → M²) and concrete depth (M² → M³).
+ * Used by both CostEstimator and the takeoff reducer for two-way binding.
+ */
+export function getEffectiveQuantity(m: Measurement): number {
+  if (m.measurementType === 'Wall' && m.height && m.unit === 'LM') {
+    return m.computedM2 ?? (m.realValue * m.height);
+  }
+  if (m.measurementType === 'Floor' && m.isConcreteFloor && m.concreteDepth) {
+    return m.computedM3 ?? (m.realValue * m.concreteDepth);
+  }
+  return m.realValue;
+}
