@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { MousePointer, Move, Eraser, Minus, Square, Pentagon, Circle, Hash, Undo, Redo, Columns, DoorOpen, AppWindow, PenLine, Columns3, Crosshair, Spline } from 'lucide-react';
+import { MousePointer, Move, Eraser, Minus, Square, Pentagon, Circle, Hash, Undo, Redo, DoorOpen, AppWindow, PenLine, Columns3, Crosshair, Spline } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
@@ -19,9 +19,98 @@ interface MeasurementToolbarProps {
   onModSelect?: (mod: 'wall' | 'door' | 'window' | 'custom') => void;
   wallThicknessMm?: number;
   onWallThicknessChange?: (mm: number) => void;
+  wallHatchType?: string;
+  onWallHatchTypeChange?: (type: string) => void;
+  wallHatchSide?: string;
+  onWallHatchSideChange?: (side: string) => void;
+  doorSubtype?: string;
+  onDoorSubtypeChange?: (type: string) => void;
+  windowSubtype?: string;
+  onWindowSubtypeChange?: (type: string) => void;
 }
 
 const WALL_PRESETS = [64, 70, 90, 92, 110, 150];
+
+// Mini pattern previews via CSS gradients
+const HATCH_FILLS = [
+  {
+    id: 'none',
+    label: 'Plain',
+    desc: 'No fill',
+    preview: undefined,
+    previewClass: 'border border-dashed border-gray-500 bg-transparent',
+  },
+  {
+    id: 'masonry',
+    label: 'Masonry',
+    desc: 'Brick bond',
+    preview: 'repeating-linear-gradient(0deg,#92400e 0,#92400e 1px,#d97706 1px,#d97706 5px,#92400e 5px,#92400e 6px,#fbbf24 6px,#fbbf24 10px)',
+    previewClass: '',
+  },
+  {
+    id: 'plasterboard',
+    label: 'Plasterboard',
+    desc: 'Both faces',
+    preview: 'repeating-linear-gradient(45deg,#94a3b8 0,#94a3b8 1px,#1e293b 1px,#1e293b 5px)',
+    previewClass: '',
+  },
+  {
+    id: 'fire-rated',
+    label: 'Fire-Rated',
+    desc: 'Dense diagonal',
+    preview: 'repeating-linear-gradient(45deg,#ef4444 0,#ef4444 1px,#450a0a 1px,#450a0a 3px)',
+    previewClass: '',
+  },
+  {
+    id: 'insulation',
+    label: 'Insulation',
+    desc: 'Cavity batt',
+    preview: 'linear-gradient(135deg,#fde68a,#f59e0b)',
+    previewClass: '',
+  },
+  {
+    id: 'cladding',
+    label: 'Cladding',
+    desc: 'Exterior face',
+    preview: 'repeating-linear-gradient(0deg,#38bdf8 0,#38bdf8 1px,#0c4a6e 1px,#0c4a6e 4px)',
+    previewClass: '',
+  },
+  {
+    id: 'wet-area',
+    label: 'Wet Area',
+    desc: 'Waterproof lining',
+    preview: 'repeating-linear-gradient(45deg,#3b82f6 0,#3b82f6 1px,#1e3a8a 1px,#1e3a8a 5px)',
+    previewClass: '',
+  },
+  {
+    id: 'glazing',
+    label: 'Glazing',
+    desc: 'Glass / curtain',
+    preview: 'repeating-linear-gradient(45deg,#67e8f9 0,#67e8f9 1.5px,#164e63 1.5px,#164e63 7px)',
+    previewClass: '',
+  },
+] as const;
+
+const FACE_LINING_TYPES = new Set(['plasterboard', 'wet-area', 'cladding']);
+
+const DOOR_TYPES = [
+  { id: 'Internal',      label: 'Internal' },
+  { id: 'Entry',         label: 'Entry' },
+  { id: 'Cavity Slider', label: 'Cavity Slider' },
+  { id: 'Bi-fold',       label: 'Bi-fold' },
+  { id: 'French',        label: 'French' },
+  { id: 'Garage',        label: 'Garage' },
+  { id: 'Fire Door',     label: 'Fire Door' },
+] as const;
+
+const WINDOW_TYPES = [
+  { id: 'Awning',   label: 'Awning' },
+  { id: 'Casement', label: 'Casement' },
+  { id: 'Sliding',  label: 'Sliding' },
+  { id: 'Fixed',    label: 'Fixed' },
+  { id: 'Louvre',   label: 'Louvre' },
+  { id: 'Skylight', label: 'Skylight' },
+] as const;
 
 export const MeasurementToolbar = ({
   activeTool,
@@ -35,47 +124,53 @@ export const MeasurementToolbar = ({
   onModSelect,
   wallThicknessMm = 90,
   onWallThicknessChange,
+  wallHatchType = 'none',
+  onWallHatchTypeChange,
+  wallHatchSide = 'both',
+  onWallHatchSideChange,
+  doorSubtype = 'Internal',
+  onDoorSubtypeChange,
+  windowSubtype = 'Awning',
+  onWindowSubtypeChange,
 }: MeasurementToolbarProps) => {
   const [customInput, setCustomInput] = useState('');
   type ModId = 'wall' | 'door' | 'window' | 'custom';
+
   const navigationTools = [
-    { id: 'select' as const, icon: MousePointer, label: 'Select (V)', shortcut: 'V' },
-    { id: 'pan' as const, icon: Move, label: 'Pan (H)', shortcut: 'H' },
+    { id: 'select' as const, icon: MousePointer, label: 'Select (V)' },
+    { id: 'pan' as const, icon: Move, label: 'Pan (H)' },
   ];
 
   const measurementTools = [
-    { id: 'line' as const, icon: Minus, label: 'Line (L)', shortcut: 'L', color: 'bg-red-500' },
-    { id: 'rectangle' as const, icon: Square, label: 'Rectangle (R)', shortcut: 'R', color: 'bg-green-500' },
-    { id: 'polygon' as const, icon: Pentagon, label: 'Polygon (P)', shortcut: 'P', color: 'bg-blue-500' },
-    { id: 'circle' as const, icon: Circle, label: 'Circle (C)', shortcut: 'C', color: 'bg-purple-500' },
-    { id: 'count' as const, icon: Hash, label: 'Count (N)', shortcut: 'N', color: 'bg-orange-500' },
-    { id: 'wall-line' as const, icon: Columns3, label: 'Wall Line (T)', shortcut: 'T', color: 'bg-amber-700' },
-    { id: 'arc-wall' as const, icon: Spline, label: 'Arc Wall (A) — 3 clicks: start → end → curve', shortcut: 'A', color: 'bg-orange-500' },
-    { id: 'offset' as const, icon: Crosshair, label: 'Reference Line (G)', shortcut: 'G', color: 'bg-sky-400' },
+    { id: 'line' as const, icon: Minus, label: 'Line (L)', color: 'bg-red-500' },
+    { id: 'rectangle' as const, icon: Square, label: 'Rectangle (R)', color: 'bg-green-500' },
+    { id: 'polygon' as const, icon: Pentagon, label: 'Polygon (P)', color: 'bg-blue-500' },
+    { id: 'circle' as const, icon: Circle, label: 'Circle (C)', color: 'bg-purple-500' },
+    { id: 'count' as const, icon: Hash, label: 'Count (N)', color: 'bg-orange-500' },
+    { id: 'wall-line' as const, icon: Columns3, label: 'Wall Line (T)', color: 'bg-amber-700' },
+    { id: 'arc-wall' as const, icon: Spline, label: 'Arc Wall (A) — 3 clicks: start → end → curve', color: 'bg-orange-500' },
+    { id: 'offset' as const, icon: Crosshair, label: 'Reference Line (G)', color: 'bg-sky-400' },
   ];
 
   const modTools: Array<{ id: ModId; icon: React.ComponentType<{ className?: string }>; label: string; color: string; ring: string }> = [
-    { id: 'wall', icon: Columns, label: 'Add Wall (W)', color: 'bg-amber-500', ring: 'ring-amber-500' },
     { id: 'door', icon: DoorOpen, label: 'Add Door (D)', color: 'bg-violet-500', ring: 'ring-violet-500' },
     { id: 'window', icon: AppWindow, label: 'Add Window (Q)', color: 'bg-cyan-500', ring: 'ring-cyan-500' },
     { id: 'custom', icon: PenLine, label: 'Custom line (draw freely, prompt to add to estimate)', color: 'bg-slate-400', ring: 'ring-slate-400' },
   ];
 
+  const isWallTool = activeTool === 'wall-line' || activeTool === 'arc-wall';
+  const isFaceLining = FACE_LINING_TYPES.has(wallHatchType || '');
+
   return (
     <TooltipProvider delayDuration={300}>
       <div className="flex flex-col gap-1">
-        {/* ── Row 1: Measure tools ── */}
+
+        {/* ── Row 1: Tool buttons ───────────────────────────────────────── */}
         <div className="flex items-center gap-1 p-2 bg-card border border-border rounded-lg overflow-x-auto">
-          {/* Navigation Tools */}
           {navigationTools.map(({ id, icon: Icon, label }) => (
             <Tooltip key={id}>
               <TooltipTrigger asChild>
-                <Button
-                  variant={activeTool === id ? 'default' : 'ghost'}
-                  size="icon"
-                  className="h-9 w-9 shrink-0"
-                  onClick={() => onToolSelect(id)}
-                >
+                <Button variant={activeTool === id ? 'default' : 'ghost'} size="icon" className="h-9 w-9 shrink-0" onClick={() => onToolSelect(id)}>
                   <Icon className="h-4 w-4" />
                 </Button>
               </TooltipTrigger>
@@ -85,15 +180,9 @@ export const MeasurementToolbar = ({
 
           <Separator orientation="vertical" className="h-6 mx-1 shrink-0" />
 
-          {/* Eraser Tool */}
           <Tooltip>
             <TooltipTrigger asChild>
-              <Button
-                variant={activeTool === 'eraser' ? 'destructive' : 'ghost'}
-                size="icon"
-                className="h-9 w-9 shrink-0"
-                onClick={() => onToolSelect('eraser')}
-              >
+              <Button variant={activeTool === 'eraser' ? 'destructive' : 'ghost'} size="icon" className="h-9 w-9 shrink-0" onClick={() => onToolSelect('eraser')}>
                 <Eraser className="h-4 w-4" />
               </Button>
             </TooltipTrigger>
@@ -102,7 +191,6 @@ export const MeasurementToolbar = ({
 
           <Separator orientation="vertical" className="h-6 mx-1 shrink-0" />
 
-          {/* Measurement Tools */}
           {measurementTools.map(({ id, icon: Icon, label, color }) => {
             const isActive = modMode === null && activeTool === id;
             return (
@@ -124,54 +212,10 @@ export const MeasurementToolbar = ({
             );
           })}
 
-          {disabled && (
-            <Badge variant="secondary" className="ml-1 text-xs shrink-0">
-              Set scale first
-            </Badge>
-          )}
-
-          {(activeTool === 'wall-line' || activeTool === 'arc-wall') && onWallThicknessChange && (
-            <div className="flex items-center gap-1.5 ml-1">
-              <span className="text-xs text-muted-foreground shrink-0">mm:</span>
-              {WALL_PRESETS.map(mm => (
-                <button
-                  key={mm}
-                  onClick={() => { onWallThicknessChange(mm); setCustomInput(''); }}
-                  className={cn(
-                    'h-6 px-1.5 rounded text-xs font-mono transition-colors',
-                    wallThicknessMm === mm
-                      ? 'bg-amber-600 text-white'
-                      : 'bg-muted text-muted-foreground hover:bg-muted/80'
-                  )}
-                >
-                  {mm}
-                </button>
-              ))}
-              <input
-                type="number"
-                min="10"
-                max="500"
-                placeholder="≥10mm"
-                value={customInput}
-                onChange={e => setCustomInput(e.target.value)}
-                onKeyDown={e => {
-                  if (e.key === 'Enter') {
-                    const v = parseInt(customInput, 10);
-                    if (!isNaN(v) && v >= 10) { onWallThicknessChange(v); setCustomInput(''); }
-                  }
-                }}
-                onBlur={() => {
-                  const v = parseInt(customInput, 10);
-                  if (!isNaN(v) && v >= 10) { onWallThicknessChange(v); setCustomInput(''); }
-                }}
-                className="h-6 w-16 text-xs border border-input rounded px-1.5 bg-background focus:outline-none focus:border-ring"
-              />
-            </div>
-          )}
+          {disabled && <Badge variant="secondary" className="ml-1 text-xs shrink-0">Set scale first</Badge>}
 
           <Separator orientation="vertical" className="h-6 mx-1 shrink-0" />
 
-          {/* Undo/Redo */}
           <Tooltip>
             <TooltipTrigger asChild>
               <Button variant="ghost" size="icon" className="h-9 w-9 shrink-0" onClick={onUndo} disabled={!canUndo || disabled}>
@@ -190,11 +234,184 @@ export const MeasurementToolbar = ({
           </Tooltip>
         </div>
 
-        {/* ── Row 2: Modifications (always visible) ── */}
+        {/* ── Row 2: Wall configuration (only when wall tool active) ─────── */}
+        {isWallTool && (
+          <div className="flex items-start gap-3 px-3 py-2.5 bg-slate-800/70 border border-amber-900/40 rounded-lg">
+
+            {/* Fill type cards */}
+            {onWallHatchTypeChange && (
+              <div className="flex-1 min-w-0">
+                <p className="text-[10px] font-semibold text-amber-400/80 uppercase tracking-widest mb-1.5">
+                  Wall Fill
+                </p>
+                <div className="flex gap-1.5 flex-wrap">
+                  {HATCH_FILLS.map(({ id, label, desc, preview, previewClass }) => {
+                    const active = wallHatchType === id;
+                    return (
+                      <button
+                        key={id}
+                        onClick={() => onWallHatchTypeChange(id)}
+                        title={desc}
+                        className={cn(
+                          'flex flex-col items-center gap-1 rounded-md px-2 py-1.5 transition-all w-[72px] text-center',
+                          active
+                            ? 'bg-amber-900/50 ring-1 ring-amber-400/70'
+                            : 'bg-slate-700/40 hover:bg-slate-700/70'
+                        )}
+                      >
+                        <div
+                          className={cn('w-full h-5 rounded-sm', previewClass)}
+                          style={preview ? { background: preview } : undefined}
+                        />
+                        <span className={cn('text-[10px] leading-tight font-medium', active ? 'text-amber-300' : 'text-slate-300')}>
+                          {label}
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
+            <div className="w-px bg-amber-900/30 self-stretch shrink-0" />
+
+            {/* Thickness */}
+            {onWallThicknessChange && (
+              <div className="shrink-0">
+                <p className="text-[10px] font-semibold text-amber-400/80 uppercase tracking-widest mb-1.5">
+                  Thickness
+                </p>
+                <div className="flex gap-1 flex-wrap">
+                  {WALL_PRESETS.map(mm => (
+                    <button
+                      key={mm}
+                      onClick={() => { onWallThicknessChange(mm); setCustomInput(''); }}
+                      className={cn(
+                        'h-7 px-2 rounded text-xs font-mono transition-colors',
+                        wallThicknessMm === mm
+                          ? 'bg-amber-600 text-white'
+                          : 'bg-slate-700/60 text-slate-300 hover:bg-slate-600'
+                      )}
+                    >
+                      {mm}
+                    </button>
+                  ))}
+                  <input
+                    type="number"
+                    min="10"
+                    max="500"
+                    placeholder="mm"
+                    value={customInput}
+                    onChange={e => setCustomInput(e.target.value)}
+                    onKeyDown={e => {
+                      if (e.key === 'Enter') {
+                        const v = parseInt(customInput, 10);
+                        if (!isNaN(v) && v >= 10) { onWallThicknessChange(v); setCustomInput(''); }
+                      }
+                    }}
+                    onBlur={() => {
+                      const v = parseInt(customInput, 10);
+                      if (!isNaN(v) && v >= 10) { onWallThicknessChange(v); setCustomInput(''); }
+                    }}
+                    className="h-7 w-14 text-xs border border-slate-600 rounded px-1.5 bg-slate-800 text-slate-200 placeholder-slate-500 focus:outline-none focus:border-amber-500"
+                  />
+                </div>
+              </div>
+            )}
+
+            {/* Side selector — only for face lining types */}
+            {isFaceLining && onWallHatchSideChange && (
+              <>
+                <div className="w-px bg-amber-900/30 self-stretch shrink-0" />
+                <div className="shrink-0">
+                  <p className="text-[10px] font-semibold text-amber-400/80 uppercase tracking-widest mb-1.5">
+                    Face
+                  </p>
+                  <div className="flex flex-col gap-1">
+                    {([
+                      { id: 'l1',   label: '◁  Left face',  title: 'Lining on left face only' },
+                      { id: 'both', label: '↔  Both faces',  title: 'Lining on both faces' },
+                      { id: 'l2',   label: 'Right face  ▷', title: 'Lining on right face only' },
+                    ] as const).map(({ id, label, title }) => (
+                      <button
+                        key={id}
+                        onClick={() => onWallHatchSideChange(id)}
+                        title={title}
+                        className={cn(
+                          'h-7 px-3 rounded text-xs font-medium transition-colors text-left whitespace-nowrap',
+                          wallHatchSide === id
+                            ? 'bg-cyan-700 text-white'
+                            : 'bg-slate-700/60 text-slate-300 hover:bg-slate-600'
+                        )}
+                      >
+                        {label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </>
+            )}
+
+          </div>
+        )}
+
+        {/* ── Row 2b: Door subtype (when marking door) ──────────────────── */}
+        {modMode === 'door' && onDoorSubtypeChange && (
+          <div className="flex items-center gap-3 px-3 py-2 bg-slate-800/70 border border-violet-900/40 rounded-lg">
+            <p className="text-[10px] font-semibold text-violet-400/80 uppercase tracking-widest shrink-0">
+              Door Type
+            </p>
+            <div className="w-px bg-violet-900/30 self-stretch shrink-0" />
+            <div className="flex gap-1.5 flex-wrap">
+              {DOOR_TYPES.map(({ id, label }) => (
+                <button
+                  key={id}
+                  onClick={() => onDoorSubtypeChange(id)}
+                  className={cn(
+                    'h-7 px-3 rounded text-xs font-medium transition-colors',
+                    doorSubtype === id
+                      ? 'bg-violet-600 text-white'
+                      : 'bg-slate-700/60 text-slate-300 hover:bg-slate-600'
+                  )}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* ── Row 2c: Window subtype (when marking window) ───────────────── */}
+        {modMode === 'window' && onWindowSubtypeChange && (
+          <div className="flex items-center gap-3 px-3 py-2 bg-slate-800/70 border border-cyan-900/40 rounded-lg">
+            <p className="text-[10px] font-semibold text-cyan-400/80 uppercase tracking-widest shrink-0">
+              Window Type
+            </p>
+            <div className="w-px bg-cyan-900/30 self-stretch shrink-0" />
+            <div className="flex gap-1.5 flex-wrap">
+              {WINDOW_TYPES.map(({ id, label }) => (
+                <button
+                  key={id}
+                  onClick={() => onWindowSubtypeChange(id)}
+                  className={cn(
+                    'h-7 px-3 rounded text-xs font-medium transition-colors',
+                    windowSubtype === id
+                      ? 'bg-cyan-600 text-white'
+                      : 'bg-slate-700/60 text-slate-300 hover:bg-slate-600'
+                  )}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* ── Row 3: Modifications (always visible) ───────────────────────── */}
         {onModSelect && (
           <div className="flex items-center gap-2 px-2 py-1.5 bg-muted/40 border border-border rounded-lg">
             <span className="text-[11px] font-medium text-muted-foreground uppercase tracking-wide shrink-0 select-none">
-              Add to plan:
+              Mark as:
             </span>
             {modTools.map(({ id, icon: Icon, label, color, ring }) => (
               <Tooltip key={id}>
@@ -202,10 +419,7 @@ export const MeasurementToolbar = ({
                   <Button
                     variant={modMode === id ? 'default' : 'outline'}
                     size="sm"
-                    className={cn(
-                      'h-8 gap-1.5 shrink-0',
-                      modMode === id && `ring-2 ring-offset-1 ${ring}`
-                    )}
+                    className={cn('h-8 gap-1.5 shrink-0', modMode === id && `ring-2 ring-offset-1 ${ring}`)}
                     onClick={() => onModSelect(id)}
                     disabled={disabled}
                   >
@@ -229,6 +443,7 @@ export const MeasurementToolbar = ({
             )}
           </div>
         )}
+
       </div>
     </TooltipProvider>
   );

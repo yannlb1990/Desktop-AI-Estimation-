@@ -43,6 +43,18 @@ export interface PDFViewportData {
 
 // === MEASUREMENT TYPES ===
 export type MeasurementType = 'line' | 'rectangle' | 'polygon' | 'circle';
+
+export type WallHatchType =
+  | 'none'
+  | 'masonry'
+  | 'plasterboard'
+  | 'fire-rated'
+  | 'insulation'
+  | 'cladding'
+  | 'wet-area'
+  | 'glazing';
+
+export type WallHatchSide = 'l1' | 'both' | 'l2';
 export type MeasurementUnit = string;
 export type ToolType = 'select' | 'pan' | 'eraser' | 'line' | 'rectangle' | 'polygon' | 'circle' | 'count' | 'wall-line' | 'arc-wall' | 'offset' | null;
 
@@ -96,7 +108,10 @@ export interface Measurement {
   pageIndex: number;
   planId?: string;       // Which plan this measurement belongs to (name + filesize key)
   wallThickness?: number;      // mm — set by wall-line tool
+  wallHatchType?: WallHatchType; // fill pattern for wall-line / arc-wall
+  wallHatchSide?: WallHatchSide; // which face(s) to draw face-lining hatches on
   arcControlPoint?: WorldPoint; // control point for arc-wall tool (passes through this point)
+  modSubtype?: string;          // subtype for door/window mark-as (e.g. 'Internal', 'Awning')
   timestamp: Date;
 
   // Enhanced fields for takeoff table

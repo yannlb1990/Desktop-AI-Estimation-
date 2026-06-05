@@ -79,6 +79,17 @@ export const PDFTakeoff = ({ projectId, estimateId, onAddCostItems }: PDFTakeoff
   const [upgradeModal, setUpgradeModal] = useState<{ open: boolean; feature: string }>({ open: false, feature: '' });
   const [modMode, setModMode] = useState<'wall' | 'door' | 'window' | 'custom' | null>(null);
   const [wallThicknessMm, setWallThicknessMm] = useState(90);
+  const [wallHatchType, setWallHatchType] = useState<string>('none');
+  const [wallHatchSide, setWallHatchSide] = useState<string>('both');
+  const [doorSubtype, setDoorSubtype] = useState<string>('Internal');
+  const [windowSubtype, setWindowSubtype] = useState<string>('Awning');
+
+  const handleWallHatchTypeChange = (type: string) => {
+    setWallHatchType(type);
+    // Auto-set sensible default side for each face-lining type
+    if (type === 'plasterboard') setWallHatchSide('both');
+    else if (type === 'wet-area' || type === 'cladding') setWallHatchSide('l1');
+  };
   const [pendingModMeasurement, setPendingModMeasurement] = useState<Measurement | null>(null);
   const [pendingModIsNew, setPendingModIsNew] = useState(true);
   // Custom line: after draw, ask "add to estimate?"
@@ -180,7 +191,7 @@ export const PDFTakeoff = ({ projectId, estimateId, onAddCostItems }: PDFTakeoff
         return;
       }
       const key = e.key.toLowerCase();
-      if (key === 'w') { setModMode('wall'); dispatch({ type: 'SET_ACTIVE_TOOL', payload: 'line' }); return; }
+      if (key === 'w') { setModMode(null); dispatch({ type: 'SET_ACTIVE_TOOL', payload: 'wall-line' }); return; }
       if (key === 'd') { setModMode('door'); dispatch({ type: 'SET_ACTIVE_TOOL', payload: 'line' }); return; }
       if (key === 'q') { setModMode('window'); dispatch({ type: 'SET_ACTIVE_TOOL', payload: 'line' }); return; }
       const tool = shortcutToTool(e.key);
@@ -317,13 +328,13 @@ export const PDFTakeoff = ({ projectId, estimateId, onAddCostItems }: PDFTakeoff
     if (modMode === 'wall') {
       m = { ...m, color: '#f59e0b', measurementType: 'Wall', label: '' };
     } else if (modMode === 'door') {
-      m = { ...m, color: '#8b5cf6', measurementType: 'Door', label: '' };
+      m = { ...m, color: '#8b5cf6', measurementType: 'Door', label: '', modSubtype: doorSubtype };
     } else if (modMode === 'window') {
-      m = { ...m, color: '#06b6d4', measurementType: 'Window', label: '' };
+      m = { ...m, color: '#06b6d4', measurementType: 'Window', label: '', modSubtype: windowSubtype };
     }
 
     dispatch({ type: 'ADD_MEASUREMENT', payload: m });
-  }, [dispatch, isVerifyMode, modMode, state.pdfFile?.planId]);
+  }, [dispatch, isVerifyMode, modMode, state.pdfFile?.planId, doorSubtype, windowSubtype]);
 
   const handleDeleteLastMeasurement = useCallback(() => {
     const measurements = state.measurements;
@@ -430,6 +441,11 @@ export const PDFTakeoff = ({ projectId, estimateId, onAddCostItems }: PDFTakeoff
     dispatch({ type: 'UPDATE_MEASUREMENT', payload: { id, updates } });
     toast.success('Measurement updated');
   }, [dispatch]);
+
+  // Close measurement popup when tool changes so the backdrop doesn't block the canvas.
+  useEffect(() => {
+    setMeasurementPopup(null);
+  }, [state.activeTool]);
 
   // Auto-dismiss the "Draw a line…" calibration instruction after 5 s.
   // Phase (b) — the distance input — is never auto-dismissed.
@@ -772,27 +788,40 @@ export const PDFTakeoff = ({ projectId, estimateId, onAddCostItems }: PDFTakeoff
     </div>
   ) : null;
 
+  // ── Shared toolbar (used in both normal and fullscreen layouts) ─────────────
+  const toolbarBlock = (
+    <MeasurementToolbar
+      activeTool={state.activeTool}
+      onToolSelect={(tool) => { setModMode(null); dispatch({ type: 'SET_ACTIVE_TOOL', payload: tool }); }}
+      onUndo={() => dispatch({ type: 'UNDO' })}
+      onRedo={() => dispatch({ type: 'REDO' })}
+      canUndo={state.historyIndex > 0}
+      canRedo={state.historyIndex < state.history.length - 1}
+      disabled={!state.isCalibrated && state.activeTool !== 'pan'}
+      modMode={modMode}
+      onModSelect={(mod) => {
+        setModMode(mod);
+        dispatch({ type: 'SET_ACTIVE_TOOL', payload: 'line' });
+      }}
+      wallThicknessMm={wallThicknessMm}
+      onWallThicknessChange={setWallThicknessMm}
+      wallHatchType={wallHatchType}
+      onWallHatchTypeChange={handleWallHatchTypeChange}
+      wallHatchSide={wallHatchSide}
+      onWallHatchSideChange={setWallHatchSide}
+      doorSubtype={doorSubtype}
+      onDoorSubtypeChange={setDoorSubtype}
+      windowSubtype={windowSubtype}
+      onWindowSubtypeChange={setWindowSubtype}
+    />
+  );
+
   // ── Fullscreen portal ───────────────────────────────────────────────────────
   const fullscreenPortal = isTakeoffFullscreen && state.pdfFile ? createPortal(
     <div className="fixed inset-0 z-[9999] bg-[#0f172a] text-white flex flex-col">
       {/* Top bar */}
       <div className="flex items-center gap-2 px-3 py-2 bg-[#1e293b] border-b border-gray-700 shrink-0">
-        <MeasurementToolbar
-          activeTool={state.activeTool}
-          onToolSelect={(tool) => { setModMode(null); dispatch({ type: 'SET_ACTIVE_TOOL', payload: tool }); }}
-          onUndo={() => dispatch({ type: 'UNDO' })}
-          onRedo={() => dispatch({ type: 'REDO' })}
-          canUndo={state.historyIndex > 0}
-          canRedo={state.historyIndex < state.history.length - 1}
-          disabled={!state.isCalibrated && state.activeTool !== 'pan'}
-          modMode={modMode}
-          onModSelect={(mod) => {
-            setModMode(mod);
-            dispatch({ type: 'SET_ACTIVE_TOOL', payload: 'line' });
-          }}
-          wallThicknessMm={wallThicknessMm}
-          onWallThicknessChange={setWallThicknessMm}
-        />
+        {toolbarBlock}
         {/* Zoom + rotate + fit */}
         <div className="flex items-center gap-1 border-l border-gray-600 pl-2 ml-1">
           <Button variant="ghost" size="sm" onClick={handleZoomOut} className="h-8 text-gray-200 hover:bg-gray-700"><ZoomOut className="h-4 w-4" /></Button>
@@ -899,6 +928,8 @@ export const PDFTakeoff = ({ projectId, estimateId, onAddCostItems }: PDFTakeoff
           onMeasurementSelect={handleMeasurementSelect}
           canvasExportRef={canvasExportRef}
           wallThickness={wallThicknessMm}
+          wallHatchType={wallHatchType}
+          wallHatchSide={wallHatchSide}
           onReupload={() => {
             dispatch({ type: 'SET_PDF_FILE', payload: null as any });
             setIsTakeoffFullscreen(false);
@@ -1091,22 +1122,7 @@ export const PDFTakeoff = ({ projectId, estimateId, onAddCostItems }: PDFTakeoff
             <div className="grid grid-cols-1 lg:grid-cols-4 gap-4">
               {/* Center - Canvas (3 cols) */}
               <div className="lg:col-span-3 space-y-2">
-                <MeasurementToolbar
-                  activeTool={state.activeTool}
-                  onToolSelect={(tool) => { setModMode(null); dispatch({ type: 'SET_ACTIVE_TOOL', payload: tool }); }}
-                  onUndo={() => dispatch({ type: 'UNDO' })}
-                  onRedo={() => dispatch({ type: 'REDO' })}
-                  canUndo={state.historyIndex > 0}
-                  canRedo={state.historyIndex < state.history.length - 1}
-                  disabled={!state.isCalibrated && state.activeTool !== 'pan'}
-                  modMode={modMode}
-                  onModSelect={(mod) => {
-                    setModMode(mod);
-                    dispatch({ type: 'SET_ACTIVE_TOOL', payload: 'line' });
-                  }}
-                  wallThicknessMm={wallThicknessMm}
-                  onWallThicknessChange={setWallThicknessMm}
-                />
+                {toolbarBlock}
 
                 {/* Canvas Controls */}
                 <div className="flex items-center gap-2 justify-between p-2 bg-card border rounded-lg">
@@ -1228,45 +1244,51 @@ export const PDFTakeoff = ({ projectId, estimateId, onAddCostItems }: PDFTakeoff
                 )}
 
                 <div className="h-[calc(100vh-260px)] min-h-[500px] relative" ref={canvasContainerRef}>
-                  {calibrationBar}
-                  <InteractiveCanvas
-                    key={`${state.currentPageIndex}-${state.pdfFile?.planId ?? 'none'}`}
-                    pdfUrl={state.pdfFile.url}
-                    planId={state.pdfFile?.planId}
-                    fileName={state.pdfFile?.name}
-                    pageIndex={state.currentPageIndex}
-                    transform={state.transform}
-                    activeTool={state.activeTool}
-                    isCalibrated={state.isCalibrated}
-                    unitsPerMetre={state.currentScale?.unitsPerMetre || null}
-                    calibrationMode={state.calibrationMode}
-                    selectedColor={
-                      modMode === 'wall' ? '#f59e0b' :
-                      modMode === 'door' ? '#8b5cf6' :
-                      modMode === 'window' ? '#06b6d4' :
-                      state.selectedColor
-                    }
-                    measurements={state.measurements.filter(m => {
-                      if (m.pageIndex !== state.currentPageIndex) return false;
-                      if (state.pdfFile?.planId && m.planId !== state.pdfFile.planId) return false;
-                      return true;
-                    })}
-                    detectedOpenings={detectedOpenings}
-                    onMeasurementComplete={handleMeasurementComplete}
-                    onMeasurementUpdate={handleMeasurementUpdate}
-                    onCalibrationPointsSet={handleCalibrationPointsSet}
-                    onTransformChange={handleTransformChange}
-                    onViewportReady={handleViewportReady}
-                    onDeleteLastMeasurement={handleDeleteLastMeasurement}
-                    onDeleteMeasurement={handleDeleteMeasurement}
-                    onMeasurementSelect={handleMeasurementSelect}
-                    canvasExportRef={canvasExportRef}
-                    wallThickness={wallThicknessMm}
-                    onReupload={() => {
-                      dispatch({ type: 'SET_PDF_FILE', payload: null as any });
-                      setActiveTab('upload');
-                    }}
-                  />
+                  {!isTakeoffFullscreen && (
+                    <>
+                      {calibrationBar}
+                      <InteractiveCanvas
+                        key={`${state.currentPageIndex}-${state.pdfFile?.planId ?? 'none'}`}
+                        pdfUrl={state.pdfFile.url}
+                        planId={state.pdfFile?.planId}
+                        fileName={state.pdfFile?.name}
+                        pageIndex={state.currentPageIndex}
+                        transform={state.transform}
+                        activeTool={state.activeTool}
+                        isCalibrated={state.isCalibrated}
+                        unitsPerMetre={state.currentScale?.unitsPerMetre || null}
+                        calibrationMode={state.calibrationMode}
+                        selectedColor={
+                          modMode === 'wall' ? '#f59e0b' :
+                          modMode === 'door' ? '#8b5cf6' :
+                          modMode === 'window' ? '#06b6d4' :
+                          state.selectedColor
+                        }
+                        measurements={state.measurements.filter(m => {
+                          if (m.pageIndex !== state.currentPageIndex) return false;
+                          if (state.pdfFile?.planId && m.planId !== state.pdfFile.planId) return false;
+                          return true;
+                        })}
+                        detectedOpenings={detectedOpenings}
+                        onMeasurementComplete={handleMeasurementComplete}
+                        onMeasurementUpdate={handleMeasurementUpdate}
+                        onCalibrationPointsSet={handleCalibrationPointsSet}
+                        onTransformChange={handleTransformChange}
+                        onViewportReady={handleViewportReady}
+                        onDeleteLastMeasurement={handleDeleteLastMeasurement}
+                        onDeleteMeasurement={handleDeleteMeasurement}
+                        onMeasurementSelect={handleMeasurementSelect}
+                        canvasExportRef={canvasExportRef}
+                        wallThickness={wallThicknessMm}
+                        wallHatchType={wallHatchType}
+                        wallHatchSide={wallHatchSide}
+                        onReupload={() => {
+                          dispatch({ type: 'SET_PDF_FILE', payload: null as any });
+                          setActiveTab('upload');
+                        }}
+                      />
+                    </>
+                  )}
                 </div>
               </div>
 

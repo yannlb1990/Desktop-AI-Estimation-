@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, useCallback } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState, useCallback } from 'react';
 import { Canvas as FabricCanvas, FabricImage, Circle, Line, Path, Rect, Polygon, Text, Point as FabricPoint, util as fabricUtil } from 'fabric';
 import * as pdfjsLib from 'pdfjs-dist';
 import { Loader2, Check, X } from 'lucide-react';
@@ -35,6 +35,53 @@ function snapToSquare(from: WorldPoint, to: WorldPoint): WorldPoint {
   return { x: from.x + Math.sign(dx) * side, y: from.y + Math.sign(dy) * side };
 }
 
+/** Return midpoints for every edge of a measurement's worldPoints array. */
+function getMidpointsForMeasurement(m: { type?: string; worldPoints: WorldPoint[] }): WorldPoint[] {
+  const pts = m.worldPoints;
+  if (pts.length < 2) return [];
+  if (m.type === 'rectangle' && pts.length === 2) {
+    const minX = Math.min(pts[0].x, pts[1].x), maxX = Math.max(pts[0].x, pts[1].x);
+    const minY = Math.min(pts[0].y, pts[1].y), maxY = Math.max(pts[0].y, pts[1].y);
+    return [
+      { x: (minX + maxX) / 2, y: minY },
+      { x: (minX + maxX) / 2, y: maxY },
+      { x: minX, y: (minY + maxY) / 2 },
+      { x: maxX, y: (minY + maxY) / 2 },
+    ];
+  }
+  const n = m.type === 'polygon' ? pts.length : pts.length - 1;
+  const mids: WorldPoint[] = [];
+  for (let i = 0; i < n; i++) {
+    const a = pts[i], b = pts[(i + 1) % pts.length];
+    mids.push({ x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 });
+  }
+  return mids;
+}
+
+/** Snap cursor to nearest endpoint (priority) or midpoint within threshold.
+ *  Returns the snapped point and whether it is a midpoint. */
+function computeSnapPoint(
+  cursor: WorldPoint,
+  measurements: { type?: string; worldPoints?: WorldPoint[] }[],
+  thresh: number
+): { point: WorldPoint; isMidpoint: boolean } | null {
+  for (const m of measurements) {
+    if (!m.worldPoints) continue;
+    for (const ep of m.worldPoints) {
+      if (Math.hypot(cursor.x - ep.x, cursor.y - ep.y) < thresh)
+        return { point: { x: ep.x, y: ep.y }, isMidpoint: false };
+    }
+  }
+  for (const m of measurements) {
+    if (!m.worldPoints || m.worldPoints.length < 2) continue;
+    for (const mid of getMidpointsForMeasurement(m as any)) {
+      if (Math.hypot(cursor.x - mid.x, cursor.y - mid.y) < thresh)
+        return { point: { x: mid.x, y: mid.y }, isMidpoint: true };
+    }
+  }
+  return null;
+}
+
 /** In-place update of a Fabric Line's world endpoints (no scale/skew accumulation). */
 function setFabricLineCoords(line: any, x1: number, y1: number, x2: number, y2: number) {
   line.set({
@@ -49,35 +96,62 @@ function setFabricLineCoords(line: any, x1: number, y1: number, x2: number, y2: 
 }
 
 /**
- * Sync the three companion wall objects (wl2, cap1, cap2) to match wl1's current
- * rendered position. wl1 is always the +normal side (l1 in wallGeometry).
+ * Sync the four visual wall lines to match the hit-rect's current position/scale.
+ * objects = [hitRect, wl1, wl2, wc1, wc2]
+ * hitRect is rotated to the wall axis; its local X = wall length, local Y = thickness (locked).
  */
-function syncWallCompanions(
-  wl1: any,
+function syncWallFromRect(
+  hitRect: any,
   objects: any[],
   wallThickness: number,
   upm: number,
 ) {
-  if (objects.length < 4) return;
-  const [, wl2, wc1, wc2] = objects;
+  if (objects.length < 5) return;
+  const [, wl1, wl2, wc1, wc2] = objects;
 
-  const matrix = wl1.calcTransformMatrix();
-  const local = (wl1 as any).calcLinePoints();
-  const p1 = fabricUtil.transformPoint({ x: local.x1, y: local.y1 }, matrix);
-  const p2 = fabricUtil.transformPoint({ x: local.x2, y: local.y2 }, matrix);
+  const angle = (hitRect.angle ?? 0) * Math.PI / 180;
+  const cx: number = hitRect.left;
+  const cy: number = hitRect.top;
+  const halfLength = (hitRect.width * (hitRect.scaleX ?? 1)) / 2;
 
-  // wl1 sits at axis + normal*hw; derive axis by subtracting normal
-  const dx = p2.x - p1.x, dy = p2.y - p1.y;
-  const len = Math.sqrt(dx * dx + dy * dy) || 1;
-  const nx = -dy / len, ny = dx / len;
-  const hw = (wallThickness / 1000) * upm / 2;
-  const axisP1 = { x: p1.x - nx * hw, y: p1.y - ny * hw };
-  const axisP2 = { x: p2.x - nx * hw, y: p2.y - ny * hw };
+  const cosA = Math.cos(angle), sinA = Math.sin(angle);
+  const axisP1 = { x: cx - cosA * halfLength, y: cy - sinA * halfLength };
+  const axisP2 = { x: cx + cosA * halfLength, y: cy + sinA * halfLength };
 
   const geo = wallGeometry(axisP1, axisP2, wallThickness, upm);
+  setFabricLineCoords(wl1, geo.l1p1.x, geo.l1p1.y, geo.l1p2.x, geo.l1p2.y);
   setFabricLineCoords(wl2, geo.l2p1.x, geo.l2p1.y, geo.l2p2.x, geo.l2p2.y);
   setFabricLineCoords(wc1, geo.l1p1.x, geo.l1p1.y, geo.l2p1.x, geo.l2p1.y);
   setFabricLineCoords(wc2, geo.l1p2.x, geo.l1p2.y, geo.l2p2.x, geo.l2p2.y);
+}
+
+/** Build the transparent hit-rect that acts as the primary interactive object for a wall. */
+function makeWallHitRect(axisP1: WorldPoint, axisP2: WorldPoint, thicknessMm: number, upm: number, strokeWidth: number) {
+  const dx = axisP2.x - axisP1.x, dy = axisP2.y - axisP1.y;
+  const length = Math.sqrt(dx * dx + dy * dy) || 1;
+  const thicknessWorld = (thicknessMm / 1000) * upm;
+  const angle = Math.atan2(dy, dx) * 180 / Math.PI;
+  const cx = (axisP1.x + axisP2.x) / 2;
+  const cy = (axisP1.y + axisP2.y) / 2;
+
+  const hitRect = new Rect({
+    left: cx, top: cy,
+    width: length, height: thicknessWorld,
+    angle,
+    originX: 'center', originY: 'center',
+    fill: 'rgba(0,0,0,0)',
+    stroke: null,
+    hasControls: true, hasBorders: true,
+    lockRotation: true, lockScalingY: true,
+    cornerColor: '#2563eb', cornerStyle: 'circle' as const,
+    cornerSize: 10, transparentCorners: false, borderColor: '#2563eb',
+    borderScaleFactor: 2,
+    selectable: false, evented: false,
+  });
+  // Only show left/right endpoint handles — MT/MB/corners would scale thickness
+  hitRect.setControlsVisibility({ mt: false, mb: false, tl: false, tr: false, bl: false, br: false });
+  (hitRect as any)._isWallPrimary = true;
+  return hitRect;
 }
 
 /** Compute the four corner points for a wall-line given two endpoints, thickness in mm, and unitsPerMetre. */
@@ -166,6 +240,10 @@ interface InteractiveCanvasProps {
   onReupload?: () => void;
   /** Original file name — used to choose between PDF.js and direct image loading. */
   fileName?: string;
+  /** Fill hatch pattern for the next wall drawn. */
+  wallHatchType?: string;
+  /** Which face(s) to apply face-lining hatches (plasterboard / wet-area / cladding). */
+  wallHatchSide?: string;
 }
 
 export const InteractiveCanvas = ({
@@ -190,6 +268,8 @@ export const InteractiveCanvas = ({
   onMeasurementSelect,
   canvasExportRef,
   wallThickness = 90,
+  wallHatchType = 'none',
+  wallHatchSide = 'both',
   onReupload,
   fileName,
 }: InteractiveCanvasProps) => {
@@ -235,10 +315,23 @@ export const InteractiveCanvas = ({
   const perpSnapRef = useRef<{ from: WorldPoint; to: WorldPoint } | null>(null);
   // Last endpoint snapped to perpendicular — carried from mouse:move into mouse:up
   const snappedWallEndRef = useRef<WorldPoint | null>(null);
+  // Midpoint snap indicator — set to the midpoint world position when cursor is snapping to one
+  const midpointSnapRef = useRef<WorldPoint | null>(null);
+  // Endpoint snap indicator — set to the endpoint world position when cursor is snapping to an endpoint
+  const endpointSnapIndicatorRef = useRef<WorldPoint | null>(null);
+  // Arc wall control-point drag state (select mode)
+  const arcDragRef = useRef<{ id: string; p1: WorldPoint; p2: WorldPoint; ctrl: WorldPoint } | null>(null);
 
   // Always-current draw color — avoids stale closure in mouse callbacks
   const drawColorRef = useRef<string | undefined>(selectedColor);
   useEffect(() => { drawColorRef.current = selectedColor; }, [selectedColor]);
+
+  // Always-current hatch type — avoids stale closure in mouse callbacks
+  const wallHatchTypeRef = useRef<string>('none');
+  useEffect(() => { wallHatchTypeRef.current = wallHatchType || 'none'; }, [wallHatchType]);
+
+  const wallHatchSideRef = useRef<string>('both');
+  useEffect(() => { wallHatchSideRef.current = wallHatchSide || 'both'; }, [wallHatchSide]);
 
   // Reset and auto-dismiss hint banner whenever tool changes
   useEffect(() => {
@@ -269,7 +362,7 @@ export const InteractiveCanvas = ({
   // Drawing state
   const [isDrawing, setIsDrawing] = useState(false);
   const [startPoint, setStartPoint] = useState<WorldPoint | null>(null);
-  const [previewShape, setPreviewShape] = useState<any>(null);
+  const previewShapeRef = useRef<any>(null);
   const [polygonPoints, setPolygonPoints] = useState<WorldPoint[]>([]);
   const [polygonMarkers, setPolygonMarkers] = useState<Circle[]>([]);
   const [polygonLines, setPolygonLines] = useState<Line[]>([]);
@@ -621,22 +714,18 @@ export const InteractiveCanvas = ({
     loadPDF();
   }, [pdfUrl, pageIndex, transform.rotation, onViewportReady, onTransformChange]);
 
-  // Apply zoom and pan transforms - SINGLE SOURCE OF TRUTH
-  // Re-render measurements when transform changes for stability
-  useEffect(() => {
+  // Apply zoom and pan transforms synchronously before paint to avoid a 1-frame lag
+  // where React has updated state but the canvas still shows the old viewport.
+  useLayoutEffect(() => {
     if (!fabricCanvasRef.current) return;
     const canvas = fabricCanvasRef.current;
-    
-    // Apply viewportTransform for zoom and pan
-    // [scaleX, skewY, skewX, scaleY, translateX, translateY]
     canvas.setViewportTransform([
-      transform.zoom, 0, 0, 
-      transform.zoom, 
-      transform.panX, 
+      transform.zoom, 0, 0,
+      transform.zoom,
+      transform.panX,
       transform.panY
     ]);
-    
-    canvas.requestRenderAll();
+    canvas.renderAll();
   }, [transform.zoom, transform.panX, transform.panY]);
 
   // Update cursor based on active tool
@@ -748,10 +837,33 @@ export const InteractiveCanvas = ({
     return baseSize / transform.zoom;
   }, [transform.zoom]);
 
-  // Keep measurementMapRef in sync so the after:render label handler always has current data
-  useEffect(() => {
+  // Synchronously remove canvas objects for deleted measurements BEFORE the browser paints.
+  // useEffect runs after paint, causing a visible ghost frame. useLayoutEffect runs before
+  // paint, so the canvas is already clean when the user sees the screen update.
+  useLayoutEffect(() => {
     measurementMapRef.current = new Map(measurements.map(m => [m.id, m]));
-    fabricCanvasRef.current?.requestRenderAll();
+    const canvas = fabricCanvasRef.current;
+    if (!canvas) return;
+    const measurementIds = new Set(measurements.map(m => m.id));
+    const objectsMap = measurementObjectsRef.current;
+    const idsToRemove: string[] = [];
+    const activeObj = canvas.getActiveObject();
+    objectsMap.forEach((objects, id) => {
+      if (!measurementIds.has(id)) {
+        if (activeObj && objects.includes(activeObj as any)) {
+          canvas.discardActiveObject();
+        }
+        objects.forEach((obj: any) => {
+          canvas.remove(obj);
+          shapeToMeasurementIdRef.current.delete(obj);
+        });
+        idsToRemove.push(id);
+      }
+    });
+    if (idsToRemove.length > 0) {
+      idsToRemove.forEach(id => objectsMap.delete(id));
+      canvas.renderAll();
+    }
   }, [measurements]);
 
   // Sync canvas objects with measurements state:
@@ -767,9 +879,19 @@ export const InteractiveCanvas = ({
 
     // Remove canvas objects for measurements that no longer exist in state
     const idsToRemove: string[] = [];
+    const activeObj = canvas.getActiveObject();
     objectsMap.forEach((objects, id) => {
       if (!measurementIds.has(id)) {
-        objects.forEach(obj => canvas.remove(obj));
+        // If the active selection belongs to this deleted measurement, discard it
+        // before removal — otherwise Fabric v6 leaves selection handles rendered
+        // as a ghost on the next animation frame.
+        if (activeObj && objects.includes(activeObj as any)) {
+          canvas.discardActiveObject();
+        }
+        objects.forEach(obj => {
+          canvas.remove(obj);
+          shapeToMeasurementIdRef.current.delete(obj as any);
+        });
         idsToRemove.push(id);
       }
     });
@@ -796,28 +918,41 @@ export const InteractiveCanvas = ({
             const geo = arcWallGeometry(s, e, ctrl, (measurement as any).wallThickness || 90, unitsPerMetreRef.current);
             const makeArcPath = (pts: { p1: WorldPoint; Q: WorldPoint; p2: WorldPoint }) =>
               `M ${pts.p1.x} ${pts.p1.y} Q ${pts.Q.x} ${pts.Q.y} ${pts.p2.x} ${pts.p2.y}`;
-            const outerArc = new Path(makeArcPath(geo.outer), { stroke: color, strokeWidth: strokeWidth * 1.5, fill: '', selectable: false, evented: false, hasControls: true, hasBorders: true, lockRotation: true, cornerColor: '#2563eb', cornerStyle: 'circle' as const, cornerSize: 10, transparentCorners: false, borderColor: '#2563eb' });
+            const outerArc = new Path(makeArcPath(geo.outer), { stroke: color, strokeWidth: strokeWidth * 1.5, fill: '', selectable: false, evented: false });
             const innerArc = new Path(makeArcPath(geo.inner), { stroke: color, strokeWidth: strokeWidth * 1.5, fill: '', selectable: false, evented: false });
             const capS = new Line([geo.outer.p1.x, geo.outer.p1.y, geo.inner.p1.x, geo.inner.p1.y], { stroke: color, strokeWidth, selectable: false, evented: false });
             const capE = new Line([geo.outer.p2.x, geo.outer.p2.y, geo.inner.p2.x, geo.inner.p2.y], { stroke: color, strokeWidth, selectable: false, evented: false });
+            (outerArc as any)._isWallSecondary = true;
+            (innerArc as any)._isWallSecondary = true;
+            (capS as any)._isWallSecondary = true;
+            (capE as any)._isWallSecondary = true;
             [outerArc, innerArc, capS, capE].forEach(l => canvas.add(l));
             measurementObjectsRef.current.set(measurement.id, [outerArc, innerArc, capS, capE]);
             shapeToMeasurementIdRef.current.set(outerArc, measurement.id);
+            shapeToMeasurementIdRef.current.set(innerArc, measurement.id);
+            shapeToMeasurementIdRef.current.set(capS, measurement.id);
+            shapeToMeasurementIdRef.current.set(capE, measurement.id);
             return;
           }
-          // Restore wall-line as 4 fabric objects
-          const geo = wallGeometry(s, e, (measurement as any).wallThickness, unitsPerMetreRef.current);
-          const wl1 = new Line([geo.l1p1.x, geo.l1p1.y, geo.l1p2.x, geo.l1p2.y], { stroke: color, strokeWidth: strokeWidth * 1.5, selectable: false, evented: false, hasControls: true, hasBorders: true, lockRotation: true, cornerColor: '#2563eb', cornerStyle: 'circle' as const, cornerSize: 10, transparentCorners: false, borderColor: '#2563eb' });
+          // Restore wall-line as 5 fabric objects: [hitRect, wl1, wl2, wc1, wc2]
+          const thickness = (measurement as any).wallThickness ?? 90;
+          const geo = wallGeometry(s, e, thickness, unitsPerMetreRef.current);
+          const hitRect = makeWallHitRect(s, e, thickness, unitsPerMetreRef.current, strokeWidth);
+          const wl1 = new Line([geo.l1p1.x, geo.l1p1.y, geo.l1p2.x, geo.l1p2.y], { stroke: color, strokeWidth: strokeWidth * 1.5, selectable: false, evented: false, hasControls: false, hasBorders: false });
           const wl2 = new Line([geo.l2p1.x, geo.l2p1.y, geo.l2p2.x, geo.l2p2.y], { stroke: color, strokeWidth: strokeWidth * 1.5, selectable: false, evented: false });
           const wc1 = new Line([geo.l1p1.x, geo.l1p1.y, geo.l2p1.x, geo.l2p1.y], { stroke: color, strokeWidth, selectable: false, evented: false });
           const wc2 = new Line([geo.l1p2.x, geo.l1p2.y, geo.l2p2.x, geo.l2p2.y], { stroke: color, strokeWidth, selectable: false, evented: false });
-          (wl1 as any)._isWallPrimary = true;
+          (wl1 as any)._isWallSecondary = true;
           (wl2 as any)._isWallSecondary = true;
           (wc1 as any)._isWallSecondary = true;
           (wc2 as any)._isWallSecondary = true;
-          [wl1, wl2, wc1, wc2].forEach(l => canvas.add(l));
-          measurementObjectsRef.current.set(measurement.id, [wl1, wl2, wc1, wc2]);
+          [hitRect, wl1, wl2, wc1, wc2].forEach(l => canvas.add(l));
+          measurementObjectsRef.current.set(measurement.id, [hitRect, wl1, wl2, wc1, wc2]);
+          shapeToMeasurementIdRef.current.set(hitRect, measurement.id);
           shapeToMeasurementIdRef.current.set(wl1, measurement.id);
+          shapeToMeasurementIdRef.current.set(wl2, measurement.id);
+          shapeToMeasurementIdRef.current.set(wc1, measurement.id);
+          shapeToMeasurementIdRef.current.set(wc2, measurement.id);
           return; // skip the generic shape = ... and canvas.add(shape) below
         }
         const isRefLine = measurement.color === '#38bdf8';
@@ -981,55 +1116,424 @@ export const InteractiveCanvas = ({
       };
 
       // Door/window symbols — p1/p2 in world coords, converted inside
-      const drawDoorSymbol = (p1: WorldPoint, p2: WorldPoint, color: string) => {
+      const drawDoorSymbol = (p1: WorldPoint, p2: WorldPoint, color: string, subtype?: string) => {
         const x1 = tpx(p1.x), y1 = tpy(p1.y);
         const x2 = tpx(p2.x), y2 = tpy(p2.y);
         const dx = x2 - x1, dy = y2 - y1;
         const len = Math.sqrt(dx * dx + dy * dy);
         if (len < 1) return;
         const lineAngle = Math.atan2(dy, dx);
-        ctx.beginPath();
-        ctx.arc(x1, y1, len, lineAngle, lineAngle + Math.PI / 2, false);
+        ctx.save();
         ctx.strokeStyle = color + 'cc';
         ctx.lineWidth = 1 * dpr;
-        ctx.setLineDash([4 * dpr, 3 * dpr]);
-        ctx.stroke();
-        ctx.setLineDash([]);
-        const endAngle = lineAngle + Math.PI / 2;
-        ctx.beginPath();
-        ctx.moveTo(x1, y1);
-        ctx.lineTo(x1 + len * Math.cos(endAngle), y1 + len * Math.sin(endAngle));
-        ctx.strokeStyle = color + '88';
-        ctx.lineWidth = 1 * dpr;
-        ctx.stroke();
+        if (subtype === 'Cavity Slider') {
+          // Two parallel lines + bidirectional arrow
+          const perpX = -dy / len, perpY = dx / len;
+          const off = 4 * dpr;
+          ctx.setLineDash([]);
+          for (const s of [-1, 1]) {
+            ctx.beginPath();
+            ctx.moveTo(x1 + perpX * off * s, y1 + perpY * off * s);
+            ctx.lineTo(x2 + perpX * off * s, y2 + perpY * off * s);
+            ctx.stroke();
+          }
+          const aSize = 6 * dpr;
+          for (const [ax, ay, dir] of [[x1, y1, 1], [x2, y2, -1]] as [number, number, number][]) {
+            ctx.beginPath();
+            ctx.moveTo(ax, ay);
+            ctx.lineTo(ax + Math.cos(lineAngle) * aSize * dir, ay + Math.sin(lineAngle) * aSize * dir);
+            ctx.stroke();
+          }
+        } else if (subtype === 'Bi-fold') {
+          ctx.setLineDash([]);
+          const half = len / 2;
+          ctx.beginPath();
+          ctx.moveTo(x1, y1);
+          ctx.lineTo(x1 + Math.cos(lineAngle - Math.PI / 4) * half, y1 + Math.sin(lineAngle - Math.PI / 4) * half);
+          ctx.stroke();
+          ctx.beginPath();
+          ctx.moveTo(x1, y1);
+          ctx.lineTo(x1 + Math.cos(lineAngle + Math.PI / 4) * half, y1 + Math.sin(lineAngle + Math.PI / 4) * half);
+          ctx.stroke();
+        } else if (subtype === 'French') {
+          ctx.setLineDash([4 * dpr, 3 * dpr]);
+          const half = len / 2;
+          const midX = (x1 + x2) / 2, midY = (y1 + y2) / 2;
+          ctx.beginPath(); ctx.arc(x1, y1, half, lineAngle, lineAngle + Math.PI / 2, false); ctx.stroke();
+          ctx.beginPath(); ctx.arc(x2, y2, half, lineAngle + Math.PI, lineAngle + Math.PI * 1.5, false); ctx.stroke();
+        } else if (subtype === 'Garage') {
+          ctx.setLineDash([]);
+          const perpX = -dy / len, perpY = dx / len;
+          const nLines = 4;
+          for (let i = 0; i <= nLines; i++) {
+            const t = i / nLines;
+            const bx = x1 + dx * t, by = y1 + dy * t;
+            const off = 6 * dpr;
+            ctx.beginPath();
+            ctx.moveTo(bx + perpX * off, by + perpY * off);
+            ctx.lineTo(bx - perpX * off, by - perpY * off);
+            ctx.stroke();
+          }
+        } else if (subtype === 'Fire Door') {
+          ctx.setLineDash([4 * dpr, 3 * dpr]);
+          ctx.beginPath(); ctx.arc(x1, y1, len, lineAngle, lineAngle + Math.PI / 2, false); ctx.stroke();
+          ctx.setLineDash([]);
+          const endAngle = lineAngle + Math.PI / 2;
+          ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x1 + len * Math.cos(endAngle), y1 + len * Math.sin(endAngle)); ctx.stroke();
+          ctx.fillStyle = color + 'cc';
+          ctx.font = `bold ${Math.max(8, len * 0.18)}px system-ui`;
+          ctx.textAlign = 'center';
+          ctx.fillText('FD', (x1 + x1 + len * Math.cos(endAngle)) / 2, (y1 + y1 + len * Math.sin(endAngle)) / 2 - 4 * dpr);
+        } else {
+          // Default: Internal / Entry — standard quarter-circle swing
+          ctx.setLineDash([4 * dpr, 3 * dpr]);
+          ctx.beginPath(); ctx.arc(x1, y1, len, lineAngle, lineAngle + Math.PI / 2, false); ctx.stroke();
+          ctx.setLineDash([]);
+          const endAngle = lineAngle + Math.PI / 2;
+          ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x1 + len * Math.cos(endAngle), y1 + len * Math.sin(endAngle));
+          ctx.strokeStyle = color + '88'; ctx.stroke();
+        }
+        ctx.restore();
       };
 
-      const drawWindowSymbol = (p1: WorldPoint, p2: WorldPoint, color: string) => {
+      const drawWindowSymbol = (p1: WorldPoint, p2: WorldPoint, color: string, subtype?: string) => {
         const x1 = tpx(p1.x), y1 = tpy(p1.y);
         const x2 = tpx(p2.x), y2 = tpy(p2.y);
         const dx = x2 - x1, dy = y2 - y1;
         const len = Math.sqrt(dx * dx + dy * dy) || 1;
-        const perpX = -dy / len;
-        const perpY = dx / len;
-        const offPx = 5 * dpr;
-        for (const sign of [-1, 1]) {
+        const perpX = -dy / len, perpY = dx / len;
+        ctx.save();
+        ctx.strokeStyle = color + 'bb';
+        ctx.lineWidth = 1 * dpr;
+        if (subtype === 'Fixed') {
+          ctx.lineWidth = 2.5 * dpr;
+          ctx.setLineDash([]);
+          ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke();
+        } else if (subtype === 'Louvre') {
+          ctx.setLineDash([]);
+          const nBars = Math.max(3, Math.round(len / (10 * dpr)));
+          const offPx = 5 * dpr;
+          for (let i = 0; i <= nBars; i++) {
+            const t = i / nBars;
+            const bx = x1 + dx * t, by = y1 + dy * t;
+            ctx.beginPath();
+            ctx.moveTo(bx + perpX * offPx, by + perpY * offPx);
+            ctx.lineTo(bx - perpX * offPx, by - perpY * offPx);
+            ctx.stroke();
+          }
+          for (const s of [-1, 1]) {
+            ctx.beginPath();
+            ctx.moveTo(x1 + perpX * offPx * s, y1 + perpY * offPx * s);
+            ctx.lineTo(x2 + perpX * offPx * s, y2 + perpY * offPx * s);
+            ctx.stroke();
+          }
+        } else if (subtype === 'Skylight') {
+          const offPx = 6 * dpr;
+          ctx.setLineDash([]);
+          for (const s of [-1, 1]) {
+            ctx.beginPath();
+            ctx.moveTo(x1 + perpX * offPx * s, y1 + perpY * offPx * s);
+            ctx.lineTo(x2 + perpX * offPx * s, y2 + perpY * offPx * s);
+            ctx.stroke();
+          }
+          for (const pt of [{ x: x1, y: y1 }, { x: x2, y: y2 }]) {
+            ctx.beginPath();
+            ctx.moveTo(pt.x - perpX * offPx, pt.y - perpY * offPx);
+            ctx.lineTo(pt.x + perpX * offPx, pt.y + perpY * offPx);
+            ctx.stroke();
+          }
           ctx.beginPath();
-          ctx.moveTo(x1 + perpX * offPx * sign, y1 + perpY * offPx * sign);
-          ctx.lineTo(x2 + perpX * offPx * sign, y2 + perpY * offPx * sign);
-          ctx.strokeStyle = color + 'bb';
-          ctx.lineWidth = 1 * dpr;
+          ctx.moveTo(x1 + perpX * offPx, y1 + perpY * offPx);
+          ctx.lineTo(x2 - perpX * offPx, y2 - perpY * offPx);
+          ctx.moveTo(x1 - perpX * offPx, y1 - perpY * offPx);
+          ctx.lineTo(x2 + perpX * offPx, y2 + perpY * offPx);
           ctx.stroke();
-        }
-        for (const pt of [{ x: x1, y: y1 }, { x: x2, y: y2 }]) {
-          ctx.beginPath();
-          ctx.moveTo(pt.x - perpX * offPx, pt.y - perpY * offPx);
-          ctx.lineTo(pt.x + perpX * offPx, pt.y + perpY * offPx);
+        } else if (subtype === 'Sliding') {
+          const offPx = 5 * dpr;
+          ctx.setLineDash([]);
+          for (const s of [-1, 1]) {
+            ctx.beginPath();
+            ctx.moveTo(x1 + perpX * offPx * s, y1 + perpY * offPx * s);
+            ctx.lineTo(x2 + perpX * offPx * s, y2 + perpY * offPx * s);
+            ctx.stroke();
+          }
+          for (const pt of [{ x: x1, y: y1 }, { x: x2, y: y2 }]) {
+            ctx.beginPath();
+            ctx.moveTo(pt.x - perpX * offPx, pt.y - perpY * offPx);
+            ctx.lineTo(pt.x + perpX * offPx, pt.y + perpY * offPx);
+            ctx.stroke();
+          }
+          const mx = (x1 + x2) / 2, my = (y1 + y2) / 2;
+          const aLen = Math.min(len * 0.3, 15 * dpr);
+          const ux = dx / len, uy = dy / len;
           ctx.strokeStyle = color;
           ctx.lineWidth = 1.5 * dpr;
+          ctx.beginPath();
+          ctx.moveTo(mx - ux * aLen, my - uy * aLen);
+          ctx.lineTo(mx + ux * aLen, my + uy * aLen);
           ctx.stroke();
+          for (const [tip, dir] of [[{x: mx + ux * aLen, y: my + uy * aLen}, 1], [{x: mx - ux * aLen, y: my - uy * aLen}, -1]] as [{x:number;y:number}, number][]) {
+            const aHead = 4 * dpr;
+            ctx.beginPath();
+            ctx.moveTo(tip.x, tip.y);
+            ctx.lineTo(tip.x - (ux * Math.cos(0.4) - uy * Math.sin(0.4)) * aHead * dir, tip.y - (uy * Math.cos(0.4) + ux * Math.sin(0.4)) * aHead * dir);
+            ctx.moveTo(tip.x, tip.y);
+            ctx.lineTo(tip.x - (ux * Math.cos(-0.4) - uy * Math.sin(-0.4)) * aHead * dir, tip.y - (uy * Math.cos(-0.4) + ux * Math.sin(-0.4)) * aHead * dir);
+            ctx.stroke();
+          }
+        } else {
+          // Default: Awning / Casement — two parallel lines with end caps
+          const offPx = 5 * dpr;
+          ctx.setLineDash([]);
+          for (const s of [-1, 1]) {
+            ctx.beginPath();
+            ctx.moveTo(x1 + perpX * offPx * s, y1 + perpY * offPx * s);
+            ctx.lineTo(x2 + perpX * offPx * s, y2 + perpY * offPx * s);
+            ctx.stroke();
+          }
+          for (const pt of [{ x: x1, y: y1 }, { x: x2, y: y2 }]) {
+            ctx.beginPath();
+            ctx.moveTo(pt.x - perpX * offPx, pt.y - perpY * offPx);
+            ctx.lineTo(pt.x + perpX * offPx, pt.y + perpY * offPx);
+            ctx.strokeStyle = color;
+            ctx.lineWidth = 1.5 * dpr;
+            ctx.stroke();
+          }
         }
+        ctx.restore();
       };
 
+      // ── Pass 1: wall hatch fills (drawn before labels so labels sit on top) ──
+      // Iterate measurementMapRef (rebuilt from props first) so deleted IDs are never hatched.
+      measurementMapRef.current.forEach((hm, hatchId) => {
+        if (!hm) return;
+        const ht = (hm as any).wallHatchType as string | undefined;
+        if (!ht || ht === 'none') return;
+        if (!hm.wallThickness || !hm.worldPoints || hm.worldPoints.length < 2) return;
+
+        const upm = unitsPerMetreRef.current || 1;
+        const hp1 = hm.worldPoints[0];
+        const hp2 = hm.worldPoints[1];
+        const thkMm = hm.wallThickness;
+        const isArc = !!(hm as any).arcControlPoint;
+        const toS = (wx: number, wy: number) => ({ x: tpx(wx), y: tpy(wy) });
+
+        ctx.save();
+        ctx.setLineDash([]);
+
+        let bbCorners: { x: number; y: number }[] = [];
+
+        if (isArc) {
+          const ctrl = (hm as any).arcControlPoint as WorldPoint;
+          const g = arcWallGeometry(hp1, hp2, ctrl, thkMm, upm);
+          const op1 = toS(g.outer.p1.x, g.outer.p1.y);
+          const oQ  = toS(g.outer.Q.x,  g.outer.Q.y);
+          const op2 = toS(g.outer.p2.x, g.outer.p2.y);
+          const ip1 = toS(g.inner.p1.x, g.inner.p1.y);
+          const iQ  = toS(g.inner.Q.x,  g.inner.Q.y);
+          const ip2 = toS(g.inner.p2.x, g.inner.p2.y);
+          ctx.beginPath();
+          ctx.moveTo(op1.x, op1.y);
+          ctx.quadraticCurveTo(oQ.x, oQ.y, op2.x, op2.y);
+          ctx.lineTo(ip2.x, ip2.y);
+          ctx.quadraticCurveTo(iQ.x, iQ.y, ip1.x, ip1.y);
+          ctx.closePath();
+          bbCorners = [op1, oQ, op2, ip1, iQ, ip2];
+        } else {
+          const g = wallGeometry(hp1, hp2, thkMm, upm);
+          const c1 = toS(g.l1p1.x, g.l1p1.y);
+          const c2 = toS(g.l1p2.x, g.l1p2.y);
+          const c3 = toS(g.l2p2.x, g.l2p2.y);
+          const c4 = toS(g.l2p1.x, g.l2p1.y);
+          ctx.beginPath();
+          ctx.moveTo(c1.x, c1.y);
+          ctx.lineTo(c2.x, c2.y);
+          ctx.lineTo(c3.x, c3.y);
+          ctx.lineTo(c4.x, c4.y);
+          ctx.closePath();
+          bbCorners = [c1, c2, c3, c4];
+        }
+        ctx.clip();
+
+        const xs = bbCorners.map(c => c.x);
+        const ys = bbCorners.map(c => c.y);
+        const bbX0 = Math.min(...xs), bbX1 = Math.max(...xs);
+        const bbY0 = Math.min(...ys), bbY1 = Math.max(...ys);
+        const bbW = bbX1 - bbX0, bbH = bbY1 - bbY0;
+
+        const ax1h = tpx(hp1.x), ay1h = tpy(hp1.y);
+        const ax2h = tpx(hp2.x), ay2h = tpy(hp2.y);
+        const wallAngle = Math.atan2(ay2h - ay1h, ax2h - ax1h);
+        const halfLen = Math.sqrt((ax2h - ax1h) ** 2 + (ay2h - ay1h) ** 2) / 2;
+        const hwPx = (thkMm / 1000) * upm * zoom * dpr / 2;
+        const midX = (ax1h + ax2h) / 2, midY = (ay1h + ay2h) / 2;
+
+        // diagonal helper: draws lines of slope 1 (↘) covering the bbox
+        const diagLines = (color: string, lw: number, sp: number) => {
+          ctx.strokeStyle = color;
+          ctx.lineWidth = lw;
+          const cMin = bbX0 - bbY1 - sp;
+          const cMax = bbX1 - bbY0 + sp;
+          for (let c = cMin; c <= cMax; c += sp) {
+            ctx.beginPath();
+            ctx.moveTo(c + bbY0, bbY0);
+            ctx.lineTo(c + bbY1, bbY1);
+            ctx.stroke();
+          }
+        };
+
+        if (ht === 'masonry') {
+          const bH = Math.max(hwPx * 0.55, 3 * dpr);
+          if (bH >= 2) {
+            const bW = bH * 2.5;
+            ctx.save();
+            ctx.translate(midX, midY);
+            ctx.rotate(wallAngle);
+            ctx.strokeStyle = '#a07340';
+            ctx.fillStyle = 'rgba(200,170,130,0.07)';
+            ctx.lineWidth = 0.75 * dpr;
+            let row = 0;
+            for (let y = -hwPx; y < hwPx; y += bH, row++) {
+              const off = (row % 2) * bW * 0.5;
+              ctx.beginPath(); ctx.moveTo(-halfLen, y); ctx.lineTo(halfLen, y); ctx.stroke();
+              for (let x = -halfLen - off; x <= halfLen + bW; x += bW) {
+                const rb = Math.min(y + bH, hwPx);
+                ctx.fillRect(x, y + 0.5, bW - 0.8, rb - y - 0.8);
+                ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x, rb); ctx.stroke();
+              }
+            }
+            ctx.beginPath(); ctx.moveTo(-halfLen, hwPx); ctx.lineTo(halfLen, hwPx); ctx.stroke();
+            ctx.restore();
+          }
+        } else if (ht === 'plasterboard') {
+          const stripH = Math.max(hwPx * 0.28, 2.5 * dpr);
+          const sp2 = Math.max(3 * dpr, stripH * 0.55);
+          const side = (hm as any).wallHatchSide as string || 'both';
+          const strips: number[] = [];
+          if (side === 'l1' || side === 'both') strips.push(-hwPx);
+          if (side === 'l2' || side === 'both') strips.push(hwPx - stripH);
+          ctx.save();
+          ctx.translate(midX, midY);
+          ctx.rotate(wallAngle);
+          ctx.strokeStyle = '#94a3b8';
+          ctx.lineWidth = 0.7 * dpr;
+          for (const sY0 of strips) {
+            const sY1 = sY0 + stripH;
+            ctx.save();
+            ctx.beginPath();
+            ctx.rect(-halfLen, sY0, halfLen * 2, stripH + 0.5);
+            ctx.clip();
+            ctx.fillStyle = 'rgba(148,163,184,0.15)';
+            ctx.fillRect(-halfLen, sY0, halfLen * 2, stripH);
+            for (let c = -halfLen - stripH - sp2; c <= halfLen + sp2; c += sp2) {
+              ctx.beginPath();
+              ctx.moveTo(c + sY0, sY0);
+              ctx.lineTo(c + sY1, sY1);
+              ctx.stroke();
+            }
+            ctx.restore();
+          }
+          ctx.restore();
+        } else if (ht === 'fire-rated') {
+          ctx.fillStyle = 'rgba(239,68,68,0.07)';
+          ctx.fillRect(bbX0, bbY0, bbW, bbH);
+          diagLines('#fca5a5', 0.7 * dpr, 4 * dpr);
+        } else if (ht === 'insulation') {
+          const wvSp = Math.max(hwPx * 0.45, 4 * dpr);
+          const wvA  = wvSp * 0.38;
+          const wvP  = wvSp * 2.2;
+          ctx.save();
+          ctx.translate(midX, midY);
+          ctx.rotate(wallAngle);
+          ctx.strokeStyle = '#fcd34d';
+          ctx.lineWidth = 1 * dpr;
+          for (let y = -hwPx + wvSp * 0.5; y < hwPx; y += wvSp) {
+            ctx.beginPath();
+            let first = true;
+            for (let x = -halfLen; x <= halfLen; x += 1.5) {
+              const wy = y + Math.sin((x / wvP) * Math.PI * 2) * wvA;
+              first ? ctx.moveTo(x, wy) : ctx.lineTo(x, wy);
+              first = false;
+            }
+            ctx.stroke();
+          }
+          ctx.restore();
+        } else if (ht === 'cladding') {
+          const stripH = Math.max(hwPx * 0.22, 2 * dpr);
+          const sideClad = (hm as any).wallHatchSide as string || 'l1';
+          const strips: number[] = [];
+          if (sideClad === 'l1' || sideClad === 'both') strips.push(-hwPx);
+          if (sideClad === 'l2' || sideClad === 'both') strips.push(hwPx - stripH);
+          ctx.save();
+          ctx.translate(midX, midY);
+          ctx.rotate(wallAngle);
+          ctx.strokeStyle = '#7dd3fc';
+          ctx.lineWidth = 0.8 * dpr;
+          for (const sY0 of strips) {
+            const sY1 = sY0 + stripH;
+            ctx.save();
+            ctx.beginPath();
+            ctx.rect(-halfLen, sY0, halfLen * 2, stripH + 0.5);
+            ctx.clip();
+            ctx.fillStyle = 'rgba(125,211,252,0.15)';
+            ctx.fillRect(-halfLen, sY0, halfLen * 2, stripH);
+            const lineGap = Math.max(1.8 * dpr, stripH / 3);
+            for (let y = sY0 + lineGap; y < sY1; y += lineGap) {
+              ctx.beginPath(); ctx.moveTo(-halfLen, y); ctx.lineTo(halfLen, y); ctx.stroke();
+            }
+            ctx.restore();
+          }
+          ctx.restore();
+        } else if (ht === 'wet-area') {
+          const stripH = Math.max(hwPx * 0.28, 2.5 * dpr);
+          const sp2 = Math.max(3 * dpr, stripH * 0.55);
+          const sideWet = (hm as any).wallHatchSide as string || 'l1';
+          const strips: number[] = [];
+          if (sideWet === 'l1' || sideWet === 'both') strips.push(-hwPx);
+          if (sideWet === 'l2' || sideWet === 'both') strips.push(hwPx - stripH);
+          ctx.save();
+          ctx.translate(midX, midY);
+          ctx.rotate(wallAngle);
+          ctx.strokeStyle = 'rgba(59,130,246,0.65)';
+          ctx.lineWidth = 0.7 * dpr;
+          for (const sY0 of strips) {
+            const sY1 = sY0 + stripH;
+            ctx.save();
+            ctx.beginPath();
+            ctx.rect(-halfLen, sY0, halfLen * 2, stripH + 0.5);
+            ctx.clip();
+            ctx.fillStyle = 'rgba(59,130,246,0.15)';
+            ctx.fillRect(-halfLen, sY0, halfLen * 2, stripH);
+            for (let c = -halfLen - stripH - sp2; c <= halfLen + sp2; c += sp2) {
+              ctx.beginPath();
+              ctx.moveTo(c + sY0, sY0);
+              ctx.lineTo(c + sY1, sY1);
+              ctx.stroke();
+            }
+            ctx.restore();
+          }
+          ctx.restore();
+        } else if (ht === 'glazing') {
+          // X pattern (two diagonal directions)
+          diagLines('rgba(147,197,253,0.80)', 1.5 * dpr, 14 * dpr);
+          // Also draw ↗ direction
+          ctx.lineWidth = 1.5 * dpr;
+          ctx.strokeStyle = 'rgba(147,197,253,0.80)';
+          const sp = 14 * dpr;
+          const cMin = bbX0 + bbY0 - sp;
+          const cMax = bbX1 + bbY1 + sp;
+          for (let c = cMin; c <= cMax; c += sp) {
+            ctx.beginPath();
+            ctx.moveTo(c - bbY0, bbY0);
+            ctx.lineTo(c - bbY1, bbY1);
+            ctx.stroke();
+          }
+        }
+
+        ctx.restore();
+      });
+
+      // ── Pass 2: labels, symbols, endpoint squares ────────────────────────
       // ── Render each measurement ──────────────────────────────────────────
       measurementObjectsRef.current.forEach((objects, measurementId) => {
         const measurement = measurementMapRef.current.get(measurementId);
@@ -1082,8 +1586,8 @@ export const InteractiveCanvas = ({
 
           const isDoor = mType === 'Door' || lbl.startsWith('Door ') || lbl.startsWith('Door—') || lbl === 'Door';
           const isWindow = mType === 'Window' || lbl.startsWith('Window ') || lbl.startsWith('Window—') || lbl === 'Window';
-          if (isDoor) drawDoorSymbol(wP1, wP2, measurement.color || '#8b5cf6');
-          else if (isWindow) drawWindowSymbol(wP1, wP2, measurement.color || '#06b6d4');
+          if (isDoor) drawDoorSymbol(wP1, wP2, measurement.color || '#8b5cf6', (measurement as any).modSubtype);
+          else if (isWindow) drawWindowSymbol(wP1, wP2, measurement.color || '#06b6d4', (measurement as any).modSubtype);
         } else if ((measurement as any).type === 'count') {
           let sx = 0, sy = 0;
           objects.forEach(o => { const c = o.getCenterPoint(); sx += c.x; sy += c.y; });
@@ -1124,6 +1628,99 @@ export const InteractiveCanvas = ({
         ctx.lineTo(tpx(snapGuide.to.x), tpy(snapGuide.to.y));
         ctx.stroke();
         ctx.restore();
+      }
+
+      // Draw midpoint-snap triangle indicator (yellow triangle = AutoCAD midpoint style)
+      const midSnap = midpointSnapRef.current;
+      if (midSnap) {
+        const cx = tpx(midSnap.x), cy = tpy(midSnap.y);
+        const s = 7 * dpr;
+        ctx.save();
+        ctx.fillStyle = '#facc15';
+        ctx.strokeStyle = '#ca8a04';
+        ctx.lineWidth = 1.5 * dpr;
+        ctx.setLineDash([]);
+        ctx.beginPath();
+        ctx.moveTo(cx, cy - s);
+        ctx.lineTo(cx + s, cy + s * 0.7);
+        ctx.lineTo(cx - s, cy + s * 0.7);
+        ctx.closePath();
+        ctx.fill();
+        ctx.stroke();
+        ctx.restore();
+      }
+
+      // Feature 1: Endpoint snap indicator — cyan circle with cross
+      const epSnap = endpointSnapIndicatorRef.current;
+      if (epSnap) {
+        const cx = tpx(epSnap.x), cy = tpy(epSnap.y);
+        const r = 8 * dpr;
+        ctx.save();
+        ctx.strokeStyle = '#22d3ee';
+        ctx.lineWidth = 2 * dpr;
+        ctx.setLineDash([]);
+        ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI * 2); ctx.stroke();
+        ctx.beginPath();
+        ctx.moveTo(cx - r * 0.4, cy); ctx.lineTo(cx + r * 0.4, cy);
+        ctx.moveTo(cx, cy - r * 0.4); ctx.lineTo(cx, cy + r * 0.4);
+        ctx.stroke();
+        ctx.restore();
+      }
+
+      // Feature 2: Arc wall control-point handles (orange diamond, always visible)
+      measurementMapRef.current.forEach((m) => {
+        const ctrl = (m as any).arcControlPoint as WorldPoint | undefined;
+        if (!ctrl || !m.worldPoints || m.worldPoints.length < 2) return;
+        const cx = tpx(ctrl.x), cy = tpy(ctrl.y);
+        const s = 6 * dpr;
+        ctx.save();
+        ctx.fillStyle = arcDragRef.current?.id === m.id ? '#fb923c' : '#f97316cc';
+        ctx.strokeStyle = 'rgba(255,255,255,0.8)';
+        ctx.lineWidth = 1.5 * dpr;
+        ctx.setLineDash([]);
+        ctx.beginPath();
+        ctx.moveTo(cx, cy - s); ctx.lineTo(cx + s, cy); ctx.lineTo(cx, cy + s); ctx.lineTo(cx - s, cy);
+        ctx.closePath();
+        ctx.fill(); ctx.stroke();
+        ctx.restore();
+      });
+
+      // Feature 3: Squareness indicator — green square symbol where walls meet at ~90°
+      {
+        const walls = Array.from(measurementMapRef.current.values()).filter(
+          m => !!(m as any).wallThickness && m.worldPoints?.length >= 2
+        );
+        const snapThresh = 18 / zoom;
+        for (let i = 0; i < walls.length; i++) {
+          for (let j = i + 1; j < walls.length; j++) {
+            const mA = walls[i], mB = walls[j];
+            for (const epA of mA.worldPoints) {
+              for (const epB of mB.worldPoints) {
+                if (Math.hypot(epA.x - epB.x, epA.y - epB.y) > snapThresh) continue;
+                const otherA = mA.worldPoints.find((ep: WorldPoint) => ep !== epA) || mA.worldPoints[1];
+                const otherB = mB.worldPoints.find((ep: WorldPoint) => ep !== epB) || mB.worldPoints[1];
+                const angleA = Math.atan2(otherA.y - epA.y, otherA.x - epA.x);
+                const angleB = Math.atan2(otherB.y - epB.y, otherB.x - epB.x);
+                let diff = Math.abs(angleA - angleB);
+                while (diff > Math.PI) diff = Math.abs(diff - 2 * Math.PI);
+                if (Math.abs(diff - Math.PI / 2) < (6 * Math.PI / 180)) {
+                  const sx = tpx(epA.x), sy = tpy(epA.y);
+                  const sqS = 7 * dpr;
+                  ctx.save();
+                  ctx.translate(sx, sy);
+                  ctx.rotate(angleA);
+                  ctx.strokeStyle = '#22c55e';
+                  ctx.lineWidth = 1.5 * dpr;
+                  ctx.setLineDash([]);
+                  ctx.beginPath();
+                  ctx.moveTo(sqS, 0); ctx.lineTo(sqS, sqS); ctx.lineTo(0, sqS);
+                  ctx.stroke();
+                  ctx.restore();
+                }
+              }
+            }
+          }
+        }
       }
 
       ctx.restore();
@@ -1328,6 +1925,32 @@ export const InteractiveCanvas = ({
         // correct endpoint positions regardless of scale state.
         target.setCoords();
 
+      } else if (target.type === 'rect' && (target as any)._isWallPrimary) {
+        // Wall hit-rect modified (moved or length-resized). Extract new axis from rect geometry.
+        const existingMeasurement = measurementMapRef.current.get(measurementId);
+        const wallThickness = (existingMeasurement as any)?.wallThickness ?? 90;
+        const angle = (target.angle ?? 0) * Math.PI / 180;
+        const cx: number = target.left;
+        const cy: number = target.top;
+        const halfLength = (target.width * (target.scaleX ?? 1)) / 2;
+        const cosA = Math.cos(angle), sinA = Math.sin(angle);
+        const axisP1: WorldPoint = { x: cx - cosA * halfLength, y: cy - sinA * halfLength };
+        const axisP2: WorldPoint = { x: cx + cosA * halfLength, y: cy + sinA * halfLength };
+
+        // Absorb scaleX into width so scale resets to 1
+        target.set({ width: target.width * (target.scaleX ?? 1), scaleX: 1 });
+        target.setCoords();
+
+        if (objects) syncWallFromRect(target, objects, wallThickness, effectiveUnits);
+
+        const result = calculateLinearWorld(axisP1, axisP2, effectiveUnits);
+        onMeasurementUpdate(measurementId, {
+          worldPoints: [axisP1, axisP2],
+          worldValue: result.worldValue,
+          realValue: isCalibrated ? result.realValue : result.worldValue,
+          label: '',
+        });
+
       } else if (target.type === 'rect') {
         // For rectangles, calculate from bounding box after transform
         const left = target.left;
@@ -1441,8 +2064,11 @@ export const InteractiveCanvas = ({
       if (!objects || !measurement) return;
       const upm = unitsPerMetreRef.current || 1;
       const thickness = (measurement as any).wallThickness ?? 90;
-      syncWallCompanions(target, objects, thickness, upm);
-      canvas.requestRenderAll();
+      syncWallFromRect(target, objects, thickness, upm);
+      // Use renderAll (sync) so the visual lines update on the same frame Fabric
+      // draws the dragged hitRect — requestRenderAll schedules a rAF which fires
+      // AFTER Fabric's own drag render, leaving a one-frame ghost of old positions.
+      canvas.renderAll();
     };
 
     canvas.on('object:moving', syncWall);
@@ -1913,6 +2539,15 @@ export const InteractiveCanvas = ({
     // Convert to world coordinates for storage (applies inverse transform)
     let worldPoint = viewToWorld(viewPoint, transform, viewport);
 
+    // Snap click point to nearest endpoint or midpoint
+    if (activeTool && activeTool !== 'pan' && activeTool !== 'select' && activeTool !== 'eraser') {
+      const snapZoom = fabricCanvasRef.current?.getZoom() || 1;
+      const snapResult = computeSnapPoint(worldPoint, measurements, 12 / snapZoom);
+      if (snapResult) worldPoint = snapResult.point;
+    }
+    midpointSnapRef.current = null;
+    endpointSnapIndicatorRef.current = null;
+
     // Handle calibration (drag-to-calibrate)
     if (calibrationMode === 'manual' && !isCalibrated) {
       handleCalibrationMouseDown(worldPoint);
@@ -1927,8 +2562,22 @@ export const InteractiveCanvas = ({
       return;
     }
 
-    // Handle select mode — Fabric.js manages object selection natively, don't start drawing
-    if (activeTool === 'select') return;
+    // Handle select mode — check arc control point hit before letting Fabric handle selection
+    if (activeTool === 'select') {
+      const snapZoom = fabricCanvasRef.current?.getZoom() || 1;
+      const hitThresh = 12 / snapZoom;
+      let arcHit: { id: string; p1: WorldPoint; p2: WorldPoint; ctrl: WorldPoint } | null = null;
+      measurementMapRef.current.forEach((m, id) => {
+        if (arcHit) return;
+        const ctrl = (m as any).arcControlPoint as WorldPoint | undefined;
+        if (!ctrl || !m.worldPoints || m.worldPoints.length < 2) return;
+        if (Math.hypot(worldPoint.x - ctrl.x, worldPoint.y - ctrl.y) < hitThresh) {
+          arcHit = { id, p1: m.worldPoints[0], p2: m.worldPoints[1], ctrl };
+        }
+      });
+      if (arcHit) { arcDragRef.current = arcHit; return; }
+      return;
+    }
 
     // Handle eraser — click the specific shape you want to remove
     if (activeTool === 'eraser') {
@@ -2054,10 +2703,15 @@ export const InteractiveCanvas = ({
         const arcColor = drawColorRef.current || '#f97316';
         const makeArcPath = (pts: { p1: WorldPoint; Q: WorldPoint; p2: WorldPoint }) =>
           `M ${pts.p1.x} ${pts.p1.y} Q ${pts.Q.x} ${pts.Q.y} ${pts.p2.x} ${pts.p2.y}`;
-        const outerArc = new Path(makeArcPath(geo.outer), { stroke: arcColor, strokeWidth: arcStrokeWidth * 1.5, fill: '', selectable: false, evented: false, hasControls: true, hasBorders: true, lockRotation: true, cornerColor: '#2563eb', cornerStyle: 'circle' as const, cornerSize: 10, transparentCorners: false, borderColor: '#2563eb' });
+        const outerArc = new Path(makeArcPath(geo.outer), { stroke: arcColor, strokeWidth: arcStrokeWidth * 1.5, fill: '', selectable: false, evented: false });
         const innerArc = new Path(makeArcPath(geo.inner), { stroke: arcColor, strokeWidth: arcStrokeWidth * 1.5, fill: '', selectable: false, evented: false });
         const capS = new Line([geo.outer.p1.x, geo.outer.p1.y, geo.inner.p1.x, geo.inner.p1.y], { stroke: arcColor, strokeWidth: arcStrokeWidth, selectable: false, evented: false });
         const capE = new Line([geo.outer.p2.x, geo.outer.p2.y, geo.inner.p2.x, geo.inner.p2.y], { stroke: arcColor, strokeWidth: arcStrokeWidth, selectable: false, evented: false });
+        // Mark all arc-wall pieces as secondary so none become independently selectable in select mode
+        (outerArc as any)._isWallSecondary = true;
+        (innerArc as any)._isWallSecondary = true;
+        (capS as any)._isWallSecondary = true;
+        (capE as any)._isWallSecondary = true;
         [outerArc, innerArc, capS, capE].forEach(s => canvas.add(s));
 
         // Remove P1 marker
@@ -2073,7 +2727,11 @@ export const InteractiveCanvas = ({
 
         const id = crypto.randomUUID();
         measurementObjectsRef.current.set(id, [outerArc, innerArc, capS, capE]);
+        // Map ALL pieces so eraser hits any part and removes the whole arc wall
         shapeToMeasurementIdRef.current.set(outerArc, id);
+        shapeToMeasurementIdRef.current.set(innerArc, id);
+        shapeToMeasurementIdRef.current.set(capS, id);
+        shapeToMeasurementIdRef.current.set(capE, id);
 
         onMeasurementComplete?.({
           id,
@@ -2086,6 +2744,8 @@ export const InteractiveCanvas = ({
           color: arcColor,
           pageIndex,
           wallThickness: wallThicknessRef.current,
+          wallHatchType: wallHatchTypeRef.current,
+          wallHatchSide: wallHatchSideRef.current,
         } as any);
 
         canvas.renderAll();
@@ -2210,13 +2870,48 @@ export const InteractiveCanvas = ({
     if (isPanning && lastClientPos) {
       const deltaX = e.e.clientX - lastClientPos.x;
       const deltaY = e.e.clientY - lastClientPos.y;
-      
-      onTransformChange({ 
+
+      onTransformChange({
         panX: transform.panX + deltaX,
         panY: transform.panY + deltaY
       });
-      
+
       setLastClientPos({ x: e.e.clientX, y: e.e.clientY });
+      return;
+    }
+
+    // Feature 2: Arc drag in select mode
+    if (activeTool === 'select' && arcDragRef.current) {
+      const arcPtr = canvas.getPointer(e.e, true);
+      const newCtrl: WorldPoint = viewToWorld({ x: arcPtr.x, y: arcPtr.y }, transform, viewport);
+      const { id, p1, p2 } = arcDragRef.current;
+      arcDragRef.current.ctrl = newCtrl;
+      const eu = unitsPerMetreRef.current;
+      const m = measurementMapRef.current.get(id);
+      if (m && eu) {
+        const strokeWidth = getZoomAwareSize(2);
+        const color = m.color || '#f97316';
+        const geo = arcWallGeometry(p1, p2, newCtrl, (m as any).wallThickness || 90, eu);
+        const makeArcPath = (pts: { p1: WorldPoint; Q: WorldPoint; p2: WorldPoint }) =>
+          `M ${pts.p1.x} ${pts.p1.y} Q ${pts.Q.x} ${pts.Q.y} ${pts.p2.x} ${pts.p2.y}`;
+        const oldObjs = measurementObjectsRef.current.get(id) || [];
+        oldObjs.forEach((o: any) => { canvas.remove(o); shapeToMeasurementIdRef.current.delete(o); });
+        const outerArc = new Path(makeArcPath(geo.outer), { stroke: color, strokeWidth: strokeWidth * 1.5, fill: '', selectable: false, evented: false });
+        const innerArc = new Path(makeArcPath(geo.inner), { stroke: color, strokeWidth: strokeWidth * 1.5, fill: '', selectable: false, evented: false });
+        const capS = new Line([geo.outer.p1.x, geo.outer.p1.y, geo.inner.p1.x, geo.inner.p1.y], { stroke: color, strokeWidth, selectable: false, evented: false });
+        const capE = new Line([geo.outer.p2.x, geo.outer.p2.y, geo.inner.p2.x, geo.inner.p2.y], { stroke: color, strokeWidth, selectable: false, evented: false });
+        (outerArc as any)._isWallSecondary = true;
+        (innerArc as any)._isWallSecondary = true;
+        (capS as any)._isWallSecondary = true;
+        (capE as any)._isWallSecondary = true;
+        [outerArc, innerArc, capS, capE].forEach(o => canvas.add(o));
+        measurementObjectsRef.current.set(id, [outerArc, innerArc, capS, capE]);
+        shapeToMeasurementIdRef.current.set(outerArc, id);
+        shapeToMeasurementIdRef.current.set(innerArc, id);
+        shapeToMeasurementIdRef.current.set(capS, id);
+        shapeToMeasurementIdRef.current.set(capE, id);
+      }
+      canvas.requestRenderAll();
       return;
     }
 
@@ -2267,21 +2962,17 @@ export const InteractiveCanvas = ({
       viewport
     );
 
-    // Endpoint snap: if cursor is within ~12 screen px of any measurement endpoint, snap to it
+    // Snap: endpoints (priority) then midpoints — 12 screen-px threshold
     const zoom = fabricCanvasRef.current?.getZoom() || 1;
-    const snapThreshWorld = 12 / zoom;
-    let snappedToEndpoint = false;
-    for (const m of measurements) {
-      if (!m.worldPoints) continue;
-      for (const ep of m.worldPoints) {
-        const dist = Math.hypot(currentWorldPoint.x - ep.x, currentWorldPoint.y - ep.y);
-        if (dist < snapThreshWorld) {
-          currentWorldPoint = { x: ep.x, y: ep.y };
-          snappedToEndpoint = true;
-          break;
-        }
-      }
-      if (snappedToEndpoint) break;
+    const snapResult = computeSnapPoint(currentWorldPoint, measurements, 12 / zoom);
+    if (snapResult) {
+      currentWorldPoint = snapResult.point;
+      midpointSnapRef.current = snapResult.isMidpoint ? snapResult.point : null;
+      // Feature 1: endpoint snap indicator
+      endpointSnapIndicatorRef.current = snapResult.isMidpoint ? null : snapResult.point;
+    } else {
+      midpointSnapRef.current = null;
+      endpointSnapIndicatorRef.current = null;
     }
 
     // Shift-snap: 45° for line, square for rectangle
@@ -2291,16 +2982,16 @@ export const InteractiveCanvas = ({
     }
 
     // Remove previous preview
-    if (previewShape) {
+    if (previewShapeRef.current) {
       // Clean up wall preview extras
-      if ((previewShape as any)?._wallPreviews) {
-        ((previewShape as any)._wallPreviews as any[]).forEach((s: any) => canvas.remove(s));
+      if ((previewShapeRef.current as any)?._wallPreviews) {
+        ((previewShapeRef.current as any)._wallPreviews as any[]).forEach((s: any) => canvas.remove(s));
       }
       // Clean up arc-wall preview extras
-      if ((previewShape as any)?._arcPreviews) {
-        ((previewShape as any)._arcPreviews as any[]).forEach((s: any) => canvas.remove(s));
+      if ((previewShapeRef.current as any)?._arcPreviews) {
+        ((previewShapeRef.current as any)._arcPreviews as any[]).forEach((s: any) => canvas.remove(s));
       }
-      canvas.remove(previewShape);
+      canvas.remove(previewShapeRef.current);
     }
 
     let shape: any = null;
@@ -2409,7 +3100,8 @@ export const InteractiveCanvas = ({
       const eu2 = unitsPerMetreRef.current || 1;
       const r = calculateLinearWorld(startPoint, currentWorldPoint, eu2);
       const t = isCalibrated ? `${r.realValue.toFixed(2)} m  (${wallThicknessRef.current}mm wall)` : `${r.worldValue.toFixed(0)} px`;
-      previewLabelRef.current = { text: t, worldX: (startPoint.x + currentWorldPoint.x) / 2, worldY: (startPoint.y + currentWorldPoint.y) / 2, color: wallColor };
+      const angleLabel = bestSnap ? '  ⊾ 90°' : '';
+      previewLabelRef.current = { text: t + angleLabel, worldX: (startPoint.x + currentWorldPoint.x) / 2, worldY: (startPoint.y + currentWorldPoint.y) / 2, color: wallColor };
     } else if (activeTool === 'offset') {
       const offsetColor = '#38bdf8';
       shape = new Line([startPoint.x, startPoint.y, currentWorldPoint.x, currentWorldPoint.y], {
@@ -2463,7 +3155,7 @@ export const InteractiveCanvas = ({
       if (!(activeTool === 'wall-line') && !(activeTool === 'arc-wall')) {
         canvas.add(shape);
       }
-      setPreviewShape(shape);
+      previewShapeRef.current = shape;
     }
 
     // Update live measurement preview label
@@ -2491,7 +3183,7 @@ export const InteractiveCanvas = ({
     canvas.requestRenderAll();
   }, [
     viewport, transform, isPanning, lastClientPos, isDrawing, startPoint,
-    previewShape, activeTool, isCalibrated, unitsPerMetre, onTransformChange,
+    activeTool, isCalibrated, unitsPerMetre, onTransformChange,
     calibrationMode, isCalibrationDragging, calibrationStartPoint, handleCalibrationMouseMove,
     getZoomAwareSize, polygonPoints, measurements
   ]);
@@ -2517,6 +3209,15 @@ export const InteractiveCanvas = ({
       return;
     }
 
+    // Feature 2: Complete arc control-point drag
+    if (arcDragRef.current) {
+      const { id, ctrl } = arcDragRef.current;
+      onMeasurementUpdate?.(id, { arcControlPoint: ctrl } as any);
+      arcDragRef.current = null;
+      canvas.requestRenderAll();
+      return;
+    }
+
     if (!isDrawing || !startPoint || !viewport) return;
 
     // CRITICAL FIX: Use getPointer(e.e, true) for raw canvas coordinates
@@ -2530,17 +3231,17 @@ export const InteractiveCanvas = ({
     }
 
     // Remove preview shape
-    if (previewShape) {
+    if (previewShapeRef.current) {
       // Clean up wall preview extras
-      if ((previewShape as any)?._wallPreviews) {
-        ((previewShape as any)._wallPreviews as any[]).forEach((s: any) => canvas.remove(s));
+      if ((previewShapeRef.current as any)?._wallPreviews) {
+        ((previewShapeRef.current as any)._wallPreviews as any[]).forEach((s: any) => canvas.remove(s));
       }
       // Clean up arc-wall preview extras
-      if ((previewShape as any)?._arcPreviews) {
-        ((previewShape as any)._arcPreviews as any[]).forEach((s: any) => canvas.remove(s));
+      if ((previewShapeRef.current as any)?._arcPreviews) {
+        ((previewShapeRef.current as any)._arcPreviews as any[]).forEach((s: any) => canvas.remove(s));
       }
-      canvas.remove(previewShape);
-      setPreviewShape(null);
+      canvas.remove(previewShapeRef.current);
+      previewShapeRef.current = null;
     }
 
     // Helper: abort drawing cleanly (clears preview label + ghost state)
@@ -2627,11 +3328,12 @@ export const InteractiveCanvas = ({
       const wallColor = drawColorRef.current || '#f59e0b';
       const result = calculateLinearWorld(startPoint, worldEndPoint, eu);
 
+      // Wall = [hitRect, wl1, wl2, wc1, wc2]. hitRect is the transparent body (click/move/resize).
+      // Visual lines are purely decorative (_isWallSecondary).
+      const wallHitRect = makeWallHitRect(startPoint, worldEndPoint, thickness, eu, strokeWidth);
       const wallLine1 = new Line([geo.l1p1.x, geo.l1p1.y, geo.l1p2.x, geo.l1p2.y], {
         stroke: wallColor, strokeWidth: strokeWidth * 1.5, selectable: false, evented: false,
-        hasControls: true, hasBorders: true, lockRotation: true,
-        cornerColor: '#2563eb', cornerStyle: 'circle' as const, cornerSize: 10,
-        transparentCorners: false, borderColor: '#2563eb',
+        hasControls: false, hasBorders: false,
       });
       const wallLine2 = new Line([geo.l2p1.x, geo.l2p1.y, geo.l2p2.x, geo.l2p2.y], {
         stroke: wallColor, strokeWidth: strokeWidth * 1.5, selectable: false, evented: false,
@@ -2643,16 +3345,19 @@ export const InteractiveCanvas = ({
       const cap2 = new Line([geo.l1p2.x, geo.l1p2.y, geo.l2p2.x, geo.l2p2.y], {
         stroke: wallColor, strokeWidth, selectable: false, evented: false,
       });
-      // Tag so selectability loop only makes wl1 interactive
-      (wallLine1 as any)._isWallPrimary = true;
+      (wallLine1 as any)._isWallSecondary = true;
       (wallLine2 as any)._isWallSecondary = true;
       (cap1 as any)._isWallSecondary = true;
       (cap2 as any)._isWallSecondary = true;
-      [wallLine1, wallLine2, cap1, cap2].forEach(l => canvas.add(l));
+      [wallHitRect, wallLine1, wallLine2, cap1, cap2].forEach(l => canvas.add(l));
 
       const measurementId = crypto.randomUUID();
-      measurementObjectsRef.current.set(measurementId, [wallLine1, wallLine2, cap1, cap2]);
+      measurementObjectsRef.current.set(measurementId, [wallHitRect, wallLine1, wallLine2, cap1, cap2]);
+      shapeToMeasurementIdRef.current.set(wallHitRect, measurementId);
       shapeToMeasurementIdRef.current.set(wallLine1, measurementId);
+      shapeToMeasurementIdRef.current.set(wallLine2, measurementId);
+      shapeToMeasurementIdRef.current.set(cap1, measurementId);
+      shapeToMeasurementIdRef.current.set(cap2, measurementId);
 
       const labelText = isCalibrated ? `${result.realValue.toFixed(2)} m` : `${result.worldValue.toFixed(0)} px`;
       const measurement: Measurement = {
@@ -2665,6 +3370,8 @@ export const InteractiveCanvas = ({
         color: wallColor,
         label: labelText,
         wallThickness: thickness,
+        wallHatchType: wallHatchTypeRef.current as any,
+        wallHatchSide: wallHatchSideRef.current as any,
         pageIndex,
         timestamp: new Date(),
       };
@@ -2841,11 +3548,12 @@ export const InteractiveCanvas = ({
     previewLabelRef.current = null;
     perpSnapRef.current = null;
     snappedWallEndRef.current = null;
+    midpointSnapRef.current = null;
     setIsDrawing(false);
     setStartPoint(null);
     canvas.requestRenderAll();
   }, [
-    viewport, transform, isPanning, isDrawing, startPoint, previewShape,
+    viewport, transform, isPanning, isDrawing, startPoint,
     activeTool, isCalibrated, unitsPerMetre, pageIndex,
     onMeasurementComplete, calibrationMode, isCalibrationDragging,
     calibrationStartPoint, handleCalibrationMouseUp, getZoomAwareSize
