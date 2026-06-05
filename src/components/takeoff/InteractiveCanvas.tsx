@@ -244,6 +244,12 @@ interface InteractiveCanvasProps {
   wallHatchType?: string;
   /** Which face(s) to apply face-lining hatches (plasterboard / wet-area / cladding). */
   wallHatchSide?: string;
+  /**
+   * Parent passes a mutable ref; canvas fills `.current` with imperative methods.
+   * Use `canvasActionsRef.current?.removeObjects(id)` to delete canvas objects before
+   * dispatching DELETE_MEASUREMENT so removal is synchronous (same frame), not deferred.
+   */
+  canvasActionsRef?: React.MutableRefObject<{ removeObjects: (id: string) => void } | null>;
 }
 
 export const InteractiveCanvas = ({
@@ -272,6 +278,7 @@ export const InteractiveCanvas = ({
   wallHatchSide = 'both',
   onReupload,
   fileName,
+  canvasActionsRef,
 }: InteractiveCanvasProps) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -445,6 +452,28 @@ export const InteractiveCanvas = ({
       canvasRef.current = null;
     };
   }, []);
+
+  // Expose imperative delete handle so the right panel can remove canvas objects
+  // BEFORE dispatching DELETE_MEASUREMENT — same synchronous pattern as the eraser.
+  useEffect(() => {
+    if (!canvasActionsRef) return;
+    canvasActionsRef.current = {
+      removeObjects: (id: string) => {
+        const canvas = fabricCanvasRef.current;
+        const objs = measurementObjectsRef.current.get(id) || [];
+        objs.forEach((o: any) => {
+          canvas?.remove(o);
+          shapeToMeasurementIdRef.current.delete(o);
+        });
+        measurementObjectsRef.current.delete(id);
+        measurementMapRef.current.delete(id);
+        canvas?.renderAll();
+      },
+    };
+    return () => {
+      if (canvasActionsRef) canvasActionsRef.current = null;
+    };
+  }, [canvasActionsRef]);
 
   // Expose export handle to parent via canvasExportRef
   useEffect(() => {

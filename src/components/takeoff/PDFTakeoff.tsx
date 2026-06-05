@@ -100,6 +100,7 @@ export const PDFTakeoff = ({ projectId, estimateId, onAddCostItems }: PDFTakeoff
   const canvasContainerRef = useRef<HTMLDivElement | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const canvasExportRef = useRef<{ export: () => void } | null>(null);
+  const canvasActionsRef = useRef<{ removeObjects: (id: string) => void } | null>(null);
 
   // Restore PDF from IndexedDB when navigating back to a project.
   // Blob URLs don't survive component unmount; this recreates one from the cached ArrayBuffer.
@@ -343,6 +344,7 @@ export const PDFTakeoff = ({ projectId, estimateId, onAddCostItems }: PDFTakeoff
       return;
     }
     const lastMeasurement = measurements[measurements.length - 1];
+    canvasActionsRef.current?.removeObjects(lastMeasurement.id);
     dispatch({ type: 'DELETE_MEASUREMENT', payload: lastMeasurement.id });
     toast.success('Last measurement deleted');
   }, [dispatch, state.measurements]);
@@ -391,12 +393,14 @@ export const PDFTakeoff = ({ projectId, estimateId, onAddCostItems }: PDFTakeoff
 
   const handlePopupDelete = useCallback(() => {
     if (!measurementPopup) return;
+    canvasActionsRef.current?.removeObjects(measurementPopup.id);
     dispatch({ type: 'DELETE_MEASUREMENT', payload: measurementPopup.id });
     setMeasurementPopup(null);
     toast.success('Measurement deleted');
   }, [dispatch, measurementPopup]);
 
   const handleDeleteMeasurement = useCallback((id: string) => {
+    canvasActionsRef.current?.removeObjects(id);
     dispatch({ type: 'DELETE_MEASUREMENT', payload: id });
     toast.success('Measurement deleted');
   }, [dispatch]);
@@ -927,6 +931,7 @@ export const PDFTakeoff = ({ projectId, estimateId, onAddCostItems }: PDFTakeoff
           onDeleteMeasurement={handleDeleteMeasurement}
           onMeasurementSelect={handleMeasurementSelect}
           canvasExportRef={canvasExportRef}
+          canvasActionsRef={canvasActionsRef}
           wallThickness={wallThicknessMm}
           wallHatchType={wallHatchType}
           wallHatchSide={wallHatchSide}
@@ -1279,6 +1284,7 @@ export const PDFTakeoff = ({ projectId, estimateId, onAddCostItems }: PDFTakeoff
                         onDeleteMeasurement={handleDeleteMeasurement}
                         onMeasurementSelect={handleMeasurementSelect}
                         canvasExportRef={canvasExportRef}
+                        canvasActionsRef={canvasActionsRef}
                         wallThickness={wallThicknessMm}
                         wallHatchType={wallHatchType}
                         wallHatchSide={wallHatchSide}
@@ -1371,9 +1377,10 @@ export const PDFTakeoff = ({ projectId, estimateId, onAddCostItems }: PDFTakeoff
                     onUpdateMeasurement={(id, updates) =>
                       dispatch({ type: 'UPDATE_MEASUREMENT', payload: { id, updates } })
                     }
-                    onDeleteMeasurement={(id) =>
-                      dispatch({ type: 'DELETE_MEASUREMENT', payload: id })
-                    }
+                    onDeleteMeasurement={(id) => {
+                      canvasActionsRef.current?.removeObjects(id);
+                      dispatch({ type: 'DELETE_MEASUREMENT', payload: id });
+                    }}
                     onAddToEstimate={handleAddToEstimate}
                     onFetchNCCCode={handleFetchNCCCode}
                   />
@@ -1479,7 +1486,10 @@ export const PDFTakeoff = ({ projectId, estimateId, onAddCostItems }: PDFTakeoff
                                   variant="ghost"
                                   size="icon"
                                   className="h-8 w-8"
-                                  onClick={() => dispatch({ type: 'DELETE_MEASUREMENT', payload: m.id })}
+                                  onClick={() => {
+                                    canvasActionsRef.current?.removeObjects(m.id);
+                                    dispatch({ type: 'DELETE_MEASUREMENT', payload: m.id });
+                                  }}
                                   aria-label="Delete measurement"
                                 >
                                   <Trash2 className="h-4 w-4" />
@@ -1521,7 +1531,10 @@ export const PDFTakeoff = ({ projectId, estimateId, onAddCostItems }: PDFTakeoff
                                   }
                                 }
                               });
-                              rest.forEach(m => dispatch({ type: 'DELETE_MEASUREMENT', payload: m.id }));
+                              rest.forEach(m => {
+                                canvasActionsRef.current?.removeObjects(m.id);
+                                dispatch({ type: 'DELETE_MEASUREMENT', payload: m.id });
+                              });
                               setSidebarSelectedIds(new Set());
                               toast.success(`Combined ${selected.length} measurements → ${total.toFixed(2)} ${units[0]}`);
                             }}
