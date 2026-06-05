@@ -754,7 +754,7 @@ export const InteractiveCanvas = ({
       transform.panX,
       transform.panY
     ]);
-    canvas.renderAll();
+    canvas.requestRenderAll();
   }, [transform.zoom, transform.panX, transform.panY]);
 
   // Update cursor based on active tool
@@ -2094,10 +2094,7 @@ export const InteractiveCanvas = ({
       const upm = unitsPerMetreRef.current || 1;
       const thickness = (measurement as any).wallThickness ?? 90;
       syncWallFromRect(target, objects, thickness, upm);
-      // Use renderAll (sync) so the visual lines update on the same frame Fabric
-      // draws the dragged hitRect — requestRenderAll schedules a rAF which fires
-      // AFTER Fabric's own drag render, leaving a one-frame ghost of old positions.
-      canvas.renderAll();
+      canvas.requestRenderAll();
     };
 
     canvas.on('object:moving', syncWall);
