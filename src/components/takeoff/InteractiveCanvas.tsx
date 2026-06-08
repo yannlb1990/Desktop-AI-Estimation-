@@ -794,6 +794,33 @@ export const InteractiveCanvas = ({
       }
       previewLabelRef.current = null;
     }
+
+    // Clean up any lingering wall-line preview objects when switching away from wall-line
+    if (activeTool !== 'wall-line') {
+      if (canvas) {
+        const wallToRemove: any[] = [];
+        canvas.getObjects().forEach((obj: any) => {
+          // Old 4-Line style previews (race-condition leftovers from prior code)
+          if (obj._wallPreviews) {
+            (obj._wallPreviews as any[]).forEach((s: any) => wallToRemove.push(s));
+            wallToRemove.push(obj);
+          }
+          // New single-Rect style preview
+          if (obj._isWallPreviewRect) {
+            wallToRemove.push(obj);
+          }
+        });
+        wallToRemove.forEach(obj => { try { canvas.remove(obj); } catch (_) {} });
+        if (wallToRemove.length > 0) {
+          previewLabelRef.current = null;
+          canvas.requestRenderAll();
+        }
+      }
+      // Clear ref so next wall-line session creates a fresh Rect
+      if (previewShapeRef.current && ((previewShapeRef.current as any)._isWallPreviewRect || (previewShapeRef.current as any)._wallPreviews)) {
+        previewShapeRef.current = null;
+      }
+    }
   }, [activeTool, calibrationMode]);
 
   // Clear calibration markers when calibration is complete
@@ -1151,6 +1178,9 @@ export const InteractiveCanvas = ({
         const dx = x2 - x1, dy = y2 - y1;
         const len = Math.sqrt(dx * dx + dy * dy);
         if (len < 1) return;
+        // Cap symbol size so overlapping doors don't create a starburst.
+        // symR ≤ 22 CSS px keeps the indicator compact at any zoom/door width.
+        const symR = Math.min(len, 22 * dpr);
         const lineAngle = Math.atan2(dy, dx);
         ctx.save();
         ctx.strokeStyle = color + 'cc';
@@ -1175,7 +1205,7 @@ export const InteractiveCanvas = ({
           }
         } else if (subtype === 'Bi-fold') {
           ctx.setLineDash([]);
-          const half = len / 2;
+          const half = symR / 2;
           ctx.beginPath();
           ctx.moveTo(x1, y1);
           ctx.lineTo(x1 + Math.cos(lineAngle - Math.PI / 4) * half, y1 + Math.sin(lineAngle - Math.PI / 4) * half);
@@ -1186,8 +1216,7 @@ export const InteractiveCanvas = ({
           ctx.stroke();
         } else if (subtype === 'French') {
           ctx.setLineDash([4 * dpr, 3 * dpr]);
-          const half = len / 2;
-          const midX = (x1 + x2) / 2, midY = (y1 + y2) / 2;
+          const half = symR / 2;
           ctx.beginPath(); ctx.arc(x1, y1, half, lineAngle, lineAngle + Math.PI / 2, false); ctx.stroke();
           ctx.beginPath(); ctx.arc(x2, y2, half, lineAngle + Math.PI, lineAngle + Math.PI * 1.5, false); ctx.stroke();
         } else if (subtype === 'Garage') {
@@ -1205,21 +1234,21 @@ export const InteractiveCanvas = ({
           }
         } else if (subtype === 'Fire Door') {
           ctx.setLineDash([4 * dpr, 3 * dpr]);
-          ctx.beginPath(); ctx.arc(x1, y1, len, lineAngle, lineAngle + Math.PI / 2, false); ctx.stroke();
+          ctx.beginPath(); ctx.arc(x1, y1, symR, lineAngle, lineAngle + Math.PI / 2, false); ctx.stroke();
           ctx.setLineDash([]);
           const endAngle = lineAngle + Math.PI / 2;
-          ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x1 + len * Math.cos(endAngle), y1 + len * Math.sin(endAngle)); ctx.stroke();
+          ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x1 + symR * Math.cos(endAngle), y1 + symR * Math.sin(endAngle)); ctx.stroke();
           ctx.fillStyle = color + 'cc';
-          ctx.font = `bold ${Math.max(8, len * 0.18)}px system-ui`;
+          ctx.font = `bold ${Math.max(8 * dpr, symR * 0.55)}px system-ui`;
           ctx.textAlign = 'center';
-          ctx.fillText('FD', (x1 + x1 + len * Math.cos(endAngle)) / 2, (y1 + y1 + len * Math.sin(endAngle)) / 2 - 4 * dpr);
+          ctx.fillText('FD', (x1 + x1 + symR * Math.cos(endAngle)) / 2, (y1 + y1 + symR * Math.sin(endAngle)) / 2 - 4 * dpr);
         } else {
-          // Default: Internal / Entry — standard quarter-circle swing
+          // Default: Internal / Entry — compact quarter-circle swing indicator
           ctx.setLineDash([4 * dpr, 3 * dpr]);
-          ctx.beginPath(); ctx.arc(x1, y1, len, lineAngle, lineAngle + Math.PI / 2, false); ctx.stroke();
+          ctx.beginPath(); ctx.arc(x1, y1, symR, lineAngle, lineAngle + Math.PI / 2, false); ctx.stroke();
           ctx.setLineDash([]);
           const endAngle = lineAngle + Math.PI / 2;
-          ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x1 + len * Math.cos(endAngle), y1 + len * Math.sin(endAngle));
+          ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x1 + symR * Math.cos(endAngle), y1 + symR * Math.sin(endAngle));
           ctx.strokeStyle = color + '88'; ctx.stroke();
         }
         ctx.restore();
@@ -1383,6 +1412,27 @@ export const InteractiveCanvas = ({
           bbCorners = [c1, c2, c3, c4];
         }
         ctx.clip();
+
+        // Arc walls: straight hatch lines clipped by a curved boundary create
+        // concentric-arc artifacts. Fill with the hatch base colour instead.
+        if (isArc) {
+          const arcFills: Record<string, string> = {
+            masonry:      'rgba(160,115,64,0.18)',
+            plasterboard: 'rgba(148,163,184,0.18)',
+            'fire-rated': 'rgba(239,68,68,0.12)',
+            insulation:   'rgba(252,211,77,0.18)',
+            cladding:     'rgba(125,211,252,0.18)',
+            'wet-area':   'rgba(59,130,246,0.18)',
+            glazing:      'rgba(147,197,253,0.22)',
+          };
+          const fill = arcFills[ht] ?? 'rgba(128,128,128,0.12)';
+          const xs2 = bbCorners.map(c => c.x);
+          const ys2 = bbCorners.map(c => c.y);
+          ctx.fillStyle = fill;
+          ctx.fillRect(Math.min(...xs2), Math.min(...ys2), Math.max(...xs2) - Math.min(...xs2), Math.max(...ys2) - Math.min(...ys2));
+          ctx.restore();
+          return;
+        }
 
         const xs = bbCorners.map(c => c.x);
         const ys = bbCorners.map(c => c.y);
@@ -2640,6 +2690,7 @@ export const InteractiveCanvas = ({
 
         if (newObjects.length === 0) {
           measurementObjectsRef.current.delete(measurementId);
+          measurementMapRef.current.delete(measurementId);
           onDeleteMeasurement?.(measurementId);
         } else {
           measurementObjectsRef.current.set(measurementId, newObjects);
@@ -2687,6 +2738,7 @@ export const InteractiveCanvas = ({
           const tracked = measurementObjectsRef.current.get(measurementId) || [];
           tracked.forEach((o: any) => { canvas.remove(o); shapeToMeasurementIdRef.current.delete(o); });
           measurementObjectsRef.current.delete(measurementId);
+          measurementMapRef.current.delete(measurementId);
           onDeleteMeasurement?.(measurementId);
         } else {
           // Orphaned / untracked shape — just remove it from canvas directly
@@ -3017,7 +3069,9 @@ export const InteractiveCanvas = ({
       if ((previewShapeRef.current as any)?._arcPreviews) {
         ((previewShapeRef.current as any)._arcPreviews as any[]).forEach((s: any) => canvas.remove(s));
       }
-      canvas.remove(previewShapeRef.current);
+      if (!(activeTool === 'wall-line' && (previewShapeRef.current as any)._isWallPreviewRect)) {
+        canvas.remove(previewShapeRef.current);
+      }
     }
 
     let shape: any = null;
@@ -3064,6 +3118,7 @@ export const InteractiveCanvas = ({
         evented: false,
       });
     } else if (activeTool === 'wall-line') {
+      let bestSnap: { snapped: WorldPoint; guideFrom: WorldPoint; guideTo: WorldPoint } | null = null;
       if (e.e.shiftKey) {
         currentWorldPoint = snapEndpointToAngle(startPoint, currentWorldPoint, 45);
         snappedWallEndRef.current = null;
@@ -3073,7 +3128,6 @@ export const InteractiveCanvas = ({
         perpSnapRef.current = null;
         const measurements = measurementMapRef.current;
         const SNAP_DEG = 8; // degrees tolerance for perp snap
-        let bestSnap: { snapped: WorldPoint; guideFrom: WorldPoint; guideTo: WorldPoint } | null = null;
         let bestDelta = Infinity;
         measurements.forEach((m) => {
           if (!(m as any).wallThickness || m.worldPoints.length < 2) return;
@@ -3092,7 +3146,7 @@ export const InteractiveCanvas = ({
                 x: startPoint.x + dist * Math.cos(targetAngle),
                 y: startPoint.y + dist * Math.sin(targetAngle),
               };
-              // Guide line extends ±20% of canvas width along the perp direction
+              // Guide line extends ±30% of canvas width along the perp direction
               const guideLen = (canvas.getWidth() / (canvas.viewportTransform?.[0] || 1)) * 0.3;
               bestSnap = {
                 snapped,
@@ -3110,18 +3164,47 @@ export const InteractiveCanvas = ({
           snappedWallEndRef.current = null;
         }
       }
-      const eu = unitsPerMetreRef.current;
-      const geo = wallGeometry(startPoint, currentWorldPoint, wallThicknessRef.current, eu || 1);
+      const eu = unitsPerMetreRef.current || 1;
+      const wdx = currentWorldPoint.x - startPoint.x;
+      const wdy = currentWorldPoint.y - startPoint.y;
+      const wallLength = Math.sqrt(wdx * wdx + wdy * wdy) || 0.001;
+      const wallAngleDeg = Math.atan2(wdy, wdx) * (180 / Math.PI);
+      const midX = (startPoint.x + currentWorldPoint.x) / 2;
+      const midY = (startPoint.y + currentWorldPoint.y) / 2;
+      const thicknessWorld = (wallThicknessRef.current / 1000) * eu;
       const wallColor = drawColorRef.current || '#f59e0b';
-      const wallShapes: any[] = [
-        new Line([geo.l1p1.x, geo.l1p1.y, geo.l1p2.x, geo.l1p2.y], { stroke: wallColor, strokeWidth, strokeDashArray: [dashSize, dashSize], selectable: false, evented: false }),
-        new Line([geo.l2p1.x, geo.l2p1.y, geo.l2p2.x, geo.l2p2.y], { stroke: wallColor, strokeWidth, strokeDashArray: [dashSize, dashSize], selectable: false, evented: false }),
-        new Line([geo.l1p1.x, geo.l1p1.y, geo.l2p1.x, geo.l2p1.y], { stroke: wallColor, strokeWidth: strokeWidth * 0.5, strokeDashArray: [dashSize, dashSize], selectable: false, evented: false }),
-        new Line([geo.l1p2.x, geo.l1p2.y, geo.l2p2.x, geo.l2p2.y], { stroke: wallColor, strokeWidth: strokeWidth * 0.5, strokeDashArray: [dashSize, dashSize], selectable: false, evented: false }),
-      ];
-      wallShapes.forEach(s => canvas.add(s));
-      shape = wallShapes[0];
-      (shape as any)._wallPreviews = wallShapes.slice(1);
+
+      if (previewShapeRef.current && (previewShapeRef.current as any)._isWallPreviewRect) {
+        // Update the single Rect in-place — no canvas remove/add, no duplication
+        previewShapeRef.current.set({
+          left: midX,
+          top: midY,
+          width: wallLength,
+          height: thicknessWorld,
+          angle: wallAngleDeg,
+          stroke: wallColor,
+        });
+        previewShapeRef.current.setCoords();
+        shape = previewShapeRef.current;
+      } else {
+        shape = new Rect({
+          left: midX,
+          top: midY,
+          width: wallLength,
+          height: thicknessWorld,
+          originX: 'center',
+          originY: 'center',
+          angle: wallAngleDeg,
+          fill: 'rgba(245,158,11,0.08)',
+          stroke: wallColor,
+          strokeWidth,
+          strokeDashArray: [dashSize, dashSize],
+          selectable: false,
+          evented: false,
+        });
+        (shape as any)._isWallPreviewRect = true;
+        canvas.add(shape);
+      }
 
       const eu2 = unitsPerMetreRef.current || 1;
       const r = calculateLinearWorld(startPoint, currentWorldPoint, eu2);
