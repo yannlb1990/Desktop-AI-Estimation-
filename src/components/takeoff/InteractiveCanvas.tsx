@@ -904,6 +904,8 @@ export const InteractiveCanvas = ({
     const objectsMap = measurementObjectsRef.current;
     const idsToRemove: string[] = [];
     const activeObj = canvas.getActiveObject();
+
+    // Pass 1: objectsRef-based cleanup (the normal path)
     objectsMap.forEach((objects, id) => {
       if (!measurementIds.has(id)) {
         if (activeObj && objects.includes(activeObj as any)) {
@@ -916,8 +918,29 @@ export const InteractiveCanvas = ({
         idsToRemove.push(id);
       }
     });
-    if (idsToRemove.length > 0) {
-      idsToRemove.forEach(id => objectsMap.delete(id));
+    idsToRemove.forEach(id => objectsMap.delete(id));
+
+    // Pass 2: shapeRef-based sweep — catches canvas objects whose tracking entry
+    // points to a deleted measurement but that slipped through Pass 1 (e.g. if
+    // objectsRef was cleared imperatively without calling canvas.remove).
+    const orphanObjs: any[] = [];
+    canvas.getObjects().forEach((obj: any) => {
+      const mid = shapeToMeasurementIdRef.current.get(obj);
+      if (mid && !measurementIds.has(mid)) {
+        orphanObjs.push(obj);
+      }
+    });
+    orphanObjs.forEach(obj => {
+      canvas.remove(obj);
+      const mid = shapeToMeasurementIdRef.current.get(obj);
+      if (mid) {
+        shapeToMeasurementIdRef.current.delete(obj);
+        measurementObjectsRef.current.delete(mid);
+        measurementMapRef.current.delete(mid);
+      }
+    });
+
+    if (idsToRemove.length > 0 || orphanObjs.length > 0) {
       canvas.renderAll();
     }
   }, [measurements]);
