@@ -940,9 +940,10 @@ export const InteractiveCanvas = ({
       }
     });
 
-    if (idsToRemove.length > 0 || orphanObjs.length > 0) {
-      canvas.renderAll();
-    }
+    // Always force-render so any stale `after:render` overlay (labels/hatches) is cleared
+    // even when removeObjects() already cleaned the refs imperatively before this effect ran
+    // and both idsToRemove and orphanObjs are empty.
+    canvas.renderAll();
   }, [measurements]);
 
   // Sync canvas objects with measurements state:
