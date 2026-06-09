@@ -89,6 +89,9 @@ const SetupPassword = () => {
       migrateUnscopedData(email);
       activateTrialIfNeeded(email);
 
+      // Signal Dashboard to show the first-login welcome overlay once
+      localStorage.setItem(`${email}:show_welcome`, "true");
+
       toast.success("Welcome to Metricore — your account is ready!");
       navigate("/dashboard");
     } catch (err: any) {

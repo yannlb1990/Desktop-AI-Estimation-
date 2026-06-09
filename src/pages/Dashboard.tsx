@@ -16,6 +16,7 @@ import { getLocalUser, localSignOut, isSignedIn, getUserStorageKey, migrateUnsco
 import { loadProjectsMerged, deleteProjectFromSupabase, lsSaveProjects, migrateLocalProjectsToSupabase } from "@/lib/db/projects";
 import { useTour } from "@/context/TourContext";
 import { TourTip } from "@/components/TourTip";
+import WelcomeOverlay from "@/components/WelcomeOverlay";
 
 // ── helpers ─────────────────────────────────────────────────────────────────
 
@@ -119,6 +120,11 @@ const Dashboard = () => {
   const [projects, setProjects] = useState<any[]>([]);
   const [showAll, setShowAll] = useState(false);
   const [bannerDismissed, setBannerDismissed] = useState(false);
+  const [showWelcome, setShowWelcome] = useState(() => {
+    const user = getLocalUser();
+    if (!user) return false;
+    return localStorage.getItem(`${user.email}:show_welcome`) === "true";
+  });
   const sub = useSubscription();
   const localUser = getLocalUser();
   const { tourEnabled, toggleTour } = useTour();
@@ -188,6 +194,12 @@ const Dashboard = () => {
     navigate('/project/new');
   };
 
+  const handleDismissWelcome = () => {
+    const user = getLocalUser();
+    if (user) localStorage.removeItem(`${user.email}:show_welcome`);
+    setShowWelcome(false);
+  };
+
   // Trial banner: show from day 1 of trial through expiry
   const showTrialBanner =
     !bannerDismissed &&
@@ -198,8 +210,19 @@ const Dashboard = () => {
   const showPastDueBanner = sub.isPastDue;
 
   // ── render ─────────────────────────────────────────────────────────────────
+  const firstName = (localUser?.displayName ?? localUser?.email ?? "").split(/[\s@]/)[0];
+  const trialDaysLeft = sub.daysLeftInTrial > 0 ? sub.daysLeftInTrial : 14;
+
   return (
     <div className="min-h-screen bg-muted/30">
+
+      {showWelcome && (
+        <WelcomeOverlay
+          firstName={firstName}
+          trialDays={trialDaysLeft}
+          onDismiss={handleDismissWelcome}
+        />
+      )}
 
       {/* Past-due payment banner — amber, always visible during grace period */}
       {showPastDueBanner && (
