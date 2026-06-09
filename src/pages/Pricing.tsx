@@ -1,3 +1,4 @@
+import { Helmet } from "react-helmet-async";
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
@@ -154,6 +155,15 @@ const Pricing = () => {
   };
 
   return (
+    <>
+      <Helmet>
+        <title>Construction Estimation Software Pricing | Metricore</title>
+        <meta name="description" content="Simple, transparent pricing for Metricore construction estimation software. Free trial available, no credit card required. Plans for sole traders to mid-size construction firms." />
+        <link rel="canonical" href="https://metricore.com.au/pricing" />
+        <meta property="og:title" content="Construction Estimation Software Pricing | Metricore" />
+        <meta property="og:description" content="Simple, transparent pricing for Metricore. Free trial available, no credit card required. Plans for sole traders to mid-size construction firms." />
+        <meta property="og:url" content="https://metricore.com.au/pricing" />
+      </Helmet>
     <div className="min-h-screen bg-background">
       <Navigation />
 
@@ -466,6 +476,7 @@ const Pricing = () => {
       </div>
       <Footer />
     </div>
+    </>
   );
 };
 

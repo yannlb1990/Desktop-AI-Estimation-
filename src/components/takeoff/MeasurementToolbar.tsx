@@ -170,7 +170,7 @@ export const MeasurementToolbar = ({
           {navigationTools.map(({ id, icon: Icon, label }) => (
             <Tooltip key={id}>
               <TooltipTrigger asChild>
-                <Button variant={activeTool === id ? 'default' : 'ghost'} size="icon" className="h-9 w-9 shrink-0" onClick={() => onToolSelect(id)}>
+                <Button aria-label={label} variant={activeTool === id ? 'default' : 'ghost'} size="icon" className="h-9 w-9 shrink-0" onClick={() => onToolSelect(id)}>
                   <Icon className="h-4 w-4" />
                 </Button>
               </TooltipTrigger>
@@ -182,7 +182,7 @@ export const MeasurementToolbar = ({
 
           <Tooltip>
             <TooltipTrigger asChild>
-              <Button variant={activeTool === 'eraser' ? 'destructive' : 'ghost'} size="icon" className="h-9 w-9 shrink-0" onClick={() => onToolSelect('eraser')}>
+              <Button aria-label="Eraser — click a measurement to delete (E)" variant={activeTool === 'eraser' ? 'destructive' : 'ghost'} size="icon" className="h-9 w-9 shrink-0" onClick={() => onToolSelect('eraser')}>
                 <Eraser className="h-4 w-4" />
               </Button>
             </TooltipTrigger>
@@ -197,6 +197,8 @@ export const MeasurementToolbar = ({
               <Tooltip key={id}>
                 <TooltipTrigger asChild>
                   <Button
+                    aria-label={label}
+                    aria-pressed={isActive}
                     variant={isActive ? 'default' : 'ghost'}
                     size="icon"
                     className={cn('h-9 w-9 relative shrink-0', isActive && 'ring-2 ring-offset-1')}
@@ -204,7 +206,7 @@ export const MeasurementToolbar = ({
                     disabled={disabled}
                   >
                     <Icon className="h-4 w-4" />
-                    <span className={cn('absolute bottom-1 right-1 h-2 w-2 rounded-full', color)} />
+                    <span aria-hidden="true" className={cn('absolute bottom-1 right-1 h-2 w-2 rounded-full', color)} />
                   </Button>
                 </TooltipTrigger>
                 <TooltipContent>{label}</TooltipContent>
@@ -218,7 +220,7 @@ export const MeasurementToolbar = ({
 
           <Tooltip>
             <TooltipTrigger asChild>
-              <Button variant="ghost" size="icon" className="h-9 w-9 shrink-0" onClick={onUndo} disabled={!canUndo || disabled}>
+              <Button aria-label="Undo (Ctrl+Z)" variant="ghost" size="icon" className="h-9 w-9 shrink-0" onClick={onUndo} disabled={!canUndo || disabled}>
                 <Undo className="h-4 w-4" />
               </Button>
             </TooltipTrigger>
@@ -226,7 +228,7 @@ export const MeasurementToolbar = ({
           </Tooltip>
           <Tooltip>
             <TooltipTrigger asChild>
-              <Button variant="ghost" size="icon" className="h-9 w-9 shrink-0" onClick={onRedo} disabled={!canRedo || disabled}>
+              <Button aria-label="Redo (Ctrl+Y)" variant="ghost" size="icon" className="h-9 w-9 shrink-0" onClick={onRedo} disabled={!canRedo || disabled}>
                 <Redo className="h-4 w-4" />
               </Button>
             </TooltipTrigger>

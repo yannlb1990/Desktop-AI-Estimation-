@@ -20,10 +20,9 @@ const Footer = () => {
           <div>
             <h4 className="font-display font-bold mb-4">Product</h4>
             <ul className="space-y-2 text-sm text-muted-foreground">
-              <li><a href="/#features" className="hover:text-foreground transition-smooth">Features</a></li>
-              <li><a href="/pricing" className="hover:text-foreground transition-smooth">Pricing</a></li>
-              <li><a href="/#insights" className="hover:text-foreground transition-smooth">Market Insights</a></li>
-              <li><a href="/insights" className="hover:text-foreground transition-smooth">Rate Database</a></li>
+              <li><a href="/#features" className="hover:text-foreground transition-colors">Features</a></li>
+              <li><a href="/pricing" className="hover:text-foreground transition-colors">Pricing</a></li>
+              <li><a href="/#insights" className="hover:text-foreground transition-colors">Market Insights</a></li>
             </ul>
           </div>
 
@@ -31,27 +30,26 @@ const Footer = () => {
           <div>
             <h4 className="font-display font-bold mb-4">Resources</h4>
             <ul className="space-y-2 text-sm text-muted-foreground">
-              <li><a href="/materials" className="hover:text-foreground transition-smooth">Materials Library</a></li>
-              <li><a href="/dashboard" className="hover:text-foreground transition-smooth">Dashboard</a></li>
-              <li><a href="mailto:admin@metricore.com.au" className="hover:text-foreground transition-smooth">Support</a></li>
-              <li><a href="/#features" className="hover:text-foreground transition-smooth">NCC Compliance</a></li>
+              <li><a href="/support" className="hover:text-foreground transition-colors">Support & FAQ</a></li>
+              <li><a href="/about" className="hover:text-foreground transition-colors">About</a></li>
             </ul>
           </div>
 
-          {/* Company */}
+          {/* Legal */}
           <div>
-            <h4 className="font-display font-bold mb-4">Company</h4>
+            <h4 className="font-display font-bold mb-4">Legal</h4>
             <ul className="space-y-2 text-sm text-muted-foreground">
-              <li><a href="/#features" className="hover:text-foreground transition-smooth">About</a></li>
-              <li><a href="mailto:admin@metricore.com.au" className="hover:text-foreground transition-smooth">Contact</a></li>
-              <li><span className="cursor-default text-muted-foreground/50">Privacy Policy</span></li>
-              <li><span className="cursor-default text-muted-foreground/50">Terms of Service</span></li>
+              <li><a href="/privacy" className="hover:text-foreground transition-colors">Privacy Policy</a></li>
+              <li><a href="/terms" className="hover:text-foreground transition-colors">Terms of Service</a></li>
             </ul>
           </div>
         </div>
 
-        <div className="pt-8 border-t border-border text-center text-sm text-muted-foreground">
+        <div className="pt-8 border-t border-border flex flex-col sm:flex-row items-center justify-between gap-2 text-sm text-muted-foreground">
           <p>© 2026 Metricore. All rights reserved. Built for Australian builders.</p>
+          <a href="mailto:admin@metricore.com.au" className="text-xs text-muted-foreground/60 hover:text-muted-foreground transition-colors">
+            admin@metricore.com.au
+          </a>
         </div>
       </div>
     </footer>

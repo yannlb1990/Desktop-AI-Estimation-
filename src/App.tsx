@@ -1,4 +1,5 @@
 import React, { useEffect } from "react";
+import { HelmetProvider } from "react-helmet-async";
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -44,6 +45,10 @@ import AcceptInvite from "./pages/AcceptInvite";
 import SetupPassword from "./pages/SetupPassword";
 import ResetPassword from "./pages/ResetPassword";
 import NotFound from "./pages/NotFound";
+import PrivacyPolicy from "./pages/PrivacyPolicy";
+import TermsOfService from "./pages/TermsOfService";
+import About from "./pages/About";
+import Support from "./pages/Support";
 
 const queryClient = new QueryClient();
 
@@ -63,6 +68,7 @@ const App = () => {
   }, []);
 
   return (
+    <HelmetProvider>
     <QueryClientProvider client={queryClient}>
       <TourProvider>
       <TooltipProvider>
@@ -79,6 +85,10 @@ const App = () => {
             <Route path="/accept-invite" element={<AcceptInvite />} />
             <Route path="/setup-password" element={<SetupPassword />} />
             <Route path="/reset-password" element={<ResetPassword />} />
+            <Route path="/privacy" element={<PrivacyPolicy />} />
+            <Route path="/terms" element={<TermsOfService />} />
+            <Route path="/about" element={<About />} />
+            <Route path="/support" element={<Support />} />
             <Route path="/app" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
             <Route path="/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
             <Route path="/project/new" element={<ProtectedRoute><NewProject /></ProtectedRoute>} />
@@ -94,6 +104,7 @@ const App = () => {
       </TooltipProvider>
       </TourProvider>
     </QueryClientProvider>
+    </HelmetProvider>
   );
 };
 

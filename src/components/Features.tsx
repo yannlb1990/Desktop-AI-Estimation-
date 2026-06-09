@@ -5,13 +5,13 @@ const features = [
   {
     icon: Upload,
     title: "AI Plan Upload",
-    description: "Upload PDF, DWG, or IFC files. AI automatically detects elements, scales, and compliance requirements.",
+    description: "Upload your PDF plans. Metricore detects elements, calibrates the scale, and flags compliance requirements automatically.",
     color: "text-primary"
   },
   {
     icon: Layers,
     title: "Smart Takeoffs",
-    description: "Auto-generate quantities by trade with 98% accuracy. Review and adjust with visual overlays.",
+    description: "Draw measurements directly on your plan, auto-sorted by trade. Review and adjust with visual overlays on the canvas.",
     color: "text-accent"
   },
   {
@@ -50,7 +50,7 @@ const Features = () => {
             <span className="block mt-2 text-primary">Accurate Estimates</span>
           </h2>
           <p className="text-lg text-muted-foreground">
-            From plan upload to tender generation, Buildamax streamlines your entire estimation workflow with AI precision.
+            From plan upload to tender generation, Metricore streamlines your entire estimation workflow from first measurement to final tender.
           </p>
         </div>
 

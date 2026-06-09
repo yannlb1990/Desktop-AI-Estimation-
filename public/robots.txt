@@ -12,3 +12,12 @@ Allow: /
 
 User-agent: *
 Allow: /
+Disallow: /dashboard
+Disallow: /project/
+Disallow: /insights
+Disallow: /clients
+Disallow: /settings
+Disallow: /materials
+Disallow: /app
+
+Sitemap: https://metricore.com.au/sitemap.xml

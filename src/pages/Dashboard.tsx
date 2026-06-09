@@ -6,7 +6,8 @@ import { Badge } from "@/components/ui/badge";
 import {
   Plus, FileText, DollarSign, TrendingUp, BarChart3,
   Upload, Zap, Settings, Package, ChevronRight,
-  ArrowRight, Clock, User, ExternalLink, AlertTriangle, X, LogOut, Trash2, BookOpen
+  ArrowRight, Clock, User, ExternalLink, AlertTriangle, X, LogOut, Trash2, BookOpen,
+  Send, Trophy, XCircle
 } from "lucide-react";
 import { useSubscription } from "@/hooks/useSubscription";
 import { PLAN_NAMES } from "@/lib/subscription";
@@ -21,11 +22,11 @@ import { TourTip } from "@/components/TourTip";
 type Stage = 'Takeoff' | 'Estimating' | 'Tender Ready' | 'Sent';
 type QuoteStatus = 'draft' | 'sent' | 'won' | 'lost';
 
-const QUOTE_STATUS_CONFIG: Record<QuoteStatus, { label: string; color: string; bg: string }> = {
-  draft:  { label: 'Draft',  color: 'text-muted-foreground', bg: 'bg-muted/60 border-border' },
-  sent:   { label: 'Sent',   color: 'text-purple-400',       bg: 'bg-purple-400/10 border-purple-400/30' },
-  won:    { label: 'Won',    color: 'text-green-400',        bg: 'bg-green-400/10 border-green-400/30' },
-  lost:   { label: 'Lost',   color: 'text-red-400',          bg: 'bg-red-400/10 border-red-400/30' },
+const QUOTE_STATUS_CONFIG: Record<QuoteStatus, { label: string; color: string; bg: string; icon: React.ReactNode }> = {
+  draft:  { label: 'Draft',  color: 'text-muted-foreground', bg: 'bg-muted/60 border-border',         icon: <FileText className="h-3 w-3" /> },
+  sent:   { label: 'Sent',   color: 'text-purple-400',       bg: 'bg-purple-400/10 border-purple-400/30', icon: <Send className="h-3 w-3" /> },
+  won:    { label: 'Won',    color: 'text-green-400',        bg: 'bg-green-400/10 border-green-400/30',  icon: <Trophy className="h-3 w-3" /> },
+  lost:   { label: 'Lost',   color: 'text-red-400',          bg: 'bg-red-400/10 border-red-400/30',      icon: <XCircle className="h-3 w-3" /> },
 };
 
 const getStage = (p: any): Stage => {
@@ -337,8 +338,8 @@ const Dashboard = () => {
           ))}
         </div>
 
-        {/* Pipeline funnel */}
-        <Card className="p-5 bg-background">
+        {/* Pipeline funnel — only shown when there are projects to display */}
+        {projects.length > 0 && <Card className="p-5 bg-background">
           <p className="text-xs text-muted-foreground font-medium uppercase tracking-wide mb-4">Project Pipeline</p>
           <div className="flex items-stretch gap-0">
             {stages.map((stage, i) => {
@@ -357,7 +358,7 @@ const Dashboard = () => {
               );
             })}
           </div>
-        </Card>
+        </Card>}
 
         {/* Recent Projects */}
         <Card className="bg-background">
@@ -447,7 +448,8 @@ const Dashboard = () => {
                       </div>
                       <div>
                         {qs !== 'draft' && (
-                          <span className={`inline-flex items-center text-xs font-medium px-2 py-1 rounded-full border ${qcfg.bg} ${qcfg.color}`}>
+                          <span className={`inline-flex items-center gap-1 text-xs font-medium px-2 py-1 rounded-full border ${qcfg.bg} ${qcfg.color}`}>
+                            {qcfg.icon}
                             {qcfg.label}
                           </span>
                         )}

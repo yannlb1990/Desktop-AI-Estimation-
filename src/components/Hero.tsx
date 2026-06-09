@@ -3,9 +3,9 @@ import { ArrowRight, Clock, CheckCircle, Users, Zap } from "lucide-react";
 import { isSignedIn } from "@/lib/localAuth";
 
 const AppMockup = () => (
-  <div className="relative w-full max-w-lg mx-auto">
+  <div role="img" aria-label="Metricore app showing a floor plan with four measured rooms: Living Room 45.8 m², Master Bed 22.4 m², Kitchen 18.2 m², Garage 28.0 m². Estimated project value $284,500." className="relative w-full max-w-lg mx-auto">
     {/* Glow behind mockup */}
-    <div className="absolute inset-0 bg-primary/20 rounded-2xl blur-3xl scale-110 pointer-events-none" />
+    <div aria-hidden="true" className="absolute inset-0 bg-primary/20 rounded-2xl blur-3xl scale-110 pointer-events-none" />
 
     {/* Browser chrome */}
     <div className="relative rounded-xl overflow-hidden border border-white/10 shadow-2xl bg-[#0f1117]">
@@ -25,7 +25,7 @@ const AppMockup = () => (
       <div className="flex h-[340px] text-[10px]">
 
         {/* Left toolbar */}
-        <div className="w-10 bg-[#131620] border-r border-white/5 flex flex-col items-center py-3 gap-3">
+        <div aria-hidden="true" className="w-10 bg-[#131620] border-r border-white/5 flex flex-col items-center py-3 gap-3">
           {["M", "L", "A", "⊙", "↔"].map((t, i) => (
             <div key={i} className={`w-6 h-6 rounded flex items-center justify-center font-bold text-[9px] ${i === 1 ? 'bg-primary text-black' : 'text-white/30 hover:text-white/60'}`}>{t}</div>
           ))}
@@ -35,7 +35,7 @@ const AppMockup = () => (
         <div className="flex-1 bg-[#0d0f18] relative overflow-hidden">
 
           {/* Floor plan SVG */}
-          <svg className="absolute inset-0 w-full h-full" viewBox="0 0 300 260" preserveAspectRatio="xMidYMid meet">
+          <svg aria-hidden="true" className="absolute inset-0 w-full h-full" viewBox="0 0 300 260" preserveAspectRatio="xMidYMid meet">
             {/* Floor plan outline */}
             <rect x="30" y="20" width="240" height="220" fill="none" stroke="rgba(255,255,255,0.12)" strokeWidth="1.5" />
             {/* Internal walls */}
