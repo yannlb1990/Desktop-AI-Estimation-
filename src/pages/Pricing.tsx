@@ -229,10 +229,10 @@ const Pricing = () => {
             const price = PLAN_PRICES[plan.id][billing];
             const isSelected = selected === plan.id;
             return (
-              <button
+              <div
                 key={plan.id}
                 onClick={() => setSelected(plan.id)}
-                className={`relative text-left rounded-2xl border-2 p-6 transition-all focus:outline-none ${
+                className={`relative text-left rounded-2xl border-2 p-6 transition-all cursor-pointer ${
                   isSelected
                     ? 'border-primary bg-primary/5 shadow-lg ring-2 ring-primary/20'
                     : 'border-border bg-card hover:border-primary/40 hover:shadow-md'
@@ -275,7 +275,7 @@ const Pricing = () => {
                   </p>
                 )}
 
-                <div className="mt-4 pt-4 border-t border-border space-y-1.5">
+                <div className="mt-4 pt-4 border-t border-border space-y-1.5 mb-5">
                   {(Object.keys(FEATURE_LABELS) as FeatureKey[]).slice(0, 5).map(key => {
                     const val = plan.features[key];
                     if (typeof val === 'boolean' && !val) return null;
@@ -288,11 +288,21 @@ const Pricing = () => {
                       </div>
                     );
                   })}
-                  <p className="text-xs text-primary font-medium pt-1">
-                    {isSelected ? '← Selected' : 'Click to select'}
-                  </p>
                 </div>
-              </button>
+
+                <Button
+                  className={`w-full ${
+                    isSelected
+                      ? 'bg-primary text-primary-foreground hover:bg-primary/90'
+                      : 'bg-muted text-foreground hover:bg-primary hover:text-primary-foreground'
+                  }`}
+                  disabled={checkingOut || alreadyPaid}
+                  onClick={(e) => { e.stopPropagation(); handleCTA(plan.id); }}
+                >
+                  {alreadyPaid ? 'Already Subscribed' : `Start Free Trial`}
+                  {!alreadyPaid && <ArrowRight className="ml-2 h-4 w-4" />}
+                </Button>
+              </div>
             );
           })}
         </div>
