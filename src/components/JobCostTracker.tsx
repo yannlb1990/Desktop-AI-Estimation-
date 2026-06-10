@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useMemo } from "react";
 import { format, parseISO } from "date-fns";
 import { toast } from "sonner";
 import { getUserStorageKey } from "@/lib/localAuth";
+import { loadJobCostsMerged, lsSaveJobCosts, syncJobCostsToSupabase } from "@/lib/db/jobCosts";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -60,8 +61,6 @@ const typeColors: Record<CostType, string> = {
 // ─── Component ────────────────────────────────────────────────────────────────
 
 export default function JobCostTracker({ projectId }: JobCostTrackerProps) {
-  const storageKey = getUserStorageKey(`job_costs_${projectId}`);
-
   const [entries, setEntries] = useState<CostEntry[]>([]);
   const [estimateItems, setEstimateItems] = useState<any[]>([]);
   const [showForm, setShowForm] = useState(false);
@@ -74,29 +73,23 @@ export default function JobCostTracker({ projectId }: JobCostTrackerProps) {
   const [formAmount, setFormAmount] = useState("");
   const [formType, setFormType] = useState<CostType>("invoice");
 
-  // Load data
+  // Load data — estimate items from localStorage, cost entries merged from DB
   useEffect(() => {
     const projectsRaw = localStorage.getItem(getUserStorageKey("local_projects"));
     const projects: any[] = projectsRaw ? JSON.parse(projectsRaw) : [];
     const project = projects.find((p: any) => p.id === projectId);
     setEstimateItems(project?.estimate_items || []);
 
-    const saved = localStorage.getItem(storageKey);
-    if (saved) {
-      try {
-        setEntries(JSON.parse(saved));
-      } catch {
-        setEntries([]);
-      }
-    }
-  }, [projectId, storageKey]);
+    loadJobCostsMerged(projectId).then(setEntries);
+  }, [projectId]);
 
   const saveEntries = useCallback(
     (updated: CostEntry[]) => {
       setEntries(updated);
-      localStorage.setItem(storageKey, JSON.stringify(updated));
+      lsSaveJobCosts(projectId, updated);
+      syncJobCostsToSupabase(projectId, updated);
     },
-    [storageKey]
+    [projectId]
   );
 
   // ─── Derived values ───────────────────────────────────────────────────────

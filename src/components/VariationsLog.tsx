@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useMemo } from "react";
 import { format, parseISO } from "date-fns";
 import { toast } from "sonner";
 import { getUserStorageKey } from "@/lib/localAuth";
+import { loadVariationsMerged, lsSaveVariations, syncVariationsToSupabase } from "@/lib/db/variations";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -134,8 +135,6 @@ export default function VariationsLog({
   projectName,
   clientEmail,
 }: VariationsLogProps) {
-  const storageKey = getUserStorageKey(`variations_${projectId}`);
-
   const [variations, setVariations] = useState<Variation[]>([]);
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -148,24 +147,18 @@ export default function VariationsLog({
   const [formNotes, setFormNotes] = useState("");
   const [formItems, setFormItems] = useState<VariationItem[]>([makeBlankItem()]);
 
-  // Load
+  // Load merged from DB + localStorage
   useEffect(() => {
-    const saved = localStorage.getItem(storageKey);
-    if (saved) {
-      try {
-        setVariations(JSON.parse(saved));
-      } catch {
-        setVariations([]);
-      }
-    }
-  }, [storageKey]);
+    loadVariationsMerged(projectId).then(setVariations);
+  }, [projectId]);
 
   const saveVariations = useCallback(
     (updated: Variation[]) => {
       setVariations(updated);
-      localStorage.setItem(storageKey, JSON.stringify(updated));
+      lsSaveVariations(projectId, updated);
+      syncVariationsToSupabase(projectId, updated);
     },
-    [storageKey]
+    [projectId]
   );
 
   // ─── Summary ────────────────────────────────────────────────────────────

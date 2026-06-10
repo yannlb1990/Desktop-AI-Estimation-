@@ -12,6 +12,7 @@ import {
 } from "date-fns";
 import { toast } from "sonner";
 import { getUserStorageKey } from "@/lib/localAuth";
+import { loadScheduleMerged, lsSaveSchedule, syncScheduleToSupabase } from "@/lib/db/schedule";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -108,7 +109,6 @@ function generateFromEstimate(estimateItems: any[]): ScheduleTask[] {
 // ─── Component ────────────────────────────────────────────────────────────────
 
 export default function GanttSchedule({ projectId }: GanttScheduleProps) {
-  const storageKey = getUserStorageKey(`schedule_${projectId}`);
   const scrollRef = useRef<HTMLDivElement>(null);
 
   const [tasks, setTasks] = useState<ScheduleTask[]>([]);
@@ -116,38 +116,33 @@ export default function GanttSchedule({ projectId }: GanttScheduleProps) {
   const [editDraft, setEditDraft] = useState<ScheduleTask | null>(null);
   const [loaded, setLoaded] = useState(false);
 
-  // Load or generate
-  const loadTasks = useCallback(() => {
-    const projectsRaw = localStorage.getItem(getUserStorageKey("local_projects"));
-    const projects: any[] = projectsRaw ? JSON.parse(projectsRaw) : [];
-    const project = projects.find((p: any) => p.id === projectId);
-    const estimateItems: any[] = project?.estimate_items || [];
-
-    const saved = localStorage.getItem(storageKey);
-    if (saved) {
-      try {
-        setTasks(JSON.parse(saved));
-      } catch {
-        setTasks(generateFromEstimate(estimateItems));
+  // Load from DB (merged with localStorage), fall back to generating from estimate
+  useEffect(() => {
+    loadScheduleMerged(projectId).then((saved) => {
+      if (saved && saved.length > 0) {
+        setTasks(saved);
+        setLoaded(true);
+        return;
       }
-    } else {
+      const projectsRaw = localStorage.getItem(getUserStorageKey("local_projects"));
+      const projects: any[] = projectsRaw ? JSON.parse(projectsRaw) : [];
+      const project = projects.find((p: any) => p.id === projectId);
+      const estimateItems: any[] = project?.estimate_items || [];
       const generated = generateFromEstimate(estimateItems);
       setTasks(generated);
-      localStorage.setItem(storageKey, JSON.stringify(generated));
-    }
-    setLoaded(true);
-  }, [projectId, storageKey]);
-
-  useEffect(() => {
-    loadTasks();
-  }, [loadTasks]);
+      lsSaveSchedule(projectId, generated);
+      syncScheduleToSupabase(projectId, generated);
+      setLoaded(true);
+    });
+  }, [projectId]);
 
   const saveTasks = useCallback(
     (updated: ScheduleTask[]) => {
       setTasks(updated);
-      localStorage.setItem(storageKey, JSON.stringify(updated));
+      lsSaveSchedule(projectId, updated);
+      syncScheduleToSupabase(projectId, updated);
     },
-    [storageKey]
+    [projectId]
   );
 
   // ─── Gantt geometry ──────────────────────────────────────────────────────────
