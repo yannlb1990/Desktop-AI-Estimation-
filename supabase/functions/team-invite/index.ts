@@ -39,15 +39,26 @@ serve(async (req) => {
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "",
     );
 
-    // Verify the inviting user has an active Business subscription
+    // Verify the inviting user has a Business plan (paid active OR on trial)
     const { data: ownerSub } = await supabaseAdmin
       .from("subscriptions")
       .select("plan_id, status, team_id")
       .eq("user_id", user.id)
       .single();
 
-    if (!ownerSub || ownerSub.status !== "active" || ownerSub.plan_id !== "business") {
-      return json({ error: "Team invites require an active Business subscription" }, 403, cors);
+    const hasPaidBusiness = ownerSub?.status === "active" && ownerSub?.plan_id === "business";
+
+    if (!hasPaidBusiness) {
+      // Fall back to profiles.plan_id — covers Business trial users
+      const { data: profile } = await supabaseAdmin
+        .from("profiles")
+        .select("plan_id")
+        .eq("id", user.id)
+        .single();
+
+      if (!profile || profile.plan_id !== "business") {
+        return json({ error: "Team invites require an active Business subscription" }, 403, cors);
+      }
     }
 
     const { email } = await req.json();
@@ -60,7 +71,7 @@ serve(async (req) => {
     }
 
     // Get or create the team for this owner
-    let teamId = ownerSub.team_id;
+    let teamId = ownerSub?.team_id ?? null;
     if (!teamId) {
       const { data: existingTeam } = await supabaseAdmin
         .from("teams")

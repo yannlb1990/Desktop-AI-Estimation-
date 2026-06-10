@@ -57,8 +57,8 @@ const Settings = () => {
   const logoInputRef = useRef<HTMLInputElement>(null);
 
   const localUser = getLocalUser();
-  const { isTrialing, isTrialExpired, daysLeftInTrial, subscription } = getSubscriptionStatus();
-  const isBusinessPlan = subscription?.activePlan === "business";
+  const { isTrialing, isTrialExpired, daysLeftInTrial, subscription, effectivePlan } = getSubscriptionStatus();
+  const isBusinessPlan = effectivePlan === "business";
   const isPaidPlan = subscription?.activePlan !== "trial" && !!subscription?.subscribedAt;
 
   // ── Company Profile ─────────────────────────────────────────────────────────

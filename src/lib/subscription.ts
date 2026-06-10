@@ -80,7 +80,7 @@ export const PLAN_CAPS: Record<PlanId, PlanCaps> = {
   },
 };
 
-// Trial always has Pro-level caps
+// Trial fallback caps (Pro-level) — used only if selectedPlan is unrecognised
 const TRIAL_CAPS = PLAN_CAPS.pro;
 
 // ── Storage helpers ───────────────────────────────────────────────────────────
@@ -174,7 +174,7 @@ export function getSubscriptionStatus(): SubscriptionStatus {
   if (isTrialExpired) effectivePlan = 'starter';
 
   const caps: PlanCaps =
-    isTrialing ? TRIAL_CAPS
+    isTrialing ? (PLAN_CAPS[sub.selectedPlan] ?? TRIAL_CAPS)
     : isTrialExpired ? PLAN_CAPS.starter
     : PLAN_CAPS[sub.activePlan as PlanId] ?? PLAN_CAPS.starter;
 
