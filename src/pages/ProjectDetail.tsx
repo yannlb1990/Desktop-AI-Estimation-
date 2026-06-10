@@ -30,7 +30,7 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "sonner";
-import { ArrowLeft, FileText, DollarSign, Ruler, Loader2, Settings, Calculator, TrendingUp, ShieldCheck, MapPin, User, Calendar as CalendarIcon, Clock, Bell, Package, ChevronDown, ChevronUp, Users, FolderOpen, Sofa, BookOpen } from "lucide-react";
+import { ArrowLeft, FileText, DollarSign, Ruler, Loader2, Settings, Calculator, TrendingUp, ShieldCheck, MapPin, User, Calendar as CalendarIcon, Clock, Bell, Package, ChevronDown, ChevronUp, Users, FolderOpen, Sofa, BookOpen, BarChart2, GitBranch, PlusCircle } from "lucide-react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { SubcontractorComparison } from "@/components/SubcontractorComparison";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
@@ -50,6 +50,9 @@ import { PlanAnalysisWizard } from "@/components/PlanAnalysisWizard";
 import { AIPlanAnalyzerEnhanced } from "@/components/AIPlanAnalyzerEnhanced";
 import { DocumentLibrary } from "@/components/DocumentLibrary";
 import { FFEModule } from "@/components/ffe/FFEModule";
+import GanttSchedule from "@/components/GanttSchedule";
+import JobCostTracker from "@/components/JobCostTracker";
+import VariationsLog from "@/components/VariationsLog";
 import { syncProjectToSupabase } from "@/lib/db/projects";
 import { TourTip } from "@/components/TourTip";
 
@@ -409,6 +412,9 @@ const ProjectDetail = () => {
             { key: "compliance",label: "NCC",         icon: ShieldCheck,tour: "National Construction Code compliance checklist tailored to this project type. Identify gaps before submission." },
             { key: "subbies",   label: "Subbies",    icon: Users,      tour: "Enter and compare subcontractor quotes side by side for each trade. Easily select the best price and attach it to your estimate." },
             { key: "documents", label: "Docs",        icon: FolderOpen, tour: "Store all project documents in one place — contracts, variations, site photos, council approvals and correspondence." },
+            { key: "schedule",  label: "Schedule",    icon: CalendarIcon, tour: "Auto-generate a Gantt chart from your estimate trades. Adjust durations and dependencies, then print or export." },
+            { key: "jobcost",   label: "Job Cost",    icon: BarChart2,  tour: "Track actual costs against your estimate in real time. Log invoices and expenses by trade to see your live margin." },
+            { key: "variations",label: "Variations",  icon: GitBranch,  tour: "Manage change orders with a full approval workflow — draft, send for approval, track accepted variations and update your contract sum." },
           ].map((tool) => {
             const Icon = tool.icon;
             return (
@@ -441,6 +447,9 @@ const ProjectDetail = () => {
             <TabsTrigger value="ffe" />
             <TabsTrigger value="documents" />
             <TabsTrigger value="pricing" />
+            <TabsTrigger value="schedule" />
+            <TabsTrigger value="jobcost" />
+            <TabsTrigger value="variations" />
             {project.plan_file_url && <TabsTrigger value="plans" />}
           </TabsList>
 
@@ -581,6 +590,18 @@ const ProjectDetail = () => {
               <PlanAnalysisWizard planUrl={project.plan_file_url} projectId={projectId!} />
             </TabsContent>
           )}
+
+          <TabsContent value="schedule">
+            <GanttSchedule projectId={projectId!} />
+          </TabsContent>
+
+          <TabsContent value="jobcost">
+            <JobCostTracker projectId={projectId!} />
+          </TabsContent>
+
+          <TabsContent value="variations">
+            <VariationsLog projectId={projectId!} projectName={project?.name ?? ""} clientEmail={project?.client_email} />
+          </TabsContent>
         </Tabs>
       </div>
     </div>
