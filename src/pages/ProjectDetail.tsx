@@ -369,7 +369,7 @@ const ProjectDetail = () => {
         )}
 
         {/* Workflow progress strip */}
-        <div className="flex items-center gap-0 rounded-xl border border-border bg-card p-1 mb-2">
+        <div className="flex items-center gap-0 rounded-xl border border-border bg-card p-1 mb-2 overflow-x-auto scrollbar-none">
           {[
             { key: "takeoff", label: "1. Takeoff", icon: Ruler, tour: "Upload your PDF plans here. AI measures quantities automatically — review and adjust each item, then send everything to Estimate." },
             { key: "estimate", label: "2. Estimate", icon: Calculator, tour: "Review and price all takeoff items. Add labour, materials, margins and overheads. This is your full cost build-up before generating the client document." },
@@ -421,7 +421,7 @@ const ProjectDetail = () => {
               <TourTip key={tool.key} text={tool.tour} position="bottom">
                 <button
                   onClick={() => setActiveMainTab(tool.key)}
-                  className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium transition-all ${
+                  className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium transition-all shrink-0 ${
                     activeMainTab === tool.key
                       ? "bg-muted text-foreground"
                       : "text-muted-foreground hover:bg-muted/60"

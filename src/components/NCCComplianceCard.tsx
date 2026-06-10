@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo } from "react";
 import { getUserStorageKey } from "@/lib/localAuth";
+import { syncProjectToSupabase } from "@/lib/db/projects";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -1954,6 +1955,7 @@ export const NCCComplianceCard = ({ projectId }: NCCComplianceCardProps) => {
         newEstimateItem.item_number = String(existing.length + 1);
         projects[idx].estimate_items = [...existing, newEstimateItem];
         localStorage.setItem(getUserStorageKey("local_projects"), JSON.stringify(projects));
+        syncProjectToSupabase(projects[idx]);
         toast.success(`"${s.item.slice(0, 50)}…" added to estimate`);
       } else {
         toast.error("Project not found — open Estimate tab first");
