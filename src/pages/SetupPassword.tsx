@@ -40,6 +40,9 @@ const SetupPassword = () => {
   const [planId, setPlanId] = useState<PlanId>("pro");
   const [billingPeriod, setBillingPeriod] = useState<BillingPeriod>("monthly");
 
+  // Set when user came from "subscribe now" on pricing page — skip trial, go straight to Stripe
+  const [directCheckout] = useState(() => !!localStorage.getItem('metricore_direct_plan'));
+
   // Detect the Supabase session that the invite link injects
   useEffect(() => {
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
@@ -57,8 +60,13 @@ const SetupPassword = () => {
         setUserEmail(session.user.email ?? "");
         setUserName(session.user.user_metadata?.displayName ?? "");
         const meta = session.user.user_metadata ?? {};
-        if (PLANS.includes(meta.plan_id)) setPlanId(meta.plan_id);
-        if (meta.billing_period === "annual") setBillingPeriod("annual");
+        // Prefer localStorage direct-checkout intent over user metadata
+        const directPlan = localStorage.getItem('metricore_direct_plan') as PlanId | null;
+        const directBilling = localStorage.getItem('metricore_direct_billing') as BillingPeriod | null;
+        if (directPlan && PLANS.includes(directPlan)) setPlanId(directPlan);
+        else if (PLANS.includes(meta.plan_id)) setPlanId(meta.plan_id);
+        if (directBilling === 'annual') setBillingPeriod('annual');
+        else if (meta.billing_period === "annual") setBillingPeriod("annual");
       }
     });
 
@@ -80,8 +88,8 @@ const SetupPassword = () => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (password.length < 6) {
-      toast.error("Password must be at least 6 characters");
+    if (password.length < 8) {
+      toast.error("Password must be at least 8 characters");
       return;
     }
     if (password !== confirm) {
@@ -93,7 +101,16 @@ const SetupPassword = () => {
     try {
       const { error } = await supabase.auth.updateUser({ password });
       if (error) throw error;
-      await setupAccount();
+      const { resolvedPlan, resolvedBilling } = await setupAccount();
+
+      if (directCheckout) {
+        // Clear the direct-checkout flags before going to Stripe
+        localStorage.removeItem('metricore_direct_plan');
+        localStorage.removeItem('metricore_direct_billing');
+        await redirectToStripeCheckout(resolvedPlan, resolvedBilling);
+        return;
+      }
+
       const { data: { user } } = await supabase.auth.getUser();
       localStorage.setItem(`${user?.email ?? userEmail}:show_welcome`, "true");
       toast.success("Welcome to Metricore — your account is ready!");
@@ -106,7 +123,7 @@ const SetupPassword = () => {
   };
 
   const handleSubscribeNow = async () => {
-    if (password.length < 6) { toast.error("Set your password first"); return; }
+    if (password.length < 8) { toast.error("Set your password first (min 8 characters)"); return; }
     if (password !== confirm) { toast.error("Passwords don't match"); return; }
     setIsCheckingOut(true);
     try {
@@ -184,11 +201,11 @@ const SetupPassword = () => {
                 onChange={(e) => setPassword(e.target.value)}
                 placeholder="••••••••"
                 required
-                minLength={6}
+                minLength={8}
                 maxLength={100}
                 autoFocus
               />
-              <p className="text-xs text-muted-foreground mt-1">Minimum 6 characters</p>
+              <p className="text-xs text-muted-foreground mt-1">Minimum 8 characters</p>
             </div>
 
             <div>
@@ -204,35 +221,80 @@ const SetupPassword = () => {
               />
             </div>
 
-            {/* Primary: start trial */}
-            <Button type="submit" className="w-full bg-primary text-primary-foreground hover:bg-primary/90" disabled={isLoading || isCheckingOut}>
-              {isLoading
-                ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Setting up…</>
-                : `Start My ${TRIAL_DAYS}-Day Free Trial`}
-            </Button>
+            {directCheckout ? (
+              /* Direct-subscribe mode — primary CTA goes straight to Stripe */
+              <>
+                <Button type="submit" className="w-full bg-primary text-primary-foreground hover:bg-primary/90" disabled={isLoading || isCheckingOut}>
+                  {isLoading
+                    ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Setting up…</>
+                    : <><CreditCard className="mr-2 h-4 w-4" />Subscribe to {PLAN_NAMES[planId]}</>}
+                </Button>
+                <div className="flex items-center gap-3">
+                  <div className="flex-1 h-px bg-border" />
+                  <span className="text-xs text-muted-foreground">or</span>
+                  <div className="flex-1 h-px bg-border" />
+                </div>
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="w-full"
+                  disabled={isLoading || isCheckingOut}
+                  onClick={async () => {
+                    localStorage.removeItem('metricore_direct_plan');
+                    localStorage.removeItem('metricore_direct_billing');
+                    // Fall through to trial path
+                    if (password.length < 8) { toast.error("Password must be at least 8 characters"); return; }
+                    if (password !== confirm) { toast.error("Passwords don't match"); return; }
+                    setIsLoading(true);
+                    try {
+                      const { error } = await supabase.auth.updateUser({ password });
+                      if (error) throw error;
+                      await setupAccount();
+                      const { data: { user } } = await supabase.auth.getUser();
+                      localStorage.setItem(`${user?.email ?? userEmail}:show_welcome`, "true");
+                      toast.success("Welcome to Metricore — your account is ready!");
+                      navigate("/dashboard");
+                    } catch (err: any) {
+                      toast.error(err.message ?? "Could not set password — please try again");
+                    } finally {
+                      setIsLoading(false);
+                    }
+                  }}
+                >
+                  Start {TRIAL_DAYS}-Day Free Trial instead
+                </Button>
+              </>
+            ) : (
+              /* Normal trial mode */
+              <>
+                <Button type="submit" className="w-full bg-primary text-primary-foreground hover:bg-primary/90" disabled={isLoading || isCheckingOut}>
+                  {isLoading
+                    ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Setting up…</>
+                    : `Start My ${TRIAL_DAYS}-Day Free Trial`}
+                </Button>
 
-            {/* Divider */}
-            <div className="flex items-center gap-3">
-              <div className="flex-1 h-px bg-border" />
-              <span className="text-xs text-muted-foreground">or</span>
-              <div className="flex-1 h-px bg-border" />
-            </div>
+                <div className="flex items-center gap-3">
+                  <div className="flex-1 h-px bg-border" />
+                  <span className="text-xs text-muted-foreground">or</span>
+                  <div className="flex-1 h-px bg-border" />
+                </div>
 
-            {/* Secondary: skip trial, pay now */}
-            <Button
-              type="button"
-              variant="outline"
-              className="w-full gap-2"
-              disabled={isLoading || isCheckingOut}
-              onClick={handleSubscribeNow}
-            >
-              {isCheckingOut
-                ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Opening checkout…</>
-                : <><CreditCard className="h-4 w-4" />Subscribe to {PLAN_NAMES[planId]} — skip the trial</>}
-            </Button>
-            <p className="text-center text-xs text-muted-foreground">
-              Skip the trial and go straight to your paid plan
-            </p>
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="w-full gap-2"
+                  disabled={isLoading || isCheckingOut}
+                  onClick={handleSubscribeNow}
+                >
+                  {isCheckingOut
+                    ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Opening checkout…</>
+                    : <><CreditCard className="h-4 w-4" />Subscribe to {PLAN_NAMES[planId]} — skip the trial</>}
+                </Button>
+                <p className="text-center text-xs text-muted-foreground">
+                  Skip the trial and go straight to your paid plan
+                </p>
+              </>
+            )}
           </form>
 
           {userEmail && (

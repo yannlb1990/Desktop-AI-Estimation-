@@ -54,6 +54,7 @@ serve(async (req) => {
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "",
     );
 
+    const appUrl = Deno.env.get("APP_URL") ?? "https://www.metricore.com.au";
     const { data, error } = await supabaseAdmin.auth.admin.inviteUserByEmail(email, {
       data: {
         displayName: name,
@@ -62,7 +63,7 @@ serve(async (req) => {
         plan_id,
         billing_period,
       },
-      redirectTo: "https://www.metricore.com.au/setup-password",
+      redirectTo: `${appUrl}/setup-password`,
     });
 
     if (error) {

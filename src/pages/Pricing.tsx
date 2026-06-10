@@ -144,7 +144,6 @@ const Pricing = () => {
       navigate(`/auth?plan=${planId}&billing=${billing}&mode=signup`);
       return;
     }
-    // Signed in → go to Stripe
     setCheckingOut(true);
     try {
       await redirectToStripeCheckout(planId, billing);
@@ -152,6 +151,23 @@ const Pricing = () => {
       toast.error(err.message ?? "Could not open checkout. Please try again.");
       setCheckingOut(false);
     }
+  };
+
+  const handleDirectSubscribe = async (planId: PlanId) => {
+    if (signedIn) {
+      setCheckingOut(true);
+      try {
+        await redirectToStripeCheckout(planId, billing);
+      } catch (err: any) {
+        toast.error(err.message ?? "Could not open checkout. Please try again.");
+        setCheckingOut(false);
+      }
+      return;
+    }
+    // Not signed in — store direct-checkout intent, then go to signup
+    localStorage.setItem('metricore_direct_plan', planId);
+    localStorage.setItem('metricore_direct_billing', billing);
+    navigate(`/auth?plan=${planId}&billing=${billing}&mode=signup`);
   };
 
   return (
@@ -299,9 +315,20 @@ const Pricing = () => {
                   disabled={checkingOut || alreadyPaid}
                   onClick={(e) => { e.stopPropagation(); handleCTA(plan.id); }}
                 >
-                  {alreadyPaid ? 'Already Subscribed' : `Start Free Trial`}
+                  {alreadyPaid ? 'Already Subscribed' : 'Start Free Trial'}
                   {!alreadyPaid && <ArrowRight className="ml-2 h-4 w-4" />}
                 </Button>
+
+                {!alreadyPaid && (
+                  <button
+                    type="button"
+                    className="w-full text-xs text-muted-foreground hover:text-primary transition-colors py-1.5 text-center"
+                    disabled={checkingOut}
+                    onClick={(e) => { e.stopPropagation(); handleDirectSubscribe(plan.id); }}
+                  >
+                    Or subscribe now — ${PLAN_PRICES[plan.id][billing]}/mo
+                  </button>
+                )}
               </div>
             );
           })}
@@ -324,22 +351,34 @@ const Pricing = () => {
                 ${PLAN_PRICES[selected][billing]} AUD/mo after trial · No credit card required for trial
               </p>
             </div>
-            <Button
-              size="lg"
-              className="bg-primary text-primary-foreground hover:bg-primary/90 px-8 shrink-0"
-              disabled={checkingOut || alreadyPaid}
-              onClick={() => handleCTA(selected)}
-            >
-              {checkingOut ? (
-                <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Opening checkout…</>
-              ) : alreadyPaid ? (
-                "Already Subscribed"
-              ) : signedIn ? (
-                <>Subscribe to {PLAN_NAMES[selected]} <ArrowRight className="ml-2 h-5 w-5" /></>
-              ) : (
-                <>Get Started with {PLAN_NAMES[selected]} <ArrowRight className="ml-2 h-5 w-5" /></>
+            <div className="flex flex-col items-stretch md:items-end gap-2 shrink-0">
+              <Button
+                size="lg"
+                className="bg-primary text-primary-foreground hover:bg-primary/90 px-8"
+                disabled={checkingOut || alreadyPaid}
+                onClick={() => handleCTA(selected)}
+              >
+                {checkingOut ? (
+                  <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Opening checkout…</>
+                ) : alreadyPaid ? (
+                  "Already Subscribed"
+                ) : signedIn ? (
+                  <>Subscribe to {PLAN_NAMES[selected]} <ArrowRight className="ml-2 h-5 w-5" /></>
+                ) : (
+                  <>Get Started with {PLAN_NAMES[selected]} <ArrowRight className="ml-2 h-5 w-5" /></>
+                )}
+              </Button>
+              {!alreadyPaid && (
+                <button
+                  type="button"
+                  className="text-xs text-muted-foreground hover:text-primary transition-colors text-center md:text-right py-1"
+                  disabled={checkingOut}
+                  onClick={() => handleDirectSubscribe(selected)}
+                >
+                  Skip the trial — subscribe now at ${PLAN_PRICES[selected][billing]}/mo
+                </button>
               )}
-            </Button>
+            </div>
           </div>
         </div>
 

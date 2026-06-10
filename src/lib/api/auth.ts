@@ -13,7 +13,6 @@ export interface OnboardReq {
 
 interface OnboardRes {
   success: true;
-  user_id: string;
 }
 
 /**
