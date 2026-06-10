@@ -1,21 +1,11 @@
 import { supabase } from '@/integrations/supabase/client';
 import { getUserStorageKey } from '@/lib/localAuth';
+import type { Database } from '@/integrations/supabase/types';
 
 const LS_KEY = 'local_clients';
 
-export interface Client {
-  id: string;
-  company_name: string | null;
-  contact_name: string;
-  email: string;
-  phone: string | null;
-  mobile: string | null;
-  city: string | null;
-  state: string | null;
-  client_type: string | null;
-  created_at: string;
-  updated_at?: string;
-}
+export type Client = Database['public']['Tables']['clients']['Row'];
+type ClientInsert = Database['public']['Tables']['clients']['Insert'];
 
 export function lsLoadClients(): Client[] {
   try {
@@ -38,18 +28,16 @@ export async function syncClientToSupabase(client: Client): Promise<void> {
   const userId = await getAuthUserId();
   if (!userId) return;
   try {
-    await (supabase as any).from('clients').upsert(
-      { ...client, user_id: userId, updated_at: new Date().toISOString() },
-      { onConflict: 'id' }
-    );
-  } catch { /* silent */ }
+    const row: ClientInsert = { ...client, user_id: userId, updated_at: new Date().toISOString() };
+    await supabase.from('clients').upsert(row, { onConflict: 'id' });
+  } catch { /* silent — local data is source of truth */ }
 }
 
 export async function deleteClientFromSupabase(clientId: string): Promise<void> {
   const userId = await getAuthUserId();
   if (!userId) return;
   try {
-    await (supabase as any).from('clients').delete().eq('id', clientId).eq('user_id', userId);
+    await supabase.from('clients').delete().eq('id', clientId).eq('user_id', userId);
   } catch { /* silent */ }
 }
 
@@ -57,13 +45,13 @@ export async function loadClientsFromSupabase(): Promise<Client[]> {
   const userId = await getAuthUserId();
   if (!userId) return [];
   try {
-    const { data, error } = await (supabase as any)
+    const { data, error } = await supabase
       .from('clients')
       .select('*')
       .eq('user_id', userId)
       .order('created_at', { ascending: false });
     if (error || !data) return [];
-    return data as Client[];
+    return data;
   } catch {
     return [];
   }
@@ -77,7 +65,7 @@ export async function loadClientsMerged(): Promise<Client[]> {
 
   if (dbClients.length === 0) return lsClients;
 
-  const dbIds = new Set(dbClients.map((c: Client) => c.id));
+  const dbIds = new Set(dbClients.map(c => c.id));
   const lsOnly = lsClients.filter(c => !dbIds.has(c.id));
   lsOnly.forEach(c => syncClientToSupabase(c));
 
