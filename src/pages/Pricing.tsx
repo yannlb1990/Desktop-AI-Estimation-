@@ -371,11 +371,11 @@ const Pricing = () => {
               {!alreadyPaid && (
                 <button
                   type="button"
-                  className="text-xs text-muted-foreground hover:text-primary transition-colors text-center md:text-right py-1"
+                  className="text-sm text-muted-foreground hover:text-primary transition-colors text-center md:text-right py-1 underline underline-offset-2"
                   disabled={checkingOut}
                   onClick={() => handleDirectSubscribe(selected)}
                 >
-                  Skip the trial — subscribe now at ${PLAN_PRICES[selected][billing]}/mo
+                  Or subscribe now — ${PLAN_PRICES[selected][billing]}/mo
                 </button>
               )}
             </div>
@@ -520,6 +520,16 @@ const Pricing = () => {
               </Button>
             )}
           </div>
+          {!alreadyPaid && (
+            <button
+              type="button"
+              className="mt-4 text-sm text-muted-foreground hover:text-primary transition-colors underline underline-offset-2"
+              disabled={checkingOut}
+              onClick={() => handleDirectSubscribe(selected)}
+            >
+              Or subscribe now — ${PLAN_PRICES[selected][billing]}/mo
+            </button>
+          )}
         </div>
 
       </div>
