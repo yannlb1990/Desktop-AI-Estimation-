@@ -986,7 +986,10 @@ export const PDFTakeoff = ({ projectId, estimateId, onAddCostItems }: PDFTakeoff
               <TakeoffTable
                 measurements={filteredMeasurements}
                 onUpdateMeasurement={(id, updates) => dispatch({ type: 'UPDATE_MEASUREMENT', payload: { id, updates } })}
-                onDeleteMeasurement={(id) => dispatch({ type: 'DELETE_MEASUREMENT', payload: id })}
+                onDeleteMeasurement={(id) => {
+                  canvasActionsRef.current?.removeObjects(id);
+                  dispatch({ type: 'DELETE_MEASUREMENT', payload: id });
+                }}
                 onAddToEstimate={handleAddToEstimate}
                 onFetchNCCCode={handleFetchNCCCode}
               />
