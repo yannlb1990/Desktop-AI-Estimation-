@@ -20,7 +20,11 @@ export async function syncSubscriptionFromDB(retries = 3): Promise<boolean> {
         .eq("user_id", session.user.id)
         .single<Pick<SubscriptionRow, "plan_id" | "billing_period" | "status" | "current_period_end" | "created_at">>();
 
-      if (error || !data || data.status === "canceled") return false;
+      if (error || !data) {
+        if (attempt < retries) await new Promise(r => setTimeout(r, 2000));
+        continue;
+      }
+      if (data.status === "canceled") return false;
 
       const storageKey = `${session.user.email}:estimate_subscription`;
       const raw = localStorage.getItem(storageKey);
@@ -55,7 +59,7 @@ export async function syncSubscriptionFromDB(retries = 3): Promise<boolean> {
       return true;
     } catch {
       if (attempt < retries) {
-        await new Promise(r => setTimeout(r, attempt * 1000));
+        await new Promise(r => setTimeout(r, 2000));
       }
     }
   }

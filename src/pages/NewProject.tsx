@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { isSignedIn, getUserStorageKey } from "@/lib/localAuth";
+import { getSubscriptionStatus } from "@/lib/subscription";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -43,6 +44,15 @@ const NewProject = () => {
     if (!isSignedIn()) {
       navigate("/auth");
       return;
+    }
+    const { caps } = getSubscriptionStatus();
+    if (caps.maxProjects !== Infinity) {
+      const existing: any[] = JSON.parse(localStorage.getItem(getUserStorageKey('local_projects')) || '[]');
+      if (existing.length >= caps.maxProjects) {
+        toast.error(`Plan limit: ${caps.maxProjects} projects — upgrade to add more`);
+        navigate("/dashboard");
+        return;
+      }
     }
     const mode = searchParams.get("mode");
     if (mode === "manual") {
@@ -167,8 +177,8 @@ const NewProject = () => {
         client_name: validData.client_name || null,
         site_address: validData.site_address || null,
         address: validData.site_address || "TBD",
-        state: "NSW",
-        postcode: "0000",
+        state: null,
+        postcode: null,
         plan_file_name: uploadedFile?.name || null,
         status: "in_progress",
         created_at: new Date().toISOString(),
@@ -236,8 +246,8 @@ const NewProject = () => {
         client_name: validData.client_name || null,
         site_address: validData.site_address || null,
         address: validData.site_address || "TBD",
-        state: "NSW",
-        postcode: "0000",
+        state: null,
+        postcode: null,
         status: "in_progress",
         created_at: new Date().toISOString(),
         estimate_items: [],

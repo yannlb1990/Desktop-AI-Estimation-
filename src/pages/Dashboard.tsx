@@ -7,7 +7,7 @@ import {
   Plus, FileText, DollarSign, TrendingUp, BarChart3,
   Upload, Zap, Settings, Package, ChevronRight,
   ArrowRight, Clock, User, ExternalLink, AlertTriangle, X, LogOut, Trash2, BookOpen,
-  Send, Trophy, XCircle
+  Send, Trophy, XCircle, Users
 } from "lucide-react";
 import { useSubscription } from "@/hooks/useSubscription";
 import { PLAN_NAMES } from "@/lib/subscription";
@@ -286,6 +286,11 @@ const Dashboard = () => {
             <span className="font-display text-xl font-bold">Metricore</span>
           </div>
           <div className="flex items-center gap-2">
+            <TourTip text="Manage your clients and their contact details." position="bottom">
+              <Button variant="ghost" size="sm" onClick={() => navigate("/clients")}>
+                <Users className="h-4 w-4 mr-1.5" />Clients
+              </Button>
+            </TourTip>
             <TourTip text="Browse supplier materials and update your pricing catalogue." position="bottom">
               <Button variant="ghost" size="sm" onClick={() => navigate("/materials")}>
                 <Package className="h-4 w-4 mr-1.5" />Materials
