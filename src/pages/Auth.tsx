@@ -6,7 +6,7 @@ import { Label } from "@/components/ui/label";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
-import { Loader2, Check, ArrowLeft, Mail, Phone, Building2, Home } from "lucide-react";
+import { Loader2, Check, ArrowLeft, Mail, Phone, Building2, Home, CreditCard } from "lucide-react";
 import { MetricoreLogoMark } from "@/components/MetricoreLogoMark";
 import { z } from "zod";
 import {
@@ -158,9 +158,17 @@ const Auth = () => {
     }
   };
 
-  const handleRequestAccess = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const submitRequest = async (direct: boolean) => {
     setIsLoading(true);
+
+    // Set or clear direct-checkout intent before submitting
+    if (direct) {
+      localStorage.setItem('metricore_direct_plan', selectedPlan);
+      localStorage.setItem('metricore_direct_billing', billing);
+    } else {
+      localStorage.removeItem('metricore_direct_plan');
+      localStorage.removeItem('metricore_direct_billing');
+    }
 
     try {
       const data = leadSchema.parse({
@@ -182,6 +190,10 @@ const Auth = () => {
       setPendingEmail(data.email);
       setVerificationSent(true);
     } catch (error) {
+      if (direct) {
+        localStorage.removeItem('metricore_direct_plan');
+        localStorage.removeItem('metricore_direct_billing');
+      }
       if (error instanceof z.ZodError) {
         toast.error(error.errors[0].message);
       } else if (error instanceof EdgeFunctionError && error.status === 409) {
@@ -196,6 +208,11 @@ const Auth = () => {
     } finally {
       setIsLoading(false);
     }
+  };
+
+  const handleRequestAccess = (e: React.FormEvent) => {
+    e.preventDefault();
+    submitRequest(false);
   };
 
   const handleForgotPassword = async () => {
@@ -510,6 +527,24 @@ const Auth = () => {
                   {isLoading
                     ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Sending your link…</>
                     : `Get Started — ${TRIAL_DAYS}-Day Free Trial`}
+                </Button>
+
+                <div className="flex items-center gap-3">
+                  <div className="flex-1 h-px bg-border" />
+                  <span className="text-xs text-muted-foreground">or</span>
+                  <div className="flex-1 h-px bg-border" />
+                </div>
+
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="w-full gap-2"
+                  disabled={isLoading || !projectType}
+                  onClick={() => submitRequest(true)}
+                >
+                  {isLoading
+                    ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Sending your link…</>
+                    : <><CreditCard className="h-4 w-4" />Subscribe to {PLAN_NAMES[selectedPlan]} — ${price}/mo</>}
                 </Button>
 
                 {/* What happens next */}
