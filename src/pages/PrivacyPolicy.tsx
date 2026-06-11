@@ -226,7 +226,52 @@ const PrivacyPolicy = () => {
             </div>
 
             <div>
-              <h2 className="text-foreground font-semibold text-lg mb-3">11. Children's Privacy</h2>
+              <h2 className="text-foreground font-semibold text-lg mb-3">11. Notifiable Data Breaches</h2>
+              <p>
+                In the event of an eligible data breach under the{" "}
+                <em>Notifiable Data Breaches (NDB) scheme</em> (Part IIIC of the{" "}
+                <em>Privacy Act 1988</em>), we will:
+              </p>
+              <ul className="list-disc pl-6 mt-3 space-y-1">
+                <li>Assess the suspected breach as quickly as practicable</li>
+                <li>Notify affected individuals whose personal information was involved and who are at real risk of serious harm</li>
+                <li>Notify the Office of the Australian Information Commissioner (OAIC) within 30 days of becoming aware of an eligible breach</li>
+                <li>Include in that notification: the nature of the breach, the types of information involved, and the steps we are taking in response</li>
+              </ul>
+              <p className="mt-3">
+                If you suspect your account has been compromised, contact us immediately at{" "}
+                <a href="mailto:admin@metricore.com.au" className="text-primary hover:underline">
+                  admin@metricore.com.au
+                </a>
+                .
+              </p>
+            </div>
+
+            <div>
+              <h2 className="text-foreground font-semibold text-lg mb-3">12. Third-Party Personal Data You Enter</h2>
+              <p>
+                The platform allows you to enter personal information belonging to third parties —
+                such as your clients' names, email addresses, phone numbers, and project addresses —
+                for the purpose of generating quotes, Scope of Works documents, and tender packages.
+              </p>
+              <p className="mt-3">
+                By entering third-party personal information into the platform, you represent and
+                warrant that:
+              </p>
+              <ul className="list-disc pl-6 mt-3 space-y-1">
+                <li>You have the authority or consent of that individual to collect and use their personal information for this purpose</li>
+                <li>Your collection and use of that information complies with applicable privacy laws</li>
+                <li>You will not enter sensitive personal information (such as government identifiers, health information, or financial account details) beyond what is necessary to generate construction documents</li>
+              </ul>
+              <p className="mt-3">
+                Buildamax Pty Ltd processes third-party personal information you enter solely to
+                provide the Service to you. We do not use it for any other purpose and do not contact
+                those individuals directly.
+              </p>
+            </div>
+
+            <div>
+              <h2 className="text-foreground font-semibold text-lg mb-3">13. Children's Privacy</h2>
               <p>
                 The Service is not directed to persons under 18 years of age. We do not knowingly
                 collect personal information from children. If you believe we have inadvertently
@@ -235,7 +280,7 @@ const PrivacyPolicy = () => {
             </div>
 
             <div>
-              <h2 className="text-foreground font-semibold text-lg mb-3">12. Changes to This Policy</h2>
+              <h2 className="text-foreground font-semibold text-lg mb-3">15. Changes to This Policy</h2>
               <p>
                 We may update this Privacy Policy from time to time. Material changes will be
                 communicated by email or via a notice on the platform before they take effect.
@@ -245,7 +290,7 @@ const PrivacyPolicy = () => {
             </div>
 
             <div>
-              <h2 className="text-foreground font-semibold text-lg mb-3">13. Complaints</h2>
+              <h2 className="text-foreground font-semibold text-lg mb-3">15. Complaints</h2>
               <p>
                 If you have a complaint about how we have handled your personal information, please
                 contact us first at{" "}
@@ -271,7 +316,7 @@ const PrivacyPolicy = () => {
             </div>
 
             <div>
-              <h2 className="text-foreground font-semibold text-lg mb-3">14. Contact</h2>
+              <h2 className="text-foreground font-semibold text-lg mb-3">16. Contact</h2>
               <p>
                 <strong className="text-foreground">Privacy Officer — Buildamax Pty Ltd</strong><br />
                 Trading as Metricore<br />
