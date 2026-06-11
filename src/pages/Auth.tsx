@@ -73,6 +73,7 @@ const Auth = () => {
   const [name, setName]             = useState("");
   const [phone, setPhone]           = useState("");
   const [projectType, setProjectType] = useState<"commercial" | "residential" | "">("");
+  const [marketingConsent, setMarketingConsent] = useState(false);
 
   // Verification states
   const [verificationSent, setVerificationSent] = useState(false);
@@ -185,6 +186,7 @@ const Auth = () => {
         project_type: data.projectType,
         plan_id: selectedPlan,
         billing_period: billing,
+        marketing_consent: marketingConsent,
       });
 
       setPendingEmail(data.email);
@@ -519,6 +521,19 @@ const Auth = () => {
                     ))}
                   </div>
                 </div>
+                <label className="flex items-start gap-2.5 cursor-pointer group">
+                  <input
+                    type="checkbox"
+                    checked={marketingConsent}
+                    onChange={(e) => setMarketingConsent(e.target.checked)}
+                    className="mt-0.5 h-4 w-4 rounded border-border accent-primary shrink-0"
+                  />
+                  <span className="text-xs text-muted-foreground leading-snug group-hover:text-foreground transition-colors">
+                    I'd like to receive product updates, tips, and industry insights from Metricore.
+                    You can unsubscribe at any time. (Optional)
+                  </span>
+                </label>
+
                 <Button
                   type="submit"
                   className="w-full bg-primary text-primary-foreground hover:bg-primary/90"
@@ -563,7 +578,7 @@ const Auth = () => {
                 type="button"
                 onClick={() => {
                   setIsLogin(!isLogin);
-                  setEmail(""); setPassword(""); setName(""); setPhone(""); setProjectType("");
+                  setEmail(""); setPassword(""); setName(""); setPhone(""); setProjectType(""); setMarketingConsent(false);
                   setNeedsVerification(false);
                 }}
                 className="text-sm text-primary hover:underline"
@@ -576,7 +591,10 @@ const Auth = () => {
           </Card>
 
           <p className="text-center mt-4 text-sm text-white/50">
-            By continuing you agree to our Terms of Service &amp; Privacy Policy
+            By continuing you agree to our{" "}
+            <a href="/terms" className="underline hover:text-white/80">Terms of Service</a>
+            {" "}&amp;{" "}
+            <a href="/privacy" className="underline hover:text-white/80">Privacy Policy</a>
           </p>
         </div>
       </div>
