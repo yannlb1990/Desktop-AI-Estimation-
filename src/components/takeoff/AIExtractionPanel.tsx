@@ -226,6 +226,12 @@ export const AIExtractionPanel: React.FC<AIExtractionPanelProps> = ({
       </Button>
 
       {extractionResult && (
+        <div className="text-[11px] text-muted-foreground text-center italic mb-1">
+          AI-generated — review all values before use
+        </div>
+      )}
+
+      {extractionResult && (
         <div className="text-xs text-muted-foreground">
           Processed {extractionResult.total_pages} pages in {(extractionResult.processing_time_ms / 1000).toFixed(1)}s
         </div>

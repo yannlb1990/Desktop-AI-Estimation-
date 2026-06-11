@@ -3,6 +3,8 @@
 // All 8 states/territories included
 // Data Freshness: Updated December 2025
 
+export const RATES_LAST_UPDATED = "December 2025";
+
 export type AustralianState = 'NSW' | 'VIC' | 'QLD' | 'SA' | 'WA' | 'TAS' | 'NT' | 'ACT';
 
 export interface SOWRate {

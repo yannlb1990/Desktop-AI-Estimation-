@@ -1995,6 +1995,9 @@ export const NCCComplianceCard = ({ projectId }: NCCComplianceCardProps) => {
             <span className="block mt-1 text-xs text-amber-700 bg-amber-50 border border-amber-100 rounded px-2 py-1 mt-2">
               ⚠️ NCC 2022 Amendment 2 is current (effective July 2025). NSW & QLD adopt NCC 2025 from 1 May 2027. Always confirm with your local building surveyor.
             </span>
+            <span className="block mt-2 text-xs text-muted-foreground">
+              For guidance only. Always verify requirements with a registered building surveyor or certifier before making compliance decisions. Metricore accepts no liability for loss arising from reliance on this checklist.
+            </span>
           </CardDescription>
         </CardHeader>
         <CardContent>

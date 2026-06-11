@@ -251,6 +251,10 @@ export const FixturesSummary = ({ pdfUrl }: FixturesSummaryProps) => {
             No symbols detected. Check the plan has text-based W/D tags or a window/door schedule.
           </div>
         )}
+
+        <p className="text-[11px] text-muted-foreground italic text-center mt-3">
+          AI-generated — verify counts against the architectural schedule before ordering.
+        </p>
       </div>
     </Card>
   );

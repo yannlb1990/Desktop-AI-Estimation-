@@ -13,7 +13,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { getUserStorageKey } from '@/lib/localAuth';
 import { Measurement, CostItem, MeasurementArea, TRADE_OPTIONS, RelatedMaterial, ConsumableItem } from '@/lib/takeoff/types';
 import { cn } from '@/lib/utils';
-import { SCOPE_OF_WORK_RATES, type AustralianState } from '@/data/scopeOfWorkRates';
+import { SCOPE_OF_WORK_RATES, RATES_LAST_UPDATED, type AustralianState } from '@/data/scopeOfWorkRates';
 import { MARKET_LABOUR_RATES, getStateRate } from '@/data/marketLabourRates';
 import { exportToBOQCsv } from '@/lib/takeoff/export';
 import { getEffectiveQuantity } from '@/lib/takeoff/calculations';
@@ -1520,6 +1520,12 @@ export const CostEstimator = ({
           </div>
         </div>
       </Card>
+
+      {/* Estimation disclaimer */}
+      <p className="text-[11px] text-muted-foreground text-center leading-snug px-2">
+        Indicative estimate only — not a substitute for a certified quantity surveyor. Rates updated {RATES_LAST_UPDATED}. Market conditions vary by region and project specifics. Metricore accepts no liability for loss arising from reliance on these figures.
+      </p>
+
       <UpgradeModal open={upgradeOpen} onClose={() => setUpgradeOpen(false)} feature="BOQ Export" />
 
       {/* Save Template Dialog */}
