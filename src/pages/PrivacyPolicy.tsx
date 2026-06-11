@@ -7,117 +7,257 @@ const PrivacyPolicy = () => {
     <>
       <Helmet>
         <title>Privacy Policy | Metricore</title>
-        <meta name="description" content="Read Metricore's Privacy Policy to learn how we collect, store, and protect your personal information under Australian privacy law and the Privacy Act 1988." />
+        <meta name="description" content="Metricore Privacy Policy — how Buildamax Pty Ltd collects, stores, and protects your personal information under the Australian Privacy Act 1988." />
         <link rel="canonical" href="https://metricore.com.au/privacy" />
       </Helmet>
       <div className="min-h-screen">
         <Navigation />
         <main className="container mx-auto px-6 py-16 max-w-3xl">
           <h1 className="font-display text-4xl font-bold mb-2">Privacy Policy</h1>
-          <p className="text-muted-foreground mb-10">Last updated: 1 June 2026</p>
+          <p className="text-muted-foreground mb-10">Last updated: 11 June 2026</p>
 
           <section className="space-y-8 text-sm leading-7 text-muted-foreground">
+
             <div>
               <h2 className="text-foreground font-semibold text-lg mb-3">1. About This Policy</h2>
               <p>
-                Metricore ("we", "us", "our") is an Australian software company providing AI-powered
-                construction estimation tools. This Privacy Policy explains how we handle personal
-                information in accordance with the <em>Privacy Act 1988</em> (Cth) and the Australian
-                Privacy Principles (APPs).
+                This Privacy Policy describes how <strong className="text-foreground">Buildamax Pty Ltd
+                (ABN [INSERT ABN])</strong>, trading as <strong className="text-foreground">Metricore</strong>
+                ("we", "us", "our"), collects, uses, discloses, and protects personal information
+                through the Metricore platform at metricore.com.au.
+              </p>
+              <p className="mt-3">
+                We are bound by the <em>Privacy Act 1988</em> (Cth) and the Australian Privacy
+                Principles (APPs). This policy explains your rights and our obligations under that
+                framework.
               </p>
             </div>
 
             <div>
               <h2 className="text-foreground font-semibold text-lg mb-3">2. Information We Collect</h2>
-              <p className="mb-3">We collect information you provide directly, including:</p>
+              <p className="mb-3 font-medium text-foreground">Account and identity information:</p>
               <ul className="list-disc pl-6 space-y-1">
-                <li>Account registration details (name, email address, password)</li>
-                <li>Billing information (processed securely by Stripe — we do not store card details)</li>
-                <li>Project data you upload (plans, measurements, tender documents)</li>
-                <li>Communications you send us (support requests, feedback)</li>
+                <li>Full name</li>
+                <li>Email address</li>
+                <li>Phone number</li>
+                <li>Company or trading name</li>
+                <li>Project type (commercial / residential) provided at signup</li>
+                <li>Password (stored as a one-way cryptographic hash — we cannot read it)</li>
               </ul>
-              <p className="mt-3">
-                We also automatically collect usage data such as browser type, IP address, pages visited,
-                and feature usage to improve our service.
+
+              <p className="mt-4 mb-3 font-medium text-foreground">Project and business data:</p>
+              <ul className="list-disc pl-6 space-y-1">
+                <li>Architectural plans and PDF documents you upload</li>
+                <li>Measurement takeoff data, cost estimates, and BOQ items</li>
+                <li>Project names, addresses, and descriptions</li>
+                <li>Client names, email addresses, and contact details you enter</li>
+                <li>Scope of Works, variation logs, and tender documents you create</li>
+                <li>Schedule and job cost records</li>
+              </ul>
+
+              <p className="mt-4 mb-3 font-medium text-foreground">Technical and usage data:</p>
+              <ul className="list-disc pl-6 space-y-1">
+                <li>IP address and browser type</li>
+                <li>Pages visited and features used within the platform</li>
+                <li>Session timestamps and duration</li>
+                <li>Error and diagnostic logs</li>
+              </ul>
+
+              <p className="mt-4 mb-3 font-medium text-foreground">Payment information:</p>
+              <p>
+                Payment card details are collected and processed directly by Stripe. We do not receive,
+                store, or have access to your card number, CVV, or full payment details. We retain only
+                transaction records (amount, date, plan type) for accounting purposes.
               </p>
             </div>
 
             <div>
               <h2 className="text-foreground font-semibold text-lg mb-3">3. How We Use Your Information</h2>
+              <p className="mb-3">We use personal information to:</p>
               <ul className="list-disc pl-6 space-y-1">
-                <li>To provide and improve the Metricore platform</li>
-                <li>To process payments and manage your subscription</li>
-                <li>To send transactional emails (receipts, password resets)</li>
-                <li>To respond to support requests</li>
-                <li>To comply with legal obligations</li>
-              </ul>
-              <p className="mt-3">We do not sell your personal information to third parties.</p>
-            </div>
-
-            <div>
-              <h2 className="text-foreground font-semibold text-lg mb-3">4. Data Storage and Security</h2>
-              <p>
-                Your data is stored on secure cloud infrastructure (Supabase/AWS) with encryption at
-                rest and in transit. We apply industry-standard security practices including access
-                controls, audit logging, and regular security reviews.
-              </p>
-            </div>
-
-            <div>
-              <h2 className="text-foreground font-semibold text-lg mb-3">5. Third-Party Services</h2>
-              <p className="mb-3">We use the following third-party services:</p>
-              <ul className="list-disc pl-6 space-y-1">
-                <li><strong>Stripe</strong> — payment processing</li>
-                <li><strong>Supabase</strong> — database and authentication</li>
-                <li><strong>Resend</strong> — transactional email delivery</li>
-                <li><strong>Vercel</strong> — hosting and delivery</li>
-              </ul>
-              <p className="mt-3">Each provider operates under their own privacy policy and data processing terms.</p>
-            </div>
-
-            <div>
-              <h2 className="text-foreground font-semibold text-lg mb-3">6. Your Rights</h2>
-              <p>Under the Australian Privacy Principles, you have the right to:</p>
-              <ul className="list-disc pl-6 mt-3 space-y-1">
-                <li>Access the personal information we hold about you</li>
-                <li>Request correction of inaccurate information</li>
-                <li>Request deletion of your account and associated data</li>
-                <li>Opt out of marketing communications</li>
+                <li>Create and manage your account</li>
+                <li>Deliver and improve the Metricore platform and its features</li>
+                <li>Process subscription payments and issue receipts</li>
+                <li>Send transactional emails (account activation, password reset, billing notifications)</li>
+                <li>Respond to support requests and enquiries</li>
+                <li>Detect fraud, abuse, or security incidents</li>
+                <li>Comply with legal obligations under Australian law</li>
+                <li>Send product updates and service announcements (you may opt out at any time)</li>
               </ul>
               <p className="mt-3">
-                To exercise these rights, email us at{" "}
+                We do not use your project data or client data to train AI models. We do not sell
+                personal information to third parties.
+              </p>
+            </div>
+
+            <div>
+              <h2 className="text-foreground font-semibold text-lg mb-3">4. AI Processing — Important Disclosure</h2>
+              <p>
+                Metricore uses Google's Gemini AI to power features including plan dimension extraction,
+                window and door detection, and AI-generated scope suggestions. When you use these
+                features, the PDF content or plan data you upload is transmitted to Google's AI
+                infrastructure for processing.
+              </p>
+              <p className="mt-3">
+                Google processes this data under its own API Terms of Service and Data Processing
+                Agreement. Google has committed that API data is not used to train its general AI
+                models. However, your uploaded plans may be processed on servers located outside
+                Australia.
+              </p>
+              <p className="mt-3">
+                <strong className="text-foreground">Do not upload documents containing sensitive personal
+                information</strong> (such as identity documents, financial records, or confidential
+                client contracts) when using AI extraction features. Project plans and architectural
+                drawings are appropriate for these features.
+              </p>
+            </div>
+
+            <div>
+              <h2 className="text-foreground font-semibold text-lg mb-3">5. Third-Party Service Providers</h2>
+              <p className="mb-3">
+                We share limited personal information with the following service providers, solely
+                to operate the platform:
+              </p>
+              <ul className="list-disc pl-6 space-y-2">
+                <li>
+                  <strong className="text-foreground">Supabase</strong> — database, authentication, and
+                  file storage. Data may be hosted on AWS infrastructure (US East region).
+                </li>
+                <li>
+                  <strong className="text-foreground">Stripe</strong> — payment processing. Subject to
+                  Stripe's Privacy Policy and PCI-DSS compliance.
+                </li>
+                <li>
+                  <strong className="text-foreground">Vercel</strong> — application hosting and content
+                  delivery. Edge nodes may be located globally.
+                </li>
+                <li>
+                  <strong className="text-foreground">Resend</strong> — transactional email delivery
+                  (account invitations, receipts, password resets).
+                </li>
+                <li>
+                  <strong className="text-foreground">Google (Gemini AI)</strong> — AI-powered plan
+                  processing features. See Section 4 above.
+                </li>
+              </ul>
+              <p className="mt-3">
+                These providers process personal information only as instructed by us and are required
+                to protect it in accordance with their respective data processing agreements.
+              </p>
+            </div>
+
+            <div>
+              <h2 className="text-foreground font-semibold text-lg mb-3">6. Overseas Disclosure</h2>
+              <p>
+                Some of our service providers (Supabase/AWS, Vercel, Google, Stripe) operate
+                infrastructure outside Australia, including in the United States. By using the Service,
+                you consent to your personal information being transferred to and processed in these
+                countries. We take reasonable steps to ensure overseas recipients handle your
+                information in accordance with the APPs.
+              </p>
+            </div>
+
+            <div>
+              <h2 className="text-foreground font-semibold text-lg mb-3">7. Data Storage and Security</h2>
+              <p>
+                We implement industry-standard security measures including:
+              </p>
+              <ul className="list-disc pl-6 mt-3 space-y-1">
+                <li>TLS encryption for all data in transit</li>
+                <li>Encryption at rest for database records</li>
+                <li>Row-Level Security (RLS) ensuring users can only access their own data</li>
+                <li>Access controls and authentication requirements for platform access</li>
+                <li>Regular security reviews</li>
+              </ul>
+              <p className="mt-3">
+                No method of transmission over the internet is 100% secure. While we take reasonable
+                steps to protect your information, we cannot guarantee absolute security.
+              </p>
+            </div>
+
+            <div>
+              <h2 className="text-foreground font-semibold text-lg mb-3">8. Data Retention</h2>
+              <p>
+                We retain your personal information and project data for as long as your account is
+                active and for a reasonable period thereafter to satisfy legal, accounting, or business
+                obligations. On account termination or deletion request:
+              </p>
+              <ul className="list-disc pl-6 mt-3 space-y-1">
+                <li>Active account data is retained for 90 days, during which you may request an export</li>
+                <li>After 90 days, personal and project data is permanently deleted from our systems</li>
+                <li>Billing records are retained for 7 years as required by Australian tax law</li>
+                <li>Anonymised aggregate usage statistics may be retained indefinitely</li>
+              </ul>
+            </div>
+
+            <div>
+              <h2 className="text-foreground font-semibold text-lg mb-3">9. Cookies and Local Storage</h2>
+              <p>
+                We use browser cookies and localStorage for:
+              </p>
+              <ul className="list-disc pl-6 mt-3 space-y-1">
+                <li>Authentication session tokens (essential — cannot be disabled)</li>
+                <li>Project data caching to improve performance (localStorage)</li>
+                <li>User preferences (theme, settings)</li>
+              </ul>
+              <p className="mt-3">
+                We do not use advertising, tracking, or third-party analytics cookies. Essential cookies
+                required for authentication cannot be disabled without preventing platform access.
+              </p>
+            </div>
+
+            <div>
+              <h2 className="text-foreground font-semibold text-lg mb-3">10. Your Rights Under the APPs</h2>
+              <p>Under the Australian Privacy Principles, you have the right to:</p>
+              <ul className="list-disc pl-6 mt-3 space-y-1">
+                <li><strong className="text-foreground">Access</strong> — request a copy of the personal information we hold about you</li>
+                <li><strong className="text-foreground">Correction</strong> — request correction of inaccurate, incomplete, or out-of-date information</li>
+                <li><strong className="text-foreground">Deletion</strong> — request deletion of your account and associated personal data</li>
+                <li><strong className="text-foreground">Opt-out</strong> — unsubscribe from marketing communications at any time via the unsubscribe link or by emailing us</li>
+                <li><strong className="text-foreground">Portability</strong> — request an export of your project data</li>
+              </ul>
+              <p className="mt-3">
+                To exercise any of these rights, email{" "}
                 <a href="mailto:admin@metricore.com.au" className="text-primary hover:underline">
                   admin@metricore.com.au
                 </a>
-                .
+                . We will respond within 30 days. Identity verification may be required.
               </p>
             </div>
 
             <div>
-              <h2 className="text-foreground font-semibold text-lg mb-3">7. Cookies</h2>
+              <h2 className="text-foreground font-semibold text-lg mb-3">11. Children's Privacy</h2>
               <p>
-                We use essential cookies required for authentication and session management.
-                We do not use advertising or tracking cookies.
+                The Service is not directed to persons under 18 years of age. We do not knowingly
+                collect personal information from children. If you believe we have inadvertently
+                collected information from a minor, please contact us immediately.
               </p>
             </div>
 
             <div>
-              <h2 className="text-foreground font-semibold text-lg mb-3">8. Changes to This Policy</h2>
+              <h2 className="text-foreground font-semibold text-lg mb-3">12. Changes to This Policy</h2>
               <p>
-                We may update this policy periodically. Material changes will be notified via email or
-                a prominent notice on the platform. Continued use after changes constitutes acceptance.
+                We may update this Privacy Policy from time to time. Material changes will be
+                communicated by email or via a notice on the platform before they take effect.
+                Continued use of the Service after the effective date constitutes acceptance of the
+                updated policy.
               </p>
             </div>
 
             <div>
-              <h2 className="text-foreground font-semibold text-lg mb-3">9. Contact</h2>
+              <h2 className="text-foreground font-semibold text-lg mb-3">13. Complaints</h2>
               <p>
-                For privacy-related enquiries or complaints, contact us at{" "}
+                If you have a complaint about how we have handled your personal information, please
+                contact us first at{" "}
                 <a href="mailto:admin@metricore.com.au" className="text-primary hover:underline">
                   admin@metricore.com.au
                 </a>
-                . We will respond within 30 days. You also have the right to lodge a complaint with the
-                Office of the Australian Information Commissioner (OAIC) at{" "}
+                . We will investigate and respond within 30 days.
+              </p>
+              <p className="mt-3">
+                If you are not satisfied with our response, you may lodge a complaint with the{" "}
+                <strong className="text-foreground">Office of the Australian Information Commissioner (OAIC)</strong>{" "}
+                at{" "}
                 <a
                   href="https://www.oaic.gov.au"
                   target="_blank"
@@ -129,6 +269,20 @@ const PrivacyPolicy = () => {
                 .
               </p>
             </div>
+
+            <div>
+              <h2 className="text-foreground font-semibold text-lg mb-3">14. Contact</h2>
+              <p>
+                <strong className="text-foreground">Privacy Officer — Buildamax Pty Ltd</strong><br />
+                Trading as Metricore<br />
+                ABN: [INSERT ABN]<br />
+                Email:{" "}
+                <a href="mailto:admin@metricore.com.au" className="text-primary hover:underline">
+                  admin@metricore.com.au
+                </a>
+              </p>
+            </div>
+
           </section>
         </main>
         <Footer />
