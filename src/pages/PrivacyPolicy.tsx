@@ -22,7 +22,7 @@ const PrivacyPolicy = () => {
               <h2 className="text-foreground font-semibold text-lg mb-3">1. About This Policy</h2>
               <p>
                 This Privacy Policy describes how <strong className="text-foreground">Buildamax Pty Ltd
-                (ABN [INSERT ABN])</strong>, trading as <strong className="text-foreground">Metricore</strong>
+                (ABN 42 674 304 726)</strong>, trading as <strong className="text-foreground">Metricore</strong>
                 ("we", "us", "our"), collects, uses, discloses, and protects personal information
                 through the Metricore platform at metricore.com.au.
               </p>
@@ -275,7 +275,7 @@ const PrivacyPolicy = () => {
               <p>
                 <strong className="text-foreground">Privacy Officer — Buildamax Pty Ltd</strong><br />
                 Trading as Metricore<br />
-                ABN: [INSERT ABN]<br />
+                ABN: 42 674 304 726<br />
                 Email:{" "}
                 <a href="mailto:admin@metricore.com.au" className="text-primary hover:underline">
                   admin@metricore.com.au

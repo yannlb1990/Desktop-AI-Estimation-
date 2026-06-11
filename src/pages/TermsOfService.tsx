@@ -22,7 +22,7 @@ const TermsOfService = () => {
               <h2 className="text-foreground font-semibold text-lg mb-3">1. Parties and Agreement</h2>
               <p>
                 These Terms of Service ("Terms") constitute a legally binding agreement between you ("User",
-                "you") and <strong className="text-foreground">Buildamax Pty Ltd (ABN [INSERT ABN])</strong>,
+                "you") and <strong className="text-foreground">Buildamax Pty Ltd (ABN 42 674 304 726)</strong>,
                 trading as <strong className="text-foreground">Metricore</strong> ("we", "us", "our"),
                 operating the platform at metricore.com.au ("the Service").
               </p>
@@ -252,7 +252,7 @@ const TermsOfService = () => {
               <h2 className="text-foreground font-semibold text-lg mb-3">16. Contact</h2>
               <p>
                 <strong className="text-foreground">Buildamax Pty Ltd</strong> trading as Metricore<br />
-                ABN: [INSERT ABN]<br />
+                ABN: 42 674 304 726<br />
                 Email:{" "}
                 <a href="mailto:admin@metricore.com.au" className="text-primary hover:underline">
                   admin@metricore.com.au
