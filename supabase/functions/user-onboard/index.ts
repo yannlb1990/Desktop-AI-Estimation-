@@ -41,6 +41,7 @@ serve(async (req) => {
     const project_type = (body.project_type ?? '').trim();
     const plan_id = (body.plan_id ?? '').trim();
     const billing_period = (body.billing_period ?? 'monthly').trim();
+    const password = (body.password ?? '').trim();
 
     if (!name) return json({ error: "Name is required" }, 400, cors);
     if (!email || !EMAIL_REGEX.test(email)) return json({ error: "Valid email is required" }, 400, cors);
@@ -48,34 +49,53 @@ serve(async (req) => {
     if (!ALLOWED_PROJECT_TYPES.includes(project_type)) return json({ error: "Invalid project type" }, 400, cors);
     if (!ALLOWED_PLAN_IDS.includes(plan_id)) return json({ error: "Invalid plan" }, 400, cors);
     if (!ALLOWED_BILLING.includes(billing_period)) return json({ error: "Invalid billing period" }, 400, cors);
+    if (password && password.length < 8) return json({ error: "Password must be at least 8 characters" }, 400, cors);
 
     const supabaseAdmin = createClient(
       Deno.env.get("SUPABASE_URL") ?? "",
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "",
     );
 
-    const appUrl = Deno.env.get("APP_URL") ?? "https://www.metricore.com.au";
-    const { data, error } = await supabaseAdmin.auth.admin.inviteUserByEmail(email, {
-      data: {
-        displayName: name,
-        phone,
-        project_type,
-        plan_id,
-        billing_period,
-      },
-      redirectTo: `${appUrl}/setup-password`,
-    });
+    const userMeta = { displayName: name, phone, project_type, plan_id, billing_period };
 
-    if (error) {
-      if (error.status === 422 || error.message?.toLowerCase().includes("already")) {
-        return json({ error: "already_exists" }, 409, cors);
+    let userId: string;
+
+    if (password) {
+      // Self-serve: create user with password, Supabase sends confirmation email
+      const { data, error } = await supabaseAdmin.auth.admin.createUser({
+        email,
+        password,
+        email_confirm: false,
+        user_metadata: userMeta,
+      });
+
+      if (error) {
+        if (error.status === 422 || error.message?.toLowerCase().includes("already")) {
+          return json({ error: "already_exists" }, 409, cors);
+        }
+        return json({ error: error.message }, 400, cors);
       }
-      return json({ error: error.message }, 400, cors);
+      userId = data.user.id;
+    } else {
+      // Invite flow: send setup-password email
+      const appUrl = Deno.env.get("APP_URL") ?? "https://www.metricore.com.au";
+      const { data, error } = await supabaseAdmin.auth.admin.inviteUserByEmail(email, {
+        data: userMeta,
+        redirectTo: `${appUrl}/setup-password`,
+      });
+
+      if (error) {
+        if (error.status === 422 || error.message?.toLowerCase().includes("already")) {
+          return json({ error: "already_exists" }, 409, cors);
+        }
+        return json({ error: error.message }, 400, cors);
+      }
+      userId = data.user.id;
     }
 
     await supabaseAdmin.from("profiles").upsert({
-      id: data.user.id,
-      email: data.user.email,
+      id: userId,
+      email,
       name,
       phone,
       project_type,

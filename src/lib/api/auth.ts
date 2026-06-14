@@ -9,6 +9,8 @@ export interface OnboardReq {
   project_type: 'residential' | 'commercial' | 'industrial' | 'renovation' | 'other';
   plan_id: 'starter' | 'pro' | 'business';
   billing_period: 'monthly' | 'annual';
+  password?: string;
+  marketing_consent?: boolean;
 }
 
 interface OnboardRes {

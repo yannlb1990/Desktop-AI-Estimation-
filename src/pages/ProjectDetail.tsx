@@ -507,15 +507,25 @@ const ProjectDetail = () => {
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-sm font-semibold text-foreground">Ready to send this to the client?</p>
-                  <p className="text-xs text-muted-foreground mt-0.5">Generate a professional Quote or full Tender document.</p>
+                  <p className="text-xs text-muted-foreground mt-0.5">Quote — fast branded proposal · Tender — full compliance document.</p>
                 </div>
-                <Button
-                  onClick={() => setActiveMainTab("tender")}
-                  className="bg-primary text-primary-foreground hover:bg-primary/90 shrink-0 ml-4"
-                >
-                  Generate Tender
-                  <ArrowLeft className="h-4 w-4 ml-2 rotate-180" />
-                </Button>
+                <div className="flex gap-2 shrink-0 ml-4">
+                  <Button
+                    variant="outline"
+                    onClick={() => setActiveMainTab("tender")}
+                    className="border-primary/50 text-primary hover:bg-primary/10"
+                  >
+                    <FileText className="h-4 w-4 mr-2" />
+                    Generate Quote
+                  </Button>
+                  <Button
+                    onClick={() => setActiveMainTab("tender")}
+                    className="bg-primary text-primary-foreground hover:bg-primary/90"
+                  >
+                    Generate Tender
+                    <ArrowLeft className="h-4 w-4 ml-2 rotate-180" />
+                  </Button>
+                </div>
               </div>
             </Card>
           </TabsContent>

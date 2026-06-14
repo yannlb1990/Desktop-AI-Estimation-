@@ -287,6 +287,9 @@ export const InteractiveCanvas = ({
   const patchedBufferRef = useRef<ArrayBuffer | null>(null);
   const wallThicknessRef = useRef(wallThickness);
   useEffect(() => { wallThicknessRef.current = wallThickness; }, [wallThickness]);
+  const zoomRef = useRef(transform.zoom);
+  useEffect(() => { zoomRef.current = transform.zoom; }, [transform.zoom]);
+  const prevZoomForWallsRef = useRef(transform.zoom);
   const unitsPerMetreRef = useRef(unitsPerMetre);
   useEffect(() => { unitsPerMetreRef.current = unitsPerMetre; }, [unitsPerMetre]);
   // Arc-wall 3-click state: phase 0=idle, 1=placed P1 (waiting for P2), 2=placed P1+P2 (move for control)
@@ -980,6 +983,24 @@ export const InteractiveCanvas = ({
     });
 
     // Draw measurements that are in state but not yet on canvas (page restore / reload).
+    // When zoom changes significantly, clear wall canvas objects so they redraw at correct visual scale
+    const _currentZoom = transform.zoom;
+    if (Math.abs(_currentZoom - prevZoomForWallsRef.current) / (prevZoomForWallsRef.current || _currentZoom) > 0.04) {
+      prevZoomForWallsRef.current = _currentZoom;
+      const _wallIdsToRedraw: string[] = [];
+      objectsMap.forEach((objs, id) => {
+        if (!(measurementMapRef.current.get(id) as any)?.wallThickness) return;
+        objs.forEach(o => canvas.remove(o));
+        _wallIdsToRedraw.push(id);
+      });
+      _wallIdsToRedraw.forEach(id => {
+        objectsMap.delete(id);
+        Array.from(shapeToMeasurementIdRef.current.entries()).forEach(([shape, mid]) => {
+          if (mid === id) shapeToMeasurementIdRef.current.delete(shape);
+        });
+      });
+    }
+
     const strokeWidth = getZoomAwareSize(2);
 
     measurements.forEach(measurement => {
@@ -995,7 +1016,7 @@ export const InteractiveCanvas = ({
           // Arc-wall restore (has arcControlPoint)
           if ((measurement as any).arcControlPoint && unitsPerMetreRef.current) {
             const ctrl = (measurement as any).arcControlPoint as WorldPoint;
-            const geo = arcWallGeometry(s, e, ctrl, (measurement as any).wallThickness || 90, unitsPerMetreRef.current);
+            const geo = arcWallGeometry(s, e, ctrl, (measurement as any).wallThickness || 90, Math.max(unitsPerMetreRef.current, 8 / (0.064 * transform.zoom)));
             const makeArcPath = (pts: { p1: WorldPoint; Q: WorldPoint; p2: WorldPoint }) =>
               `M ${pts.p1.x} ${pts.p1.y} Q ${pts.Q.x} ${pts.Q.y} ${pts.p2.x} ${pts.p2.y}`;
             const outerArc = new Path(makeArcPath(geo.outer), { stroke: color, strokeWidth: strokeWidth * 1.5, fill: '', selectable: false, evented: false });
@@ -1016,8 +1037,9 @@ export const InteractiveCanvas = ({
           }
           // Restore wall-line as 5 fabric objects: [hitRect, wl1, wl2, wc1, wc2]
           const thickness = (measurement as any).wallThickness ?? 90;
-          const geo = wallGeometry(s, e, thickness, unitsPerMetreRef.current);
-          const hitRect = makeWallHitRect(s, e, thickness, unitsPerMetreRef.current, strokeWidth);
+          const _visualUpm = Math.max(unitsPerMetreRef.current, 8 / (0.064 * transform.zoom));
+          const geo = wallGeometry(s, e, thickness, _visualUpm);
+          const hitRect = makeWallHitRect(s, e, thickness, _visualUpm, strokeWidth);
           const wl1 = new Line([geo.l1p1.x, geo.l1p1.y, geo.l1p2.x, geo.l1p2.y], { stroke: color, strokeWidth: strokeWidth * 1.5, selectable: false, evented: false, hasControls: false, hasBorders: false });
           const wl2 = new Line([geo.l2p1.x, geo.l2p1.y, geo.l2p2.x, geo.l2p2.y], { stroke: color, strokeWidth: strokeWidth * 1.5, selectable: false, evented: false });
           const wc1 = new Line([geo.l1p1.x, geo.l1p1.y, geo.l2p1.x, geo.l2p1.y], { stroke: color, strokeWidth, selectable: false, evented: false });
@@ -1044,13 +1066,37 @@ export const InteractiveCanvas = ({
           evented: false,
           hasControls: true,
           hasBorders: true,
-          lockRotation: true,
+          lockRotation: false,
           cornerColor: '#2563eb',
           cornerStyle: 'circle' as const,
           cornerSize: 10,
           transparentCorners: false,
           borderColor: '#2563eb',
         });
+        const lmMidX = (s.x + e.x) / 2;
+        const lmMidY = (s.y + e.y) / 2;
+        const lmR = getZoomAwareSize(6);
+        const lmMidHandle = new Circle({
+          left: lmMidX - lmR,
+          top: lmMidY - lmR,
+          radius: lmR,
+          fill: color,
+          stroke: '#ffffff',
+          strokeWidth: 1.5,
+          selectable: false,
+          evented: false,
+          hasControls: false,
+          hasBorders: false,
+          originX: 'left' as const,
+          originY: 'top' as const,
+        });
+        (lmMidHandle as any)._isMidHandle = true;
+        canvas.add(shape);
+        canvas.add(lmMidHandle);
+        objectsMap.set(measurement.id, [shape, lmMidHandle]);
+        shapeToMeasurementIdRef.current.set(shape, measurement.id);
+        shapeToMeasurementIdRef.current.set(lmMidHandle, measurement.id);
+        return; // skip generic canvas.add below
       } else if (measurement.type === 'rectangle') {
         const [s, e] = measurement.worldPoints;
         shape = new Rect({
@@ -1394,6 +1440,7 @@ export const InteractiveCanvas = ({
         if (!hm.wallThickness || !hm.worldPoints || hm.worldPoints.length < 2) return;
 
         const upm = unitsPerMetreRef.current || 1;
+        const visualUpm = Math.max(upm, 8 / (0.064 * (zoomRef.current || 1)));
         const hp1 = hm.worldPoints[0];
         const hp2 = hm.worldPoints[1];
         const thkMm = hm.wallThickness;
@@ -1407,7 +1454,7 @@ export const InteractiveCanvas = ({
 
         if (isArc) {
           const ctrl = (hm as any).arcControlPoint as WorldPoint;
-          const g = arcWallGeometry(hp1, hp2, ctrl, thkMm, upm);
+          const g = arcWallGeometry(hp1, hp2, ctrl, thkMm, visualUpm);
           const op1 = toS(g.outer.p1.x, g.outer.p1.y);
           const oQ  = toS(g.outer.Q.x,  g.outer.Q.y);
           const op2 = toS(g.outer.p2.x, g.outer.p2.y);
@@ -1422,7 +1469,7 @@ export const InteractiveCanvas = ({
           ctx.closePath();
           bbCorners = [op1, oQ, op2, ip1, iQ, ip2];
         } else {
-          const g = wallGeometry(hp1, hp2, thkMm, upm);
+          const g = wallGeometry(hp1, hp2, thkMm, visualUpm);
           const c1 = toS(g.l1p1.x, g.l1p1.y);
           const c2 = toS(g.l1p2.x, g.l1p2.y);
           const c3 = toS(g.l2p2.x, g.l2p2.y);
@@ -1468,7 +1515,7 @@ export const InteractiveCanvas = ({
         const ax2h = tpx(hp2.x), ay2h = tpy(hp2.y);
         const wallAngle = Math.atan2(ay2h - ay1h, ax2h - ax1h);
         const halfLen = Math.sqrt((ax2h - ax1h) ** 2 + (ay2h - ay1h) ** 2) / 2;
-        const hwPx = (thkMm / 1000) * upm * zoom * dpr / 2;
+        const hwPx = (thkMm / 1000) * visualUpm * zoom * dpr / 2;
         const midX = (ax1h + ax2h) / 2, midY = (ay1h + ay2h) / 2;
 
         // diagonal helper: draws lines of slope 1 (↘) covering the bbox
@@ -1872,13 +1919,25 @@ export const InteractiveCanvas = ({
             borderColor: '#2563eb',
             borderScaleFactor: 2,
           });
+        } else if ((obj as any)._isMidHandle) {
+          // Line mid-handle: draggable only, no resize/rotation controls
+          obj.set({
+            selectable: isSelectMode,
+            evented: isSelectMode,
+            hasControls: false,
+            hasBorders: false,
+            lockRotation: true,
+            lockScalingX: true,
+            lockScalingY: true,
+          });
         } else {
+          const isRegularLine = !!(obj as any).calcLinePoints && !(obj as any)._isWallPrimary;
           obj.set({
             selectable: isSelectMode,
             evented: isSelectMode,
             hasControls: isSelectMode,
             hasBorders: isSelectMode,
-            lockRotation: true,
+            lockRotation: !isRegularLine,
             cornerColor: '#2563eb',
             cornerStyle: 'circle',
             cornerSize: 10,
@@ -1970,6 +2029,37 @@ export const InteractiveCanvas = ({
         return;
       }
 
+      // Mid-handle modified — line was moved via handle; commit line's new worldPoints
+      if ((target as any)._isMidHandle) {
+        const effectiveUnitsH = unitsPerMetre || 1;
+        const hObjects = measurementObjectsRef.current.get(measurementId);
+        const hLine = hObjects?.[0];
+        if (!hLine || !(hLine as any).calcLinePoints) return;
+        const hMat = (hLine as any).calcTransformMatrix();
+        const hLp = (hLine as any).calcLinePoints();
+        const hP1 = fabricUtil.transformPoint({ x: hLp.x1, y: hLp.y1 }, hMat);
+        const hP2 = fabricUtil.transformPoint({ x: hLp.x2, y: hLp.y2 }, hMat);
+        const hStart: WorldPoint = { x: hP1.x, y: hP1.y };
+        const hEnd: WorldPoint = { x: hP2.x, y: hP2.y };
+        const hResult = calculateLinearWorld(hStart, hEnd, effectiveUnitsH);
+        const hExisting = measurementMapRef.current.get(measurementId);
+        const hMType = (hExisting as any)?.measurementType as string | undefined;
+        const hIsModLine = hMType === 'Wall' || hMType === 'Door' || hMType === 'Window';
+        const hLabel = hIsModLine ? '' : (isCalibrated ? `${hResult.realValue.toFixed(2)} m` : `${hResult.worldValue.toFixed(0)} px`);
+        onMeasurementUpdate(measurementId, {
+          worldPoints: [hStart, hEnd],
+          worldValue: hResult.worldValue,
+          realValue: isCalibrated ? hResult.realValue : hResult.worldValue,
+          label: hLabel,
+        });
+        const hR = (target as any).radius ?? 6;
+        target.set({ left: (hP1.x + hP2.x) / 2 - hR, top: (hP1.y + hP2.y) / 2 - hR, scaleX: 1, scaleY: 1 });
+        target.setCoords();
+        (hLine as any).setCoords();
+        canvas.requestRenderAll();
+        return;
+      }
+
       const effectiveUnits = unitsPerMetre || 1;
       const objects = measurementObjectsRef.current.get(measurementId);
 
@@ -1995,11 +2085,12 @@ export const InteractiveCanvas = ({
           const len = Math.sqrt(dx * dx + dy * dy) || 1;
           const nx = -dy / len, ny = dx / len;
           const upm = effectiveUnits;
-          const hw = ((existingMeasurement as any).wallThickness / 1000) * upm / 2;
+          const _vUpmLine = Math.max(upm, 8 / (0.064 * (zoomRef.current || 1)));
+          const hw = ((existingMeasurement as any).wallThickness / 1000) * _vUpmLine / 2;
           startPoint = { x: p1.x - nx * hw, y: p1.y - ny * hw };
           endPoint   = { x: p2.x - nx * hw, y: p2.y - ny * hw };
           // Sync companion objects immediately after commit
-          if (objects) syncWallCompanions(target, objects, (existingMeasurement as any).wallThickness, upm);
+          if (objects) syncWallCompanions(target, objects, (existingMeasurement as any).wallThickness, _vUpmLine);
         } else {
           startPoint = { x: p1.x, y: p1.y };
           endPoint   = { x: p2.x, y: p2.y };
@@ -2027,6 +2118,16 @@ export const InteractiveCanvas = ({
         // render the scaled line correctly. calcTransformMatrix() always gives
         // correct endpoint positions regardless of scale state.
         target.setCoords();
+        // Sync midHandle to new midpoint after line modified/rotated
+        if (objects && objects.length >= 2 && (objects[1] as any)?._isMidHandle) {
+          const lmMat = target.calcTransformMatrix();
+          const lmLp = (target as any).calcLinePoints();
+          const lmP1 = fabricUtil.transformPoint({ x: lmLp.x1, y: lmLp.y1 }, lmMat);
+          const lmP2 = fabricUtil.transformPoint({ x: lmLp.x2, y: lmLp.y2 }, lmMat);
+          const lmR = (objects[1] as any).radius ?? 6;
+          (objects[1] as any).set({ left: (lmP1.x + lmP2.x) / 2 - lmR, top: (lmP1.y + lmP2.y) / 2 - lmR });
+          (objects[1] as any).setCoords();
+        }
 
       } else if (target.type === 'rect' && (target as any)._isWallPrimary) {
         // Wall hit-rect modified (moved or length-resized). Extract new axis from rect geometry.
@@ -2044,7 +2145,8 @@ export const InteractiveCanvas = ({
         target.set({ width: target.width * (target.scaleX ?? 1), scaleX: 1 });
         target.setCoords();
 
-        if (objects) syncWallFromRect(target, objects, wallThickness, effectiveUnits);
+        const _vUpm = Math.max(effectiveUnits, 8 / (0.064 * (zoomRef.current || 1)));
+        if (objects) syncWallFromRect(target, objects, wallThickness, _vUpm);
 
         const result = calculateLinearWorld(axisP1, axisP2, effectiveUnits);
         onMeasurementUpdate(measurementId, {
@@ -2167,7 +2269,7 @@ export const InteractiveCanvas = ({
       if (!objects || !measurement) return;
       const upm = unitsPerMetreRef.current || 1;
       const thickness = (measurement as any).wallThickness ?? 90;
-      syncWallFromRect(target, objects, thickness, upm);
+      syncWallFromRect(target, objects, thickness, Math.max(upm, 8 / (0.064 * (zoomRef.current || 1))));
       canvas.requestRenderAll();
     };
 
@@ -2179,6 +2281,94 @@ export const InteractiveCanvas = ({
       canvas.off('object:scaling', syncWall);
     };
   }, []);
+
+  // Live sync: mid-handle ↔ companion line during drag/rotate/scale
+  useEffect(() => {
+    const canvas = fabricCanvasRef.current;
+    if (!canvas) return;
+
+    const syncLineMidHandle = (e: any) => {
+      const target = e.target;
+      if (!target) return;
+
+      if ((target as any)._isMidHandle) {
+        // Handle dragged → translate companion line by same delta
+        const measurementId = shapeToMeasurementIdRef.current.get(target);
+        if (!measurementId) return;
+        const objects = measurementObjectsRef.current.get(measurementId);
+        const line = objects?.[0];
+        if (!line || !(line as any).calcLinePoints) return;
+
+        const r = (target as any).radius ?? 6;
+        const newMidX = (target.left ?? 0) + r;
+        const newMidY = (target.top ?? 0) + r;
+
+        const matrix = (line as any).calcTransformMatrix();
+        const localPts = (line as any).calcLinePoints();
+        const p1 = fabricUtil.transformPoint({ x: localPts.x1, y: localPts.y1 }, matrix);
+        const p2 = fabricUtil.transformPoint({ x: localPts.x2, y: localPts.y2 }, matrix);
+        const oldMidX = (p1.x + p2.x) / 2;
+        const oldMidY = (p1.y + p2.y) / 2;
+
+        (line as any).set({ left: (line.left ?? 0) + (newMidX - oldMidX), top: (line.top ?? 0) + (newMidY - oldMidY) });
+        (line as any).setCoords();
+
+        // Update live label via previewLabelRef
+        const measurement = measurementMapRef.current.get(measurementId);
+        if (measurement) {
+          const effectiveUnits = unitsPerMetreRef.current || 1;
+          const mat2 = (line as any).calcTransformMatrix();
+          const lp2 = (line as any).calcLinePoints();
+          const lp1w = fabricUtil.transformPoint({ x: lp2.x1, y: lp2.y1 }, mat2);
+          const lp2w = fabricUtil.transformPoint({ x: lp2.x2, y: lp2.y2 }, mat2);
+          const result = calculateLinearWorld({ x: lp1w.x, y: lp1w.y }, { x: lp2w.x, y: lp2w.y }, effectiveUnits);
+          const text = isCalibrated ? `${result.realValue.toFixed(2)} m` : `${result.worldValue.toFixed(0)} px`;
+          const zoom = canvas.getZoom() || 1;
+          const offset = 14 / zoom;
+          const dx = lp2w.x - lp1w.x, dy = lp2w.y - lp1w.y;
+          const len = Math.sqrt(dx * dx + dy * dy) || 1;
+          previewLabelRef.current = {
+            text, color: measurement.color || '#FF6B6B',
+            worldX: (lp1w.x + lp2w.x) / 2 + (-dy / len) * offset,
+            worldY: (lp1w.y + lp2w.y) / 2 + (dx / len) * offset,
+          };
+        }
+        canvas.requestRenderAll();
+        return;
+      }
+
+      // Regular line moving/scaling/rotating → sync midHandle to current midpoint
+      if ((target as any).calcLinePoints && !(target as any)._isWallPrimary) {
+        const measurementId = shapeToMeasurementIdRef.current.get(target);
+        if (!measurementId) return;
+        const objects = measurementObjectsRef.current.get(measurementId);
+        if (!objects || objects.length < 2) return;
+        const midHandle = objects[1];
+        if (!(midHandle as any)?._isMidHandle) return;
+
+        const matrix = (target as any).calcTransformMatrix();
+        const localPts = (target as any).calcLinePoints();
+        const p1 = fabricUtil.transformPoint({ x: localPts.x1, y: localPts.y1 }, matrix);
+        const p2 = fabricUtil.transformPoint({ x: localPts.x2, y: localPts.y2 }, matrix);
+        const mx = (p1.x + p2.x) / 2;
+        const my = (p1.y + p2.y) / 2;
+        const r = (midHandle as any).radius ?? 6;
+        (midHandle as any).set({ left: mx - r, top: my - r });
+        (midHandle as any).setCoords();
+        canvas.requestRenderAll();
+      }
+    };
+
+    canvas.on('object:moving', syncLineMidHandle);
+    canvas.on('object:scaling', syncLineMidHandle);
+    canvas.on('object:rotating', syncLineMidHandle);
+
+    return () => {
+      canvas.off('object:moving', syncLineMidHandle);
+      canvas.off('object:scaling', syncLineMidHandle);
+      canvas.off('object:rotating', syncLineMidHandle);
+    };
+  }, [isCalibrated]);
 
   // Live measurement label during resize / move — updates previewLabelRef on every
   // object:scaling / object:moving frame so after:render draws the live value.
@@ -2282,11 +2472,13 @@ export const InteractiveCanvas = ({
 
     canvas.on('object:scaling', handleLiveTransform);
     canvas.on('object:moving', handleLiveTransform);
+    canvas.on('object:rotating', handleLiveTransform);
     canvas.on('object:modified', handleModifiedClear);
 
     return () => {
       canvas.off('object:scaling', handleLiveTransform);
       canvas.off('object:moving', handleLiveTransform);
+      canvas.off('object:rotating', handleLiveTransform);
       canvas.off('object:modified', handleModifiedClear);
     };
   }, [unitsPerMetre, isCalibrated]);
@@ -2800,7 +2992,7 @@ export const InteractiveCanvas = ({
         const ctrl = worldPoint;
         const eu = unitsPerMetreRef.current;
         const arcStrokeWidth = getZoomAwareSize(2);
-        const geo = arcWallGeometry(p1, p2, ctrl, wallThicknessRef.current, eu);
+        const geo = arcWallGeometry(p1, p2, ctrl, wallThicknessRef.current, Math.max(eu || 1, 8 / (0.064 * transform.zoom)));
 
         const arcColor = drawColorRef.current || '#f97316';
         const makeArcPath = (pts: { p1: WorldPoint; Q: WorldPoint; p2: WorldPoint }) =>
@@ -3195,7 +3387,7 @@ export const InteractiveCanvas = ({
       const wallAngleDeg = Math.atan2(wdy, wdx) * (180 / Math.PI);
       const midX = (startPoint.x + currentWorldPoint.x) / 2;
       const midY = (startPoint.y + currentWorldPoint.y) / 2;
-      const thicknessWorld = (wallThicknessRef.current / 1000) * eu;
+      const thicknessWorld = (wallThicknessRef.current / 1000) * Math.max(eu, 8 / (0.064 * transform.zoom));
       const wallColor = drawColorRef.current || '#f59e0b';
 
       if (previewShapeRef.current && (previewShapeRef.current as any)._isWallPreviewRect) {
@@ -3267,7 +3459,7 @@ export const InteractiveCanvas = ({
         const p1 = arcStateRef.current.p1;
         const p2 = arcStateRef.current.p2;
         const eu = unitsPerMetreRef.current;
-        const geo = arcWallGeometry(p1, p2, currentWorldPoint, wallThicknessRef.current, eu);
+        const geo = arcWallGeometry(p1, p2, currentWorldPoint, wallThicknessRef.current, Math.max(eu || 1, 8 / (0.064 * transform.zoom)));
         const arcColor = '#f97316';
         const makeArcPath = (pts: { p1: WorldPoint; Q: WorldPoint; p2: WorldPoint }) =>
           `M ${pts.p1.x} ${pts.p1.y} Q ${pts.Q.x} ${pts.Q.y} ${pts.p2.x} ${pts.p2.y}`;
@@ -3457,13 +3649,14 @@ export const InteractiveCanvas = ({
 
       const eu = unitsPerMetreRef.current || 1;
       const thickness = wallThicknessRef.current;
-      const geo = wallGeometry(startPoint, worldEndPoint, thickness, eu);
+      const _euVisual = Math.max(eu, 8 / (0.064 * transform.zoom));
+      const geo = wallGeometry(startPoint, worldEndPoint, thickness, _euVisual);
       const wallColor = drawColorRef.current || '#f59e0b';
       const result = calculateLinearWorld(startPoint, worldEndPoint, eu);
 
       // Wall = [hitRect, wl1, wl2, wc1, wc2]. hitRect is the transparent body (click/move/resize).
       // Visual lines are purely decorative (_isWallSecondary).
-      const wallHitRect = makeWallHitRect(startPoint, worldEndPoint, thickness, eu, strokeWidth);
+      const wallHitRect = makeWallHitRect(startPoint, worldEndPoint, thickness, _euVisual, strokeWidth);
       const wallLine1 = new Line([geo.l1p1.x, geo.l1p1.y, geo.l1p2.x, geo.l1p2.y], {
         stroke: wallColor, strokeWidth: strokeWidth * 1.5, selectable: false, evented: false,
         hasControls: false, hasBorders: false,

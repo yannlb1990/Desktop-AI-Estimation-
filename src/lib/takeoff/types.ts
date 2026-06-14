@@ -230,6 +230,7 @@ export const TRADE_OPTIONS = [
   'Windows & Doors',
   'Waterproofing',
   'Plasterboard',
+  'Insulation',
   'Joinery',
   'Painting',
   'Tiling',

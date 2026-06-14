@@ -13,13 +13,14 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { getUserStorageKey } from '@/lib/localAuth';
 import { Measurement, CostItem, MeasurementArea, TRADE_OPTIONS, RelatedMaterial, ConsumableItem } from '@/lib/takeoff/types';
 import { cn } from '@/lib/utils';
-import { SCOPE_OF_WORK_RATES, RATES_LAST_UPDATED, type AustralianState } from '@/data/scopeOfWorkRates';
+import { SCOPE_OF_WORK_RATES, RATES_LAST_UPDATED, SOW_METADATA, type AustralianState } from '@/data/scopeOfWorkRates';
 import { MARKET_LABOUR_RATES, getStateRate } from '@/data/marketLabourRates';
 import { exportToBOQCsv } from '@/lib/takeoff/export';
 import { getEffectiveQuantity } from '@/lib/takeoff/calculations';
 import { RATE_TRADE_TO_OPTION } from '@/lib/takeoff/profile';
 import { toast } from 'sonner';
 import { MaterialPickerDialog } from './MaterialPickerDialog';
+import { RecipePickerDialog } from '@/components/recipes/RecipePickerDialog';
 import { MaterialEntry } from '@/lib/materials/types';
 import { useSubscription } from '@/hooks/useSubscription';
 import { UpgradeModal } from '@/components/UpgradeModal';
@@ -311,6 +312,7 @@ export const CostEstimator = ({
   });
   const [showAddDialog, setShowAddDialog] = useState(false);
   const [showLibraryPicker, setShowLibraryPicker] = useState(false);
+  const [showRecipePicker, setShowRecipePicker]   = useState(false);
   const [saveTemplateOpen, setSaveTemplateOpen] = useState(false);
   const [loadTemplateOpen, setLoadTemplateOpen] = useState(false);
   const [templateName, setTemplateName] = useState('');
@@ -793,6 +795,18 @@ export const CostEstimator = ({
 
   return (
     <div className="space-y-4">
+      {/* Rate data staleness warning */}
+      {new Date() > new Date(SOW_METADATA.nextUpdate) && (
+        <div className="flex items-center gap-3 px-4 py-2.5 rounded-lg bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 text-sm text-amber-800 dark:text-amber-200">
+          <Clock className="h-4 w-4 shrink-0 text-amber-600" />
+          <span>
+            Rate data may be outdated (last updated {RATES_LAST_UPDATED}). Values might not reflect current market rates.{' '}
+            <a href="/admin/rates" className="underline font-medium hover:text-amber-900 dark:hover:text-amber-100">
+              Update rates
+            </a>
+          </span>
+        </div>
+      )}
       {/* Header Controls */}
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-3">
@@ -873,6 +887,10 @@ export const CostEstimator = ({
             <Package className="h-4 w-4 mr-1" />
             From Library
           </Button>
+          <Button variant="outline" size="sm" onClick={() => setShowRecipePicker(true)}>
+            <BookOpen className="h-4 w-4 mr-1" />
+            From Recipe
+          </Button>
           <Button variant="outline" size="sm" onClick={() => { refreshTemplates(); setLoadTemplateOpen(true); }}>
             <BookOpen className="h-4 w-4 mr-1" />
             Templates
@@ -892,6 +910,13 @@ export const CostEstimator = ({
         open={showLibraryPicker}
         onOpenChange={setShowLibraryPicker}
         onSelect={handleAddFromLibrary}
+      />
+
+      <RecipePickerDialog
+        open={showRecipePicker}
+        onOpenChange={setShowRecipePicker}
+        onAddCostItem={onAddCostItem}
+        selectedState={selectedState}
       />
 
       {/* Add Dialog */}

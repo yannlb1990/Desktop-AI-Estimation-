@@ -45,6 +45,7 @@ import AcceptInvite from "./pages/AcceptInvite";
 import SetupPassword from "./pages/SetupPassword";
 import ResetPassword from "./pages/ResetPassword";
 import NotFound from "./pages/NotFound";
+import AdminRates from "./pages/AdminRates";
 import PrivacyPolicy from "./pages/PrivacyPolicy";
 import TermsOfService from "./pages/TermsOfService";
 import About from "./pages/About";
@@ -97,6 +98,7 @@ const App = () => {
             <Route path="/clients" element={<ProtectedRoute><Clients /></ProtectedRoute>} />
             <Route path="/settings" element={<ProtectedRoute><Settings /></ProtectedRoute>} />
             <Route path="/materials" element={<ProtectedRoute><MaterialsLibrary /></ProtectedRoute>} />
+            <Route path="/admin/rates" element={<AdminRates />} />
             {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
             <Route path="*" element={<NotFound />} />
           </Routes>

@@ -6,7 +6,7 @@ import { Label } from "@/components/ui/label";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
-import { Loader2, Check, ArrowLeft, Mail, Phone, Building2, Home, CreditCard } from "lucide-react";
+import { Loader2, Check, ArrowLeft, Mail, Phone, Building2, Home, CreditCard, Eye, EyeOff } from "lucide-react";
 import { MetricoreLogoMark } from "@/components/MetricoreLogoMark";
 import { z } from "zod";
 import {
@@ -37,6 +37,11 @@ const leadSchema = z.object({
   email: z.string().email("Invalid email address").max(255),
   phone: z.string().min(6, "Phone number is required").max(30),
   projectType: z.enum(["commercial", "residential"], { required_error: "Please select a project type" }),
+  password: z.string().min(8, "Password must be at least 8 characters").max(100),
+  confirmPassword: z.string(),
+}).refine(data => data.password === data.confirmPassword, {
+  message: "Passwords don't match",
+  path: ["confirmPassword"],
 });
 
 const signInSchema = z.object({
@@ -74,6 +79,9 @@ const Auth = () => {
   const [phone, setPhone]           = useState("");
   const [projectType, setProjectType] = useState<"commercial" | "residential" | "">("");
   const [marketingConsent, setMarketingConsent] = useState(false);
+  const [signupPassword, setSignupPassword] = useState("");
+  const [signupConfirmPassword, setSignupConfirmPassword] = useState("");
+  const [showSignupPassword, setShowSignupPassword] = useState(false);
 
   // Verification states
   const [verificationSent, setVerificationSent] = useState(false);
@@ -177,7 +185,13 @@ const Auth = () => {
         email: email.trim(),
         phone: phone.trim(),
         projectType,
+        password: signupPassword,
+        confirmPassword: signupConfirmPassword,
       });
+
+      // Store plan choice so onAuthStateChange can create the right trial after email verification
+      localStorage.setItem('metricore_oauth_plan', selectedPlan);
+      localStorage.setItem('metricore_oauth_billing', billing);
 
       await onboardUser({
         name: data.name,
@@ -187,6 +201,7 @@ const Auth = () => {
         plan_id: selectedPlan,
         billing_period: billing,
         marketing_consent: marketingConsent,
+        password: data.password,
       });
 
       setPendingEmail(data.email);
@@ -196,6 +211,8 @@ const Auth = () => {
         localStorage.removeItem('metricore_direct_plan');
         localStorage.removeItem('metricore_direct_billing');
       }
+      localStorage.removeItem('metricore_oauth_plan');
+      localStorage.removeItem('metricore_oauth_billing');
       if (error instanceof z.ZodError) {
         toast.error(error.errors[0].message);
       } else if (error instanceof EdgeFunctionError && error.status === 409) {
@@ -262,12 +279,12 @@ const Auth = () => {
                 <Mail className="h-8 w-8 text-blue-600" />
               </div>
               <div>
-                <h1 className="font-display text-2xl font-bold mb-2">Check your inbox</h1>
+                <h1 className="font-display text-2xl font-bold mb-2">Verify your email</h1>
                 <p className="text-muted-foreground text-sm leading-relaxed">
-                  We sent a setup link to{" "}
+                  We sent a verification link to{" "}
                   <strong className="text-foreground">{pendingEmail}</strong>.
                   <br />
-                  Click <strong>"Set Up Your Account"</strong> in the email to create your password and access your {TRIAL_DAYS}-day free trial. Link expires in 24 hours.
+                  Click the link to confirm your account, then sign in to start your {TRIAL_DAYS}-day free trial. Link expires in 24 hours.
                 </p>
               </div>
               <div className="space-y-3 pt-2">
@@ -287,6 +304,7 @@ const Auth = () => {
                     setIsLogin(true);
                     setEmail(pendingEmail);
                     setPassword(""); setName(""); setPhone(""); setProjectType("");
+                    setSignupPassword(""); setSignupConfirmPassword(""); setShowSignupPassword(false);
                   }}
                   className="text-sm text-primary hover:underline"
                 >
@@ -500,6 +518,43 @@ const Auth = () => {
                   </div>
                 </div>
                 <div>
+                  <Label htmlFor="signup-password">Password</Label>
+                  <div className="relative">
+                    <Input
+                      id="signup-password"
+                      type={showSignupPassword ? "text" : "password"}
+                      value={signupPassword}
+                      onChange={(e) => setSignupPassword(e.target.value)}
+                      placeholder="At least 8 characters"
+                      required
+                      maxLength={100}
+                      className="pr-10"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowSignupPassword(v => !v)}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                      tabIndex={-1}
+                    >
+                      {showSignupPassword
+                        ? <EyeOff className="h-4 w-4" />
+                        : <Eye className="h-4 w-4" />}
+                    </button>
+                  </div>
+                </div>
+                <div>
+                  <Label htmlFor="signup-confirm-password">Confirm Password</Label>
+                  <Input
+                    id="signup-confirm-password"
+                    type={showSignupPassword ? "text" : "password"}
+                    value={signupConfirmPassword}
+                    onChange={(e) => setSignupConfirmPassword(e.target.value)}
+                    placeholder="Repeat your password"
+                    required
+                    maxLength={100}
+                  />
+                </div>
+                <div>
                   <Label>Project Type</Label>
                   <div className="grid grid-cols-2 gap-2 mt-1">
                     {(["commercial", "residential"] as const).map((type) => (
@@ -540,7 +595,7 @@ const Auth = () => {
                   disabled={isLoading || !projectType}
                 >
                   {isLoading
-                    ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Sending your link…</>
+                    ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Creating your account…</>
                     : `Get Started — ${TRIAL_DAYS}-Day Free Trial`}
                 </Button>
 
@@ -558,7 +613,7 @@ const Auth = () => {
                   onClick={() => submitRequest(true)}
                 >
                   {isLoading
-                    ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Sending your link…</>
+                    ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Creating your account…</>
                     : <><CreditCard className="h-4 w-4" />Subscribe to {PLAN_NAMES[selectedPlan]} — ${price}/mo</>}
                 </Button>
 
@@ -566,8 +621,8 @@ const Auth = () => {
                 <div className="flex items-start gap-2 p-3 rounded-lg bg-muted/50 text-xs text-muted-foreground">
                   <Mail className="h-3.5 w-3.5 shrink-0 mt-0.5 text-primary" />
                   <span>
-                    We'll send a setup link to your email. Click it to create your password
-                    and access your {TRIAL_DAYS}-day trial instantly — no credit card needed.
+                    We'll send a verification link to your email. Click it to confirm your account,
+                    then sign in to start your {TRIAL_DAYS}-day free trial — no credit card needed.
                   </span>
                 </div>
               </form>
@@ -579,6 +634,7 @@ const Auth = () => {
                 onClick={() => {
                   setIsLogin(!isLogin);
                   setEmail(""); setPassword(""); setName(""); setPhone(""); setProjectType(""); setMarketingConsent(false);
+                  setSignupPassword(""); setSignupConfirmPassword(""); setShowSignupPassword(false);
                   setNeedsVerification(false);
                 }}
                 className="text-sm text-primary hover:underline"

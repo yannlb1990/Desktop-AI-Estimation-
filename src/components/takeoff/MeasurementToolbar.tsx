@@ -27,6 +27,7 @@ interface MeasurementToolbarProps {
   onDoorSubtypeChange?: (type: string) => void;
   windowSubtype?: string;
   onWindowSubtypeChange?: (type: string) => void;
+  contextPanelOpen?: boolean;
 }
 
 const WALL_PRESETS = [64, 70, 90, 92, 110, 150];
@@ -132,6 +133,7 @@ export const MeasurementToolbar = ({
   onDoorSubtypeChange,
   windowSubtype = 'Awning',
   onWindowSubtypeChange,
+  contextPanelOpen = true,
 }: MeasurementToolbarProps) => {
   const [customInput, setCustomInput] = useState('');
   type ModId = 'wall' | 'door' | 'window' | 'custom';
@@ -237,7 +239,7 @@ export const MeasurementToolbar = ({
         </div>
 
         {/* ── Row 2: Wall configuration (only when wall tool active) ─────── */}
-        {isWallTool && (
+        {(contextPanelOpen ?? true) && isWallTool && (
           <div className="flex items-start gap-3 px-3 py-2.5 bg-slate-800/70 border border-amber-900/40 rounded-lg">
 
             {/* Fill type cards */}
@@ -358,7 +360,7 @@ export const MeasurementToolbar = ({
         )}
 
         {/* ── Row 2b: Door subtype (when marking door) ──────────────────── */}
-        {modMode === 'door' && onDoorSubtypeChange && (
+        {(contextPanelOpen ?? true) && modMode === 'door' && onDoorSubtypeChange && (
           <div className="flex items-center gap-3 px-3 py-2 bg-slate-800/70 border border-violet-900/40 rounded-lg">
             <p className="text-[10px] font-semibold text-violet-400/80 uppercase tracking-widest shrink-0">
               Door Type
@@ -384,7 +386,7 @@ export const MeasurementToolbar = ({
         )}
 
         {/* ── Row 2c: Window subtype (when marking window) ───────────────── */}
-        {modMode === 'window' && onWindowSubtypeChange && (
+        {(contextPanelOpen ?? true) && modMode === 'window' && onWindowSubtypeChange && (
           <div className="flex items-center gap-3 px-3 py-2 bg-slate-800/70 border border-cyan-900/40 rounded-lg">
             <p className="text-[10px] font-semibold text-cyan-400/80 uppercase tracking-widest shrink-0">
               Window Type
@@ -410,7 +412,7 @@ export const MeasurementToolbar = ({
         )}
 
         {/* ── Row 3: Modifications (always visible) ───────────────────────── */}
-        {onModSelect && (
+        {(contextPanelOpen ?? true) && onModSelect && (
           <div className="flex items-center gap-2 px-2 py-1.5 bg-muted/40 border border-border rounded-lg">
             <span className="text-[11px] font-medium text-muted-foreground uppercase tracking-wide shrink-0 select-none">
               Mark as:

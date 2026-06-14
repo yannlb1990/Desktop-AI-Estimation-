@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { Download, ZoomIn, ZoomOut, RotateCw, RotateCcw, Maximize2, Minimize2, ChevronLeft, ChevronRight, ChevronUp, ChevronDown, Trash2, FileText, SlidersHorizontal, Combine, Ruler, X, CheckCircle } from 'lucide-react';
+import { Download, ZoomIn, ZoomOut, RotateCw, RotateCcw, Maximize2, Minimize2, ChevronLeft, ChevronRight, ChevronUp, ChevronDown, Trash2, FileText, SlidersHorizontal, Combine, Ruler, X, CheckCircle, EyeOff } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { PDFUploadManager } from './PDFUploadManager';
@@ -83,6 +83,8 @@ export const PDFTakeoff = ({ projectId, estimateId, onAddCostItems }: PDFTakeoff
   const [wallHatchSide, setWallHatchSide] = useState<string>('both');
   const [doorSubtype, setDoorSubtype] = useState<string>('Internal');
   const [windowSubtype, setWindowSubtype] = useState<string>('Awning');
+  const [fsContextOpen, setFsContextOpen] = useState(true);
+  const [focusMode, setFocusMode] = useState(false);
 
   const handleWallHatchTypeChange = (type: string) => {
     setWallHatchType(type);
@@ -130,9 +132,8 @@ export const PDFTakeoff = ({ projectId, estimateId, onAddCostItems }: PDFTakeoff
   // Sidebar list: only show measurements belonging to the current plan.
   const currentPlanId = state.pdfFile?.planId;
   const filteredMeasurements = useMemo(() => {
-    const planMeasurements = state.measurements.filter(m =>
-      !currentPlanId || m.planId === currentPlanId
-    );
+    if (!currentPlanId) return [];
+    const planMeasurements = state.measurements.filter(m => m.planId === currentPlanId);
     if (pageFilter === 'all') return planMeasurements;
     return planMeasurements.filter((m) => m.pageIndex === pageFilter);
   }, [pageFilter, state.measurements, currentPlanId]);
@@ -201,6 +202,20 @@ export const PDFTakeoff = ({ projectId, estimateId, onAddCostItems }: PDFTakeoff
     document.addEventListener('keydown', handleKeyDown);
     return () => document.removeEventListener('keydown', handleKeyDown);
   }, [dispatch]);
+
+  // Auto-open context panel when a special mode activates
+  useEffect(() => {
+    if (modMode !== null) setFsContextOpen(true);
+  }, [modMode]);
+
+  // Escape key handler for focus mode exit
+  useEffect(() => {
+    const handleKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && focusMode) setFocusMode(false);
+    };
+    window.addEventListener('keydown', handleKey);
+    return () => window.removeEventListener('keydown', handleKey);
+  }, [focusMode]);
 
   const handleZoomIn = () => {
     dispatch({
@@ -793,7 +808,7 @@ export const PDFTakeoff = ({ projectId, estimateId, onAddCostItems }: PDFTakeoff
   ) : null;
 
   // ── Shared toolbar (used in both normal and fullscreen layouts) ─────────────
-  const toolbarBlock = (
+  const renderToolbar = (contextPanelOpen: boolean) => (
     <MeasurementToolbar
       activeTool={state.activeTool}
       onToolSelect={(tool) => { setModMode(null); dispatch({ type: 'SET_ACTIVE_TOOL', payload: tool }); }}
@@ -817,15 +832,24 @@ export const PDFTakeoff = ({ projectId, estimateId, onAddCostItems }: PDFTakeoff
       onDoorSubtypeChange={setDoorSubtype}
       windowSubtype={windowSubtype}
       onWindowSubtypeChange={setWindowSubtype}
+      contextPanelOpen={contextPanelOpen}
     />
   );
 
   // ── Fullscreen portal ───────────────────────────────────────────────────────
   const fullscreenPortal = isTakeoffFullscreen && state.pdfFile ? createPortal(
     <div className="fixed inset-0 z-[9999] bg-[#0f172a] text-white flex flex-col">
+      {/* Focus mode hover strip — hover to restore toolbar */}
+      {focusMode && (
+        <div
+          className="absolute top-0 left-0 right-0 h-2 z-10 bg-gray-700/50 hover:bg-gray-500/70 cursor-pointer transition-colors"
+          onClick={() => setFocusMode(false)}
+          title="Click to restore toolbar (or press Escape)"
+        />
+      )}
       {/* Top bar */}
-      <div className="flex items-center gap-2 px-3 py-2 bg-[#1e293b] border-b border-gray-700 shrink-0">
-        {toolbarBlock}
+      <div className={`flex items-center gap-2 px-3 bg-[#1e293b] border-b border-gray-700 shrink-0 transition-all duration-200 overflow-hidden ${focusMode ? 'max-h-0 py-0 border-0' : 'max-h-96 py-2'}`}>
+        {renderToolbar(fsContextOpen)}
         {/* Zoom + rotate + fit */}
         <div className="flex items-center gap-1 border-l border-gray-600 pl-2 ml-1">
           <Button variant="ghost" size="sm" onClick={handleZoomOut} className="h-8 text-gray-200 hover:bg-gray-700"><ZoomOut className="h-4 w-4" /></Button>
@@ -875,6 +899,26 @@ export const PDFTakeoff = ({ projectId, estimateId, onAddCostItems }: PDFTakeoff
           </div>
         )}
         <div className="ml-auto flex items-center gap-1">
+          {/* Context panel toggle */}
+          <Button
+            size="sm"
+            variant="ghost"
+            onClick={() => setFsContextOpen(v => !v)}
+            className="h-8 text-gray-400 hover:text-white hover:bg-gray-700"
+            title={fsContextOpen ? 'Collapse tool options' : 'Expand tool options'}
+          >
+            {fsContextOpen ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+          </Button>
+          {/* Focus mode */}
+          <Button
+            size="sm"
+            variant="ghost"
+            onClick={() => setFocusMode(true)}
+            className="h-8 text-gray-400 hover:text-white hover:bg-gray-700"
+            title="Focus mode — hides toolbar (Esc to restore)"
+          >
+            <EyeOff className="h-4 w-4" />
+          </Button>
           <Button
             size="sm"
             variant="ghost"
@@ -898,6 +942,37 @@ export const PDFTakeoff = ({ projectId, estimateId, onAddCostItems }: PDFTakeoff
 
       {/* Canvas — full width, takes all remaining vertical space */}
       <div className="flex-1 overflow-hidden relative">
+        {/* Floating context picker — shown when toolbar context rows are hidden */}
+        {(focusMode || !fsContextOpen) && modMode === 'door' && (
+          <div className="absolute top-3 left-3 z-20 flex items-center gap-1.5 px-2 py-1.5 bg-slate-800/95 border border-violet-700/60 rounded-lg backdrop-blur-sm shadow-lg">
+            <span className="text-[10px] font-semibold text-violet-400 uppercase tracking-widest mr-1 shrink-0">Door</span>
+            {(['Internal','Entry','Cavity Slider','Bi-fold','French','Garage','Fire Door'] as const).map((id) => (
+              <button key={id} onClick={() => setDoorSubtype(id)} className={`h-6 px-2 rounded text-xs font-medium transition-colors ${doorSubtype === id ? 'bg-violet-600 text-white' : 'bg-slate-700 text-slate-300 hover:bg-slate-600'}`}>
+                {id}
+              </button>
+            ))}
+          </div>
+        )}
+        {(focusMode || !fsContextOpen) && modMode === 'window' && (
+          <div className="absolute top-3 left-3 z-20 flex items-center gap-1.5 px-2 py-1.5 bg-slate-800/95 border border-cyan-700/60 rounded-lg backdrop-blur-sm shadow-lg">
+            <span className="text-[10px] font-semibold text-cyan-400 uppercase tracking-widest mr-1 shrink-0">Window</span>
+            {(['Awning','Casement','Sliding','Fixed','Louvre','Skylight'] as const).map((id) => (
+              <button key={id} onClick={() => setWindowSubtype(id)} className={`h-6 px-2 rounded text-xs font-medium transition-colors ${windowSubtype === id ? 'bg-cyan-600 text-white' : 'bg-slate-700 text-slate-300 hover:bg-slate-600'}`}>
+                {id}
+              </button>
+            ))}
+          </div>
+        )}
+        {(focusMode || !fsContextOpen) && (modMode === null || modMode === 'wall') && (state.activeTool === 'wall-line' || state.activeTool === 'arc-wall') && (
+          <div className="absolute top-3 left-3 z-20 flex items-center gap-1.5 px-2 py-1.5 bg-slate-800/95 border border-amber-700/60 rounded-lg backdrop-blur-sm shadow-lg">
+            <span className="text-[10px] font-semibold text-amber-400 uppercase tracking-widest mr-1 shrink-0">Wall</span>
+            {[64, 70, 90, 92, 110, 150].map(mm => (
+              <button key={mm} onClick={() => setWallThicknessMm(mm)} className={`h-6 px-2 rounded text-xs font-mono transition-colors ${wallThicknessMm === mm ? 'bg-amber-600 text-white' : 'bg-slate-700 text-slate-300 hover:bg-slate-600'}`}>
+                {mm}
+              </button>
+            ))}
+          </div>
+        )}
         {calibrationBar}
         <InteractiveCanvas
           key={`${state.currentPageIndex}-${state.pdfFile?.planId ?? 'none'}`}
@@ -917,8 +992,9 @@ export const PDFTakeoff = ({ projectId, estimateId, onAddCostItems }: PDFTakeoff
             state.selectedColor
           }
           measurements={state.measurements.filter(m => {
+            if (!state.pdfFile?.planId) return false;
             if (m.pageIndex !== state.currentPageIndex) return false;
-            if (state.pdfFile?.planId && m.planId !== state.pdfFile.planId) return false;
+            if (m.planId !== state.pdfFile.planId) return false;
             return true;
           })}
           detectedOpenings={detectedOpenings}
@@ -1130,7 +1206,7 @@ export const PDFTakeoff = ({ projectId, estimateId, onAddCostItems }: PDFTakeoff
             <div className="grid grid-cols-1 lg:grid-cols-4 gap-4">
               {/* Center - Canvas (3 cols) */}
               <div className="lg:col-span-3 space-y-2">
-                {toolbarBlock}
+                {renderToolbar(true)}
 
                 {/* Canvas Controls */}
                 <div className="flex items-center gap-2 justify-between p-2 bg-card border rounded-lg">
@@ -1273,8 +1349,9 @@ export const PDFTakeoff = ({ projectId, estimateId, onAddCostItems }: PDFTakeoff
                           state.selectedColor
                         }
                         measurements={state.measurements.filter(m => {
+                          if (!state.pdfFile?.planId) return false;
                           if (m.pageIndex !== state.currentPageIndex) return false;
-                          if (state.pdfFile?.planId && m.planId !== state.pdfFile.planId) return false;
+                          if (m.planId !== state.pdfFile.planId) return false;
                           return true;
                         })}
                         detectedOpenings={detectedOpenings}
