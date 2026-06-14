@@ -409,7 +409,20 @@ export default function GanttSchedule({ projectId }: GanttScheduleProps) {
 
   const today    = new Date();
   const pct      = (d: Date) => Math.max(0, Math.min(100, (differenceInDays(d, rangeStart) / totalDays) * 100));
-  const todayPct = pct(today);
+  const todayPct = pct(today); // calendar-based — used by PDF & print exports
+
+  // Working-day display overrides (daily view + workDays only)
+  const wdCols = (viewMode === "daily" && workDays)
+    ? eachDayOfInterval({ start: rangeStart, end: rangeEnd }).filter(d => isWorkday(d, exclHolidays))
+    : null;
+  const displayColumns  = wdCols ?? columns;
+  const displayPct      = wdCols
+    ? (d: Date) => {
+        const n = wdCols.filter(wd => !isAfter(wd, d)).length;
+        return Math.max(0, Math.min(100, (n / (wdCols.length || 1)) * 100));
+      }
+    : pct;
+  const displayTodayPct = displayPct(today);
 
   // ─── Task actions ─────────────────────────────────────────────────────────
 
@@ -1063,17 +1076,17 @@ export default function GanttSchedule({ projectId }: GanttScheduleProps) {
 
             {/* Right scrollable timeline */}
             <div className="flex-1 overflow-x-auto" ref={scrollRef}>
-              <div style={{ minWidth: `${columns.length * COL_W}px` }} className="relative">
+              <div style={{ minWidth: `${displayColumns.length * COL_W}px` }} className="relative">
 
                 {/* Week/day/month headers */}
                 <div className="flex border-b border-slate-700 bg-slate-800 relative" style={{ height: 48 }}>
-                  {todayPct >= 0 && todayPct <= 100 && (
-                    <div className="absolute top-0 bottom-0 w-0.5 bg-red-500/70 z-20 pointer-events-none" style={{ left: `${todayPct}%` }}>
+                  {displayTodayPct >= 0 && displayTodayPct <= 100 && (
+                    <div className="absolute top-0 bottom-0 w-0.5 bg-red-500/70 z-20 pointer-events-none" style={{ left: `${displayTodayPct}%` }}>
                       <span className="absolute top-1 left-1 text-[8px] text-red-400 font-bold tracking-widest whitespace-nowrap">TODAY</span>
                     </div>
                   )}
-                  {columns.map((col, i) => {
-                    const prev = i > 0 ? columns[i - 1] : null;
+                  {displayColumns.map((col, i) => {
+                    const prev = i > 0 ? displayColumns[i - 1] : null;
                     let label: React.ReactNode = null;
                     let subLabel: React.ReactNode = null;
                     let isWknd = false;
@@ -1113,11 +1126,11 @@ export default function GanttSchedule({ projectId }: GanttScheduleProps) {
                 {/* Task rows */}
                 {groupedTasks.map(({ phase, tasks: phaseTasks }) => (
                   <React.Fragment key={phase}>
-                    <div className="border-b border-slate-600 bg-slate-700/20" style={{ height: PH_H, minWidth: `${columns.length * COL_W}px` }} />
+                    <div className="border-b border-slate-600 bg-slate-700/20" style={{ height: PH_H, minWidth: `${displayColumns.length * COL_W}px` }} />
 
                     {!collapsedPhases.has(phase) && phaseTasks.map((task) => {
-                      const barLeft  = pct(parseISO(task.startDate));
-                      const barRight = pct(addDays(parseISO(task.endDate), 1));
+                      const barLeft  = displayPct(parseISO(task.startDate));
+                      const barRight = displayPct(addDays(parseISO(task.endDate), 1));
                       const barWidth = Math.max(0.4, barRight - barLeft);
                       const showLabel    = barWidth > 7;
                       const showDuration = barWidth > 13;
@@ -1126,33 +1139,34 @@ export default function GanttSchedule({ projectId }: GanttScheduleProps) {
                         <div key={task.id}>
                           <div
                             className="border-b border-slate-700/60 relative flex items-center"
-                            style={{ height: ROW_H, minWidth: `${columns.length * COL_W}px` }}
+                            style={{ height: ROW_H, minWidth: `${displayColumns.length * COL_W}px` }}
                           >
                             {/* Weekend shading */}
-                            {viewMode === "weekly" && columns.map((_, i) => (
+                            {viewMode === "weekly" && displayColumns.map((_, i) => (
                               <div key={i} className="absolute top-0 bottom-0 pointer-events-none bg-white/[0.025]"
-                                style={{ left: `${((i + 5 / 7) / columns.length) * 100}%`, width: `${(2 / 7 / columns.length) * 100}%` }} />
+                                style={{ left: `${((i + 5 / 7) / displayColumns.length) * 100}%`, width: `${(2 / 7 / displayColumns.length) * 100}%` }} />
                             ))}
-                            {viewMode === "daily" && columns.map((col, i) => {
+                            {/* calendar daily: shade weekends/holidays; workDays daily: all cols are workdays, no shading needed */}
+                            {viewMode === "daily" && !workDays && displayColumns.map((col, i) => {
                               const isWknd2 = col.getDay() === 0 || col.getDay() === 6;
                               const isHol2  = exclHolidays && QLD_HOLIDAYS.has(format(col, "yyyy-MM-dd"));
                               if (!isWknd2 && !isHol2) return null;
                               return (
                                 <div key={i}
                                   className={`absolute top-0 bottom-0 pointer-events-none ${isHol2 ? "bg-amber-400/[0.06]" : "bg-white/[0.04]"}`}
-                                  style={{ left: `${(i / columns.length) * 100}%`, width: `${(1 / columns.length) * 100}%` }}
+                                  style={{ left: `${(i / displayColumns.length) * 100}%`, width: `${(1 / displayColumns.length) * 100}%` }}
                                 />
                               );
                             })}
 
                             {/* Grid lines */}
-                            {columns.map((_, i) => (
-                              <div key={i} className="absolute top-0 bottom-0 border-r border-slate-700/20 pointer-events-none" style={{ left: `${(i / columns.length) * 100}%` }} />
+                            {displayColumns.map((_, i) => (
+                              <div key={i} className="absolute top-0 bottom-0 border-r border-slate-700/20 pointer-events-none" style={{ left: `${(i / displayColumns.length) * 100}%` }} />
                             ))}
 
                             {/* Today line */}
-                            {todayPct >= 0 && todayPct <= 100 && (
-                              <div className="absolute top-0 bottom-0 w-0.5 bg-red-500/70 z-10 pointer-events-none" style={{ left: `${todayPct}%` }} />
+                            {displayTodayPct >= 0 && displayTodayPct <= 100 && (
+                              <div className="absolute top-0 bottom-0 w-0.5 bg-red-500/70 z-10 pointer-events-none" style={{ left: `${displayTodayPct}%` }} />
                             )}
 
                             {/* Task bar */}
@@ -1180,7 +1194,7 @@ export default function GanttSchedule({ projectId }: GanttScheduleProps) {
 
                           {/* Inline edit panel */}
                           {expandedId === task.id && editDraft?.id === task.id && (
-                            <div className="gantt-edit-panel border-b border-slate-600 bg-slate-800 px-4 py-3" style={{ minWidth: `${columns.length * COL_W}px` }}>
+                            <div className="gantt-edit-panel border-b border-slate-600 bg-slate-800 px-4 py-3" style={{ minWidth: `${displayColumns.length * COL_W}px` }}>
                               <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-3">
                                 <div>
                                   <Label className="text-xs text-slate-400 mb-1 block">Task Name</Label>
