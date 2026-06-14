@@ -33,6 +33,7 @@ import {
   FileDown,
   FileSpreadsheet,
   Calendar,
+  CalendarCheck,
 } from "lucide-react";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
@@ -99,10 +100,14 @@ const TRADE_SEQUENCE = [
   { keywords: ["landscape", "paving", "fence", "external work"],        name: "Landscaping",         duration: 5,  color: "#166534" },
 ];
 
-function generateFromEstimate(estimateItems: any[]): ScheduleTask[] {
-  const today = new Date();
-  let cursor = today;
+function generateFromEstimate(estimateItems: any[], useWorkDays = false, useHols = false): ScheduleTask[] {
+  let cursor = new Date();
+  if (useWorkDays) while (!isWorkday(cursor, useHols)) cursor = addDays(cursor, 1);
   return TRADE_SEQUENCE.map((entry) => {
+    const startDate = format(cursor, "yyyy-MM-dd");
+    const endDate = useWorkDays
+      ? format(addWorkingDays(cursor, entry.duration, useHols), "yyyy-MM-dd")
+      : format(addDays(cursor, entry.duration - 1), "yyyy-MM-dd");
     const hasItems = estimateItems.some((item) => {
       const h = ((item.trade || "") + " " + (item.category || "") + " " + (item.scope_of_work || "")).toLowerCase();
       return entry.keywords.some((kw) => h.includes(kw));
@@ -112,13 +117,19 @@ function generateFromEstimate(estimateItems: any[]): ScheduleTask[] {
       name: entry.name,
       trade: entry.name,
       color: entry.color,
-      startDate: format(cursor, "yyyy-MM-dd"),
-      endDate: format(addDays(cursor, entry.duration - 1), "yyyy-MM-dd"),
-      durationDays: entry.duration,
+      startDate,
+      endDate,
+      durationDays: differenceInDays(parseISO(endDate), parseISO(startDate)) + 1,
       progress: 0,
       notes: hasItems ? "" : "No estimate items matched – adjust dates as needed",
     };
-    cursor = addDays(cursor, entry.duration);
+    if (useWorkDays) {
+      let next = addDays(parseISO(endDate), 1);
+      while (!isWorkday(next, useHols)) next = addDays(next, 1);
+      cursor = next;
+    } else {
+      cursor = addDays(cursor, entry.duration);
+    }
     return task;
   });
 }
@@ -128,6 +139,46 @@ function generateFromEstimate(estimateItems: any[]): ScheduleTask[] {
 function hexToRgb(hex: string): [number, number, number] {
   const h = hex.replace("#", "");
   return [parseInt(h.slice(0, 2), 16), parseInt(h.slice(2, 4), 16), parseInt(h.slice(4, 6), 16)];
+}
+
+// ─── Working-day helpers ──────────────────────────────────────────────────────
+
+// QLD public holidays 2025–2028 (yyyy-MM-dd)
+const QLD_HOLIDAYS = new Set([
+  // 2025
+  "2025-01-01","2025-01-27","2025-04-18","2025-04-19","2025-04-21",
+  "2025-04-25","2025-05-05","2025-08-13","2025-10-27","2025-12-25","2025-12-26",
+  // 2026
+  "2026-01-01","2026-01-26","2026-04-03","2026-04-04","2026-04-06",
+  "2026-04-25","2026-05-04","2026-08-12","2026-10-26","2026-12-25","2026-12-28",
+  // 2027
+  "2027-01-01","2027-01-26","2027-03-26","2027-03-27","2027-03-29",
+  "2027-04-25","2027-05-03","2027-08-11","2027-10-25","2027-12-27","2027-12-28",
+  // 2028
+  "2028-01-03","2028-01-26","2028-04-14","2028-04-15","2028-04-17",
+  "2028-04-25","2028-05-01","2028-08-09","2028-10-23","2028-12-25","2028-12-26",
+]);
+
+function isWorkday(date: Date, useHols: boolean): boolean {
+  const d = date.getDay();
+  if (d === 0 || d === 6) return false;
+  if (useHols && QLD_HOLIDAYS.has(format(date, "yyyy-MM-dd"))) return false;
+  return true;
+}
+
+function addWorkingDays(start: Date, n: number, useHols: boolean): Date {
+  let d = new Date(start);
+  while (!isWorkday(d, useHols)) d = addDays(d, 1); // snap to workday
+  let remaining = n - 1;
+  while (remaining > 0) { d = addDays(d, 1); if (isWorkday(d, useHols)) remaining--; }
+  return d;
+}
+
+function countWorkingDays(start: Date, end: Date, useHols: boolean): number {
+  let count = 0;
+  let d = new Date(start);
+  while (!isAfter(d, end)) { if (isWorkday(d, useHols)) count++; d = addDays(d, 1); }
+  return count;
 }
 
 // ─── Print HTML builder ───────────────────────────────────────────────────────
@@ -285,6 +336,8 @@ export default function GanttSchedule({ projectId }: GanttScheduleProps) {
   const [viewMode, setViewMode]         = useState<ViewMode>("weekly");
   const [collapsedPhases, setCollapsedPhases] = useState<Set<string>>(new Set());
   const [tooltip, setTooltip]           = useState<{ task: ScheduleTask; x: number; y: number } | null>(null);
+  const [workDays, setWorkDays]         = useState(false);
+  const [exclHolidays, setExclHolidays] = useState(false);
 
   // ─── Load data ────────────────────────────────────────────────────────────
 
@@ -392,9 +445,9 @@ export default function GanttSchedule({ projectId }: GanttScheduleProps) {
   const handleReset = () => {
     const raw = localStorage.getItem(getUserStorageKey("local_projects"));
     const proj = (JSON.parse(raw || "[]") as any[]).find((p: any) => p.id === projectId);
-    saveTasks(generateFromEstimate(proj?.estimate_items || []));
+    saveTasks(generateFromEstimate(proj?.estimate_items || [], workDays, exclHolidays));
     setExpandedId(null); setEditDraft(null);
-    toast.success("Schedule reset from estimate");
+    toast.success(`Schedule reset${workDays ? " (working days)" : ""}`);
   };
 
   // ─── Brand helper ─────────────────────────────────────────────────────────
@@ -707,8 +760,133 @@ export default function GanttSchedule({ projectId }: GanttScheduleProps) {
         });
       });
 
-      // Freeze panes
+      // Freeze panes — Sheet 1
       ws.views = [{ state: "frozen", xSplit: 0, ySplit: dataStartRow, activeCell: `A${dataStartRow + 1}` }];
+
+      // ── Sheet 2: Visual Gantt ─────────────────────────────────────────────
+      const ws2 = wb.addWorksheet("Gantt View", {
+        pageSetup: { paperSize: 9, orientation: "landscape", fitToPage: true, fitToWidth: 1 },
+      });
+
+      const ganttWeeks = eachWeekOfInterval({ start: rangeStart, end: rangeEnd }, { weekStartsOn: 1 });
+      const DATA_COL   = 2; // column A = task names, column B+ = weeks
+      const totalCols  = ganttWeeks.length + 1;
+
+      // Column widths
+      ws2.getColumn(1).width = 28;
+      ganttWeeks.forEach((_, i) => { ws2.getColumn(i + DATA_COL).width = 3.4; });
+
+      // Row 1: Title
+      ws2.mergeCells(1, 1, 1, totalCols);
+      const ttl = ws2.getCell(1, 1);
+      ttl.value = `${projectName} — Project Schedule (Visual Gantt)`;
+      ttl.font  = { bold: true, size: 13, color: { argb: "FF0F172A" } };
+      ttl.fill  = { type: "pattern", pattern: "solid", fgColor: { argb: "FFF8FAFC" } };
+      ttl.alignment = { vertical: "middle", horizontal: "left", indent: 1 };
+      ws2.getRow(1).height = 24;
+
+      // Row 2: Month headers
+      ws2.getRow(2).height = 15;
+      // Task label for col A
+      const taskHdrG = ws2.getCell(2, 1);
+      taskHdrG.value = "TASK";
+      taskHdrG.font  = { bold: true, size: 9, color: { argb: "FF64748B" } };
+      taskHdrG.fill  = { type: "pattern", pattern: "solid", fgColor: { argb: "FFF1F5F9" } };
+      taskHdrG.alignment = { vertical: "middle", indent: 1 };
+
+      // Group weeks by month for merging
+      const monthGroups: { label: string; s: number; e: number }[] = [];
+      let curML = ""; let curMS = DATA_COL;
+      ganttWeeks.forEach((wk, i) => {
+        const ml = format(wk, "MMM yyyy");
+        if (ml !== curML) {
+          if (curML) monthGroups.push({ label: curML, s: curMS, e: i + DATA_COL - 1 });
+          curML = ml; curMS = i + DATA_COL;
+        }
+      });
+      monthGroups.push({ label: curML, s: curMS, e: ganttWeeks.length + DATA_COL - 1 });
+
+      monthGroups.forEach(({ label, s, e }) => {
+        if (s < e) ws2.mergeCells(2, s, 2, e);
+        const mc = ws2.getCell(2, s);
+        mc.value = label;
+        mc.font  = { bold: true, size: 9, color: { argb: "FF0F172A" } };
+        mc.fill  = { type: "pattern", pattern: "solid", fgColor: { argb: "FFE2E8F0" } };
+        mc.alignment = { horizontal: "center", vertical: "middle" };
+      });
+
+      // Row 3: Week date labels
+      ws2.getRow(3).height = 12;
+      ws2.getCell(3, 1).fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFF1F5F9" } };
+
+      // Find today's week column index
+      const todayWeekIdx = ganttWeeks.findIndex((w, i) => {
+        const wEnd = addDays(w, 6);
+        return !isAfter(today, wEnd) && !isBefore(today, w);
+      });
+
+      ganttWeeks.forEach((wk, i) => {
+        const cell = ws2.getCell(3, i + DATA_COL);
+        const isTodayWk = i === todayWeekIdx;
+        cell.value = format(wk, "d");
+        cell.font  = isTodayWk
+          ? { size: 7, bold: true, color: { argb: "FFEF4444" } }
+          : { size: 7, color: { argb: "FF94A3B8" } };
+        cell.fill  = { type: "pattern", pattern: "solid", fgColor: { argb: "FFF1F5F9" } };
+        cell.alignment = { horizontal: "center" };
+      });
+
+      // Task & phase rows
+      let g2Row = 4;
+
+      groupedTasks.forEach(({ phase, tasks: pt2 }) => {
+        // Phase header row
+        ws2.mergeCells(g2Row, 1, g2Row, totalCols);
+        const phC = ws2.getCell(g2Row, 1);
+        phC.value = phase.toUpperCase();
+        phC.font  = { bold: true, size: 8, color: { argb: "FF94A3B8" } };
+        phC.fill  = { type: "pattern", pattern: "solid", fgColor: { argb: "FF1E293B" } };
+        phC.alignment = { vertical: "middle", horizontal: "left", indent: 1 };
+        ws2.getRow(g2Row).height = 13;
+        g2Row++;
+
+        pt2.forEach((task) => {
+          ws2.getRow(g2Row).height = 14;
+          const hexStr = task.color.replace("#", "").toUpperCase();
+
+          // Task name
+          const nc = ws2.getCell(g2Row, 1);
+          nc.value = task.name;
+          nc.font  = { size: 9, bold: true, color: { argb: "FF" + hexStr } };
+          nc.alignment = { vertical: "middle", horizontal: "left", indent: 1 };
+          nc.border = { right: { style: "medium", color: { argb: "FFE2E8F0" } }, bottom: { style: "hair", color: { argb: "FFEEEEEE" } } };
+
+          const tStart = parseISO(task.startDate);
+          const tEnd   = parseISO(task.endDate);
+
+          ganttWeeks.forEach((wk, i) => {
+            const wkEnd    = addDays(wk, 6);
+            const overlaps = !isAfter(tStart, wkEnd) && !isBefore(tEnd, wk);
+            const isTodayWk = i === todayWeekIdx;
+            const cell = ws2.getCell(g2Row, i + DATA_COL);
+
+            cell.fill = overlaps
+              ? { type: "pattern", pattern: "solid", fgColor: { argb: "FF" + hexStr } }
+              : { type: "pattern", pattern: "solid", fgColor: { argb: "FFFAFBFC" } };
+
+            cell.border = {
+              right:  { style: "hair",   color: { argb: "FFE2E8F0" } },
+              bottom: { style: "hair",   color: { argb: "FFEEEEEE" } },
+              ...(isTodayWk ? { left: { style: "medium", color: { argb: "FFEF4444" } } } : {}),
+            };
+          });
+
+          g2Row++;
+        });
+      });
+
+      // Freeze: task name column + first 3 header rows
+      ws2.views = [{ state: "frozen", xSplit: 1, ySplit: 3, activeCell: "B4" }];
 
       // Download
       const buffer = await wb.xlsx.writeBuffer();
@@ -756,8 +934,9 @@ export default function GanttSchedule({ projectId }: GanttScheduleProps) {
             {format(parseISO(tooltip.task.startDate), "dd MMM yyyy")} → {format(parseISO(tooltip.task.endDate), "dd MMM yyyy")}
           </div>
           <div className="text-slate-400">
-            {tooltip.task.durationDays} days ·{" "}
-            <span className="text-cyan-400 font-medium">{tooltip.task.progress}% complete</span>
+            {tooltip.task.durationDays}d cal
+            {workDays && ` · ${countWorkingDays(parseISO(tooltip.task.startDate), parseISO(tooltip.task.endDate), exclHolidays)}wd`}
+            {" · "}<span className="text-cyan-400 font-medium">{tooltip.task.progress}% complete</span>
           </div>
           {tooltip.task.notes && (
             <div className="text-slate-500 mt-1 border-t border-slate-700 pt-1">{tooltip.task.notes}</div>
@@ -785,6 +964,28 @@ export default function GanttSchedule({ projectId }: GanttScheduleProps) {
                 <SelectItem value="monthly">Monthly</SelectItem>
               </SelectContent>
             </Select>
+
+            <div className="w-px h-5 bg-slate-700 mx-0.5" />
+
+            {/* Working-day toggles */}
+            <Button
+              size="sm"
+              onClick={() => { setWorkDays(w => !w); if (workDays) setExclHolidays(false); }}
+              className={`h-8 gap-1 text-xs ${workDays ? "bg-cyan-600 hover:bg-cyan-700 border-cyan-600 text-white" : "bg-transparent border border-slate-700 text-slate-300 hover:bg-slate-700 hover:text-white"}`}
+              title="Exclude weekends — hit Reset to regenerate with working-day dates"
+            >
+              <CalendarCheck className="w-3.5 h-3.5" /> Work Days
+            </Button>
+            {workDays && (
+              <Button
+                size="sm"
+                onClick={() => setExclHolidays(h => !h)}
+                className={`h-8 gap-1 text-xs ${exclHolidays ? "bg-cyan-600 hover:bg-cyan-700 border-cyan-600 text-white" : "bg-transparent border border-slate-700 text-slate-300 hover:bg-slate-700 hover:text-white"}`}
+                title="Also skip QLD public holidays"
+              >
+                Holidays
+              </Button>
+            )}
 
             <div className="w-px h-5 bg-slate-700 mx-0.5" />
 
@@ -844,7 +1045,7 @@ export default function GanttSchedule({ projectId }: GanttScheduleProps) {
                         <div className="flex flex-col min-w-0 flex-1">
                           <span className="text-sm font-semibold text-white truncate leading-tight">{task.name}</span>
                           <span className="text-[10px] text-slate-500 leading-tight mt-0.5">
-                            {format(parseISO(task.startDate), "dd MMM")} – {format(parseISO(task.endDate), "dd MMM")} · {task.durationDays}d
+                            {format(parseISO(task.startDate), "dd MMM")} – {format(parseISO(task.endDate), "dd MMM")} · {workDays ? `${countWorkingDays(parseISO(task.startDate), parseISO(task.endDate), exclHolidays)}wd` : `${task.durationDays}d`}
                           </span>
                           {task.progress > 0 && (
                             <span className="text-[10px] text-cyan-400 font-semibold leading-tight">{task.progress}% done</span>
@@ -877,6 +1078,7 @@ export default function GanttSchedule({ projectId }: GanttScheduleProps) {
                     let subLabel: React.ReactNode = null;
                     let isWknd = false;
 
+                    const isHoliday = exclHolidays && QLD_HOLIDAYS.has(format(col, "yyyy-MM-dd"));
                     if (viewMode === "monthly") {
                       label    = format(col, "MMM");
                       subLabel = format(col, "yyyy");
@@ -887,7 +1089,9 @@ export default function GanttSchedule({ projectId }: GanttScheduleProps) {
                     } else {
                       isWknd   = col.getDay() === 0 || col.getDay() === 6;
                       const newMonth = !prev || format(col, "MMM") !== format(prev, "MMM");
-                      label    = newMonth ? <strong className="text-slate-300 text-[9px]">{format(col, "d MMM")}</strong> : format(col, "d");
+                      label    = isHoliday
+                        ? <span className="text-amber-400 font-bold text-[9px]" title="QLD Public Holiday">{format(col, "d")}</span>
+                        : newMonth ? <strong className="text-slate-300 text-[9px]">{format(col, "d MMM")}</strong> : format(col, "d");
                     }
 
                     return (
@@ -930,11 +1134,15 @@ export default function GanttSchedule({ projectId }: GanttScheduleProps) {
                                 style={{ left: `${((i + 5 / 7) / columns.length) * 100}%`, width: `${(2 / 7 / columns.length) * 100}%` }} />
                             ))}
                             {viewMode === "daily" && columns.map((col, i) => {
-                              const w = col.getDay() === 0 || col.getDay() === 6;
-                              return w ? (
-                                <div key={i} className="absolute top-0 bottom-0 pointer-events-none bg-white/[0.04]"
-                                  style={{ left: `${(i / columns.length) * 100}%`, width: `${(1 / columns.length) * 100}%` }} />
-                              ) : null;
+                              const isWknd2 = col.getDay() === 0 || col.getDay() === 6;
+                              const isHol2  = exclHolidays && QLD_HOLIDAYS.has(format(col, "yyyy-MM-dd"));
+                              if (!isWknd2 && !isHol2) return null;
+                              return (
+                                <div key={i}
+                                  className={`absolute top-0 bottom-0 pointer-events-none ${isHol2 ? "bg-amber-400/[0.06]" : "bg-white/[0.04]"}`}
+                                  style={{ left: `${(i / columns.length) * 100}%`, width: `${(1 / columns.length) * 100}%` }}
+                                />
+                              );
                             })}
 
                             {/* Grid lines */}
@@ -963,7 +1171,7 @@ export default function GanttSchedule({ projectId }: GanttScheduleProps) {
                               {showLabel && (
                                 <div className="absolute inset-0 flex items-center px-2 gap-1.5 overflow-hidden">
                                   <span className="text-[10px] text-white font-semibold truncate leading-none drop-shadow">{task.name}</span>
-                                  {showDuration && <span className="text-[9px] text-white/60 flex-shrink-0 leading-none">{task.durationDays}d</span>}
+                                  {showDuration && <span className="text-[9px] text-white/60 flex-shrink-0 leading-none">{workDays ? `${countWorkingDays(parseISO(task.startDate), parseISO(task.endDate), exclHolidays)}wd` : `${task.durationDays}d`}</span>}
                                   {task.progress > 0 && <span className="text-[9px] text-white/80 flex-shrink-0 ml-auto leading-none font-medium">{task.progress}%</span>}
                                 </div>
                               )}
