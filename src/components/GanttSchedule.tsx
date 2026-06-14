@@ -336,8 +336,8 @@ export default function GanttSchedule({ projectId }: GanttScheduleProps) {
   const [viewMode, setViewMode]         = useState<ViewMode>("weekly");
   const [collapsedPhases, setCollapsedPhases] = useState<Set<string>>(new Set());
   const [tooltip, setTooltip]           = useState<{ task: ScheduleTask; x: number; y: number } | null>(null);
-  const [workDays, setWorkDays]         = useState(false);
-  const [exclHolidays, setExclHolidays] = useState(false);
+  const [workDays, setWorkDays]         = useState(() => localStorage.getItem("gantt_workDays") === "1");
+  const [exclHolidays, setExclHolidays] = useState(() => localStorage.getItem("gantt_exclHolidays") === "1");
 
   // ─── Load data ────────────────────────────────────────────────────────────
 
@@ -983,7 +983,12 @@ export default function GanttSchedule({ projectId }: GanttScheduleProps) {
             {/* Working-day toggles */}
             <Button
               size="sm"
-              onClick={() => { setWorkDays(w => !w); if (workDays) setExclHolidays(false); }}
+              onClick={() => {
+                const next = !workDays;
+                setWorkDays(next);
+                localStorage.setItem("gantt_workDays", next ? "1" : "0");
+                if (!next) { setExclHolidays(false); localStorage.setItem("gantt_exclHolidays", "0"); }
+              }}
               className={`h-8 gap-1 text-xs ${workDays ? "bg-cyan-600 hover:bg-cyan-700 border-cyan-600 text-white" : "bg-transparent border border-slate-700 text-slate-300 hover:bg-slate-700 hover:text-white"}`}
               title="Exclude weekends — hit Reset to regenerate with working-day dates"
             >
@@ -992,7 +997,11 @@ export default function GanttSchedule({ projectId }: GanttScheduleProps) {
             {workDays && (
               <Button
                 size="sm"
-                onClick={() => setExclHolidays(h => !h)}
+                onClick={() => {
+                  const next = !exclHolidays;
+                  setExclHolidays(next);
+                  localStorage.setItem("gantt_exclHolidays", next ? "1" : "0");
+                }}
                 className={`h-8 gap-1 text-xs ${exclHolidays ? "bg-cyan-600 hover:bg-cyan-700 border-cyan-600 text-white" : "bg-transparent border border-slate-700 text-slate-300 hover:bg-slate-700 hover:text-white"}`}
                 title="Also skip QLD public holidays"
               >
