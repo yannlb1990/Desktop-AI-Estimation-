@@ -75,6 +75,24 @@ const DEFAULT_CONSUMABLES: Omit<ConsumableItem, 'id' | 'total'>[] = [
   { name: 'PPE - Dust Masks', description: 'P2 masks 10pk', quantity: 1, unit: 'pack', unitCost: 25.00 },
 ];
 
+// Built-in system templates
+const SYSTEM_TEMPLATES: Array<{ id: string; name: string; description: string; items: CostItem[] }> = [
+  {
+    id: 'system-suspended-ceiling',
+    name: 'Suspended Ceiling — Mineral Fibre 600×600',
+    description: 'Full suspended ceiling system: grid, tiles, perimeter, hangers + labour',
+    items: [
+      { id: 'sc-1', category: 'General', name: 'Main Tee Runners 3600mm', description: 'Primary grid members @ 1200mm centres', unit: 'LM', unitCost: 6.50, quantity: 0, linkedMeasurements: [], wasteFactor: 1.05, subtotal: 0, trade: 'Joinery', materialWastePercent: 5, labourWastePercent: 10 },
+      { id: 'sc-2', category: 'General', name: 'Cross Tees 1200mm', description: 'Secondary cross members spanning 1200mm', unit: 'LM', unitCost: 3.80, quantity: 0, linkedMeasurements: [], wasteFactor: 1.05, subtotal: 0, trade: 'Joinery', materialWastePercent: 5, labourWastePercent: 10 },
+      { id: 'sc-3', category: 'General', name: 'Cross Tees 600mm', description: 'Short cross tees completing 600×600 grid', unit: 'LM', unitCost: 2.90, quantity: 0, linkedMeasurements: [], wasteFactor: 1.05, subtotal: 0, trade: 'Joinery', materialWastePercent: 5, labourWastePercent: 10 },
+      { id: 'sc-4', category: 'General', name: 'Mineral Fibre Tiles 600×600', description: '15mm mineral fibre acoustic ceiling tiles', unit: 'M2', unitCost: 28.00, quantity: 0, linkedMeasurements: [], wasteFactor: 1.10, subtotal: 0, trade: 'Joinery', materialWastePercent: 10, labourWastePercent: 10 },
+      { id: 'sc-5', category: 'General', name: 'Perimeter Angle / L-Bead', description: 'Wall angle perimeter fixing, 25×25mm galvanised', unit: 'LM', unitCost: 2.20, quantity: 0, linkedMeasurements: [], wasteFactor: 1.05, subtotal: 0, trade: 'Joinery', materialWastePercent: 5, labourWastePercent: 10 },
+      { id: 'sc-6', category: 'General', name: 'Hanger Wire + Toggle Bolts', description: 'Galv wire hangers @ 1200mm grid, toggle-bolt fixed to soffit', unit: 'count', unitCost: 4.50, quantity: 0, linkedMeasurements: [], wasteFactor: 1.0, subtotal: 0, trade: 'Joinery', materialWastePercent: 0, labourWastePercent: 10 },
+      { id: 'sc-7', category: 'General', name: 'Labour — Suspended Ceiling Install', description: 'Installation @ 2.5 m²/hr — enter area as qty, set hours = qty ÷ 2.5', unit: 'M2', unitCost: 0, quantity: 0, linkedMeasurements: [], wasteFactor: 1.0, subtotal: 0, trade: 'Joinery', laborHours: 0, hourlyRate: 65, materialWastePercent: 0, labourWastePercent: 10 },
+    ],
+  },
+];
+
 interface CostEstimatorProps {
   projectId: string;
   measurements: Measurement[];
@@ -320,6 +338,7 @@ export const CostEstimator = ({
     try { return JSON.parse(localStorage.getItem(getUserStorageKey('estimate_templates')) || '[]'); }
     catch { return []; }
   });
+  const [targetMargin, setTargetMargin] = useState<number>(25);
 
   const refreshTemplates = () => {
     try { setTemplateList(JSON.parse(localStorage.getItem(getUserStorageKey('estimate_templates')) || '[]')); }
@@ -780,6 +799,9 @@ export const CostEstimator = ({
     URL.revokeObjectURL(url);
     toast.success('BOQ exported — open in Excel for best formatting');
   };
+
+  const realMargin = marginPercent / (100 + marginPercent) * 100;
+  const requiredMarkup = targetMargin < 100 ? targetMargin / (100 - targetMargin) * 100 : 999;
 
   if (measurements.length === 0) {
     return (
@@ -1423,6 +1445,17 @@ export const CostEstimator = ({
                               {/* Additional Info */}
                               <div className="space-y-2">
                                 <div>
+                                  <Label className="text-sm">Area</Label>
+                                  <Select value={item.area || ''} onValueChange={(v: MeasurementArea) => onUpdateCostItem(item.id, { area: v })}>
+                                    <SelectTrigger className="h-9 text-sm">
+                                      <SelectValue placeholder="Select area..." />
+                                    </SelectTrigger>
+                                    <SelectContent className="bg-popover max-h-48">
+                                      {AREA_OPTIONS.map(a => <SelectItem key={a} value={a} className="text-sm">{a}</SelectItem>)}
+                                    </SelectContent>
+                                  </Select>
+                                </div>
+                                <div>
                                   <Label className="text-sm">Supplier URL</Label>
                                   <Input
                                     value={item.supplierUrl || ''}
@@ -1546,6 +1579,79 @@ export const CostEstimator = ({
         </div>
       </Card>
 
+      {/* Margin vs Markup Calculator */}
+      <Card className="p-4">
+        <div className="flex items-center gap-2 mb-3">
+          <Percent className="h-4 w-4 text-amber-600" />
+          <span className="text-sm font-semibold">Margin vs Markup</span>
+          <span className="text-xs text-muted-foreground ml-1">— your {marginPercent}% markup earns only {realMargin.toFixed(1)}¢ per dollar, not {marginPercent}¢</span>
+        </div>
+        <div className="grid grid-cols-2 gap-6">
+          {/* Left: actual margin breakdown */}
+          <div className="space-y-2">
+            <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Current Markup Applied</p>
+            <div className="grid grid-cols-2 gap-2">
+              <div className="p-2 bg-muted rounded text-center">
+                <div className="text-xs text-muted-foreground">Cost (subtotal)</div>
+                <div className="text-sm font-bold font-mono">${totals.subtotal.toFixed(2)}</div>
+              </div>
+              <div className="p-2 bg-blue-50 dark:bg-blue-950/30 rounded text-center">
+                <div className="text-xs text-blue-700">Markup ({marginPercent}%)</div>
+                <div className="text-sm font-bold text-blue-800 font-mono">${totals.margin.toFixed(2)}</div>
+              </div>
+              <div className="p-2 bg-muted rounded text-center">
+                <div className="text-xs text-muted-foreground">Revenue (ex-GST)</div>
+                <div className="text-sm font-bold font-mono">${(totals.subtotal + totals.margin).toFixed(2)}</div>
+              </div>
+              <div className={cn("p-2 rounded text-center", realMargin < 15 ? "bg-red-100 dark:bg-red-950/30" : "bg-amber-100 dark:bg-amber-950/30")}>
+                <div className={cn("text-xs font-medium", realMargin < 15 ? "text-red-700" : "text-amber-700")}>Real Margin</div>
+                <div className={cn("text-xl font-bold font-mono", realMargin < 15 ? "text-red-800" : "text-amber-800")}>{realMargin.toFixed(1)}%</div>
+              </div>
+            </div>
+            <p className="text-[11px] text-muted-foreground leading-snug">
+              Adding {marginPercent}% on top of your costs gives a real profit margin of {realMargin.toFixed(1)}% on revenue — not {marginPercent}%.
+            </p>
+          </div>
+          {/* Right: target margin reverse calculator */}
+          <div className="space-y-2">
+            <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Target Margin Calculator</p>
+            <div className="flex items-center gap-2">
+              <Label className="text-xs whitespace-nowrap">I want</Label>
+              <Input
+                type="number"
+                min={1}
+                max={99}
+                value={targetMargin}
+                onChange={(e) => setTargetMargin(Number(e.target.value))}
+                className="w-20 h-8 text-sm text-center font-mono"
+              />
+              <Label className="text-xs whitespace-nowrap">% real margin</Label>
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              <div className="p-2 bg-green-100 dark:bg-green-950/30 rounded text-center">
+                <div className="text-xs text-green-700 font-medium">Required Markup</div>
+                <div className="text-xl font-bold text-green-800 font-mono">{requiredMarkup.toFixed(1)}%</div>
+              </div>
+              <div className="p-2 bg-green-50 dark:bg-green-950/20 rounded text-center">
+                <div className="text-xs text-muted-foreground">Net Profit $</div>
+                <div className="text-sm font-bold font-mono">${(totals.subtotal * (requiredMarkup / 100)).toFixed(2)}</div>
+              </div>
+            </div>
+            <Button
+              size="sm"
+              variant="outline"
+              className="w-full h-8 text-xs border-green-400 text-green-700 hover:bg-green-50 dark:hover:bg-green-950/30"
+              onClick={() => setMarginPercent(parseFloat(requiredMarkup.toFixed(1)))}
+            >
+              Apply {requiredMarkup.toFixed(1)}% markup to estimate
+            </Button>
+            <p className="text-[11px] text-muted-foreground">
+              Required markup = target ÷ (100 − target) × 100.
+            </p>
+          </div>
+        </div>
+      </Card>
+
       {/* Estimation disclaimer */}
       <p className="text-[11px] text-muted-foreground text-center leading-snug px-2">
         Indicative estimate only — not a substitute for a certified quantity surveyor. Rates updated {RATES_LAST_UPDATED}. Market conditions vary by region and project specifics. Metricore accepts no liability for loss arising from reliance on these figures.
@@ -1586,33 +1692,58 @@ export const CostEstimator = ({
           <DialogHeader>
             <DialogTitle>Load Template</DialogTitle>
           </DialogHeader>
-          {templateList.length === 0 ? (
-            <div className="text-center py-8">
-              <BookOpen className="h-10 w-10 mx-auto text-muted-foreground mb-3" />
-              <p className="text-sm text-muted-foreground">No templates saved yet. Build a cost estimate and click Save to create one.</p>
-            </div>
-          ) : (
-            <div className="space-y-2 max-h-80 overflow-y-auto">
-              {templateList.map(t => (
-                <div key={t.id} className="flex items-center justify-between p-3 border border-border rounded-lg hover:bg-muted/40">
-                  <div>
-                    <div className="font-medium text-sm">{t.name}</div>
-                    <div className="text-xs text-muted-foreground">
-                      {t.items.length} items · {new Date(t.createdAt).toLocaleDateString('en-AU', { day: 'numeric', month: 'short', year: 'numeric' })}
+          <div className="space-y-4 max-h-[32rem] overflow-y-auto pr-1">
+            {/* Built-in system templates */}
+            <div>
+              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">Built-in Templates</p>
+              <div className="space-y-2">
+                {SYSTEM_TEMPLATES.map(t => (
+                  <div key={t.id} className="flex items-start justify-between p-3 border border-border rounded-lg hover:bg-muted/40 gap-3">
+                    <div className="min-w-0">
+                      <div className="font-medium text-sm">{t.name}</div>
+                      <div className="text-xs text-muted-foreground mt-0.5">{t.items.length} items · {t.description}</div>
                     </div>
-                  </div>
-                  <div className="flex items-center gap-1">
-                    <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => handleLoadTemplate(t.items)}>
+                    <Button size="sm" variant="outline" className="h-7 text-xs shrink-0"
+                      onClick={() => handleLoadTemplate(t.items.map(item => ({ ...item, id: crypto.randomUUID() })))}>
                       Load
                     </Button>
-                    <Button size="sm" variant="ghost" className="h-7 w-7 p-0 text-destructive" onClick={() => handleDeleteTemplate(t.id)}>
-                      <Trash2 className="h-3.5 w-3.5" />
-                    </Button>
                   </div>
-                </div>
-              ))}
+                ))}
+              </div>
             </div>
-          )}
+            {/* User-saved templates */}
+            <div>
+              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">My Templates</p>
+              {templateList.length === 0 ? (
+                <div className="text-center py-6 border border-dashed border-border rounded-lg">
+                  <BookOpen className="h-8 w-8 mx-auto text-muted-foreground mb-2" />
+                  <p className="text-sm text-muted-foreground">No saved templates yet.</p>
+                  <p className="text-xs text-muted-foreground mt-1">Build an estimate and click Save to create one.</p>
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  {templateList.map(t => (
+                    <div key={t.id} className="flex items-center justify-between p-3 border border-border rounded-lg hover:bg-muted/40">
+                      <div className="min-w-0">
+                        <div className="font-medium text-sm truncate">{t.name}</div>
+                        <div className="text-xs text-muted-foreground">
+                          {t.items.length} items · {new Date(t.createdAt).toLocaleDateString('en-AU', { day: 'numeric', month: 'short', year: 'numeric' })}
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-1 shrink-0 ml-2">
+                        <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => handleLoadTemplate(t.items)}>
+                          Load
+                        </Button>
+                        <Button size="sm" variant="ghost" className="h-7 w-7 p-0 text-destructive" onClick={() => handleDeleteTemplate(t.id)}>
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </Button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
         </DialogContent>
       </Dialog>
     </div>
