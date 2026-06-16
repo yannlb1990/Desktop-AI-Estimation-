@@ -21,7 +21,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { toast } from "sonner";
-import { Plus, Trash2, ChevronDown, ChevronRight, DollarSign, Edit2, Save, X, Link, Copy, CheckCircle, BookOpen, Home, Droplets, Utensils, TreePine, Building2, LayoutTemplate } from "lucide-react";
+import { Plus, Trash2, ChevronDown, ChevronRight, DollarSign, Edit2, Save, X, Link, Copy, CheckCircle, BookOpen, Home, Droplets, Utensils, TreePine, Building2, LayoutTemplate, Percent } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { Textarea } from "@/components/ui/textarea";
@@ -63,6 +63,11 @@ function persistCustomTemplates(list: EstimateTemplateData[]) {
 const AU_TRADES = [
   "Carpenter", "Plumber", "Electrician", "Bricklayer", "Plasterer",
   "Painter", "Tiler", "Concreter", "Roofer", "Landscaper"
+];
+
+const ESTIMATE_AREAS = [
+  'Site', 'Structure', 'Envelope', 'Roof', 'Internal', 'Wet Areas',
+  'External', 'Finishes', 'Services', 'Fitout', 'Landscaping', 'Other',
 ];
 
 const SCOPE_OF_WORK = {
@@ -208,6 +213,7 @@ export const EstimateTemplate = ({ projectId, estimateId }: EstimateTemplateProp
   const [customTemplates, setCustomTemplates] = useState<EstimateTemplateData[]>(() => loadCustomTemplates());
   const [showSaveModal, setShowSaveModal] = useState(false);
   const [newTplName, setNewTplName] = useState('');
+  const [targetMarginEst, setTargetMarginEst] = useState<number>(25);
 
   useEffect(() => {
     loadOverheads();
@@ -400,7 +406,9 @@ export const EstimateTemplate = ({ projectId, estimateId }: EstimateTemplateProp
       labour_wastage_pct: item.labour_wastage_pct,
       markup_pct: item.markup_pct,
       material_type: item.material_type,
-      area: item.area
+      area: item.area,
+      trade: item.trade,
+      scope_of_work: item.scope_of_work,
     });
   };
 
@@ -423,7 +431,9 @@ export const EstimateTemplate = ({ projectId, estimateId }: EstimateTemplateProp
           labour_wastage_pct: editValues.labour_wastage_pct ?? item.labour_wastage_pct,
           markup_pct: editValues.markup_pct ?? item.markup_pct,
           area: editValues.area ?? item.area,
-          material_type: editValues.material_type ?? item.material_type
+          material_type: editValues.material_type ?? item.material_type,
+          trade: editValues.trade ?? item.trade,
+          scope_of_work: editValues.scope_of_work ?? item.scope_of_work,
         };
       }
       return item;
@@ -444,8 +454,19 @@ export const EstimateTemplate = ({ projectId, estimateId }: EstimateTemplateProp
     setEditValues({});
   };
 
+  const updateItemField = (id: string, field: keyof EstimateItem, value: any) => {
+    const updatedItems = items.map(item => item.id === id ? { ...item, [field]: value } : item);
+    setItems(updatedItems);
+    const projects = JSON.parse(localStorage.getItem(getUserStorageKey('local_projects')) || '[]');
+    const projectIndex = projects.findIndex((p: any) => p.id === projectId);
+    if (projectIndex !== -1) {
+      projects[projectIndex].estimate_items = updatedItems;
+      localStorage.setItem(getUserStorageKey('local_projects'), JSON.stringify(projects));
+    }
+  };
+
   const toggleExpanded = (id: string) => {
-    setItems(items.map(item => 
+    setItems(items.map(item =>
       item.id === id ? { ...item, expanded: !item.expanded } : item
     ));
   };
@@ -805,16 +826,52 @@ export const EstimateTemplate = ({ projectId, estimateId }: EstimateTemplateProp
           </TableCell>
           <TableCell className="font-mono text-sm font-medium">{item.item_number}</TableCell>
           <TableCell>
-            {isEditing ? (
-              <Input
-                value={editValues.area}
-                onChange={(e) => setEditValues({ ...editValues, area: e.target.value })}
-                className="h-8"
-              />
-            ) : item.area}
+            <Select
+              value={isEditing ? (editValues.area ?? item.area ?? '') : (item.area ?? '')}
+              onValueChange={(v) => {
+                if (isEditing) {
+                  setEditValues({ ...editValues, area: v });
+                } else {
+                  updateItemField(item.id, 'area', v);
+                }
+              }}
+            >
+              <SelectTrigger className="h-8 min-w-[90px] border-0 shadow-none hover:bg-muted/50 focus:ring-0 px-2 text-sm">
+                <SelectValue placeholder="Area..." />
+              </SelectTrigger>
+              <SelectContent>
+                {ESTIMATE_AREAS.map(a => <SelectItem key={a} value={a}>{a}</SelectItem>)}
+              </SelectContent>
+            </Select>
           </TableCell>
-          <TableCell>{item.trade}</TableCell>
-          <TableCell>{item.scope_of_work}</TableCell>
+          <TableCell>
+            {isEditing ? (
+              <Select
+                value={editValues.trade ?? item.trade}
+                onValueChange={(v) => setEditValues({ ...editValues, trade: v, scope_of_work: '' })}
+              >
+                <SelectTrigger className="h-8 min-w-[100px]"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {AU_TRADES.map(t => <SelectItem key={t} value={t}>{t}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            ) : item.trade}
+          </TableCell>
+          <TableCell>
+            {isEditing ? (
+              <Select
+                value={editValues.scope_of_work ?? item.scope_of_work ?? ''}
+                onValueChange={(v) => setEditValues({ ...editValues, scope_of_work: v })}
+              >
+                <SelectTrigger className="h-8 min-w-[110px]"><SelectValue placeholder="Scope..." /></SelectTrigger>
+                <SelectContent>
+                  {(SCOPE_OF_WORK[(editValues.trade ?? item.trade) as keyof typeof SCOPE_OF_WORK] || []).map(s => (
+                    <SelectItem key={s} value={s}>{s}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            ) : item.scope_of_work}
+          </TableCell>
           <TableCell>
             {isEditing ? (
               <Input
@@ -1306,6 +1363,83 @@ export const EstimateTemplate = ({ projectId, estimateId }: EstimateTemplateProp
           </div>
         </div>
       </Card>
+
+      {/* Margin vs Markup Calculator */}
+      {(() => {
+        const realMarginEst = config.marginPct / (100 + config.marginPct) * 100;
+        const reqMarkup = targetMarginEst < 100 ? targetMarginEst / (100 - targetMarginEst) * 100 : 999;
+        return (
+          <Card className="p-4">
+            <div className="flex items-center gap-2 mb-3">
+              <Percent className="h-4 w-4 text-amber-600" />
+              <span className="text-sm font-semibold">Margin vs Markup</span>
+              <span className="text-xs text-muted-foreground ml-1">
+                — your {config.marginPct}% markup earns only {realMarginEst.toFixed(1)}¢ per revenue dollar, not {config.marginPct}¢
+              </span>
+            </div>
+            <div className="grid grid-cols-2 gap-6">
+              {/* Left: actual breakdown */}
+              <div className="space-y-2">
+                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Current Markup Applied</p>
+                <div className="grid grid-cols-2 gap-2">
+                  <div className="p-2 bg-muted rounded text-center">
+                    <div className="text-xs text-muted-foreground">Cost base</div>
+                    <div className="text-sm font-bold font-mono">${totals.preMargin.toFixed(2)}</div>
+                  </div>
+                  <div className="p-2 bg-blue-50 dark:bg-blue-950/30 rounded text-center">
+                    <div className="text-xs text-blue-700">Markup ({config.marginPct}%)</div>
+                    <div className="text-sm font-bold text-blue-800 font-mono">${totals.margin.toFixed(2)}</div>
+                  </div>
+                  <div className="p-2 bg-muted rounded text-center">
+                    <div className="text-xs text-muted-foreground">Revenue (ex-GST)</div>
+                    <div className="text-sm font-bold font-mono">${totals.taxable.toFixed(2)}</div>
+                  </div>
+                  <div className={`p-2 rounded text-center ${realMarginEst < 15 ? 'bg-red-100 dark:bg-red-950/30' : 'bg-amber-100 dark:bg-amber-950/30'}`}>
+                    <div className={`text-xs font-medium ${realMarginEst < 15 ? 'text-red-700' : 'text-amber-700'}`}>Real Margin</div>
+                    <div className={`text-xl font-bold font-mono ${realMarginEst < 15 ? 'text-red-800' : 'text-amber-800'}`}>{realMarginEst.toFixed(1)}%</div>
+                  </div>
+                </div>
+                <p className="text-[11px] text-muted-foreground leading-snug">
+                  Adding {config.marginPct}% on top of costs gives a real profit margin of {realMarginEst.toFixed(1)}% on revenue — not {config.marginPct}%.
+                </p>
+              </div>
+              {/* Right: reverse calculator */}
+              <div className="space-y-2">
+                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Target Margin Calculator</p>
+                <div className="flex items-center gap-2">
+                  <label className="text-xs whitespace-nowrap">I want</label>
+                  <input
+                    type="number" min={1} max={99}
+                    value={targetMarginEst}
+                    onChange={(e) => setTargetMarginEst(Number(e.target.value))}
+                    className="w-20 h-8 text-sm text-center font-mono border border-input rounded-md px-2 bg-background focus:outline-none focus:ring-2 focus:ring-primary/50"
+                  />
+                  <label className="text-xs whitespace-nowrap">% real margin</label>
+                </div>
+                <div className="grid grid-cols-2 gap-2">
+                  <div className="p-2 bg-green-100 dark:bg-green-950/30 rounded text-center">
+                    <div className="text-xs text-green-700 font-medium">Required Markup</div>
+                    <div className="text-xl font-bold text-green-800 font-mono">{reqMarkup.toFixed(1)}%</div>
+                  </div>
+                  <div className="p-2 bg-green-50 dark:bg-green-950/20 rounded text-center">
+                    <div className="text-xs text-muted-foreground">Net Profit $</div>
+                    <div className="text-sm font-bold font-mono">${(totals.preMargin * reqMarkup / 100).toFixed(2)}</div>
+                  </div>
+                </div>
+                <button
+                  className="w-full h-8 text-xs rounded-md border border-green-400 text-green-700 hover:bg-green-50 dark:hover:bg-green-950/30 transition-colors"
+                  onClick={() => setConfig({ ...config, marginPct: parseFloat(reqMarkup.toFixed(1)) })}
+                >
+                  Apply {reqMarkup.toFixed(1)}% markup to estimate
+                </button>
+                <p className="text-[11px] text-muted-foreground">
+                  Required markup = target ÷ (100 − target) × 100.
+                </p>
+              </div>
+            </div>
+          </Card>
+        );
+      })()}
 
       {/* 5. Preliminaries */}
       <PreliminariesSection />
