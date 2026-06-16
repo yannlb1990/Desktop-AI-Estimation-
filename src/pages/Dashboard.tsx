@@ -285,36 +285,36 @@ const Dashboard = () => {
             <MetricoreLogoMark height={28} />
             <span className="font-display text-xl font-bold">Metricore</span>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1 md:gap-2">
             <TourTip text="Manage your clients and their contact details." position="bottom">
-              <Button variant="ghost" size="sm" onClick={() => navigate("/clients")}>
-                <Users className="h-4 w-4 mr-1.5" />Clients
+              <Button variant="ghost" size="sm" onClick={() => navigate("/clients")} title="Clients">
+                <Users className="h-4 w-4 md:mr-1.5" /><span className="hidden md:inline">Clients</span>
               </Button>
             </TourTip>
             <TourTip text="Browse supplier materials and update your pricing catalogue." position="bottom">
-              <Button variant="ghost" size="sm" onClick={() => navigate("/materials")}>
-                <Package className="h-4 w-4 mr-1.5" />Materials
+              <Button variant="ghost" size="sm" onClick={() => navigate("/materials")} title="Materials">
+                <Package className="h-4 w-4 md:mr-1.5" /><span className="hidden md:inline">Materials</span>
               </Button>
             </TourTip>
             <TourTip text="View current Australian build rates, cost trends, and market benchmarks." position="bottom">
-              <Button variant="ghost" size="sm" onClick={() => navigate("/insights")}>
-                <BarChart3 className="h-4 w-4 mr-1.5" />Insights
+              <Button variant="ghost" size="sm" onClick={() => navigate("/insights")} title="Insights">
+                <BarChart3 className="h-4 w-4 md:mr-1.5" /><span className="hidden md:inline">Insights</span>
               </Button>
             </TourTip>
             <TourTip text="Manage your company branding, default margins, subscription and account details." position="bottom">
-              <Button variant="ghost" size="sm" onClick={() => navigate("/settings")}>
-                <Settings className="h-4 w-4 mr-1.5" />Settings
+              <Button variant="ghost" size="sm" onClick={() => navigate("/settings")} title="Settings">
+                <Settings className="h-4 w-4 md:mr-1.5" /><span className="hidden md:inline">Settings</span>
               </Button>
             </TourTip>
-            <Button variant="ghost" size="sm" onClick={handleSignOut} className="text-muted-foreground hover:text-foreground">
-              <LogOut className="h-4 w-4 mr-1.5" />Sign Out
+            <Button variant="ghost" size="sm" onClick={handleSignOut} className="text-muted-foreground hover:text-foreground" title="Sign Out">
+              <LogOut className="h-4 w-4 md:mr-1.5" /><span className="hidden md:inline">Sign Out</span>
             </Button>
-            {/* Guide mode toggle */}
+            {/* Guide mode toggle — hidden on mobile */}
             <Button
               variant="ghost"
               size="sm"
               onClick={toggleTour}
-              className={`border ${tourEnabled ? 'border-violet-500/60 text-violet-400 bg-violet-500/10' : 'border-border text-muted-foreground'}`}
+              className={`hidden md:flex border ${tourEnabled ? 'border-violet-500/60 text-violet-400 bg-violet-500/10' : 'border-border text-muted-foreground'}`}
               title={tourEnabled ? "Turn off Guide Mode" : "Turn on Guide Mode — hover over buttons to learn what they do"}
             >
               <BookOpen className="h-4 w-4 mr-1.5" />
@@ -324,10 +324,10 @@ const Dashboard = () => {
               <Button
                 size="sm"
                 onClick={handleNewProject}
-                className={`ml-2 ${atProjectLimit ? 'bg-muted text-muted-foreground' : 'bg-primary text-primary-foreground'}`}
+                className={`ml-1 md:ml-2 ${atProjectLimit ? 'bg-muted text-muted-foreground' : 'bg-primary text-primary-foreground'}`}
                 title={atProjectLimit ? `Plan limit: ${sub.caps.maxProjects} projects — upgrade to add more` : undefined}
               >
-                <Plus className="h-4 w-4 mr-1.5" />New Project
+                <Plus className="h-4 w-4 md:mr-1.5" /><span className="hidden md:inline">New Project</span>
                 {atProjectLimit && <Badge variant="outline" className="ml-1.5 text-[9px] px-1 py-0 border-current">Limit</Badge>}
               </Button>
             </TourTip>
@@ -335,7 +335,7 @@ const Dashboard = () => {
         </div>
       </nav>
 
-      <div className="container mx-auto px-6 py-8 space-y-6">
+      <div className="container mx-auto px-4 md:px-6 py-4 md:py-8 space-y-6">
 
         {/* Hero row */}
         <div className="flex items-start justify-between">
@@ -412,8 +412,8 @@ const Dashboard = () => {
             </div>
           ) : (
             <>
-              {/* Table header */}
-              <div className="grid grid-cols-[2fr_1fr_1fr_1fr_1fr_1fr_auto] gap-4 px-6 py-2 text-xs font-medium text-muted-foreground uppercase tracking-wide border-b border-border">
+              {/* Table header — desktop only */}
+              <div className="hidden md:grid grid-cols-[2fr_1fr_1fr_1fr_1fr_1fr_auto] gap-4 px-6 py-2 text-xs font-medium text-muted-foreground uppercase tracking-wide border-b border-border">
                 <span>Project</span>
                 <span>Client</span>
                 <span>Stage</span>
@@ -434,78 +434,120 @@ const Dashboard = () => {
                   return (
                     <div
                       key={project.id}
-                      className="grid grid-cols-[2fr_1fr_1fr_1fr_1fr_1fr_auto] gap-4 px-6 py-3.5 items-center hover:bg-muted/30 cursor-pointer transition-colors group"
+                      className="hover:bg-muted/30 cursor-pointer transition-colors group"
                       onClick={() => navigate(`/project/${project.id}`)}
                     >
-                      <div>
-                        <div className="font-medium text-sm group-hover:text-primary transition-colors">{project.name}</div>
-                        {/* Progress dots */}
-                        <div className="flex items-center gap-1 mt-1.5">
-                          {completion.steps.map((step, i) => (
-                            <div
-                              key={step.key}
-                              title={step.label}
-                              className={`w-2 h-2 rounded-full transition-colors ${
-                                step.done
-                                  ? i === completion.score - 1 && !allDone
-                                    ? 'bg-amber-400'          // current active step
-                                    : allDone
-                                    ? 'bg-green-500'          // all complete
-                                    : 'bg-primary/60'         // past done steps
-                                  : 'bg-muted-foreground/20' // pending
-                              }`}
-                            />
-                          ))}
-                          <span className={`text-xs ml-1 ${allDone ? 'text-green-500' : 'text-muted-foreground/60'}`}>
-                            {allDone
-                              ? '✓ Complete'
-                              : <span>→ {completion.nextAction}</span>
-                            }
-                          </span>
+                      {/* Mobile card layout */}
+                      <div className="md:hidden px-4 py-3.5">
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="flex-1 min-w-0">
+                            <div className="font-medium text-sm group-hover:text-primary transition-colors truncate">{project.name}</div>
+                            <div className="flex items-center gap-2 mt-1 flex-wrap">
+                              {project.client_name && (
+                                <span className="text-xs text-muted-foreground flex items-center gap-1">
+                                  <User className="h-3 w-3 shrink-0" />{project.client_name}
+                                </span>
+                              )}
+                              <span className={`inline-flex items-center gap-1 text-xs font-medium px-2 py-0.5 rounded-full border ${cfg.bg} ${cfg.color}`}>
+                                <span className={`w-1.5 h-1.5 rounded-full ${cfg.dot}`} />{stage}
+                              </span>
+                              {qs !== 'draft' && (
+                                <span className={`inline-flex items-center gap-1 text-xs font-medium px-2 py-0.5 rounded-full border ${qcfg.bg} ${qcfg.color}`}>
+                                  {qcfg.icon}{qcfg.label}
+                                </span>
+                              )}
+                            </div>
+                            <div className="flex items-center gap-3 mt-1.5">
+                              <div className="flex items-center gap-1">
+                                {completion.steps.map((step, i) => (
+                                  <div key={step.key} title={step.label} className={`w-2 h-2 rounded-full transition-colors ${step.done ? i === completion.score - 1 && !allDone ? 'bg-amber-400' : allDone ? 'bg-green-500' : 'bg-primary/60' : 'bg-muted-foreground/20'}`} />
+                                ))}
+                              </div>
+                              {value > 0 && <span className="font-mono text-sm font-semibold text-primary">{fmtCurrency(value)}</span>}
+                            </div>
+                          </div>
+                          <div className="flex flex-col items-end gap-2 shrink-0">
+                            <ChevronRight className="h-4 w-4 text-muted-foreground" />
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              className="h-7 w-7 p-0 text-destructive hover:text-destructive hover:bg-destructive/10"
+                              onClick={e => handleDeleteProject(e, project.id)}
+                            >
+                              <Trash2 className="h-3.5 w-3.5" />
+                            </Button>
+                          </div>
                         </div>
                       </div>
-                      <div className="flex items-center gap-1.5 text-sm text-muted-foreground">
-                        <User className="h-3 w-3 shrink-0" />
-                        <span className="truncate">{project.client_name || '—'}</span>
-                      </div>
-                      <div>
-                        <span className={`inline-flex items-center gap-1.5 text-xs font-medium px-2 py-1 rounded-full border ${cfg.bg} ${cfg.color}`}>
-                          <span className={`w-1.5 h-1.5 rounded-full ${cfg.dot}`} />
-                          {stage}
-                        </span>
-                      </div>
-                      <div>
-                        {qs !== 'draft' && (
-                          <span className={`inline-flex items-center gap-1 text-xs font-medium px-2 py-1 rounded-full border ${qcfg.bg} ${qcfg.color}`}>
-                            {qcfg.icon}
-                            {qcfg.label}
+
+                      {/* Desktop table row */}
+                      <div className="hidden md:grid grid-cols-[2fr_1fr_1fr_1fr_1fr_1fr_auto] gap-4 px-6 py-3.5 items-center">
+                        <div>
+                          <div className="font-medium text-sm group-hover:text-primary transition-colors">{project.name}</div>
+                          <div className="flex items-center gap-1 mt-1.5">
+                            {completion.steps.map((step, i) => (
+                              <div
+                                key={step.key}
+                                title={step.label}
+                                className={`w-2 h-2 rounded-full transition-colors ${
+                                  step.done
+                                    ? i === completion.score - 1 && !allDone
+                                      ? 'bg-amber-400'
+                                      : allDone
+                                      ? 'bg-green-500'
+                                      : 'bg-primary/60'
+                                    : 'bg-muted-foreground/20'
+                                }`}
+                              />
+                            ))}
+                            <span className={`text-xs ml-1 ${allDone ? 'text-green-500' : 'text-muted-foreground/60'}`}>
+                              {allDone ? '✓ Complete' : <span>→ {completion.nextAction}</span>}
+                            </span>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-1.5 text-sm text-muted-foreground">
+                          <User className="h-3 w-3 shrink-0" />
+                          <span className="truncate">{project.client_name || '—'}</span>
+                        </div>
+                        <div>
+                          <span className={`inline-flex items-center gap-1.5 text-xs font-medium px-2 py-1 rounded-full border ${cfg.bg} ${cfg.color}`}>
+                            <span className={`w-1.5 h-1.5 rounded-full ${cfg.dot}`} />
+                            {stage}
                           </span>
-                        )}
-                      </div>
-                      <div className="font-mono text-sm font-medium">
-                        {value > 0 ? fmtCurrency(value) : <span className="text-muted-foreground">—</span>}
-                      </div>
-                      <div className="flex items-center gap-1 text-xs text-muted-foreground">
-                        <Clock className="h-3 w-3" />
-                        {fmtDate(project.updated_at || project.created_at)}
-                      </div>
-                      <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                        <Button
-                          size="sm"
-                          variant="ghost"
-                          className="h-7 w-7 p-0"
-                          onClick={e => { e.stopPropagation(); navigate(`/project/${project.id}`); }}
-                        >
-                          <ExternalLink className="h-3.5 w-3.5" />
-                        </Button>
-                        <Button
-                          size="sm"
-                          variant="ghost"
-                          className="h-7 w-7 p-0 text-destructive hover:text-destructive hover:bg-destructive/10"
-                          onClick={e => handleDeleteProject(e, project.id)}
-                        >
-                          <Trash2 className="h-3.5 w-3.5" />
-                        </Button>
+                        </div>
+                        <div>
+                          {qs !== 'draft' && (
+                            <span className={`inline-flex items-center gap-1 text-xs font-medium px-2 py-1 rounded-full border ${qcfg.bg} ${qcfg.color}`}>
+                              {qcfg.icon}
+                              {qcfg.label}
+                            </span>
+                          )}
+                        </div>
+                        <div className="font-mono text-sm font-medium">
+                          {value > 0 ? fmtCurrency(value) : <span className="text-muted-foreground">—</span>}
+                        </div>
+                        <div className="flex items-center gap-1 text-xs text-muted-foreground">
+                          <Clock className="h-3 w-3" />
+                          {fmtDate(project.updated_at || project.created_at)}
+                        </div>
+                        <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            className="h-7 w-7 p-0"
+                            onClick={e => { e.stopPropagation(); navigate(`/project/${project.id}`); }}
+                          >
+                            <ExternalLink className="h-3.5 w-3.5" />
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            className="h-7 w-7 p-0 text-destructive hover:text-destructive hover:bg-destructive/10"
+                            onClick={e => handleDeleteProject(e, project.id)}
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </Button>
+                        </div>
                       </div>
                     </div>
                   );

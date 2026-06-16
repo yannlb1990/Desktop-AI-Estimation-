@@ -220,23 +220,25 @@ const ProjectDetail = () => {
   return (
     <div className="min-h-screen bg-muted/30">
       <nav className="border-b border-border bg-background">
-        <div className="container mx-auto px-6 py-4">
-          <div className="flex items-center justify-between">
-            <Button variant="ghost" onClick={() => navigate("/dashboard")}>
-              <ArrowLeft className="h-4 w-4 mr-2" />
-              Back to Dashboard
+        <div className="container mx-auto px-4 md:px-6 py-3 md:py-4">
+          <div className="flex items-center justify-between gap-2">
+            <Button variant="ghost" size="sm" onClick={() => navigate("/dashboard")} className="shrink-0">
+              <ArrowLeft className="h-4 w-4 md:mr-2" />
+              <span className="hidden md:inline">Back to Dashboard</span>
             </Button>
-            <div className="flex gap-2">
+            <div className="flex gap-1 md:gap-2 overflow-x-auto scrollbar-none">
               <TourTip text="Start your estimate from a pre-built template — New Build, Bathroom, Kitchen, Deck or Commercial Fitout. Loads all standard line items instantly." position="bottom">
                 <Button
                   variant="outline"
+                  size="sm"
                   onClick={() => {
                     setActiveMainTab("estimate");
                     setTimeout(() => window.dispatchEvent(new Event("open-template-modal")), 100);
                   }}
+                  title="Templates"
                 >
-                  <BookOpen className="h-4 w-4 mr-2" />
-                  Templates
+                  <BookOpen className="h-4 w-4 md:mr-2" />
+                  <span className="hidden md:inline">Templates</span>
                 </Button>
               </TourTip>
               <TourTip text="Generate a branded PDF quote — 2-page proposal with your logo, scope summary, pricing breakdown and signature block." position="bottom">
@@ -246,8 +248,9 @@ const ProjectDetail = () => {
                 <FullTenderGenerator project={project} estimate={estimate} />
               </TourTip>
               <TourTip text="Download the complete estimate as a CSV file — open it in Excel or Google Sheets for further review or sharing." position="bottom">
-                <Button onClick={handleExportCSV} className="bg-accent text-accent-foreground hover:bg-accent/90">
-                  Export to Excel
+                <Button size="sm" onClick={handleExportCSV} className="bg-accent text-accent-foreground hover:bg-accent/90 shrink-0" title="Export to Excel">
+                  <span className="hidden md:inline">Export to Excel</span>
+                  <span className="md:hidden">Export</span>
                 </Button>
               </TourTip>
             </div>
@@ -255,7 +258,7 @@ const ProjectDetail = () => {
         </div>
       </nav>
 
-      <div className="container mx-auto px-6 py-8">
+      <div className="container mx-auto px-4 md:px-6 py-4 md:py-8">
         <Card className="p-6 mb-8">
           <div className="flex flex-col md:flex-row md:items-start justify-between gap-6">
             <div className="space-y-2">
@@ -315,7 +318,7 @@ const ProjectDetail = () => {
               <TourTip text="Set the deadline to complete this estimate. Helps you prioritise when you have multiple jobs on the go." position="left">
                 <Popover>
                   <PopoverTrigger asChild>
-                    <Button variant="outline" className="justify-start text-left w-[240px]">
+                    <Button variant="outline" className="justify-start text-left w-full md:w-[240px]">
                       <CalendarIcon className="mr-2 h-4 w-4" />
                       {dueDate ? format(dueDate, "PPP") : "Pick a date"}
                     </Button>
@@ -385,7 +388,7 @@ const ProjectDetail = () => {
                 <TourTip text={step.tour} position="bottom">
                   <button
                     onClick={() => setActiveMainTab(step.key)}
-                    className={`flex items-center gap-2 px-5 py-2.5 rounded-lg text-sm font-semibold transition-all flex-1 justify-center ${
+                    className={`flex items-center gap-2 px-3 md:px-5 py-2.5 rounded-lg text-sm font-semibold transition-all flex-1 justify-center ${
                       isActive
                         ? "bg-primary text-primary-foreground shadow"
                         : isPast
@@ -393,9 +396,9 @@ const ProjectDetail = () => {
                         : "text-muted-foreground hover:bg-muted"
                     }`}
                   >
-                    <Icon className="h-4 w-4" />
-                    {step.label}
-                    {isPast && <span className="ml-1 text-xs opacity-70">✓</span>}
+                    <Icon className="h-4 w-4 shrink-0" />
+                    <span className="hidden sm:inline">{step.label}</span>
+                    {isPast && <span className="hidden sm:inline ml-1 text-xs opacity-70">✓</span>}
                   </button>
                 </TourTip>
                 {i < 2 && (
@@ -421,14 +424,15 @@ const ProjectDetail = () => {
               <TourTip key={tool.key} text={tool.tour} position="bottom">
                 <button
                   onClick={() => setActiveMainTab(tool.key)}
-                  className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium transition-all shrink-0 ${
+                  className={`flex items-center gap-1.5 px-2 md:px-3 py-2 rounded-lg text-xs font-medium transition-all shrink-0 ${
                     activeMainTab === tool.key
                       ? "bg-muted text-foreground"
                       : "text-muted-foreground hover:bg-muted/60"
                   }`}
+                  title={tool.label}
                 >
-                  <Icon className="h-3.5 w-3.5" />
-                  {tool.label}
+                  <Icon className="h-3.5 w-3.5 shrink-0" />
+                  <span className="hidden sm:inline">{tool.label}</span>
                 </button>
               </TourTip>
             );
