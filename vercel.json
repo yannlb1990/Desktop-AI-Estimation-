@@ -4,9 +4,16 @@
   "installCommand": "npm install",
   "framework": "vite",
   "rewrites": [
-    { "source": "/(.*)", "destination": "/index.html" }
+    { "source": "/((?!.*\\.mjs$)(?!.*\\.js$)(?!.*\\.css$)(?!.*\\.ico$)(?!.*\\.svg$)(?!.*\\.png$)(?!.*\\.jpg$)(?!.*\\.woff2?$)(?!.*\\.ttf$).*)", "destination": "/index.html" }
   ],
   "headers": [
+    {
+      "source": "/pdf.worker.min.mjs",
+      "headers": [
+        { "key": "Content-Type", "value": "application/javascript" },
+        { "key": "Cache-Control", "value": "public, max-age=86400" }
+      ]
+    },
     {
       "source": "/(.*)",
       "headers": [
