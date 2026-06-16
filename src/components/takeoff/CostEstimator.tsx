@@ -455,7 +455,7 @@ export const CostEstimator = ({
         labour_rate: item.hourlyRate ?? 65,
         material_wastage_pct: item.materialWastePercent ?? 5,
         labour_wastage_pct: item.labourWastePercent ?? 10,
-        markup_pct: item.markupPercent ?? marginPercent,
+        markup_pct: 0,
         notes: item.description || item.notes || '',
         expanded: false,
         item_number: `${existing.length + newEstimateItems.length + 1}`,

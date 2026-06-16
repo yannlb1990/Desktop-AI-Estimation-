@@ -465,6 +465,25 @@ export const EstimateTemplate = ({ projectId, estimateId }: EstimateTemplateProp
     }
   };
 
+  const handleRatesChange = (newRates: Record<string, number>) => {
+    const changedTrades = Object.keys(newRates).filter(trade => newRates[trade] !== labourRates[trade]);
+    if (changedTrades.length > 0) {
+      const updatedItems = items.map(item =>
+        changedTrades.includes(item.trade)
+          ? { ...item, labour_rate: newRates[item.trade] }
+          : item
+      );
+      setItems(updatedItems);
+      const projects = JSON.parse(localStorage.getItem(getUserStorageKey('local_projects')) || '[]');
+      const projectIndex = projects.findIndex((p: any) => p.id === projectId);
+      if (projectIndex !== -1) {
+        projects[projectIndex].estimate_items = updatedItems;
+        localStorage.setItem(getUserStorageKey('local_projects'), JSON.stringify(projects));
+      }
+    }
+    setLabourRates(newRates);
+  };
+
   const toggleExpanded = (id: string) => {
     setItems(items.map(item =>
       item.id === id ? { ...item, expanded: !item.expanded } : item
@@ -1445,9 +1464,9 @@ export const EstimateTemplate = ({ projectId, estimateId }: EstimateTemplateProp
       <PreliminariesSection />
       
       {/* 6. Labour Hourly Rates by Trade */}
-      <LabourRatesSection 
+      <LabourRatesSection
         rates={labourRates}
-        onRatesChange={setLabourRates}
+        onRatesChange={handleRatesChange}
       />
       
       {/* 7. Pricing Aid (Collapsible) */}
@@ -1897,7 +1916,7 @@ export const EstimateTemplate = ({ projectId, estimateId }: EstimateTemplateProp
           {/* Breakdown by Section */}
           <div className="grid md:grid-cols-3 gap-4">
             <div className="bg-card p-4 rounded-lg border border-border">
-              <p className="text-sm text-muted-foreground mb-1">Estimate Lines</p>
+              <p className="text-sm text-muted-foreground mb-1">Cost Before Overheads &amp; Margin</p>
               <p className="text-xl font-mono font-bold text-primary">
                 ${(() => {
                   let total = 0;
