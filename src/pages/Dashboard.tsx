@@ -226,7 +226,7 @@ const Dashboard = () => {
 
       {/* Past-due payment banner — amber, always visible during grace period */}
       {showPastDueBanner && (
-        <div className="border-b border-amber-500/40 bg-amber-500/10 px-6 py-2.5 flex items-center justify-between text-sm text-amber-400">
+        <div className="border-b border-amber-500/40 bg-amber-500/10 px-4 md:px-6 py-2.5 flex items-center justify-between gap-3 text-sm text-amber-400">
           <div className="flex items-center gap-2">
             <AlertTriangle className="h-4 w-4 flex-shrink-0" />
             {sub.pastDueGraceDaysLeft > 0
@@ -253,7 +253,7 @@ const Dashboard = () => {
           ? 'bg-amber-500/10 border-amber-500/30 text-amber-400'
           : 'bg-blue-500/10 border-blue-500/30 text-blue-400';
         return (
-          <div className={`border-b px-6 py-2.5 flex items-center justify-between text-sm ${colorClass}`}>
+          <div className={`border-b px-4 md:px-6 py-2.5 flex items-center justify-between gap-3 text-sm ${colorClass}`}>
             <div className="flex items-center gap-2">
               {expired
                 ? <><AlertTriangle className="h-4 w-4 flex-shrink-0" /> Your free trial has ended — upgrade to keep full access</>
@@ -280,7 +280,7 @@ const Dashboard = () => {
 
       {/* Nav */}
       <nav className="border-b border-border bg-background sticky top-0 z-10">
-        <div className="container mx-auto px-6 py-3 flex items-center justify-between">
+        <div className="container mx-auto px-4 md:px-6 py-3 flex items-center justify-between gap-2">
           <div className="flex items-center gap-2">
             <MetricoreLogoMark height={28} />
             <span className="font-display text-xl font-bold">Metricore</span>
@@ -390,7 +390,7 @@ const Dashboard = () => {
 
         {/* Recent Projects */}
         <Card className="bg-background">
-          <div className="flex items-center justify-between px-6 py-4 border-b border-border">
+          <div className="flex items-center justify-between px-4 md:px-6 py-4 border-b border-border">
             <h2 className="font-display text-lg font-bold">Recent Projects</h2>
             {projects.length > 8 && (
               <Button variant="ghost" size="sm" onClick={() => setShowAll(v => !v)}>
@@ -400,7 +400,7 @@ const Dashboard = () => {
           </div>
 
           {projects.length === 0 ? (
-            <div className="text-center py-16 px-6">
+            <div className="text-center py-16 px-4 md:px-6">
               <div className="w-16 h-16 bg-muted rounded-full flex items-center justify-center mx-auto mb-4">
                 <FileText className="h-8 w-8 text-muted-foreground" />
               </div>
@@ -413,7 +413,7 @@ const Dashboard = () => {
           ) : (
             <>
               {/* Table header — desktop only */}
-              <div className="hidden md:grid grid-cols-[2fr_1fr_1fr_1fr_1fr_1fr_auto] gap-4 px-6 py-2 text-xs font-medium text-muted-foreground uppercase tracking-wide border-b border-border">
+              <div className="hidden md:grid grid-cols-[2fr_1fr_1fr_1fr_1fr_1fr_auto] gap-4 px-4 md:px-6 py-2 text-xs font-medium text-muted-foreground uppercase tracking-wide border-b border-border">
                 <span>Project</span>
                 <span>Client</span>
                 <span>Stage</span>
