@@ -309,6 +309,9 @@ export const EstimateTemplate = ({ projectId, estimateId }: EstimateTemplateProp
       const fresh = project.estimate_items.filter((i: any) => i._costItemId && i._transferredAt > cutoff);
       setRecentlyTransferred(fresh);
     }
+    if (project.consumables && project.consumables.length > 0) {
+      setConsumables(project.consumables);
+    }
     if (project.estimate_config?.groupingMode) {
       setGroupingMode(project.estimate_config.groupingMode as 'none' | 'trade' | 'room');
     }

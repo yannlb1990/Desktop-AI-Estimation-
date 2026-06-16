@@ -473,6 +473,17 @@ export const CostEstimator = ({
     }
 
     projects[projectIndex].estimate_items = [...existing, ...newEstimateItems];
+
+    // Merge consumables into EstimateTemplate's list, deduped by name
+    const existingConsumables: any[] = projects[projectIndex].consumables || [];
+    const existingNames = new Set(existingConsumables.map((c: any) => c.name));
+    const newConsumables = consumables
+      .filter(c => !existingNames.has(c.name))
+      .map(c => ({ id: c.id, name: c.name, quantity: c.quantity, unit: c.unit, unit_price: c.unitCost }));
+    if (newConsumables.length > 0) {
+      projects[projectIndex].consumables = [...existingConsumables, ...newConsumables];
+    }
+
     localStorage.setItem(getUserStorageKey('local_projects'), JSON.stringify(projects));
     saveTransferred(projectId, newTransferred);
     setTransferredIds(new Set(newTransferred));
