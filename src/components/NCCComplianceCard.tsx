@@ -897,10 +897,10 @@ function buildSections(climateZone: string, buildingClass: string): Section[] {
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 const STATUS_CONFIG: Record<CheckStatus, { label: string; color: string; icon: React.ReactNode }> = {
-  unchecked: { label: "Not Checked", color: "bg-slate-100 text-slate-600 border-slate-200", icon: <MinusCircle className="h-3.5 w-3.5" /> },
-  pass:      { label: "Pass ✓",      color: "bg-green-100 text-green-700 border-green-200",  icon: <CheckCircle2 className="h-3.5 w-3.5" /> },
-  fail:      { label: "Fail ✗",      color: "bg-red-100 text-red-700 border-red-200",        icon: <XCircle className="h-3.5 w-3.5" /> },
-  na:        { label: "N/A",         color: "bg-blue-50 text-blue-600 border-blue-200",      icon: <MinusCircle className="h-3.5 w-3.5" /> },
+  unchecked: { label: "Not Checked", color: "bg-slate-500/15 text-slate-400 border-slate-500/30", icon: <MinusCircle className="h-3.5 w-3.5" /> },
+  pass:      { label: "Pass ✓",      color: "bg-green-500/15 text-green-400 border-green-500/30",  icon: <CheckCircle2 className="h-3.5 w-3.5" /> },
+  fail:      { label: "Fail ✗",      color: "bg-red-500/15 text-red-400 border-red-500/30",        icon: <XCircle className="h-3.5 w-3.5" /> },
+  na:        { label: "N/A",         color: "bg-primary/10 text-primary/80 border-primary/20",     icon: <MinusCircle className="h-3.5 w-3.5" /> },
 };
 
 const STATUS_CYCLE: CheckStatus[] = ["unchecked", "pass", "fail", "na"];
@@ -911,16 +911,16 @@ function nextStatus(current: CheckStatus): CheckStatus {
 }
 
 const SECTION_COLOR_MAP: Record<string, string> = {
-  amber: "bg-amber-50 border-amber-200",
-  orange: "bg-orange-50 border-orange-200",
-  yellow: "bg-yellow-50 border-yellow-200",
-  blue: "bg-blue-50 border-blue-200",
-  red: "bg-red-50 border-red-200",
-  cyan: "bg-cyan-50 border-cyan-200",
-  green: "bg-green-50 border-green-200",
-  purple: "bg-purple-50 border-purple-200",
-  teal: "bg-teal-50 border-teal-200",
-  rose: "bg-rose-50 border-rose-200",
+  amber:  "bg-amber-500/10 border-amber-500/30",
+  orange: "bg-orange-500/10 border-orange-500/30",
+  yellow: "bg-yellow-500/10 border-yellow-500/30",
+  blue:   "bg-primary/10 border-primary/20",
+  red:    "bg-red-500/10 border-red-500/30",
+  cyan:   "bg-cyan-500/10 border-cyan-500/30",
+  green:  "bg-green-500/10 border-green-500/30",
+  purple: "bg-purple-500/10 border-purple-500/30",
+  teal:   "bg-teal-500/10 border-teal-500/30",
+  rose:   "bg-rose-500/10 border-rose-500/30",
 };
 
 // ── Rules & AS Lookup Databases ───────────────────────────────────────────────
@@ -1992,7 +1992,7 @@ export const NCCComplianceCard = ({ projectId }: NCCComplianceCardProps) => {
           </div>
           <CardDescription>
             Set your project parameters — the checklist updates automatically for your climate zone and building class.
-            <span className="block mt-1 text-xs text-amber-700 bg-amber-50 border border-amber-100 rounded px-2 py-1 mt-2">
+            <span className="block mt-1 text-xs text-amber-400 bg-amber-500/10 border border-amber-500/20 rounded px-2 py-1 mt-2">
               ⚠️ NCC 2022 Amendment 2 is current (effective July 2025). NSW & QLD adopt NCC 2025 from 1 May 2027. Always confirm with your local building surveyor.
             </span>
             <span className="block mt-2 text-xs text-muted-foreground">
@@ -2114,7 +2114,7 @@ export const NCCComplianceCard = ({ projectId }: NCCComplianceCardProps) => {
                     const isShowingNotes = showNotes === item.id;
 
                     return (
-                      <div key={item.id} className={`rounded-lg border p-3 transition-colors ${status === "fail" ? "bg-red-50/60 border-red-200" : status === "pass" ? "bg-green-50/40 border-green-200" : "bg-white border-border"}`}>
+                      <div key={item.id} className={`rounded-lg border p-3 transition-colors ${status === "fail" ? "bg-red-500/10 border-red-500/30" : status === "pass" ? "bg-green-500/10 border-green-500/25" : "bg-card border-border"}`}>
                         <div className="flex items-start gap-3">
                           {/* Status cycle button */}
                           <button
@@ -2131,8 +2131,8 @@ export const NCCComplianceCard = ({ projectId }: NCCComplianceCardProps) => {
                             <div className="text-xs text-muted-foreground mt-0.5 leading-relaxed">{item.detail}</div>
                             <div className="text-[11px] text-primary/70 mt-1 font-mono">{item.reference}</div>
                             {item.asInfo && (
-                              <div className="mt-2 flex items-start gap-1.5 text-[11px] text-blue-700 bg-blue-50 border border-blue-100 rounded px-2 py-1.5 leading-relaxed">
-                                <BookOpen className="h-3 w-3 mt-0.5 flex-shrink-0 text-blue-500" />
+                              <div className="mt-2 flex items-start gap-1.5 text-[11px] text-primary/80 bg-primary/10 border border-primary/20 rounded px-2 py-1.5 leading-relaxed">
+                                <BookOpen className="h-3 w-3 mt-0.5 flex-shrink-0 text-primary" />
                                 <span>{item.asInfo}</span>
                               </div>
                             )}
@@ -2316,14 +2316,14 @@ export const NCCComplianceCard = ({ projectId }: NCCComplianceCardProps) => {
                             <span className="font-semibold shrink-0">NCC:</span>
                             <span className="font-mono text-muted-foreground">{rule.nccRef}</span>
                           </div>
-                          <div className="text-xs bg-blue-50 border border-blue-100 rounded px-2 py-1 flex gap-1 flex-wrap">
-                            <span className="font-semibold text-blue-700 shrink-0">AS:</span>
-                            <span className="font-mono text-blue-800">{rule.asRef}</span>
-                            {rule.asTitle && <span className="text-blue-600 hidden sm:inline"> — {rule.asTitle}</span>}
+                          <div className="text-xs bg-primary/10 border border-primary/20 rounded px-2 py-1 flex gap-1 flex-wrap">
+                            <span className="font-semibold text-primary/80 shrink-0">AS:</span>
+                            <span className="font-mono text-primary/70">{rule.asRef}</span>
+                            {rule.asTitle && <span className="text-primary/60 hidden sm:inline"> — {rule.asTitle}</span>}
                           </div>
                         </div>
                         {rule.notes && (
-                          <div className="mt-2 text-xs text-amber-800 bg-amber-50 border border-amber-100 rounded px-2 py-1.5 leading-relaxed">
+                          <div className="mt-2 text-xs text-amber-400 bg-amber-500/10 border border-amber-500/20 rounded px-2 py-1.5 leading-relaxed">
                             <span className="font-semibold">Site note: </span>{rule.notes}
                           </div>
                         )}
@@ -2362,10 +2362,10 @@ export const NCCComplianceCard = ({ projectId }: NCCComplianceCardProps) => {
                         {/* Header row */}
                         <div className="flex items-center gap-2 flex-wrap mb-1.5">
                           <span className="font-bold text-sm font-mono text-primary bg-primary/5 px-1.5 py-0.5 rounded border border-primary/10">{as.asNumber}</span>
-                          <span className="text-xs font-bold uppercase tracking-wide text-blue-600 bg-blue-50 border border-blue-100 px-1.5 py-0.5 rounded">AS Standard</span>
+                          <span className="text-xs font-bold uppercase tracking-wide text-primary/80 bg-primary/10 border border-primary/20 px-1.5 py-0.5 rounded">AS Standard</span>
                           <Badge variant="outline" className="text-xs h-4 px-1.5">{as.category}</Badge>
                           <Badge
-                            className={`text-xs h-4 px-1.5 ${as.buildingType === "commercial" ? "bg-indigo-100 text-indigo-700 border-indigo-200" : as.buildingType === "residential" ? "bg-emerald-100 text-emerald-700 border-emerald-200" : "bg-slate-100 text-slate-600 border-slate-200"}`}
+                            className={`text-xs h-4 px-1.5 ${as.buildingType === "commercial" ? "bg-indigo-500/15 text-indigo-400 border-indigo-500/30" : as.buildingType === "residential" ? "bg-emerald-500/15 text-emerald-400 border-emerald-500/30" : "bg-slate-500/15 text-slate-400 border-slate-500/30"}`}
                             variant="outline"
                           >
                             {as.buildingType === "both" ? "Res + Comm" : as.buildingType === "commercial" ? "Commercial" : "Residential"}
@@ -2384,7 +2384,7 @@ export const NCCComplianceCard = ({ projectId }: NCCComplianceCardProps) => {
 
                         {/* Practical note (always visible) */}
                         {as.practicalNote && (
-                          <div className="mt-2 text-xs text-amber-800 bg-amber-50 border border-amber-100 rounded px-2 py-1.5 leading-relaxed">
+                          <div className="mt-2 text-xs text-amber-400 bg-amber-500/10 border border-amber-500/20 rounded px-2 py-1.5 leading-relaxed">
                             <span className="font-semibold">On-site: </span>{as.practicalNote}
                           </div>
                         )}
@@ -2393,9 +2393,9 @@ export const NCCComplianceCard = ({ projectId }: NCCComplianceCardProps) => {
                         {as.details && as.details.length > 0 && (
                           <button
                             onClick={() => toggleAS(as.id)}
-                            className="mt-2.5 flex items-center gap-1.5 text-xs text-blue-700 hover:text-blue-900 transition-colors group"
+                            className="mt-2.5 flex items-center gap-1.5 text-xs text-primary/70 hover:text-primary transition-colors group"
                           >
-                            <span className={`inline-flex items-center justify-center w-5 h-5 rounded-full border border-blue-200 bg-blue-50 group-hover:bg-blue-100 transition-colors ${isExpanded ? "bg-blue-100" : ""}`}>
+                            <span className={`inline-flex items-center justify-center w-5 h-5 rounded-full border border-primary/20 bg-primary/10 group-hover:bg-primary/20 transition-colors ${isExpanded ? "bg-primary/20" : ""}`}>
                               {isExpanded
                                 ? <ChevronDown className="h-3 w-3" />
                                 : <ChevronRight className="h-3 w-3" />}
@@ -2404,7 +2404,7 @@ export const NCCComplianceCard = ({ projectId }: NCCComplianceCardProps) => {
                               ? <span className="font-semibold">Hide details</span>
                               : <span className="font-semibold">{as.details.length} detailed reference points</span>}
                             {!isExpanded && (
-                              <span className="ml-1 px-1.5 py-0.5 bg-blue-100 text-blue-700 rounded text-xs font-bold border border-blue-200">
+                              <span className="ml-1 px-1.5 py-0.5 bg-primary/15 text-primary/80 rounded text-xs font-bold border border-primary/25">
                                 Expand
                               </span>
                             )}
@@ -2413,17 +2413,17 @@ export const NCCComplianceCard = ({ projectId }: NCCComplianceCardProps) => {
 
                         {/* Collapsible detail section */}
                         {isExpanded && as.details && as.details.length > 0 && (
-                          <div className="mt-2 text-xs bg-blue-50 border border-blue-200 rounded-md overflow-hidden">
-                            <div className="px-3 py-2 bg-blue-100 border-b border-blue-200 flex items-center gap-1.5">
-                              <BookOpen className="h-3 w-3 text-blue-700" />
-                              <span className="font-bold text-blue-800 uppercase tracking-wide text-xs">
+                          <div className="mt-2 text-xs bg-primary/10 border border-primary/20 rounded-md overflow-hidden">
+                            <div className="px-3 py-2 bg-primary/15 border-b border-primary/20 flex items-center gap-1.5">
+                              <BookOpen className="h-3 w-3 text-primary" />
+                              <span className="font-bold text-primary/80 uppercase tracking-wide text-xs">
                                 {as.asNumber} — Technical Reference
                               </span>
                             </div>
-                            <div className="divide-y divide-blue-100">
+                            <div className="divide-y divide-primary/10">
                               {as.details.map((d, i) => (
-                                <div key={i} className="flex gap-2.5 px-3 py-2.5 text-blue-950 hover:bg-blue-100/50 transition-colors">
-                                  <span className="shrink-0 w-5 h-5 rounded-full bg-blue-200 text-blue-800 font-bold text-xs flex items-center justify-center mt-0.5">
+                                <div key={i} className="flex gap-2.5 px-3 py-2.5 text-foreground hover:bg-primary/10 transition-colors">
+                                  <span className="shrink-0 w-5 h-5 rounded-full bg-primary/20 text-primary font-bold text-xs flex items-center justify-center mt-0.5">
                                     {i + 1}
                                   </span>
                                   <span className="leading-relaxed">{d}</span>
@@ -2435,17 +2435,17 @@ export const NCCComplianceCard = ({ projectId }: NCCComplianceCardProps) => {
 
                         {/* Estimator price notes */}
                         {isExpanded && AS_ESTIMATOR_NOTES[as.id] && AS_ESTIMATOR_NOTES[as.id].length > 0 && (
-                          <div className="mt-2 text-xs bg-amber-50 border border-amber-200 rounded-md overflow-hidden">
-                            <div className="px-3 py-2 bg-amber-100 border-b border-amber-200 flex items-center gap-1.5">
-                              <ClipboardList className="h-3 w-3 text-amber-700" />
-                              <span className="font-bold text-amber-800 uppercase tracking-wide text-xs">
+                          <div className="mt-2 text-xs bg-amber-500/10 border border-amber-500/25 rounded-md overflow-hidden">
+                            <div className="px-3 py-2 bg-amber-500/15 border-b border-amber-500/25 flex items-center gap-1.5">
+                              <ClipboardList className="h-3 w-3 text-amber-500" />
+                              <span className="font-bold text-amber-400 uppercase tracking-wide text-xs">
                                 Estimator — Price & Scope Notes
                               </span>
                             </div>
-                            <div className="divide-y divide-amber-100">
+                            <div className="divide-y divide-amber-500/15">
                               {AS_ESTIMATOR_NOTES[as.id].map((n, i) => (
-                                <div key={i} className="flex gap-2.5 px-3 py-2.5 text-amber-950 hover:bg-amber-100/50 transition-colors">
-                                  <span className="shrink-0 font-bold text-amber-600 text-[11px] mt-0.5 select-none">$</span>
+                                <div key={i} className="flex gap-2.5 px-3 py-2.5 text-foreground hover:bg-amber-500/10 transition-colors">
+                                  <span className="shrink-0 font-bold text-amber-500 text-[11px] mt-0.5 select-none">$</span>
                                   <span className="leading-relaxed">{n}</span>
                                 </div>
                               ))}
