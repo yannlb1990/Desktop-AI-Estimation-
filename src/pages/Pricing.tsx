@@ -208,7 +208,7 @@ const Pricing = () => {
             <Zap className="h-3.5 w-3.5 mr-1.5" />
             {TRIAL_DAYS}-day free trial · No credit card required
           </Badge>
-          <h1 className="font-display text-5xl font-bold mb-4">Choose Your Plan</h1>
+          <h1 className="font-display text-3xl sm:text-4xl md:text-5xl font-bold mb-4">Choose Your Plan</h1>
           <p className="text-xl text-muted-foreground max-w-xl mx-auto">
             Start your free trial today. Pick a plan that fits your business and upgrade or downgrade anytime.
           </p>
@@ -240,14 +240,14 @@ const Pricing = () => {
         </div>
 
         {/* ── Plan cards ── */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4 mb-8">
           {PLANS.map(plan => {
             const price = PLAN_PRICES[plan.id][billing];
             const isSelected = selected === plan.id;
             return (
               <div
                 key={plan.id}
-                onClick={() => setSelected(plan.id)}
+                onClick={() => { setSelected(plan.id); handleCTA(plan.id); }}
                 className={`relative text-left rounded-2xl border-2 p-6 transition-all cursor-pointer ${
                   isSelected
                     ? 'border-primary bg-primary/5 shadow-lg ring-2 ring-primary/20'
@@ -384,8 +384,9 @@ const Pricing = () => {
 
         {/* ── Full feature comparison ── */}
         <div className="mb-16">
-          <h2 className="font-display text-3xl font-bold text-center mb-8">Full Feature Comparison</h2>
-          <div className="rounded-2xl border border-border overflow-hidden">
+          <h2 className="font-display text-2xl sm:text-3xl font-bold text-center mb-8">Full Feature Comparison</h2>
+          <div className="overflow-x-auto rounded-2xl">
+          <div className="rounded-2xl border border-border overflow-hidden min-w-[560px]">
             {/* Header */}
             <div className="grid grid-cols-4 border-b border-border bg-muted/40">
               <div className="px-6 py-4 text-sm font-semibold text-muted-foreground">Feature</div>
@@ -455,6 +456,7 @@ const Pricing = () => {
                 </div>
               ))}
             </div>
+          </div>
           </div>
         </div>
 

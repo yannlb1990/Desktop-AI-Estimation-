@@ -1,8 +1,10 @@
 import { useState, useEffect } from "react";
+import { Skeleton } from "@/components/ui/skeleton";
 import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import {
   Plus, FileText, DollarSign, TrendingUp, BarChart3,
   Upload, Zap, Settings, Package, ChevronRight,
@@ -118,7 +120,9 @@ function getProjectCompletion(p: any): {
 const Dashboard = () => {
   const navigate = useNavigate();
   const [projects, setProjects] = useState<any[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
   const [showAll, setShowAll] = useState(false);
+  const [stageFilter, setStageFilter] = useState<Stage | null>(null);
   const [bannerDismissed, setBannerDismissed] = useState(false);
   const [showWelcome, setShowWelcome] = useState(() => {
     const user = getLocalUser();
@@ -148,8 +152,9 @@ const Dashboard = () => {
     // Load from Supabase (cross-device) merged with localStorage (offline)
     loadProjectsMerged().then(loaded => {
       setProjects(loaded);
-      // Keep localStorage in sync with what Supabase returned
       lsSaveProjects(loaded);
+    }).finally(() => {
+      setIsLoading(false);
     });
   }, [navigate]);
 
@@ -171,7 +176,8 @@ const Dashboard = () => {
     return acc;
   }, {} as Record<Stage, number>);
 
-  const displayProjects = showAll ? projects : projects.slice(0, 8);
+  const filteredProjects = stageFilter ? projects.filter(p => getStage(p) === stageFilter) : projects;
+  const displayProjects = showAll ? filteredProjects : filteredProjects.slice(0, 8);
 
   // ── plan guards ────────────────────────────────────────────────────────────
   const atProjectLimit =
@@ -226,7 +232,7 @@ const Dashboard = () => {
 
       {/* Past-due payment banner — amber, always visible during grace period */}
       {showPastDueBanner && (
-        <div className="border-b border-amber-500/40 bg-amber-500/10 px-4 md:px-6 py-2.5 flex items-center justify-between gap-3 text-sm text-amber-400">
+        <div className="border-b border-amber-500/40 bg-amber-500/10 px-4 md:px-6 py-2.5 flex flex-wrap items-center justify-between gap-x-3 gap-y-2 text-sm text-amber-400">
           <div className="flex items-center gap-2">
             <AlertTriangle className="h-4 w-4 flex-shrink-0" />
             {sub.pastDueGraceDaysLeft > 0
@@ -253,7 +259,7 @@ const Dashboard = () => {
           ? 'bg-amber-500/10 border-amber-500/30 text-amber-400'
           : 'bg-blue-500/10 border-blue-500/30 text-blue-400';
         return (
-          <div className={`border-b px-4 md:px-6 py-2.5 flex items-center justify-between gap-3 text-sm ${colorClass}`}>
+          <div className={`border-b px-4 md:px-6 py-2.5 flex flex-wrap items-center justify-between gap-x-3 gap-y-2 text-sm ${colorClass}`}>
             <div className="flex items-center gap-2">
               {expired
                 ? <><AlertTriangle className="h-4 w-4 flex-shrink-0" /> Your free trial has ended — upgrade to keep full access</>
@@ -286,21 +292,23 @@ const Dashboard = () => {
             <span className="font-display text-xl font-bold">Metricore</span>
           </div>
           <div className="flex items-center gap-1 md:gap-2">
-            <TourTip text="Manage your clients and their contact details." position="bottom">
-              <Button variant="ghost" size="sm" onClick={() => navigate("/clients")} title="Clients">
-                <Users className="h-4 w-4 md:mr-1.5" /><span className="hidden md:inline">Clients</span>
-              </Button>
-            </TourTip>
-            <TourTip text="Browse supplier materials and update your pricing catalogue." position="bottom">
-              <Button variant="ghost" size="sm" onClick={() => navigate("/materials")} title="Materials">
-                <Package className="h-4 w-4 md:mr-1.5" /><span className="hidden md:inline">Materials</span>
-              </Button>
-            </TourTip>
-            <TourTip text="View current Australian build rates, cost trends, and market benchmarks." position="bottom">
-              <Button variant="ghost" size="sm" onClick={() => navigate("/insights")} title="Insights">
-                <BarChart3 className="h-4 w-4 md:mr-1.5" /><span className="hidden md:inline">Insights</span>
-              </Button>
-            </TourTip>
+            <div className="hidden sm:flex items-center gap-1 md:gap-2">
+              <TourTip text="Manage your clients and their contact details." position="bottom">
+                <Button variant="ghost" size="sm" onClick={() => navigate("/clients")} title="Clients">
+                  <Users className="h-4 w-4 md:mr-1.5" /><span className="hidden md:inline">Clients</span>
+                </Button>
+              </TourTip>
+              <TourTip text="Browse supplier materials and update your pricing catalogue." position="bottom">
+                <Button variant="ghost" size="sm" onClick={() => navigate("/materials")} title="Materials">
+                  <Package className="h-4 w-4 md:mr-1.5" /><span className="hidden md:inline">Materials</span>
+                </Button>
+              </TourTip>
+              <TourTip text="View current Australian build rates, cost trends, and market benchmarks." position="bottom">
+                <Button variant="ghost" size="sm" onClick={() => navigate("/insights")} title="Insights">
+                  <BarChart3 className="h-4 w-4 md:mr-1.5" /><span className="hidden md:inline">Insights</span>
+                </Button>
+              </TourTip>
+            </div>
             <TourTip text="Manage your company branding, default margins, subscription and account details." position="bottom">
               <Button variant="ghost" size="sm" onClick={() => navigate("/settings")} title="Settings">
                 <Settings className="h-4 w-4 md:mr-1.5" /><span className="hidden md:inline">Settings</span>
@@ -321,15 +329,26 @@ const Dashboard = () => {
               {tourEnabled ? "Guide On" : "Guide"}
             </Button>
             <TourTip text="Start a new estimation project. You can upload a PDF plan or enter manually." position="bottom">
-              <Button
-                size="sm"
-                onClick={handleNewProject}
-                className={`ml-1 md:ml-2 ${atProjectLimit ? 'bg-muted text-muted-foreground' : 'bg-primary text-primary-foreground'}`}
-                title={atProjectLimit ? `Plan limit: ${sub.caps.maxProjects} projects — upgrade to add more` : undefined}
-              >
-                <Plus className="h-4 w-4 md:mr-1.5" /><span className="hidden md:inline">New Project</span>
-                {atProjectLimit && <Badge variant="outline" className="ml-1.5 text-[9px] px-1 py-0 border-current">Limit</Badge>}
-              </Button>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    size="sm"
+                    onClick={handleNewProject}
+                    className={`ml-1 md:ml-2 ${atProjectLimit ? 'bg-muted text-muted-foreground' : 'bg-primary text-primary-foreground'}`}
+                  >
+                    <Plus className="h-4 w-4 md:mr-1.5" /><span className="hidden md:inline">New Project</span>
+                    {atProjectLimit && <Badge variant="outline" className="ml-1.5 text-[9px] px-1 py-0 border-current">Limit</Badge>}
+                  </Button>
+                </TooltipTrigger>
+                {atProjectLimit && (
+                  <TooltipContent side="bottom" className="max-w-xs">
+                    <p className="text-xs font-medium">Project limit reached</p>
+                    <p className="text-xs text-muted-foreground mt-0.5">
+                      You've used all {sub.caps.maxProjects} project{sub.caps.maxProjects !== 1 ? 's' : ''} on your current plan. Upgrade to Pro for unlimited projects.
+                    </p>
+                  </TooltipContent>
+                )}
+              </Tooltip>
             </TourTip>
           </div>
         </div>
@@ -340,7 +359,7 @@ const Dashboard = () => {
         {/* Hero row */}
         <div className="flex items-start justify-between">
           <div>
-            <h1 className="font-display text-3xl font-bold">Welcome back{localUser ? `, ${localUser.displayName}` : ''}</h1>
+            <h1 className="font-display text-2xl sm:text-3xl font-bold">Welcome back{localUser ? `, ${localUser.displayName}` : ''}</h1>
             <p className="text-muted-foreground mt-1">
               {projects.length} project{projects.length !== 1 ? 's' : ''} · {fmtCurrency(pipelineValue)} in pipeline
             </p>
@@ -349,36 +368,76 @@ const Dashboard = () => {
 
         {/* Stats row */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-          {[
-            { label: 'Active Projects',    value: String(projects.length),        sub: 'all projects',             icon: <FileText className="h-4 w-4" />,    accent: 'text-primary' },
-            { label: 'Pipeline Value',     value: fmtCurrency(pipelineValue),     sub: 'across all estimates',     icon: <DollarSign className="h-4 w-4" />,  accent: 'text-green-400' },
-            { label: 'Target Margin',      value: targetMargin ? `${targetMargin}%` : '—', sub: targetMargin ? 'set in Settings' : 'set in Settings', icon: <TrendingUp className="h-4 w-4" />, accent: 'text-amber-400' },
-            { label: 'Win Rate',     value: winRate !== null ? `${winRate}%` : '—', sub: winRate !== null ? `${wonProjects.length} won · ${lostProjects.length} lost` : 'mark quotes as Won/Lost', icon: <BarChart3 className="h-4 w-4" />, accent: 'text-green-400' },
-          ].map(({ label, value, sub, icon, accent }) => (
-            <Card key={label} className="p-5 bg-background">
-              <div className="flex items-center justify-between mb-3">
-                <span className="text-xs text-muted-foreground font-medium uppercase tracking-wide">{label}</span>
-                <span className={accent}>{icon}</span>
-              </div>
-              <div className="font-mono text-2xl font-bold">{value}</div>
-              <div className="text-xs text-muted-foreground mt-1">{sub}</div>
-            </Card>
-          ))}
+          {isLoading
+            ? [...Array(4)].map((_, i) => (
+                <Card key={i} className="p-3 sm:p-5 bg-background space-y-3">
+                  <div className="flex items-center justify-between">
+                    <Skeleton className="h-3 w-28" />
+                    <Skeleton className="h-4 w-4 rounded" />
+                  </div>
+                  <Skeleton className="h-7 w-20" />
+                  <Skeleton className="h-3 w-32" />
+                </Card>
+              ))
+            : [
+                { label: 'Active Projects', value: String(projects.length),               sub: 'all projects',                                                                                icon: <FileText className="h-4 w-4" />,   accent: 'text-primary' },
+                { label: 'Pipeline Value',  value: fmtCurrency(pipelineValue),            sub: 'across all estimates',                                                                        icon: <DollarSign className="h-4 w-4" />, accent: 'text-green-400' },
+                { label: 'Target Margin',   value: targetMargin ? `${targetMargin}%` : '—', sub: 'set in Settings',                                                                          icon: <TrendingUp className="h-4 w-4" />, accent: 'text-amber-400' },
+                { label: 'Win Rate',        value: winRate !== null ? `${winRate}%` : '—', sub: winRate !== null ? `${wonProjects.length} won · ${lostProjects.length} lost` : 'mark quotes as Won/Lost', icon: <BarChart3 className="h-4 w-4" />,  accent: 'text-green-400' },
+              ].map(({ label, value, sub, icon, accent }) => (
+                <Card key={label} className="p-3 sm:p-5 bg-background">
+                  <div className="flex items-center justify-between mb-3">
+                    <span className="text-xs text-muted-foreground font-medium uppercase tracking-wide">{label}</span>
+                    <span className={accent}>{icon}</span>
+                  </div>
+                  <div className="font-mono text-xl sm:text-2xl font-bold">{value}</div>
+                  <div className="text-xs text-muted-foreground mt-1">{sub}</div>
+                </Card>
+              ))
+          }
         </div>
 
         {/* Pipeline funnel — only shown when there are projects to display */}
-        {projects.length > 0 && <Card className="p-5 bg-background">
-          <p className="text-xs text-muted-foreground font-medium uppercase tracking-wide mb-4">Project Pipeline</p>
-          <div className="flex items-stretch gap-0">
+        {projects.length > 0 && <Card className="p-4 sm:p-5 bg-background">
+          <p className="text-xs text-muted-foreground font-medium uppercase tracking-wide mb-3 sm:mb-4">Project Pipeline</p>
+          {/* Mobile: 2×2 grid */}
+          <div className="grid grid-cols-2 gap-2 sm:hidden">
+            {stages.map((stage) => {
+              const cfg = STAGE_CONFIG[stage];
+              const count = stageCounts[stage];
+              const isActive = stageFilter === stage;
+              return (
+                <button
+                  key={stage}
+                  onClick={() => setStageFilter(isActive ? null : stage)}
+                  className={`rounded-lg border px-3 py-3 text-left transition-all ${cfg.bg} ${
+                    isActive ? 'ring-2 ring-current shadow-sm' : 'hover:opacity-80'
+                  }`}
+                >
+                  <div className={`text-xl font-mono font-bold ${cfg.color}`}>{count}</div>
+                  <div className={`text-xs font-medium mt-0.5 ${cfg.color}`}>{stage}</div>
+                </button>
+              );
+            })}
+          </div>
+          {/* sm+: horizontal flex with arrows */}
+          <div className="hidden sm:flex items-stretch gap-0">
             {stages.map((stage, i) => {
               const cfg = STAGE_CONFIG[stage];
               const count = stageCounts[stage];
+              const isActive = stageFilter === stage;
               return (
                 <div key={stage} className="flex items-center flex-1">
-                  <div className={`flex-1 rounded-lg border px-4 py-3 ${cfg.bg}`}>
+                  <button
+                    onClick={() => setStageFilter(isActive ? null : stage)}
+                    className={`flex-1 rounded-lg border px-4 py-3 text-left transition-all ${cfg.bg} ${
+                      isActive ? 'ring-2 ring-current shadow-sm' : 'hover:opacity-80'
+                    }`}
+                    title={isActive ? `Clear filter: ${stage}` : `Filter by ${stage}`}
+                  >
                     <div className={`text-2xl font-mono font-bold ${cfg.color}`}>{count}</div>
                     <div className={`text-xs font-medium mt-0.5 ${cfg.color}`}>{stage}</div>
-                  </div>
+                  </button>
                   {i < stages.length - 1 && (
                     <ArrowRight className="h-4 w-4 text-muted-foreground/40 mx-2 shrink-0" />
                   )}
@@ -391,29 +450,74 @@ const Dashboard = () => {
         {/* Recent Projects */}
         <Card className="bg-background">
           <div className="flex items-center justify-between px-4 md:px-6 py-4 border-b border-border">
-            <h2 className="font-display text-lg font-bold">Recent Projects</h2>
-            {projects.length > 8 && (
+            <div className="flex items-center gap-2">
+              <h2 className="font-display text-lg font-bold">Recent Projects</h2>
+              {stageFilter && (
+                <button
+                  onClick={() => setStageFilter(null)}
+                  className={`inline-flex items-center gap-1 text-xs font-medium px-2 py-0.5 rounded-full border ${STAGE_CONFIG[stageFilter].bg} ${STAGE_CONFIG[stageFilter].color}`}
+                >
+                  {stageFilter}
+                  <X className="h-3 w-3" />
+                </button>
+              )}
+            </div>
+            {filteredProjects.length > 8 && (
               <Button variant="ghost" size="sm" onClick={() => setShowAll(v => !v)}>
-                {showAll ? 'Show less' : `Show all ${projects.length}`}
+                {showAll ? 'Show less' : `Show all ${filteredProjects.length}`}
               </Button>
             )}
           </div>
 
-          {projects.length === 0 ? (
+          {isLoading ? (
+            <div className="divide-y divide-border">
+              {[...Array(5)].map((_, i) => (
+                <div key={i}>
+                  {/* Desktop skeleton row */}
+                  <div className="hidden md:grid grid-cols-[2fr_1fr_1fr_1fr_1fr_1fr_auto] gap-4 px-6 py-4 items-center">
+                    <div className="space-y-2">
+                      <Skeleton className="h-4 w-44" />
+                      <div className="flex items-center gap-1">
+                        {[...Array(4)].map((_, j) => <Skeleton key={j} className="h-2 w-2 rounded-full" />)}
+                        <Skeleton className="h-3 w-16 ml-1" />
+                      </div>
+                    </div>
+                    <Skeleton className="h-3 w-20" />
+                    <Skeleton className="h-5 w-20 rounded-full" />
+                    <div />
+                    <Skeleton className="h-4 w-16" />
+                    <Skeleton className="h-3 w-14" />
+                    <Skeleton className="h-7 w-7 rounded" />
+                  </div>
+                  {/* Mobile skeleton row */}
+                  <div className="md:hidden px-4 py-3.5 flex items-start gap-3">
+                    <div className="flex-1 space-y-2">
+                      <Skeleton className="h-4 w-36" />
+                      <div className="flex gap-2">
+                        <Skeleton className="h-5 w-16 rounded-full" />
+                      </div>
+                    </div>
+                    <Skeleton className="h-4 w-4 mt-1 rounded" />
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : projects.length === 0 ? (
             <div className="text-center py-16 px-4 md:px-6">
-              <div className="w-16 h-16 bg-muted rounded-full flex items-center justify-center mx-auto mb-4">
-                <FileText className="h-8 w-8 text-muted-foreground" />
+              <div className="w-16 h-16 bg-primary/10 rounded-2xl flex items-center justify-center mx-auto mb-4">
+                <FileText className="h-8 w-8 text-primary" />
               </div>
               <h3 className="font-semibold text-lg mb-2">No projects yet</h3>
-              <p className="text-muted-foreground text-sm mb-6">Start by uploading your first plan or creating a quick estimate</p>
+              <p className="text-muted-foreground text-sm mb-6">Upload a PDF plan or create a quick manual estimate to get started</p>
               <Button onClick={handleNewProject} className="bg-primary text-primary-foreground">
                 <Plus className="h-4 w-4 mr-2" />Create First Project
               </Button>
             </div>
           ) : (
             <>
-              {/* Table header — desktop only */}
-              <div className="hidden md:grid grid-cols-[2fr_1fr_1fr_1fr_1fr_1fr_auto] gap-4 px-4 md:px-6 py-2 text-xs font-medium text-muted-foreground uppercase tracking-wide border-b border-border">
+              {/* Table — desktop only, with horizontal scroll for narrow viewports */}
+              <div className="hidden md:block overflow-x-auto">
+              <div className="grid grid-cols-[2fr_1fr_1fr_1fr_1fr_1fr_auto] gap-4 px-4 md:px-6 py-2 text-xs font-medium text-muted-foreground uppercase tracking-wide border-b border-border min-w-[640px]">
                 <span>Project</span>
                 <span>Client</span>
                 <span>Stage</span>
@@ -422,7 +526,7 @@ const Dashboard = () => {
                 <span>Modified</span>
                 <span></span>
               </div>
-              <div className="divide-y divide-border">
+              <div className="divide-y divide-border min-w-[640px]">
                 {displayProjects.map((project) => {
                   const stage = getStage(project);
                   const cfg = STAGE_CONFIG[stage];
@@ -552,6 +656,7 @@ const Dashboard = () => {
                     </div>
                   );
                 })}
+              </div>
               </div>
             </>
           )}

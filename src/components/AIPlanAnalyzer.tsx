@@ -779,7 +779,7 @@ export function AIPlanAnalyzer({
                   {item.source}
                 </Badge>
               </TooltipTrigger>
-              <TooltipContent side="left" className="max-w-sm">
+              <TooltipContent side="left" className="max-w-xs">
                 <div className="text-xs space-y-2">
                   <p className="font-medium">{SOURCE_EXPLANATIONS[item.source]}</p>
                   {item.primarySource && (
@@ -807,6 +807,47 @@ export function AIPlanAnalyzer({
                         : 'Source details not available'}
                     </p>
                   )}
+                  {item.calculationBreakdown && (
+                    <>
+                      <div className="border-t pt-2 space-y-1">
+                        <p className="font-medium text-[11px]">Calculation Breakdown</p>
+                        <p className="text-muted-foreground">Qty source:</p>
+                        <p>{item.calculationBreakdown.quantitySource}</p>
+                        {item.calculationBreakdown.quantityFormula && (
+                          <>
+                            <p className="text-muted-foreground">Formula:</p>
+                            <p className="font-mono text-[10px] bg-muted px-1 py-0.5 rounded">{item.calculationBreakdown.quantityFormula}</p>
+                          </>
+                        )}
+                      </div>
+                      <div className="border-t pt-2 space-y-1">
+                        <p className="font-medium text-[11px]">Rate Sources</p>
+                        <div className="grid grid-cols-2 gap-x-2 gap-y-0.5">
+                          <span className="text-muted-foreground">Material:</span>
+                          <span>${item.calculationBreakdown.materialRate.toFixed(2)}/unit</span>
+                          <span className="text-muted-foreground">Labour:</span>
+                          <span>${item.calculationBreakdown.labourRate.toFixed(2)}/hr × {item.calculationBreakdown.labourHoursPerUnit}h</span>
+                        </div>
+                        <p className="text-muted-foreground text-[10px]">{item.calculationBreakdown.materialSource}</p>
+                      </div>
+                      {item.calculationBreakdown.assumptions.length > 0 && (
+                        <div className="border-t pt-2 space-y-1">
+                          <p className="font-medium text-[11px]">Assumptions</p>
+                          {item.calculationBreakdown.assumptions.map((a, i) => (
+                            <p key={i} className="text-muted-foreground">• {a}</p>
+                          ))}
+                        </div>
+                      )}
+                      {item.calculationBreakdown.warnings.length > 0 && (
+                        <div className="border-t pt-2 space-y-1">
+                          <p className="font-medium text-[11px] text-amber-600">Warnings</p>
+                          {item.calculationBreakdown.warnings.map((w, i) => (
+                            <p key={i} className="text-amber-600">⚠ {w}</p>
+                          ))}
+                        </div>
+                      )}
+                    </>
+                  )}
                 </div>
               </TooltipContent>
             </Tooltip>
@@ -823,6 +864,27 @@ export function AIPlanAnalyzer({
                 P{item.primarySource.pageNumber}
               </button>
             )}
+            {/* Confidence indicator */}
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <span className={`text-[10px] font-semibold cursor-help tabular-nums ${
+                  item.confidence >= 0.8 ? 'text-green-600' :
+                  item.confidence >= 0.5 ? 'text-amber-500' : 'text-red-500'
+                }`}>
+                  {Math.round(item.confidence * 100)}%
+                </span>
+              </TooltipTrigger>
+              <TooltipContent side="left" className="max-w-xs">
+                <p className="text-xs font-semibold">Confidence: {Math.round(item.confidence * 100)}%</p>
+                <p className="text-xs text-muted-foreground mt-1">
+                  {item.confidence >= 0.8
+                    ? 'High — quantity read directly from plan schedule or dimensions'
+                    : item.confidence >= 0.5
+                    ? 'Medium — quantity estimated from detected building elements'
+                    : 'Low — quantity inferred from floor area; verify against your plans'}
+                </p>
+              </TooltipContent>
+            </Tooltip>
           </div>
         </TableCell>
 
@@ -1082,6 +1144,59 @@ export function AIPlanAnalyzer({
               <p className="text-sm text-yellow-700 dark:text-yellow-300">
                 The PDF may not contain enough text data for accurate analysis. Consider uploading
                 architectural plans with schedules, dimensions, and annotations for better results.
+              </p>
+            </div>
+          </div>
+        </Card>
+      )}
+
+      {/* Scan Detection Warning */}
+      {analysis.scanDetection?.isLikelyScan && (
+        <Card className="p-4 border-orange-500 bg-orange-50 dark:bg-orange-950">
+          <div className="flex items-start gap-3">
+            <AlertTriangle className="h-5 w-5 text-orange-600 mt-0.5 shrink-0" />
+            <div className="space-y-1">
+              <p className="font-medium text-orange-800 dark:text-orange-200">
+                Scanned PDF Detected — Text Extraction Limited
+              </p>
+              <p className="text-sm text-orange-700 dark:text-orange-300">
+                {analysis.scanDetection.message}
+              </p>
+              <p className="text-sm text-orange-700 dark:text-orange-300">
+                For best results, upload a vector PDF exported directly from your CAD or drafting software (e.g. Revit, ArchiCAD, AutoCAD). Scanned or photographed plans cannot be read accurately and may produce incorrect estimates.
+              </p>
+              <p className="text-xs text-orange-600 dark:text-orange-400 mt-1">
+                Confidence: <span className="font-semibold">{analysis.scanDetection.confidence}</span> ·{' '}
+                {analysis.scanDetection.pagesWithText} of {analysis.scanDetection.pagesWithText + analysis.scanDetection.pagesWithoutText} pages had readable text
+              </p>
+            </div>
+          </div>
+        </Card>
+      )}
+
+      {/* Commercial Detection Warning */}
+      {analysis.commercialDetection?.isCommercial && (
+        <Card className="p-4 border-blue-500 bg-blue-50 dark:bg-blue-950">
+          <div className="flex items-start gap-3">
+            <Building2 className="h-5 w-5 text-blue-600 mt-0.5 shrink-0" />
+            <div className="space-y-1">
+              <p className="font-medium text-blue-800 dark:text-blue-200">
+                Commercial Project Detected — Auto-Estimation Skipped
+              </p>
+              <p className="text-sm text-blue-700 dark:text-blue-300">
+                {analysis.commercialDetection.message}
+              </p>
+              {analysis.commercialDetection.detectedKeywords.length > 0 && (
+                <p className="text-xs text-blue-600 dark:text-blue-400">
+                  Detected indicators:{' '}
+                  <span className="font-semibold">
+                    {analysis.commercialDetection.detectedKeywords.slice(0, 8).join(', ')}
+                    {analysis.commercialDetection.detectedKeywords.length > 8 && ` +${analysis.commercialDetection.detectedKeywords.length - 8} more`}
+                  </span>
+                </p>
+              )}
+              <p className="text-sm text-blue-700 dark:text-blue-300">
+                Residential rate schedules do not apply to commercial construction. Please use a commercial estimating platform or engage a quantity surveyor for an accurate assessment.
               </p>
             </div>
           </div>

@@ -83,6 +83,10 @@ const Auth = () => {
   const [signupConfirmPassword, setSignupConfirmPassword] = useState("");
   const [showSignupPassword, setShowSignupPassword] = useState(false);
 
+  // Field-level validation errors
+  const [signInErrors, setSignInErrors] = useState<Partial<Record<'email' | 'password', string>>>({});
+  const [signUpErrors, setSignUpErrors] = useState<Partial<Record<'name' | 'email' | 'phone' | 'projectType' | 'password' | 'confirmPassword', string>>>({});
+
   // Verification states
   const [verificationSent, setVerificationSent] = useState(false);
   const [pendingEmail, setPendingEmail] = useState("");
@@ -131,15 +135,27 @@ const Auth = () => {
 
   const handleSignIn = async (e: React.FormEvent) => {
     e.preventDefault();
-    setIsLoading(true);
+    setSignInErrors({});
     setNeedsVerification(false);
 
+    // Validate first — show field-level errors, never a toast for validation
+    const parsed = signInSchema.safeParse({ email: email.trim(), password });
+    if (!parsed.success) {
+      const errs: typeof signInErrors = {};
+      parsed.error.issues.forEach(issue => {
+        const field = issue.path[0] as keyof typeof errs;
+        if (!errs[field]) errs[field] = issue.message;
+      });
+      setSignInErrors(errs);
+      return;
+    }
+
+    setIsLoading(true);
     try {
-      const data = signInSchema.parse({ email: email.trim(), password });
-      const result = await localSignIn(data.email, data.password);
+      const result = await localSignIn(parsed.data.email, parsed.data.password);
 
       if (result.needsVerification) {
-        setPendingEmail(data.email);
+        setPendingEmail(parsed.data.email);
         setNeedsVerification(true);
         toast.error("Please verify your email first — check your inbox");
         return;
@@ -152,25 +168,41 @@ const Auth = () => {
 
       if (navigatedRef.current) return;
       navigatedRef.current = true;
-      migrateUnscopedData(data.email);
-      activateTrialIfNeeded(data.email);
+      migrateUnscopedData(parsed.data.email);
+      activateTrialIfNeeded(parsed.data.email);
       toast.success("Welcome back!");
       navigate("/dashboard");
-    } catch (error) {
-      if (error instanceof z.ZodError) {
-        toast.error(error.errors[0].message);
-      } else {
-        toast.error("Something went wrong — please try again");
-      }
+    } catch {
+      toast.error("Something went wrong — please try again");
     } finally {
       setIsLoading(false);
     }
   };
 
   const submitRequest = async (direct: boolean) => {
+    setSignUpErrors({});
+
+    // Validate first — show field-level errors before hitting the network
+    const parsed = leadSchema.safeParse({
+      name: name.trim(),
+      email: email.trim(),
+      phone: phone.trim(),
+      projectType,
+      password: signupPassword,
+      confirmPassword: signupConfirmPassword,
+    });
+    if (!parsed.success) {
+      const errs: typeof signUpErrors = {};
+      parsed.error.issues.forEach(issue => {
+        const field = issue.path[0] as keyof typeof errs;
+        if (!errs[field]) errs[field] = issue.message;
+      });
+      setSignUpErrors(errs);
+      return;
+    }
+
     setIsLoading(true);
 
-    // Set or clear direct-checkout intent before submitting
     if (direct) {
       localStorage.setItem('metricore_direct_plan', selectedPlan);
       localStorage.setItem('metricore_direct_billing', billing);
@@ -179,32 +211,22 @@ const Auth = () => {
       localStorage.removeItem('metricore_direct_billing');
     }
 
+    localStorage.setItem('metricore_oauth_plan', selectedPlan);
+    localStorage.setItem('metricore_oauth_billing', billing);
+
     try {
-      const data = leadSchema.parse({
-        name: name.trim(),
-        email: email.trim(),
-        phone: phone.trim(),
-        projectType,
-        password: signupPassword,
-        confirmPassword: signupConfirmPassword,
-      });
-
-      // Store plan choice so onAuthStateChange can create the right trial after email verification
-      localStorage.setItem('metricore_oauth_plan', selectedPlan);
-      localStorage.setItem('metricore_oauth_billing', billing);
-
       await onboardUser({
-        name: data.name,
-        email: data.email,
-        phone: data.phone,
-        project_type: data.projectType,
+        name: parsed.data.name,
+        email: parsed.data.email,
+        phone: parsed.data.phone,
+        project_type: parsed.data.projectType,
         plan_id: selectedPlan,
         billing_period: billing,
         marketing_consent: marketingConsent,
-        password: data.password,
+        password: parsed.data.password,
       });
 
-      setPendingEmail(data.email);
+      setPendingEmail(parsed.data.email);
       setVerificationSent(true);
     } catch (error) {
       if (direct) {
@@ -213,9 +235,7 @@ const Auth = () => {
       }
       localStorage.removeItem('metricore_oauth_plan');
       localStorage.removeItem('metricore_oauth_billing');
-      if (error instanceof z.ZodError) {
-        toast.error(error.errors[0].message);
-      } else if (error instanceof EdgeFunctionError && error.status === 409) {
+      if (error instanceof EdgeFunctionError && error.status === 409) {
         toast.error("That email is already registered — please sign in instead");
         setIsLogin(true);
         setEmail(email.trim());
@@ -400,7 +420,7 @@ const Auth = () => {
                       key={p}
                       type="button"
                       onClick={() => setSelectedPlan(p)}
-                      className={`w-full flex items-center justify-between px-4 py-3 rounded-lg border text-sm transition-all ${
+                      className={`w-full flex flex-col sm:flex-row sm:items-center sm:justify-between px-4 py-3 rounded-lg border text-sm transition-all ${
                         selectedPlan === p
                           ? "border-primary bg-primary/5 text-foreground"
                           : "border-border text-muted-foreground hover:border-primary/40"
@@ -415,7 +435,7 @@ const Auth = () => {
                           <Badge variant="secondary" className="text-[10px] px-1.5 py-0">Popular</Badge>
                         )}
                       </div>
-                      <span className="text-xs text-muted-foreground">{PLAN_TAGLINES[p]}</span>
+                      <span className="text-xs text-muted-foreground mt-1 sm:mt-0">{PLAN_TAGLINES[p]}</span>
                     </button>
                   ))}
                 </div>
@@ -434,11 +454,12 @@ const Auth = () => {
                     id="email"
                     type="email"
                     value={email}
-                    onChange={(e) => setEmail(e.target.value)}
+                    onChange={(e) => { setEmail(e.target.value); setSignInErrors(p => ({ ...p, email: undefined })); }}
                     placeholder="builder@example.com.au"
-                    required
+                    error={!!signInErrors.email}
                     maxLength={255}
                   />
+                  {signInErrors.email && <p className="text-xs text-destructive mt-1">{signInErrors.email}</p>}
                 </div>
                 <div>
                   <Label htmlFor="password">Password</Label>
@@ -446,11 +467,12 @@ const Auth = () => {
                     id="password"
                     type="password"
                     value={password}
-                    onChange={(e) => setPassword(e.target.value)}
+                    onChange={(e) => { setPassword(e.target.value); setSignInErrors(p => ({ ...p, password: undefined })); }}
                     placeholder="••••••••"
-                    required
+                    error={!!signInErrors.password}
                     maxLength={100}
                   />
+                  {signInErrors.password && <p className="text-xs text-destructive mt-1">{signInErrors.password}</p>}
                   <div className="flex justify-end mt-1">
                     <button
                       type="button"
@@ -483,11 +505,12 @@ const Auth = () => {
                     id="name"
                     type="text"
                     value={name}
-                    onChange={(e) => setName(e.target.value)}
+                    onChange={(e) => { setName(e.target.value); setSignUpErrors(p => ({ ...p, name: undefined })); }}
                     placeholder="John Smith"
-                    required
+                    error={!!signUpErrors.name}
                     maxLength={100}
                   />
+                  {signUpErrors.name && <p className="text-xs text-destructive mt-1">{signUpErrors.name}</p>}
                 </div>
                 <div>
                   <Label htmlFor="email-signup">Email Address</Label>
@@ -495,11 +518,12 @@ const Auth = () => {
                     id="email-signup"
                     type="email"
                     value={email}
-                    onChange={(e) => setEmail(e.target.value)}
+                    onChange={(e) => { setEmail(e.target.value); setSignUpErrors(p => ({ ...p, email: undefined })); }}
                     placeholder="john@company.com.au"
-                    required
+                    error={!!signUpErrors.email}
                     maxLength={255}
                   />
+                  {signUpErrors.email && <p className="text-xs text-destructive mt-1">{signUpErrors.email}</p>}
                 </div>
                 <div>
                   <Label htmlFor="phone">Phone Number</Label>
@@ -509,13 +533,14 @@ const Auth = () => {
                       id="phone"
                       type="tel"
                       value={phone}
-                      onChange={(e) => setPhone(e.target.value)}
+                      onChange={(e) => { setPhone(e.target.value); setSignUpErrors(p => ({ ...p, phone: undefined })); }}
                       placeholder="04XX XXX XXX"
-                      required
+                      error={!!signUpErrors.phone}
                       maxLength={30}
                       className="pl-9"
                     />
                   </div>
+                  {signUpErrors.phone && <p className="text-xs text-destructive mt-1">{signUpErrors.phone}</p>}
                 </div>
                 <div>
                   <Label htmlFor="signup-password">Password</Label>
@@ -524,9 +549,9 @@ const Auth = () => {
                       id="signup-password"
                       type={showSignupPassword ? "text" : "password"}
                       value={signupPassword}
-                      onChange={(e) => setSignupPassword(e.target.value)}
+                      onChange={(e) => { setSignupPassword(e.target.value); setSignUpErrors(p => ({ ...p, password: undefined })); }}
                       placeholder="At least 8 characters"
-                      required
+                      error={!!signUpErrors.password}
                       maxLength={100}
                       className="pr-10"
                     />
@@ -536,11 +561,10 @@ const Auth = () => {
                       className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
                       tabIndex={-1}
                     >
-                      {showSignupPassword
-                        ? <EyeOff className="h-4 w-4" />
-                        : <Eye className="h-4 w-4" />}
+                      {showSignupPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                     </button>
                   </div>
+                  {signUpErrors.password && <p className="text-xs text-destructive mt-1">{signUpErrors.password}</p>}
                 </div>
                 <div>
                   <Label htmlFor="signup-confirm-password">Confirm Password</Label>
@@ -548,11 +572,12 @@ const Auth = () => {
                     id="signup-confirm-password"
                     type={showSignupPassword ? "text" : "password"}
                     value={signupConfirmPassword}
-                    onChange={(e) => setSignupConfirmPassword(e.target.value)}
+                    onChange={(e) => { setSignupConfirmPassword(e.target.value); setSignUpErrors(p => ({ ...p, confirmPassword: undefined })); }}
                     placeholder="Repeat your password"
-                    required
+                    error={!!signUpErrors.confirmPassword}
                     maxLength={100}
                   />
+                  {signUpErrors.confirmPassword && <p className="text-xs text-destructive mt-1">{signUpErrors.confirmPassword}</p>}
                 </div>
                 <div>
                   <Label>Project Type</Label>
@@ -561,10 +586,12 @@ const Auth = () => {
                       <button
                         key={type}
                         type="button"
-                        onClick={() => setProjectType(type)}
+                        onClick={() => { setProjectType(type); setSignUpErrors(p => ({ ...p, projectType: undefined })); }}
                         className={`flex items-center gap-2 px-4 py-3 rounded-lg border text-sm font-medium transition-all ${
                           projectType === type
                             ? "border-primary bg-primary/5 text-foreground"
+                            : signUpErrors.projectType
+                            ? "border-destructive text-muted-foreground"
                             : "border-border text-muted-foreground hover:border-primary/40"
                         }`}
                       >
@@ -575,6 +602,7 @@ const Auth = () => {
                       </button>
                     ))}
                   </div>
+                  {signUpErrors.projectType && <p className="text-xs text-destructive mt-1">{signUpErrors.projectType}</p>}
                 </div>
                 <label className="flex items-start gap-2.5 cursor-pointer group">
                   <input

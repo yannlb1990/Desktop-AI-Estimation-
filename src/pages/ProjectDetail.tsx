@@ -1,4 +1,4 @@
-import React, { useState, useEffect, Component } from "react";
+import React, { useState, useEffect, useRef, Component } from "react";
 import type { ReactNode } from "react";
 
 // Isolate takeoff crashes so they don't white-out the entire project page
@@ -30,7 +30,7 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "sonner";
-import { ArrowLeft, FileText, DollarSign, Ruler, Loader2, Settings, Calculator, TrendingUp, ShieldCheck, MapPin, User, Calendar as CalendarIcon, Clock, Bell, Package, ChevronDown, ChevronUp, Users, FolderOpen, Sofa, BookOpen, BarChart2, GitBranch, PlusCircle } from "lucide-react";
+import { ArrowLeft, FileText, DollarSign, Ruler, Loader2, Settings, Calculator, TrendingUp, ShieldCheck, MapPin, User, Calendar as CalendarIcon, Clock, Bell, Package, ChevronDown, ChevronUp, ChevronLeft, ChevronRight, Users, FolderOpen, Sofa, BookOpen, BarChart2, GitBranch, PlusCircle, Check, Monitor } from "lucide-react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { SubcontractorComparison } from "@/components/SubcontractorComparison";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
@@ -66,6 +66,10 @@ const ProjectDetail = () => {
   const [dueDate, setDueDate] = useState<Date | undefined>();
   const [activeMainTab, setActiveMainTab] = useState("takeoff");
   const [showSuppliers, setShowSuppliers] = useState(false);
+  const [syncState, setSyncState] = useState<'idle' | 'saving' | 'saved'>('idle');
+  const workflowStripRef = useRef<HTMLDivElement>(null);
+  const [canScrollLeft, setCanScrollLeft] = useState(false);
+  const [canScrollRight, setCanScrollRight] = useState(false);
 
   const preferredSuppliers: any[] = (() => {
     try { return JSON.parse(localStorage.getItem(getUserStorageKey("preferred_suppliers")) || "[]"); }
@@ -117,6 +121,27 @@ const ProjectDetail = () => {
     return () => window.removeEventListener("go-to-estimate-tab", handler);
   }, []);
 
+  const checkWorkflowScroll = () => {
+    const el = workflowStripRef.current;
+    if (!el) return;
+    setCanScrollLeft(el.scrollLeft > 4);
+    setCanScrollRight(el.scrollLeft < el.scrollWidth - el.clientWidth - 4);
+  };
+
+  useEffect(() => {
+    checkWorkflowScroll();
+    window.addEventListener('resize', checkWorkflowScroll);
+    return () => window.removeEventListener('resize', checkWorkflowScroll);
+  }, []);
+
+  const syncWithTracking = (data: any) => {
+    setSyncState('saving');
+    syncProjectToSupabase(data);
+    const saveTimer = setTimeout(() => setSyncState('saved'), 1000);
+    setTimeout(() => setSyncState('idle'), 3500);
+    return () => clearTimeout(saveTimer);
+  };
+
   const handleDueDateChange = (date: Date | undefined) => {
     if (!projectId) return;
     setDueDate(date);
@@ -125,7 +150,7 @@ const ProjectDetail = () => {
     if (idx !== -1) {
       projects[idx].due_date = date?.toISOString() || null;
       localStorage.setItem(getUserStorageKey('local_projects'), JSON.stringify(projects));
-      syncProjectToSupabase(projects[idx]);
+      syncWithTracking(projects[idx]);
     }
     toast.success("Due date updated");
   };
@@ -139,7 +164,7 @@ const ProjectDetail = () => {
       projects[idx].updated_at = new Date().toISOString();
       localStorage.setItem(getUserStorageKey('local_projects'), JSON.stringify(projects));
       setProject((prev: any) => ({ ...prev, quoteStatus: status }));
-      syncProjectToSupabase(projects[idx]);
+      syncWithTracking(projects[idx]);
     }
     toast.success(`Status updated to ${status}`);
   };
@@ -222,10 +247,31 @@ const ProjectDetail = () => {
       <nav className="border-b border-border bg-background">
         <div className="container mx-auto px-4 md:px-6 py-3 md:py-4">
           <div className="flex items-center justify-between gap-2">
-            <Button variant="ghost" size="sm" onClick={() => navigate("/dashboard")} className="shrink-0">
-              <ArrowLeft className="h-4 w-4 md:mr-2" />
-              <span className="hidden md:inline">Back to Dashboard</span>
-            </Button>
+            <div className="flex items-center gap-2 shrink-0 min-w-0">
+              <button
+                onClick={() => navigate("/dashboard")}
+                className="flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground transition-colors shrink-0"
+              >
+                <ArrowLeft className="h-3.5 w-3.5" />
+                <span className="hidden sm:inline">Dashboard</span>
+              </button>
+              {project && (
+                <>
+                  <ChevronRight className="h-3.5 w-3.5 text-muted-foreground/40 shrink-0" />
+                  <span className="text-sm font-medium text-foreground truncate max-w-[120px] sm:max-w-[180px] md:max-w-xs">
+                    {project.name}
+                  </span>
+                </>
+              )}
+              {syncState !== 'idle' && (
+                <span className="hidden sm:flex items-center gap-1 text-xs text-muted-foreground ml-2">
+                  {syncState === 'saving'
+                    ? <><Loader2 className="h-3 w-3 animate-spin" />Saving…</>
+                    : <><Check className="h-3 w-3 text-green-500" />Saved</>
+                  }
+                </span>
+              )}
+            </div>
             <div className="flex gap-1 md:gap-2 overflow-x-auto scrollbar-none">
               <TourTip text="Start your estimate from a pre-built template — New Build, Bathroom, Kitchen, Deck or Commercial Fitout. Loads all standard line items instantly." position="bottom">
                 <Button
@@ -263,7 +309,7 @@ const ProjectDetail = () => {
           <div className="flex flex-col md:flex-row md:items-start justify-between gap-6">
             <div className="space-y-2">
               <div className="flex items-center gap-3 flex-wrap">
-                <h1 className="font-display text-4xl font-bold">{project.name}</h1>
+                <h1 className="font-display text-2xl sm:text-3xl md:text-4xl font-bold">{project.name}</h1>
                 <div className={`px-3 py-1 rounded-full text-xs font-medium ${
                   project.status === "complete" || project.status === "completed"
                     ? "bg-accent/20 text-accent"
@@ -292,20 +338,20 @@ const ProjectDetail = () => {
               </div>
               <div className="text-muted-foreground space-y-1">
                 {project.site_address && (
-                  <div className="flex items-center gap-2">
-                    <MapPin className="h-4 w-4" />
-                    <span>Address: {project.site_address}</span>
+                  <div className="flex items-center gap-2 min-w-0">
+                    <MapPin className="h-4 w-4 shrink-0" />
+                    <span className="truncate">Address: {project.site_address}</span>
                   </div>
                 )}
                 {project.client_name && (
-                  <div className="flex items-center gap-2">
-                    <User className="h-4 w-4" />
-                    <span>Client: {project.client_name}</span>
+                  <div className="flex items-center gap-2 min-w-0">
+                    <User className="h-4 w-4 shrink-0" />
+                    <span className="truncate">Client: {project.client_name}</span>
                   </div>
                 )}
-                <div className="flex items-center gap-2">
-                  <CalendarIcon className="h-4 w-4" />
-                  <span>Created: {new Date(project.created_at).toLocaleDateString()}</span>
+                <div className="flex items-center gap-2 min-w-0">
+                  <CalendarIcon className="h-4 w-4 shrink-0" />
+                  <span className="truncate">Created: {new Date(project.created_at).toLocaleDateString()}</span>
                 </div>
               </div>
             </div>
@@ -371,17 +417,17 @@ const ProjectDetail = () => {
           </div>
         )}
 
-        {/* Workflow progress strip */}
-        <div className="flex items-center gap-0 rounded-xl border border-border bg-card p-1 mb-2 overflow-x-auto scrollbar-none">
+        {/* ── Row 1: Main workflow steps ── */}
+        <div className="flex items-center rounded-xl border border-border bg-card p-1 mb-2">
           {[
-            { key: "takeoff", label: "1. Takeoff", icon: Ruler, tour: "Upload your PDF plans here. AI measures quantities automatically — review and adjust each item, then send everything to Estimate." },
-            { key: "estimate", label: "2. Estimate", icon: Calculator, tour: "Review and price all takeoff items. Add labour, materials, margins and overheads. This is your full cost build-up before generating the client document." },
-            { key: "tender", label: "3. Tender", icon: FileText, tour: "Generate the final client document. Choose a Quote (fast 2-page branded proposal) or a full Tender with compliance, programme and legal terms." },
+            { key: "takeoff",  label: "1. Takeoff",  icon: Ruler,      tour: "Upload your PDF plans here. AI measures quantities automatically — review and adjust each item, then send everything to Estimate." },
+            { key: "estimate", label: "2. Estimate", icon: Calculator,  tour: "Review and price all takeoff items. Add labour, materials, margins and overheads. This is your full cost build-up before generating the client document." },
+            { key: "tender",   label: "3. Tender",   icon: FileText,    tour: "Generate the final client document. Choose a Quote (fast 2-page branded proposal) or a full Tender with compliance, programme and legal terms." },
           ].map((step, i) => {
             const Icon = step.icon;
             const isActive = activeMainTab === step.key;
             const isPast =
-              (step.key === "takeoff" && (activeMainTab === "estimate" || activeMainTab === "tender")) ||
+              (step.key === "takeoff"  && (activeMainTab === "estimate" || activeMainTab === "tender")) ||
               (step.key === "estimate" && activeMainTab === "tender");
             return (
               <React.Fragment key={step.key}>
@@ -401,42 +447,76 @@ const ProjectDetail = () => {
                     {isPast && <span className="hidden sm:inline ml-1 text-xs opacity-70">✓</span>}
                   </button>
                 </TourTip>
-                {i < 2 && (
-                  <span className="text-muted-foreground/40 text-lg select-none px-1">›</span>
-                )}
+                {i < 2 && <span className="text-muted-foreground/40 text-lg select-none px-1">›</span>}
               </React.Fragment>
             );
           })}
-          <div className="w-px bg-border mx-2 self-stretch" />
-          {[
-            { key: "overheads", label: "Overheads", icon: Settings,   tour: "Add company overheads — insurance, supervision, site costs, preliminaries. These are added on top of your direct estimate costs." },
-            { key: "ffe",       label: "FF&E",       icon: Sofa,       tour: "Fixtures, Fittings & Equipment schedule. Enter appliances, furniture and fittings room by room with photos, supplier and pricing. Export as a branded PDF." },
-            { key: "insights",  label: "Insights",   icon: TrendingUp, tour: "AI-generated cost breakdown analysis — compare your project's rates against current Australian market benchmarks." },
-            { key: "compliance",label: "NCC",         icon: ShieldCheck,tour: "National Construction Code compliance checklist tailored to this project type. Identify gaps before submission." },
-            { key: "subbies",   label: "Subbies",    icon: Users,      tour: "Enter and compare subcontractor quotes side by side for each trade. Easily select the best price and attach it to your estimate." },
-            { key: "documents", label: "Docs",        icon: FolderOpen, tour: "Store all project documents in one place — contracts, variations, site photos, council approvals and correspondence." },
-            { key: "schedule",  label: "Schedule",    icon: CalendarIcon, tour: "Auto-generate a Gantt chart from your estimate trades. Adjust durations and dependencies, then print or export." },
-            { key: "jobcost",   label: "Job Cost",    icon: BarChart2,  tour: "Track actual costs against your estimate in real time. Log invoices and expenses by trade to see your live margin." },
-            { key: "variations",label: "Variations",  icon: GitBranch,  tour: "Manage change orders with a full approval workflow — draft, send for approval, track accepted variations and update your contract sum." },
-          ].map((tool) => {
-            const Icon = tool.icon;
-            return (
-              <TourTip key={tool.key} text={tool.tour} position="bottom">
-                <button
-                  onClick={() => setActiveMainTab(tool.key)}
-                  className={`flex items-center gap-1.5 px-2 md:px-3 py-2 rounded-lg text-xs font-medium transition-all shrink-0 ${
-                    activeMainTab === tool.key
-                      ? "bg-muted text-foreground"
-                      : "text-muted-foreground hover:bg-muted/60"
-                  }`}
-                  title={tool.label}
-                >
-                  <Icon className="h-3.5 w-3.5 shrink-0" />
-                  <span className="hidden sm:inline">{tool.label}</span>
-                </button>
-              </TourTip>
-            );
-          })}
+        </div>
+
+        {/* ── Row 2: Tools strip (violet active, scrollable on mobile) ── */}
+        <div className="relative mb-6">
+          {canScrollLeft && (
+            <button
+              aria-label="Scroll tools left"
+              onClick={() => workflowStripRef.current?.scrollBy({ left: -160, behavior: 'smooth' })}
+              className="absolute left-0 top-1/2 -translate-y-1/2 z-20 h-6 w-6 flex items-center justify-center rounded-full bg-background border border-border shadow-sm"
+            >
+              <ChevronLeft className="h-3 w-3" />
+            </button>
+          )}
+          {canScrollLeft && (
+            <div className="absolute left-0 top-0 bottom-0 z-10 w-10 bg-gradient-to-r from-card to-transparent pointer-events-none rounded-l-xl" />
+          )}
+          <div
+            ref={workflowStripRef}
+            onScroll={checkWorkflowScroll}
+            className="flex items-center gap-0.5 rounded-xl border border-border bg-card/60 p-1 overflow-x-auto scrollbar-none"
+          >
+            <span className="text-[10px] font-semibold text-muted-foreground/50 uppercase tracking-widest px-2 shrink-0 select-none">Tools</span>
+            <div className="w-px bg-border/60 self-stretch mx-1 shrink-0" />
+            {[
+              { key: "overheads",  label: "Overheads", icon: Settings,     tour: "Add company overheads — insurance, supervision, site costs, preliminaries. These are added on top of your direct estimate costs." },
+              { key: "ffe",        label: "FF&E",       icon: Sofa,         tour: "Fixtures, Fittings & Equipment schedule. Enter appliances, furniture and fittings room by room with photos, supplier and pricing. Export as a branded PDF." },
+              { key: "insights",   label: "Insights",   icon: TrendingUp,   tour: "AI-generated cost breakdown analysis — compare your project's rates against current Australian market benchmarks." },
+              { key: "compliance", label: "NCC",        icon: ShieldCheck,  tour: "National Construction Code compliance checklist tailored to this project type. Identify gaps before submission." },
+              { key: "subbies",    label: "Subbies",    icon: Users,        tour: "Enter and compare subcontractor quotes side by side for each trade. Easily select the best price and attach it to your estimate." },
+              { key: "documents",  label: "Docs",       icon: FolderOpen,   tour: "Store all project documents in one place — contracts, variations, site photos, council approvals and correspondence." },
+              { key: "schedule",   label: "Schedule",   icon: CalendarIcon, tour: "Auto-generate a Gantt chart from your estimate trades. Adjust durations and dependencies, then print or export." },
+              { key: "jobcost",    label: "Job Cost",   icon: BarChart2,    tour: "Track actual costs against your estimate in real time. Log invoices and expenses by trade to see your live margin." },
+              { key: "variations", label: "Variations", icon: GitBranch,    tour: "Manage change orders with a full approval workflow — draft, send for approval, track accepted variations and update your contract sum." },
+            ].map((tool) => {
+              const Icon = tool.icon;
+              const isActive = activeMainTab === tool.key;
+              return (
+                <TourTip key={tool.key} text={tool.tour} position="bottom">
+                  <button
+                    onClick={() => setActiveMainTab(tool.key)}
+                    className={`flex items-center gap-1.5 px-2 md:px-3 py-2 rounded-lg text-xs font-medium transition-all shrink-0 ${
+                      isActive
+                        ? "bg-violet-600 text-white shadow-sm"
+                        : "text-muted-foreground hover:bg-violet-500/10 hover:text-violet-300"
+                    }`}
+                    title={tool.label}
+                  >
+                    <Icon className="h-3.5 w-3.5 shrink-0" />
+                    <span className="hidden sm:inline">{tool.label}</span>
+                  </button>
+                </TourTip>
+              );
+            })}
+          </div>
+          {canScrollRight && (
+            <div className="absolute right-0 top-0 bottom-0 z-10 w-10 bg-gradient-to-l from-card to-transparent pointer-events-none rounded-r-xl" />
+          )}
+          {canScrollRight && (
+            <button
+              aria-label="Scroll tools right"
+              onClick={() => workflowStripRef.current?.scrollBy({ left: 160, behavior: 'smooth' })}
+              className="absolute right-0 top-1/2 -translate-y-1/2 z-20 h-6 w-6 flex items-center justify-center rounded-full bg-background border border-border shadow-sm"
+            >
+              <ChevronRight className="h-3 w-3" />
+            </button>
+          )}
         </div>
 
         <Tabs value={activeMainTab} onValueChange={setActiveMainTab} className="space-y-6">
@@ -458,7 +538,11 @@ const ProjectDetail = () => {
           </TabsList>
 
           {/* Step 1 — PDF Takeoff — forceMount keeps PDF alive when switching to Estimate/Tender */}
-          <TabsContent value="takeoff" forceMount className="space-y-4">
+          <TabsContent value="takeoff" forceMount className="space-y-4 data-[state=inactive]:hidden">
+            <div className="md:hidden flex items-start gap-3 rounded-lg border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-600 dark:text-amber-400">
+              <Monitor className="h-4 w-4 mt-0.5 shrink-0" />
+              <p>PDF takeoff works best on a desktop or laptop — the canvas tools are optimised for mouse precision.</p>
+            </div>
             <TakeoffErrorBoundary>
               <AIPlanAnalyzerEnhanced key={projectId} projectId={projectId!} estimateId={estimate?.id} />
             </TakeoffErrorBoundary>

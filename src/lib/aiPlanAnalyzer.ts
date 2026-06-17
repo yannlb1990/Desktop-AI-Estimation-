@@ -153,6 +153,28 @@ export interface PlanAnalysisResult {
   materialSelections: MaterialSelection[];
   electricalSummary?: Record<string, number>;
   estimatedItems: EstimatedLineItem[];
+  scanDetection: ScanDetectionResult;
+  commercialDetection: CommercialDetectionResult;
+}
+
+export interface ScanDetectionResult {
+  isLikelyScan: boolean;
+  // How confident we are in the scan diagnosis
+  confidence: 'high' | 'medium' | 'low';
+  totalCharsExtracted: number;
+  pagesWithText: number;
+  pagesWithoutText: number;
+  // Human-readable warning to surface in UI when isLikelyScan is true
+  message: string;
+}
+
+export interface CommercialDetectionResult {
+  isCommercial: boolean;
+  confidence: 'high' | 'medium' | 'low';
+  // Which specific keywords triggered the detection — shown in UI warning
+  detectedKeywords: string[];
+  // Human-readable message to surface in UI when isCommercial is true
+  message: string;
 }
 
 // Source location tracking for traceability
@@ -241,39 +263,42 @@ function classifyDrawingType(texts: ExtractedText[]): { type: DrawingType; confi
 
   let bestMatch: DrawingType = 'unknown';
   let bestScore = 0;
-  let matchedTitle: string | undefined;
+  let bestTitle: string | undefined;
 
   for (const [type, keywords] of Object.entries(DRAWING_TYPE_KEYWORDS) as [DrawingType, string[]][]) {
     let score = 0;
+    let typeTitle: string | undefined; // title candidate for THIS type only — reset each iteration
+
     for (const keyword of keywords) {
       if (allText.includes(keyword)) {
         score += keyword.split(' ').length; // Multi-word matches score higher
-        // Try to extract the title
-        const regex = new RegExp(`([^\\n]*${keyword}[^\\n]*)`, 'i');
-        const match = allText.match(regex);
-        if (match) {
-          matchedTitle = match[1].trim().substring(0, 100);
+        // Take the FIRST keyword match per type (longer/more specific keywords appear earlier in list)
+        if (!typeTitle) {
+          const regex = new RegExp(`([^\\n]*${keyword}[^\\n]*)`, 'i');
+          const match = allText.match(regex);
+          if (match) {
+            typeTitle = match[1].trim().substring(0, 100);
+          }
         }
       }
     }
+
     if (score > bestScore) {
       bestScore = score;
       bestMatch = type;
-      if (matchedTitle) {
-        matchedTitle = matchedTitle;
-      }
+      bestTitle = typeTitle; // only capture title from the WINNING type
     }
   }
 
   // Filter out PDF metadata artifacts (gspublisher version strings, etc.)
-  if (matchedTitle && /gspublish|version\s*\d+\.\d+|\d{4,}\.\d+\.\d+/i.test(matchedTitle)) {
-    matchedTitle = undefined;
+  if (bestTitle && /gspublish|version\s*\d+\.\d+|\d{4,}\.\d+\.\d+/i.test(bestTitle)) {
+    bestTitle = undefined;
   }
 
   return {
     type: bestMatch,
     confidence: Math.min(bestScore / 5, 1),
-    title: matchedTitle,
+    title: bestTitle,
   };
 }
 
@@ -463,7 +488,7 @@ const SYMBOL_PATTERNS: Record<string, { regex: RegExp; type: DetectedSymbol['typ
   ],
 };
 
-function detectSymbols(texts: ExtractedText[], pageIndex: number): DetectedSymbol[] {
+function detectSymbols(texts: ExtractedText[], pageIndex: number, drawingType: DrawingType = 'unknown'): DetectedSymbol[] {
   const symbols: DetectedSymbol[] = [];
   const seen = new Set<string>();
 
@@ -472,6 +497,16 @@ function detectSymbols(texts: ExtractedText[], pageIndex: number): DetectedSymbo
 
     for (const [category, patterns] of Object.entries(SYMBOL_PATTERNS)) {
       for (const { regex, type, subType } of patterns) {
+        // SD prefix collision: on electrical pages SD\d means a circuit/smoke detector reference,
+        // not a sliding door. Skip the sliding-door SD pattern on electrical pages to prevent
+        // misclassifying smoke detector labels as sliding doors.
+        if (
+          category === 'doors' &&
+          subType === 'sliding' &&
+          /\\bSD\\d/i.test(regex.source) &&
+          drawingType === 'electrical'
+        ) continue;
+
         regex.lastIndex = 0; // Reset regex state
         let match;
         while ((match = regex.exec(content)) !== null) {
@@ -727,8 +762,45 @@ function joinTextsByLine(texts: ExtractedText[]): string {
   return lines.join('\n');
 }
 
-// Returns true for selections that look like mid-sentence fragments
+// Known single-word Australian construction product names and material types.
+// These are real specifications that appear alone after a category keyword (e.g. "CLADDING: HEBEL").
+// They must bypass the isFragment word-count/length check and the > 8 char length guard.
+const KNOWN_SINGLE_WORD_MATERIALS = new Set([
+  // James Hardie / fibre cement products
+  'SCYON', 'VILLABOARD', 'HARDIEFLEX', 'HARDIPLANK', 'HARDIPANEL', 'HARDIFLEX',
+  'LINEA', 'BLUEBOARD', 'FIBRO',
+  // AAC / masonry brands
+  'HEBEL', 'BESSER', 'SUPASEAL',
+  // Roofing / cladding brands
+  'INTERLOK', 'COLORBOND', 'COLOURBOND', 'ZINCALUME', 'LYSAGHT', 'COVERLINE',
+  'MONIER', 'BRISTILE', 'TERRACOTTA',
+  // Plasterboard
+  'GYPROCK', 'KNAUF',
+  // Cladding types / finishes (specified as single words)
+  'WEATHERTEX', 'KNOTWOOD', 'RENDERED', 'BAGGED', 'PAINTED', 'TILED',
+  'POLISHED', 'SEALED', 'STAINED', 'OILED', 'LACQUERED', 'ACRYLIC',
+  // Timber species (appear as single words in material schedules)
+  'OAK', 'JARRAH', 'BLACKBUTT', 'TALLOWWOOD', 'SPOTTED', 'MERBAU',
+  'PINE', 'CYPRESS', 'BAMBOO',
+  // Stone / tile materials
+  'PORCELAIN', 'TRAVERTINE', 'MARBLE', 'GRANITE', 'LIMESTONE', 'SLATE',
+  'CAESARSTONE', 'ESSASTONE', 'SILESTONE', 'DEKTON',
+  // Floor coverings
+  'CARPET', 'HYBRID', 'VINYL', 'CORK', 'CONCRETE',
+  // Paint brands (appear in external/internal colour schedules)
+  'DULUX', 'TAUBMANS', 'WATTYL', 'HAYMES',
+  // Hardware brands
+  'BLUM', 'HETTICH', 'HAEFELE',
+  // Structural materials specified by single word
+  'ALUMINIUM', 'ALUMINUM', 'STEEL', 'GLASS', 'TIMBER', 'RENDER',
+]);
+
+// Returns true for selections that look like mid-sentence fragments.
+// Known single-word product names are always allowed through regardless of length.
 function isFragment(s: string): boolean {
+  // Known Australian product/material names are never fragments
+  if (KNOWN_SINGLE_WORD_MATERIALS.has(s.trim().toUpperCase())) return false;
+
   if (/^[&]/.test(s)) return true;
   if (/^[a-z]/.test(s)) return true;
   if (/^(AND|OF|TO|THE|WITH|WITHIN|OR|IN|FOR|A|AT)\s/i.test(s)) return true;
@@ -776,7 +848,8 @@ function parseMaterialSelections(texts: ExtractedText[], pageIndex: number): Mat
     let match;
     while ((match = regex.exec(allText)) !== null) {
       const selection = match[1]?.trim() || match[0]?.trim();
-      if (selection && selection.length > 8 && selection.length < 300 && !selection.endsWith('-') && !isFragment(selection)) {
+      const isKnownMaterial = selection ? KNOWN_SINGLE_WORD_MATERIALS.has(selection.trim().toUpperCase()) : false;
+      if (selection && (isKnownMaterial || selection.length > 8) && selection.length < 300 && !selection.endsWith('-') && !isFragment(selection)) {
         // Extract colour if present
         const colourMatch = selection.match(/(?:colour|color)\s*[:=]?\s*([^\s,]+)/i);
         materials.push({
@@ -926,10 +999,24 @@ function extractPageScale(texts: ExtractedText[]): string | undefined {
   return undefined;
 }
 
-// Count electrical symbols on a page
-function countElectricalSymbols(texts: ExtractedText[], pageIndex: number): Record<string, number> {
+// Count electrical symbols on a page.
+// drawingType is required to resolve the SD ambiguity:
+//   electrical page → SD = smoke detector
+//   non-electrical page → SD\d is a sliding door tag; only count full word SMOKE
+function countElectricalSymbols(
+  texts: ExtractedText[],
+  pageIndex: number,
+  drawingType: DrawingType = 'unknown'
+): Record<string, number> {
   const counts: Record<string, number> = {};
   const allText = texts.map(t => t.text).join(' ').toUpperCase();
+
+  // For smoke detectors: on electrical plans SD is the standard symbol.
+  // On all other page types (floor plans, elevations, etc.) bare \bSD\b refers to
+  // sliding door references — only match the full word SMOKE to avoid double-counting.
+  const smokeDetectorPattern = drawingType === 'electrical'
+    ? /\bSD\b|\bSMOKE/g
+    : /\bSMOKE/g;
 
   // Electrical symbol patterns
   const symbolPatterns: [string, RegExp][] = [
@@ -939,7 +1026,7 @@ function countElectricalSymbols(texts: ExtractedText[], pageIndex: number): Reco
     ['DIMMER', /\bDIM\b/g],
     ['LED', /\bLED\b/g],
     ['DOWNLIGHT', /\bDL\b|\bDOWNLIGHT/g],
-    ['SMOKE DETECTOR', /\bSD\b|\bSMOKE/g],
+    ['SMOKE DETECTOR', smokeDetectorPattern],
     ['EXHAUST FAN', /\bEF\b|\bEXHAUST/g],
     ['DATA POINT', /\bDP\b|\bDATA/g],
     ['TV POINT', /\bTV\b/g],
@@ -1108,6 +1195,84 @@ function detectBuildingElements(
   return elements;
 }
 
+// === COMMERCIAL CONTEXT DETECTION ===
+
+function detectCommercialContext(allPageTexts: string[]): CommercialDetectionResult {
+  const fullText = allPageTexts.join(' ').toLowerCase();
+  const detectedKeywords: string[] = [];
+
+  // Strong single indicators — any one is sufficient to flag commercial
+  const strongIndicators: Array<[RegExp, string]> = [
+    [/\bnla\b/, 'NLA (Net Lettable Area)'],
+    [/net\s+lettable\s+area/, 'Net Lettable Area'],
+    [/\bgfa\b/, 'GFA (Gross Floor Area)'],
+    [/\btenancy\b/, 'Tenancy'],
+    [/fit[\s-]?out/, 'Fitout'],
+    [/\bshopfront\b|\bshop\s+front\b/, 'Shopfront'],
+    [/\bclass\s+[5-9](?:\s*(?:building|[ab]))?\b/, 'NCC Class 5–9'],
+    [/commercial\s+(?:building|fitout|development|premises)/, 'Commercial Building'],
+    [/industrial\s+(?:building|development|shed|warehouse|premises)/, 'Industrial Building'],
+    [/office\s+fit[\s-]?out/, 'Office Fitout'],
+    [/retail\s+(?:tenancy|fitout|shop|store|premises)/, 'Retail Tenancy'],
+    [/\bwarehouse\b/, 'Warehouse'],
+  ];
+
+  for (const [pattern, label] of strongIndicators) {
+    if (pattern.test(fullText)) {
+      detectedKeywords.push(label);
+    }
+  }
+
+  // Accumulative room indicators — need 3+ distinct commercial room types
+  const roomIndicators: Array<[RegExp, string]> = [
+    [/\bmeeting\s+room\b/, 'Meeting Room'],
+    [/\bconference\s+room\b|\bboardroom\b/, 'Conference/Boardroom'],
+    [/\bopen\s+plan\s+office\b/, 'Open Plan Office'],
+    [/\bserver\s+room\b/, 'Server Room'],
+    [/\bcomms\s+room\b/, 'Comms Room'],
+    [/\breception\s+(?:desk|area|counter)\b/, 'Reception'],
+    [/\blobby\b/, 'Lobby'],
+    [/\bwaiting\s+room\b/, 'Waiting Room'],
+    [/\bplant\s+room\b/, 'Plant Room'],
+  ];
+
+  const roomMatches: string[] = [];
+  for (const [pattern, label] of roomIndicators) {
+    if (pattern.test(fullText)) roomMatches.push(label);
+  }
+  // 3+ distinct commercial room types appearing together strongly indicates commercial
+  if (roomMatches.length >= 3) {
+    detectedKeywords.push(...roomMatches);
+  }
+
+  // Residential override — explicit residential language cancels the commercial flag
+  // Uses specific phrases to avoid false positives ("class 1" alone is too short)
+  const residentialOverride =
+    /\bclass\s+1[ab]?\b|\bresidential\s+dwelling\b|\bsingle\s+dwelling\b|\bfamily\s+home\b|\bdwelling\s+house\b|\bprivate\s+residence\b/.test(fullText);
+
+  const isCommercial = detectedKeywords.length > 0 && !residentialOverride;
+
+  let confidence: CommercialDetectionResult['confidence'];
+  const highConfidenceTerms = ['NLA', 'GFA', 'Tenancy', 'Fitout', 'NCC Class 5', 'Retail Tenancy', 'Commercial Building', 'Industrial Building'];
+  if (isCommercial && detectedKeywords.some(k => highConfidenceTerms.some(h => k.includes(h)))) {
+    confidence = 'high';
+  } else if (isCommercial && detectedKeywords.length >= 3) {
+    confidence = 'medium';
+  } else {
+    confidence = 'low';
+  }
+
+  const keywordSummary = [...new Set(detectedKeywords)].slice(0, 4).join(', ');
+  return {
+    isCommercial,
+    confidence: isCommercial ? confidence : 'low',
+    detectedKeywords: [...new Set(detectedKeywords)],
+    message: isCommercial
+      ? `Commercial project detected (${keywordSummary}). Auto-estimation is calibrated for residential Class 1 buildings — a cost estimate has not been generated to avoid misleading figures. Detected elements (rooms, doors, windows, schedules) are still available above. Build your estimate manually using the detected quantities as a guide.`
+      : '',
+  };
+}
+
 // === ESTIMATION GENERATION ===
 
 // Rate type with trade and category for estimation
@@ -1200,11 +1365,33 @@ function mapTradeToSOWCategory(trade: Trade): SOWCategory {
   return mapping[trade] || 'INTERNAL_FIT_OUT';
 }
 
+// Rate codes that represent new-build structural work and are inappropriate for
+// renovation/addition scopes. Any code in this set is silently skipped when
+// projectType === 'Addition/Renovation'.
+const RENOVATION_SKIP_CODES = new Set([
+  'SITE-01',              // Site clearing — new build only
+  'STRUCT-01',            // Concrete slab on ground — new build only
+  'STRUCT-05',            // First floor structure — new build only
+  'FRAME-01',             // Full wall framing — new build only
+  'FRAME-03',             // Roof trusses — new build only
+  'FRAME-04',             // Ceiling battens — new build only
+  'ROOF-01',              // Colorbond roofing — new build only
+  'ROOF-03',              // Sarking/building wrap — new build only
+  'ROOF-04',              // Fascia and barge — new build only
+  'ROOF-05',              // Gutters — new build only
+  'ROOF-06',              // Downpipes — new build only
+  // External cladding — full re-clad is new build; renovation may add feature elements
+  'EXT-01', 'EXT-02', 'EXT-03', 'EXT-04', 'EXT-05', 'EXT-06', 'EXT-07',
+  // External works — paths, letterbox, clothesline, carport: new build items
+  'EXTW-01', 'EXTW-05', 'EXTW-06', 'EXTW-07', 'EXTW-08', 'EXTW-10',
+]);
+
 function generateEstimation(
   pages: PageAnalysis[],
   schedules: PlanAnalysisResult['schedules'],
   floorAreas: FloorArea[] = [],
-  electricalSummary: Record<string, number> = {}
+  electricalSummary: Record<string, number> = {},
+  projectType: string = 'New Build'
 ): EstimatedLineItem[] {
   const items: EstimatedLineItem[] = [];
   let itemId = 1;
@@ -1215,6 +1402,9 @@ function generateEstimation(
   const { isDuplex, unitCount, isMultiStorey, storeyCount, hasPool, hasCarport,
     hasEngineeredTimber, hasLouvreWindows, hasFeatureWeatherboard,
     hasAluminiumBattens, hasRender, hasBreezeBlock } = ctx;
+
+  // Renovation/addition mode — structural new-build items are skipped via RENOVATION_SKIP_CODES
+  const isRenovation = projectType === 'Addition/Renovation';
 
 
   // === FLOOR AREA DETECTION ===
@@ -1296,6 +1486,12 @@ function generateEstimation(
 
   // Count rooms from extracted labels
   const allRooms = pages.flatMap(p => p.rooms);
+
+  // Whether the plan has any readable room labels at all.
+  // When true, the plan is text-based and detections are meaningful — we trust them.
+  // When false (scanned / unlabeled), we have no signal and fall back to larger minimums.
+  const hasRoomLabels = allRooms.length > 0;
+
   const detectedWetRooms = allRooms
     .filter(r => /bathroom|ensuite|laundry|toilet|wc|powder/i.test(r.name)).length;
   const detectedBedrooms = allRooms
@@ -1303,12 +1499,22 @@ function generateEstimation(
   const detectedBathrooms = allRooms
     .filter(r => /\bbath\b|\bbathroom\b|\bensuite\b/i.test(r.name)).length;
 
-  // Minimum: 2 per unit (ensuite + main), plus laundry
-  const minWetRooms = unitCount * 3;
-  const wetRoomCount = Math.max(detectedWetRooms, minWetRooms);
-  // Bedroom and bathroom counts with realistic minimums per unit
-  const bedroomCount = Math.max(detectedBedrooms, unitCount * 3); // min 3-bed per unit
-  const bathroomCount = Math.max(detectedBathrooms, unitCount * 2); // min 2 bathrooms per unit
+  // Apply minimums based on whether the plan has readable room labels.
+  // If labels exist: trust the detection — a 1-bed apartment shows 1 bedroom, not 3.
+  //   Use a floor of 1 per unit so estimates never collapse to zero.
+  // If no labels found: the plan is scanned or unlabeled; assume a standard house layout
+  //   to avoid wildly underestimating (3-bed, 2-bath is a safe residential baseline).
+  const bedroomCount = hasRoomLabels
+    ? Math.max(detectedBedrooms, unitCount)       // trust plan; floor = 1 per unit
+    : Math.max(detectedBedrooms, unitCount * 3);  // no labels — assume 3-bed house
+
+  const bathroomCount = hasRoomLabels
+    ? Math.max(detectedBathrooms, unitCount)      // trust plan; floor = 1 per unit
+    : Math.max(detectedBathrooms, unitCount * 2); // no labels — assume 2 bathrooms
+
+  const wetRoomCount = hasRoomLabels
+    ? Math.max(detectedWetRooms, unitCount)       // trust plan; floor = 1 per unit
+    : Math.max(detectedWetRooms, unitCount * 3);  // no labels — assume 3 wet rooms
 
   // Determine construction type
   const constructionType = pages.reduce((acc, p) => {
@@ -1364,6 +1570,9 @@ function generateEstimation(
     quantityNote?: string
   ) => {
     if (quantity <= 0) return;
+
+    // Skip new-build structural items that don't apply to renovation/addition scopes
+    if (isRenovation && RENOVATION_SKIP_CODES.has(rateCode)) return;
 
     const rate = AUSTRALIAN_CONSTRUCTION_RATES.find(r => r.code === rateCode);
     if (!rate) {
@@ -1915,7 +2124,7 @@ export async function analyzePDF(file: File): Promise<PlanAnalysisResult> {
       const doorWindowTags = findDoorWindowTags(texts);
 
       // Detect symbols (schedule references, electrical, plumbing)
-      const symbols = detectSymbols(texts, pageIndex);
+      const symbols = detectSymbols(texts, pageIndex, drawingType);
 
       // Add door/window tags as symbols with their positions
       for (const tag of doorWindowTags) {
@@ -1946,8 +2155,8 @@ export async function analyzePDF(file: File): Promise<PlanAnalysisResult> {
       const floorAreas = extractFloorAreas(texts, pageIndex);
       allFloorAreas.push(...floorAreas);
 
-      // Count electrical symbols
-      const electricalCounts = countElectricalSymbols(texts, pageIndex);
+      // Count electrical symbols — pass drawingType to resolve the SD ambiguity
+      const electricalCounts = countElectricalSymbols(texts, pageIndex, drawingType);
       for (const [key, count] of Object.entries(electricalCounts)) {
         aggregatedElectricalCounts[key] = (aggregatedElectricalCounts[key] || 0) + count;
       }
@@ -2039,6 +2248,23 @@ export async function analyzePDF(file: File): Promise<PlanAnalysisResult> {
       new Map(allMaterialSelections.map(m => [`${m.category}-${m.selection}`, m])).values()
     );
 
+    // Deduplicate floor areas — the same room label (e.g. "LIVING 45.6m²") can appear on
+    // multiple pages when a GA plan is repeated at different scales or when title blocks
+    // carry area summaries. Summing duplicates would double the detected floor area and
+    // cascade to 2× estimates for framing, linings, painting, electrical, and plumbing.
+    // Strategy: keep the MAXIMUM area value per unique room name — if the same space appears
+    // at two different readings, the larger value is the true area (not a partial detail).
+    const uniqueFloorAreas = Array.from(
+      allFloorAreas.reduce((map, area) => {
+        const key = area.name.toUpperCase().trim();
+        const existing = map.get(key);
+        if (!existing || area.area > existing.area) {
+          map.set(key, area);
+        }
+        return map;
+      }, new Map<string, FloorArea>()).values()
+    );
+
     // Determine overall construction type
     const overallConstructionType = pages
       .map(p => p.constructionType)
@@ -2071,11 +2297,11 @@ export async function analyzePDF(file: File): Promise<PlanAnalysisResult> {
     const uniqueWindows = scheduleWindowTotal > 0 ? scheduleWindowTotal : symbolWindowCount;
     const uniqueRooms = new Set(pages.flatMap(p => p.rooms.map(r => r.name))).size;
 
-    // Calculate total floor area from extracted areas
-    const totalFloorArea = allFloorAreas
+    // Calculate total floor area from deduplicated areas
+    const totalFloorArea = uniqueFloorAreas
       .filter(a => a.name.includes('TOTAL') || a.name.includes('LIVING') || a.name.includes('GROSS'))
       .reduce((max, a) => Math.max(max, a.area), 0) ||
-      allFloorAreas.reduce((sum, a) => sum + a.area, 0);
+      uniqueFloorAreas.reduce((sum, a) => sum + a.area, 0);
 
     // Determine required trades
     const trades: Trade[] = [];
@@ -2087,8 +2313,53 @@ export async function analyzePDF(file: File): Promise<PlanAnalysisResult> {
     }
     trades.push('Concreter', 'Electrician', 'Plumber', 'Plasterer', 'Painter', 'Tiler', 'Roofer', 'Glazier');
 
-    // Generate estimation
-    const estimatedItems = generateEstimation(pages, schedules, allFloorAreas, aggregatedElectricalCounts);
+    // Commercial detection — must run before estimation so we can block it for commercial projects
+    const commercialDetection = detectCommercialContext(pages.flatMap(p => p.textContent));
+
+    // Generate estimation only for residential projects — commercial plans produce meaningless
+    // residential rates so we return an empty array and let the UI surface commercialDetection.message
+    const estimatedItems = commercialDetection.isCommercial
+      ? []
+      : generateEstimation(pages, schedules, uniqueFloorAreas, aggregatedElectricalCounts, projectType);
+
+    // === SCAN DETECTION ===
+    // Count meaningful characters across all pages (strip whitespace so blank pages don't mask the issue)
+    const totalCharsExtracted = pages.reduce(
+      (sum, p) => sum + p.textContent.join('').replace(/\s/g, '').length,
+      0
+    );
+    const pagesWithText = pages.filter(
+      p => p.textContent.join('').replace(/\s/g, '').length > 20
+    ).length;
+    const pagesWithoutText = pageCount - pagesWithText;
+    const charsPerPage = pageCount > 0 ? totalCharsExtracted / pageCount : 0;
+
+    let scanIsLikely: boolean;
+    let scanConfidence: ScanDetectionResult['confidence'];
+
+    if (charsPerPage < 30) {
+      // Essentially no text on any page — almost certainly scanned
+      scanIsLikely = true;
+      scanConfidence = 'high';
+    } else if (charsPerPage < 150 || pagesWithoutText > pageCount * 0.6) {
+      // Very thin text or majority of pages are blank — likely a mixed or mostly-scanned set
+      scanIsLikely = true;
+      scanConfidence = 'medium';
+    } else {
+      scanIsLikely = false;
+      scanConfidence = 'low';
+    }
+
+    const scanDetection: ScanDetectionResult = {
+      isLikelyScan: scanIsLikely,
+      confidence: scanConfidence,
+      totalCharsExtracted,
+      pagesWithText,
+      pagesWithoutText,
+      message: scanIsLikely
+        ? `Limited text detected (${totalCharsExtracted} characters across ${pageCount} page${pageCount !== 1 ? 's' : ''}, ${pagesWithText} with readable text). This PDF appears to be scanned or image-based. All quantities are estimates only — verify every line against your actual plans before use.`
+        : `Text extracted successfully (${totalCharsExtracted} characters across ${pagesWithText} page${pagesWithText !== 1 ? 's' : ''} with readable text).`,
+    };
 
     return {
       fileName: file.name,
@@ -2103,8 +2374,8 @@ export async function analyzePDF(file: File): Promise<PlanAnalysisResult> {
         totalDoors: uniqueDoors,
         totalWindows: uniqueWindows,
         trades: [...new Set(trades)],
-        // Enhanced summary
-        floorAreas: allFloorAreas,
+        // Enhanced summary — deduplicated so same room across multiple pages isn't counted twice
+        floorAreas: uniqueFloorAreas,
         standardsReferenced: uniqueStandards.map(s => s.code),
         materialSelections: uniqueMaterials,
       },
@@ -2114,6 +2385,8 @@ export async function analyzePDF(file: File): Promise<PlanAnalysisResult> {
       materialSelections: uniqueMaterials,
       electricalSummary: Object.keys(aggregatedElectricalCounts).length > 0 ? aggregatedElectricalCounts : undefined,
       estimatedItems,
+      scanDetection,
+      commercialDetection,
     };
   } finally {
     URL.revokeObjectURL(fileUrl);

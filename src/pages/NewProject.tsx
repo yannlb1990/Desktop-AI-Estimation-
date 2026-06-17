@@ -377,7 +377,7 @@ const NewProject = () => {
   return (
     <div className="min-h-screen bg-muted/30">
       <nav className="border-b border-border bg-background">
-        <div className="container mx-auto px-6 py-4">
+        <div className="container mx-auto px-4 sm:px-6 py-4">
           <Button variant="ghost" onClick={() => navigate("/dashboard")}>
             <ArrowLeft className="h-4 w-4 mr-2" />
             Back to Dashboard
@@ -385,9 +385,9 @@ const NewProject = () => {
         </div>
       </nav>
 
-      <div className="container mx-auto px-6 py-8 max-w-4xl">
+      <div className="container mx-auto px-4 sm:px-6 py-6 sm:py-8 max-w-4xl">
         <div className="mb-8">
-          <h1 className="font-display text-4xl font-bold mb-2">New Project</h1>
+          <h1 className="font-display text-2xl sm:text-3xl md:text-4xl font-bold mb-2">New Project</h1>
           <p className="text-muted-foreground">
             Upload plans for AI-powered takeoff or create a manual estimate
           </p>
@@ -406,7 +406,7 @@ const NewProject = () => {
           </TabsList>
 
           <TabsContent value="upload">
-            <Card className="p-8">
+            <Card className="p-4 sm:p-8">
               <form onSubmit={handlePlanUpload} className="space-y-6">
                 <div>
                   <Label htmlFor="name">Project Name *</Label>
