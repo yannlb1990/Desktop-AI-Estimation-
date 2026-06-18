@@ -349,6 +349,10 @@ export const InteractiveCanvas = ({
   // Grid snap size (mm) — mirrored from prop for stale-closure-free use in event handlers
   const gridSnapRef = useRef<number>(0);
   useEffect(() => { gridSnapRef.current = gridSnapMm || 0; }, [gridSnapMm]);
+  // Polygon live-area refs — stale-closure-free access in after:render
+  const polygonPointsRef = useRef<WorldPoint[]>([]);
+  const polygonCursorRef = useRef<WorldPoint | null>(null);
+  useEffect(() => { polygonPointsRef.current = polygonPoints; }, [polygonPoints]);
 
   // Always-current draw color — avoids stale closure in mouse callbacks
   const drawColorRef = useRef<string | undefined>(selectedColor);
@@ -1498,6 +1502,133 @@ export const InteractiveCanvas = ({
         ctx.restore();
       };
 
+      // ── Pass 0: Wall body fills — dark grey with miter-corrected junction corners ──
+      {
+        const upmW = unitsPerMetreRef.current;
+        if (upmW && upmW > 0) {
+          const euV = Math.max(upmW, 8 / (0.064 * zoom));
+          const allWalls = Array.from(measurementMapRef.current.values()).filter(
+            m => !!(m as any).wallThickness && m.worldPoints?.length >= 2
+          );
+          const THRESH_W = 18 / zoom;
+
+          const ri2 = (
+            px: number, py: number, dx: number, dy: number,
+            qx: number, qy: number, ex: number, ey: number
+          ): WorldPoint | null => {
+            const den = dx * ey - dy * ex;
+            if (Math.abs(den) < 1e-8) return null;
+            const t = ((qx - px) * ey - (qy - py) * ex) / den;
+            return { x: px + dx * t, y: py + dy * t };
+          };
+
+          // Pre-compute miter corners: wallId:endpointIdx → {l1, l2}
+          const miterCorners = new Map<string, { l1: WorldPoint; l2: WorldPoint }>();
+          for (let wi = 0; wi < allWalls.length; wi++) {
+            for (let wj = wi + 1; wj < allWalls.length; wj++) {
+              const mA = allWalls[wi], mB = allWalls[wj];
+              if ((mA as any).arcControlPoint || (mB as any).arcControlPoint) continue;
+              const hwA = ((mA as any).wallThickness / 1000) * euV / 2;
+              const hwB = ((mB as any).wallThickness / 1000) * euV / 2;
+              for (let eiA = 0; eiA < 2; eiA++) {
+                for (let eiB = 0; eiB < 2; eiB++) {
+                  const epA = mA.worldPoints[eiA], epB = mB.worldPoints[eiB];
+                  if (Math.hypot(epA.x - epB.x, epA.y - epB.y) > THRESH_W) continue;
+                  const jx = (epA.x + epB.x) / 2, jy = (epA.y + epB.y) / 2;
+                  const oA = mA.worldPoints[1 - eiA], oB = mB.worldPoints[1 - eiB];
+                  const lA = Math.hypot(oA.x - jx, oA.y - jy) || 1;
+                  const lB = Math.hypot(oB.x - jx, oB.y - jy) || 1;
+                  const dAx = (oA.x - jx) / lA, dAy = (oA.y - jy) / lA;
+                  const dBx = (oB.x - jx) / lB, dBy = (oB.y - jy) / lB;
+                  const nAx = -dAy, nAy = dAx, nBx = -dBy, nBy = dBx;
+                  const Al1x = jx + nAx * hwA, Al1y = jy + nAy * hwA;
+                  const Al2x = jx - nAx * hwA, Al2y = jy - nAy * hwA;
+                  const Bl1x = jx + nBx * hwB, Bl1y = jy + nBy * hwB;
+                  const Bl2x = jx - nBx * hwB, Bl2y = jy - nBy * hwB;
+                  const cross = dAx * dBy - dAy * dBx;
+                  let M1: WorldPoint | null, M2: WorldPoint | null;
+                  if (cross <= 0) {
+                    M1 = ri2(Al1x, Al1y, dAx, dAy, Bl1x, Bl1y, dBx, dBy);
+                    M2 = ri2(Al2x, Al2y, dAx, dAy, Bl2x, Bl2y, dBx, dBy);
+                    if (!M1 || !M2) continue;
+                    miterCorners.set(`${mA.id}:${eiA}`, { l1: M1, l2: M2 });
+                    miterCorners.set(`${mB.id}:${eiB}`, { l1: M1, l2: M2 });
+                  } else {
+                    M1 = ri2(Al1x, Al1y, dAx, dAy, Bl2x, Bl2y, dBx, dBy);
+                    M2 = ri2(Al2x, Al2y, dAx, dAy, Bl1x, Bl1y, dBx, dBy);
+                    if (!M1 || !M2) continue;
+                    miterCorners.set(`${mA.id}:${eiA}`, { l1: M1, l2: M2 });
+                    miterCorners.set(`${mB.id}:${eiB}`, { l1: M2, l2: M1 });
+                  }
+                }
+              }
+            }
+          }
+
+          const WALL_FILL = 'rgba(45,45,48,0.94)';
+          const toSW = (wx: number, wy: number) => ({ x: tpx(wx), y: tpy(wy) });
+
+          // Sub-pass A: fills (all walls before any stroke so fills don't overdraw adjacent face lines)
+          allWalls.forEach(m => {
+            const isArc = !!(m as any).arcControlPoint;
+            ctx.save();
+            ctx.setLineDash([]);
+            ctx.fillStyle = WALL_FILL;
+            if (isArc) {
+              const ctrl = (m as any).arcControlPoint as WorldPoint;
+              const g = arcWallGeometry(m.worldPoints[0], m.worldPoints[1], ctrl, (m as any).wallThickness, upmW);
+              const op1 = toSW(g.outer.p1.x, g.outer.p1.y), oQ = toSW(g.outer.Q.x, g.outer.Q.y), op2 = toSW(g.outer.p2.x, g.outer.p2.y);
+              const ip1 = toSW(g.inner.p1.x, g.inner.p1.y), iQ = toSW(g.inner.Q.x, g.inner.Q.y), ip2 = toSW(g.inner.p2.x, g.inner.p2.y);
+              ctx.beginPath();
+              ctx.moveTo(op1.x, op1.y); ctx.quadraticCurveTo(oQ.x, oQ.y, op2.x, op2.y);
+              ctx.lineTo(ip2.x, ip2.y); ctx.quadraticCurveTo(iQ.x, iQ.y, ip1.x, ip1.y);
+              ctx.closePath(); ctx.fill();
+            } else {
+              const thk = (m as any).wallThickness as number;
+              const geo = wallGeometry(m.worldPoints[0], m.worldPoints[1], thk, euV);
+              const m0 = miterCorners.get(`${m.id}:0`), m1 = miterCorners.get(`${m.id}:1`);
+              const c_l1p1 = m0 ? m0.l1 : geo.l1p1, c_l2p1 = m0 ? m0.l2 : geo.l2p1;
+              const c_l1p2 = m1 ? m1.l1 : geo.l1p2, c_l2p2 = m1 ? m1.l2 : geo.l2p2;
+              ctx.beginPath();
+              ctx.moveTo(tpx(c_l1p1.x), tpy(c_l1p1.y));
+              ctx.lineTo(tpx(c_l1p2.x), tpy(c_l1p2.y));
+              ctx.lineTo(tpx(c_l2p2.x), tpy(c_l2p2.y));
+              ctx.lineTo(tpx(c_l2p1.x), tpy(c_l2p1.y));
+              ctx.closePath(); ctx.fill();
+            }
+            ctx.restore();
+          });
+
+          // Sub-pass B: face lines + end caps on top of all fills
+          allWalls.forEach(m => {
+            const isArc = !!(m as any).arcControlPoint;
+            ctx.save();
+            ctx.setLineDash([]);
+            ctx.strokeStyle = m.color || '#94a3b8';
+            ctx.lineWidth = 1.5 * dpr;
+            if (isArc) {
+              const ctrl = (m as any).arcControlPoint as WorldPoint;
+              const g = arcWallGeometry(m.worldPoints[0], m.worldPoints[1], ctrl, (m as any).wallThickness, upmW);
+              const op1 = toSW(g.outer.p1.x, g.outer.p1.y), oQ = toSW(g.outer.Q.x, g.outer.Q.y), op2 = toSW(g.outer.p2.x, g.outer.p2.y);
+              const ip1 = toSW(g.inner.p1.x, g.inner.p1.y), iQ = toSW(g.inner.Q.x, g.inner.Q.y), ip2 = toSW(g.inner.p2.x, g.inner.p2.y);
+              ctx.beginPath(); ctx.moveTo(op1.x, op1.y); ctx.quadraticCurveTo(oQ.x, oQ.y, op2.x, op2.y); ctx.stroke();
+              ctx.beginPath(); ctx.moveTo(ip1.x, ip1.y); ctx.quadraticCurveTo(iQ.x, iQ.y, ip2.x, ip2.y); ctx.stroke();
+            } else {
+              const thk = (m as any).wallThickness as number;
+              const geo = wallGeometry(m.worldPoints[0], m.worldPoints[1], thk, euV);
+              const mit0 = miterCorners.get(`${m.id}:0`), mit1 = miterCorners.get(`${m.id}:1`);
+              const c_l1p1 = mit0 ? mit0.l1 : geo.l1p1, c_l2p1 = mit0 ? mit0.l2 : geo.l2p1;
+              const c_l1p2 = mit1 ? mit1.l1 : geo.l1p2, c_l2p2 = mit1 ? mit1.l2 : geo.l2p2;
+              ctx.beginPath(); ctx.moveTo(tpx(c_l1p1.x), tpy(c_l1p1.y)); ctx.lineTo(tpx(c_l1p2.x), tpy(c_l1p2.y)); ctx.stroke();
+              ctx.beginPath(); ctx.moveTo(tpx(c_l2p1.x), tpy(c_l2p1.y)); ctx.lineTo(tpx(c_l2p2.x), tpy(c_l2p2.y)); ctx.stroke();
+              if (!mit0) { ctx.beginPath(); ctx.moveTo(tpx(c_l1p1.x), tpy(c_l1p1.y)); ctx.lineTo(tpx(c_l2p1.x), tpy(c_l2p1.y)); ctx.stroke(); }
+              if (!mit1) { ctx.beginPath(); ctx.moveTo(tpx(c_l1p2.x), tpy(c_l1p2.y)); ctx.lineTo(tpx(c_l2p2.x), tpy(c_l2p2.y)); ctx.stroke(); }
+            }
+            ctx.restore();
+          });
+        }
+      }
+
       // ── Pass 1: wall hatch fills (drawn before labels so labels sit on top) ──
       // Iterate measurementMapRef (rebuilt from props first) so deleted IDs are never hatched.
       measurementMapRef.current.forEach((hm, hatchId) => {
@@ -1993,130 +2124,7 @@ export const InteractiveCanvas = ({
         }
       }
 
-      // Feature 4: Proper wall junction geometry — mitered corners at connected wall endpoints
-      {
-        const upm = unitsPerMetreRef.current;
-        if (upm && upm > 0) {
-          const euVisual = Math.max(upm, 8 / (0.064 * zoom));
-          const walls = Array.from(measurementMapRef.current.values()).filter(
-            m => !!(m as any).wallThickness && m.worldPoints?.length >= 2
-          );
-          const THRESH = 18 / zoom;
-
-          // Ray-ray intersection: ray1 = P + t*D, ray2 = Q + s*E
-          // Returns intersection point or null if parallel
-          const rayIntersect = (
-            px: number, py: number, dx: number, dy: number,
-            qx: number, qy: number, ex: number, ey: number
-          ): { x: number; y: number } | null => {
-            const denom = dx * ey - dy * ex;
-            if (Math.abs(denom) < 1e-8) return null;
-            const t = ((qx - px) * ey - (qy - py) * ex) / denom;
-            return { x: px + dx * t, y: py + dy * t };
-          };
-
-          for (let i = 0; i < walls.length; i++) {
-            for (let j = i + 1; j < walls.length; j++) {
-              const mA = walls[i], mB = walls[j];
-              const thkA = (mA as any).wallThickness as number;
-              const thkB = (mB as any).wallThickness as number;
-              const hwA = (thkA / 1000) * euVisual / 2;
-              const hwB = (thkB / 1000) * euVisual / 2;
-
-              // Check all endpoint pairs
-              for (let epIdxA = 0; epIdxA < 2; epIdxA++) {
-                for (let epIdxB = 0; epIdxB < 2; epIdxB++) {
-                  const epA = mA.worldPoints[epIdxA];
-                  const epB = mB.worldPoints[epIdxB];
-                  if (Math.hypot(epA.x - epB.x, epA.y - epB.y) > THRESH) continue;
-
-                  // Junction point J (average)
-                  const jx = (epA.x + epB.x) / 2;
-                  const jy = (epA.y + epB.y) / 2;
-
-                  // Direction vectors pointing INTO each wall from junction
-                  const otherA = mA.worldPoints[1 - epIdxA];
-                  const otherB = mB.worldPoints[1 - epIdxB];
-                  const lenA = Math.hypot(otherA.x - jx, otherA.y - jy) || 1;
-                  const lenB = Math.hypot(otherB.x - jx, otherB.y - jy) || 1;
-                  const dAx = (otherA.x - jx) / lenA;
-                  const dAy = (otherA.y - jy) / lenA;
-                  const dBx = (otherB.x - jx) / lenB;
-                  const dBy = (otherB.y - jy) / lenB;
-
-                  // Perpendicular normals (right-hand rule)
-                  const nAx = -dAy, nAy = dAx;
-                  const nBx = -dBy, nBy = dBx;
-
-                  // Offset edge start points from junction
-                  const oA1x = jx + nAx * hwA, oA1y = jy + nAy * hwA; // left side of A
-                  const oA2x = jx - nAx * hwA, oA2y = jy - nAy * hwA; // right side of A
-                  const oB1x = jx + nBx * hwB, oB1y = jy + nBy * hwB; // left side of B
-                  const oB2x = jx - nBx * hwB, oB2y = jy - nBy * hwB; // right side of B
-
-                  // Cross-intersect: A-left with B-right, and A-right with B-left
-                  // (which pairing creates an outward vs inward corner depends on geometry)
-                  const cornerOuter = rayIntersect(oA1x, oA1y, dAx, dAy, oB2x, oB2y, dBx, dBy)
-                    ?? rayIntersect(oA1x, oA1y, dAx, dAy, oB1x, oB1y, dBx, dBy);
-                  const cornerInner = rayIntersect(oA2x, oA2y, dAx, dAy, oB1x, oB1y, dBx, dBy)
-                    ?? rayIntersect(oA2x, oA2y, dAx, dAy, oB2x, oB2y, dBx, dBy);
-
-                  if (!cornerOuter || !cornerInner) continue;
-
-                  // Parse wall color for fill
-                  const rawColor = mA.color || '#64748b';
-                  let fillR = 100, fillG = 116, fillB = 139;
-                  const hexMatch = rawColor.match(/^#([0-9a-fA-F]{6})$/);
-                  if (hexMatch) {
-                    fillR = parseInt(hexMatch[1].slice(0, 2), 16);
-                    fillG = parseInt(hexMatch[1].slice(2, 4), 16);
-                    fillB = parseInt(hexMatch[1].slice(4, 6), 16);
-                  }
-
-                  // Fill the gap triangle/polygon at junction
-                  ctx.save();
-                  ctx.setLineDash([]);
-                  ctx.fillStyle = `rgba(${fillR},${fillG},${fillB},0.55)`;
-                  ctx.beginPath();
-                  ctx.moveTo(tpx(oA1x), tpy(oA1y));
-                  ctx.lineTo(tpx(cornerOuter.x), tpy(cornerOuter.y));
-                  ctx.lineTo(tpx(oB2x), tpy(oB2y));
-                  ctx.lineTo(tpx(jx), tpy(jy));
-                  ctx.closePath();
-                  ctx.fill();
-
-                  ctx.fillStyle = `rgba(${fillR},${fillG},${fillB},0.55)`;
-                  ctx.beginPath();
-                  ctx.moveTo(tpx(oA2x), tpy(oA2y));
-                  ctx.lineTo(tpx(cornerInner.x), tpy(cornerInner.y));
-                  ctx.lineTo(tpx(oB1x), tpy(oB1y));
-                  ctx.lineTo(tpx(jx), tpy(jy));
-                  ctx.closePath();
-                  ctx.fill();
-
-                  // Draw mitered outer edge line
-                  ctx.strokeStyle = rawColor;
-                  ctx.lineWidth = 1.5 * dpr;
-                  ctx.beginPath();
-                  ctx.moveTo(tpx(oA1x), tpy(oA1y));
-                  ctx.lineTo(tpx(cornerOuter.x), tpy(cornerOuter.y));
-                  ctx.lineTo(tpx(oB2x), tpy(oB2y));
-                  ctx.stroke();
-
-                  // Draw mitered inner edge line
-                  ctx.beginPath();
-                  ctx.moveTo(tpx(oA2x), tpy(oA2y));
-                  ctx.lineTo(tpx(cornerInner.x), tpy(cornerInner.y));
-                  ctx.lineTo(tpx(oB1x), tpy(oB1y));
-                  ctx.stroke();
-
-                  ctx.restore();
-                }
-              }
-            }
-          }
-        }
-      }
+      // Junction geometry is handled in Pass 0 above (miter-corrected wall fills)
 
       // Feature 5: Wall midpoint diamond markers — permanent cyan diamond at each wall's mid-axis
       {
@@ -2145,6 +2153,66 @@ export const InteractiveCanvas = ({
           ctx.stroke();
           ctx.restore();
         });
+      }
+
+      // Feature 6: Polygon live running area — fills + centroid label while drawing
+      {
+        const pts = polygonPointsRef.current;
+        const cursor = polygonCursorRef.current;
+        if (pts.length >= 2) {
+          const livePts = cursor ? [...pts, cursor] : pts;
+          // Draw the in-progress polygon fill
+          ctx.save();
+          ctx.setLineDash([6 * dpr, 4 * dpr]);
+          ctx.strokeStyle = 'rgba(74,222,128,0.85)';
+          ctx.lineWidth = 1.5 * dpr;
+          ctx.fillStyle = 'rgba(74,222,128,0.12)';
+          ctx.beginPath();
+          ctx.moveTo(tpx(livePts[0].x), tpy(livePts[0].y));
+          for (let i = 1; i < livePts.length; i++) ctx.lineTo(tpx(livePts[i].x), tpy(livePts[i].y));
+          ctx.closePath();
+          ctx.fill();
+          ctx.stroke();
+
+          // Compute area (shoelace) and centroid for live pts
+          if (livePts.length >= 3) {
+            let area = 0;
+            let cx = 0, cy = 0;
+            for (let i = 0; i < livePts.length; i++) {
+              const j = (i + 1) % livePts.length;
+              const cross = livePts[i].x * livePts[j].y - livePts[j].x * livePts[i].y;
+              area += cross;
+              cx += (livePts[i].x + livePts[j].x) * cross;
+              cy += (livePts[i].y + livePts[j].y) * cross;
+            }
+            area = Math.abs(area) / 2;
+            const A6 = Math.abs(area) * 6 || 1;
+            cx = Math.abs(cx) / A6;
+            cy = Math.abs(cy) / A6;
+
+            const upmPoly = unitsPerMetreRef.current;
+            const areaM2 = upmPoly && upmPoly > 0 ? area / (upmPoly * upmPoly) : null;
+            const areaText = areaM2 !== null ? `${areaM2.toFixed(2)} m²` : `${area.toFixed(0)} px²`;
+
+            const labelX = tpx(cx), labelY = tpy(cy);
+            const fSize = Math.max(11, Math.min(16, 13 * dpr));
+            ctx.save();
+            ctx.setLineDash([]);
+            ctx.font = `700 ${fSize}px system-ui, sans-serif`;
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            const tw = ctx.measureText(areaText).width + 10 * dpr;
+            const th = fSize + 6 * dpr;
+            ctx.fillStyle = 'rgba(15,23,42,0.80)';
+            ctx.beginPath();
+            ctx.roundRect(labelX - tw / 2, labelY - th / 2, tw, th, 4 * dpr);
+            ctx.fill();
+            ctx.fillStyle = '#4ade80';
+            ctx.fillText(areaText, labelX, labelY);
+            ctx.restore();
+          }
+          ctx.restore();
+        }
       }
 
       ctx.restore();
@@ -3494,37 +3562,53 @@ export const InteractiveCanvas = ({
       return;
     }
 
-    // Polygon snap indicator — show green ring near first point when ≥2 points placed
-    if (activeTool === 'polygon' && polygonPoints.length >= 2) {
+    // Polygon: close-snap indicator + wall-endpoint snap + live cursor tracking
+    if (activeTool === 'polygon') {
       const snapPointer = canvas.getPointer(e.e, true);
-      const snapWorld: WorldPoint = viewToWorld({ x: snapPointer.x, y: snapPointer.y }, transform, viewport);
-      const first = polygonPoints[0];
+      let snapWorld: WorldPoint = viewToWorld({ x: snapPointer.x, y: snapPointer.y }, transform, viewport);
       const snapThreshold = 15 / transform.zoom;
-      const dx = snapWorld.x - first.x;
-      const dy = snapWorld.y - first.y;
-      const isNearFirst = Math.sqrt(dx * dx + dy * dy) < snapThreshold;
 
-      // Remove old indicator
-      if (snapIndicatorRef.current) {
-        canvas.remove(snapIndicatorRef.current);
-        snapIndicatorRef.current = null;
+      // Snap cursor to wall endpoints when near one
+      let snappedToWall = false;
+      for (const m of measurementMapRef.current.values()) {
+        if (!(m as any).wallThickness || !m.worldPoints) continue;
+        for (const wp of m.worldPoints) {
+          if (Math.hypot(snapWorld.x - wp.x, snapWorld.y - wp.y) < snapThreshold) {
+            snapWorld = wp;
+            snappedToWall = true;
+            break;
+          }
+        }
+        if (snappedToWall) break;
       }
+      endpointSnapIndicatorRef.current = snappedToWall ? snapWorld : null;
+      polygonCursorRef.current = snapWorld;
 
-      if (isNearFirst) {
-        const indicatorRadius = getZoomAwareSize(12);
-        const indicator = new Circle({
-          left: first.x - indicatorRadius,
-          top: first.y - indicatorRadius,
-          radius: indicatorRadius,
-          fill: 'rgba(0, 200, 0, 0.2)',
-          stroke: '#00CC00',
-          strokeWidth: getZoomAwareSize(2),
-          strokeDashArray: [getZoomAwareSize(3), getZoomAwareSize(3)],
-          selectable: false,
-          evented: false,
-        });
-        canvas.add(indicator);
-        snapIndicatorRef.current = indicator;
+      if (polygonPoints.length >= 2) {
+        const first = polygonPoints[0];
+        const isNearFirst = Math.hypot(snapWorld.x - first.x, snapWorld.y - first.y) < snapThreshold;
+
+        if (snapIndicatorRef.current) {
+          canvas.remove(snapIndicatorRef.current);
+          snapIndicatorRef.current = null;
+        }
+
+        if (isNearFirst) {
+          const indicatorRadius = getZoomAwareSize(12);
+          const indicator = new Circle({
+            left: first.x - indicatorRadius,
+            top: first.y - indicatorRadius,
+            radius: indicatorRadius,
+            fill: 'rgba(0, 200, 0, 0.2)',
+            stroke: '#00CC00',
+            strokeWidth: getZoomAwareSize(2),
+            strokeDashArray: [getZoomAwareSize(3), getZoomAwareSize(3)],
+            selectable: false,
+            evented: false,
+          });
+          canvas.add(indicator);
+          snapIndicatorRef.current = indicator;
+        }
       }
 
       canvas.requestRenderAll();
@@ -4286,11 +4370,11 @@ export const InteractiveCanvas = ({
         </div>
       )}
 
-      {/* Polygon completion controls */}
+      {/* Polygon completion controls — floated at top so they don't obstruct drawing area */}
       {activeTool === 'polygon' && polygonPoints.length >= 3 && (
-        <div className="absolute bottom-4 left-1/2 transform -translate-x-1/2 flex gap-2 z-10">
+        <div className="absolute top-3 left-1/2 transform -translate-x-1/2 flex gap-2 z-10">
           <Button
-            onClick={handleDoubleClick}
+            onClick={() => setTimeout(() => handleDoubleClick(), 0)}
             className="bg-green-600 hover:bg-green-700 text-white shadow-lg"
             size="sm"
           >
