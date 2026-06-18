@@ -415,6 +415,13 @@ export const PDFTakeoff = ({ projectId, estimateId, onAddCostItems }: PDFTakeoff
     toast.success('Measurement deleted');
   }, [dispatch, measurementPopup]);
 
+  const handlePopupFlipDoor = useCallback(() => {
+    if (!measurementPopup) return;
+    const m = state.measurements.find(x => x.id === measurementPopup.id);
+    if (!m) return;
+    dispatch({ type: 'UPDATE_MEASUREMENT', payload: { id: measurementPopup.id, updates: { doorFlipped: !m.doorFlipped } } });
+  }, [dispatch, measurementPopup, state.measurements]);
+
   const handleDeleteMeasurement = useCallback((id: string) => {
     canvasActionsRef.current?.removeObjects(id);
     dispatch({ type: 'DELETE_MEASUREMENT', payload: id });
@@ -1781,6 +1788,20 @@ export const PDFTakeoff = ({ projectId, estimateId, onAddCostItems }: PDFTakeoff
                 </button>
               ))}
             </div>
+            {(() => {
+              const lbl = m.label || '';
+              const isDoorMeasurement = lbl.startsWith('Door') || ((m as any).modSubtype && ['Internal','Entry','Cavity Slider','Bi-fold','French','Garage','Fire Door'].includes((m as any).modSubtype));
+              if (!isDoorMeasurement) return null;
+              return (
+                <button
+                  onClick={handlePopupFlipDoor}
+                  className="mt-2 w-full px-2.5 py-1.5 rounded text-xs font-medium border border-violet-400/60 text-violet-700 hover:bg-violet-50 dark:text-violet-300 dark:hover:bg-violet-950/30 flex items-center justify-center gap-1.5 transition-colors"
+                >
+                  <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" /></svg>
+                  Flip swing
+                </button>
+              );
+            })()}
           </div>
         </>,
         document.body

@@ -112,6 +112,7 @@ export interface Measurement {
   wallHatchSide?: WallHatchSide; // which face(s) to draw face-lining hatches on
   arcControlPoint?: WorldPoint; // control point for arc-wall tool (passes through this point)
   modSubtype?: string;          // subtype for door/window mark-as (e.g. 'Internal', 'Awning')
+  doorFlipped?: boolean;        // mirror the door swing symbol (swaps hinge endpoint)
   timestamp: Date;
 
   // Enhanced fields for takeoff table

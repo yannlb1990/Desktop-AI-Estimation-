@@ -1156,6 +1156,51 @@ export const InteractiveCanvas = ({
     canvas.requestRenderAll();
   }, [viewport, measurements, getZoomAwareSize]);
 
+  // Hide wall end caps where two walls share an endpoint (junction cleanup)
+  useEffect(() => {
+    const canvas = fabricCanvasRef.current;
+    if (!canvas) return;
+    const walls = measurements.filter(m => !!m.wallThickness && m.worldPoints?.length >= 2);
+
+    // Reset all caps to visible first
+    walls.forEach(m => {
+      const objs = measurementObjectsRef.current.get(m.id);
+      if (!objs || objs.length < 5) return;
+      objs[3]?.set({ visible: true }); // cap1 (p1 end)
+      objs[4]?.set({ visible: true }); // cap2 (p2 end)
+    });
+
+    // Junction threshold: 12 world units (handles both exact chain-drawn and near-miss junctions)
+    const THRESH = 12;
+
+    for (let i = 0; i < walls.length; i++) {
+      for (let j = i + 1; j < walls.length; j++) {
+        const mA = walls[i], mB = walls[j];
+        const objsA = measurementObjectsRef.current.get(mA.id);
+        const objsB = measurementObjectsRef.current.get(mB.id);
+        if (!objsA || objsA.length < 5 || !objsB || objsB.length < 5) continue;
+
+        const ptsA = mA.worldPoints;
+        const ptsB = mB.worldPoints;
+
+        // Check all 4 endpoint pairs
+        const pairs: [number, number][] = [[0,0],[0,1],[1,0],[1,1]];
+        for (const [ai, bi] of pairs) {
+          const epA = ptsA[ai], epB = ptsB[bi];
+          if (Math.hypot(epA.x - epB.x, epA.y - epB.y) < THRESH) {
+            // ai=0 → cap1 (objsA[3]), ai=1 → cap2 (objsA[4])
+            const capIdxA = ai === 0 ? 3 : 4;
+            const capIdxB = bi === 0 ? 3 : 4;
+            objsA[capIdxA]?.set({ visible: false });
+            objsB[capIdxB]?.set({ visible: false });
+          }
+        }
+      }
+    }
+
+    canvas.requestRenderAll();
+  }, [measurements]);
+
   // Draw colored markers on the canvas for detected openings (windows=blue, doors=amber).
   // PDF text coordinates have y=0 at the page bottom; canvas world space has y=0 at the top,
   // so we flip: worldY = viewport.height - opening.y. Only renders at rotation=0.
@@ -1263,9 +1308,10 @@ export const InteractiveCanvas = ({
       };
 
       // Door/window symbols — p1/p2 in world coords, converted inside
-      const drawDoorSymbol = (p1: WorldPoint, p2: WorldPoint, color: string, subtype?: string) => {
-        const x1 = tpx(p1.x), y1 = tpy(p1.y);
-        const x2 = tpx(p2.x), y2 = tpy(p2.y);
+      const drawDoorSymbol = (p1: WorldPoint, p2: WorldPoint, color: string, subtype?: string, flipped?: boolean) => {
+        const [fp1, fp2] = flipped ? [p2, p1] : [p1, p2];
+        const x1 = tpx(fp1.x), y1 = tpy(fp1.y);
+        const x2 = tpx(fp2.x), y2 = tpy(fp2.y);
         const dx = x2 - x1, dy = y2 - y1;
         const len = Math.sqrt(dx * dx + dy * dy);
         if (len < 1) return;
@@ -1757,7 +1803,7 @@ export const InteractiveCanvas = ({
 
           const isDoor = mType === 'Door' || lbl.startsWith('Door ') || lbl.startsWith('Door—') || lbl === 'Door';
           const isWindow = mType === 'Window' || lbl.startsWith('Window ') || lbl.startsWith('Window—') || lbl === 'Window';
-          if (isDoor) drawDoorSymbol(wP1, wP2, measurement.color || '#8b5cf6', (measurement as any).modSubtype);
+          if (isDoor) drawDoorSymbol(wP1, wP2, measurement.color || '#8b5cf6', (measurement as any).modSubtype, (measurement as any).doorFlipped);
           else if (isWindow) drawWindowSymbol(wP1, wP2, measurement.color || '#06b6d4', (measurement as any).modSubtype);
         } else if ((measurement as any).type === 'count') {
           let sx = 0, sy = 0;
