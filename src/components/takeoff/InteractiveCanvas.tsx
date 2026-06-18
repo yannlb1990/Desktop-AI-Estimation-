@@ -58,6 +58,16 @@ function getMidpointsForMeasurement(m: { type?: string; worldPoints: WorldPoint[
   return mids;
 }
 
+/** Snap a world point to the nearest grid intersection. Returns `p` unchanged when grid is off. */
+function snapToGrid(p: WorldPoint, gridMm: number, upm: number): WorldPoint {
+  if (gridMm <= 0 || upm <= 0) return p;
+  const gridWorld = (gridMm / 1000) * upm;
+  return {
+    x: Math.round(p.x / gridWorld) * gridWorld,
+    y: Math.round(p.y / gridWorld) * gridWorld,
+  };
+}
+
 /** Snap cursor to nearest endpoint (priority) or midpoint within threshold.
  *  Returns the snapped point and whether it is a midpoint. */
 function computeSnapPoint(
@@ -244,6 +254,8 @@ interface InteractiveCanvasProps {
   wallHatchType?: string;
   /** Which face(s) to apply face-lining hatches (plasterboard / wet-area / cladding). */
   wallHatchSide?: string;
+  /** Grid snap size in mm. 0 = off. */
+  gridSnapMm?: number;
   /**
    * Parent passes a mutable ref; canvas fills `.current` with imperative methods.
    * Use `canvasActionsRef.current?.removeObjects(id)` to delete canvas objects before
@@ -276,6 +288,7 @@ export const InteractiveCanvas = ({
   wallThickness = 90,
   wallHatchType = 'none',
   wallHatchSide = 'both',
+  gridSnapMm = 0,
   onReupload,
   fileName,
   canvasActionsRef,
@@ -331,6 +344,11 @@ export const InteractiveCanvas = ({
   const endpointSnapIndicatorRef = useRef<WorldPoint | null>(null);
   // Arc wall control-point drag state (select mode)
   const arcDragRef = useRef<{ id: string; p1: WorldPoint; p2: WorldPoint; ctrl: WorldPoint } | null>(null);
+  // Chain wall drawing: endpoint of last completed wall — auto-starts next wall from here
+  const chainStartRef = useRef<WorldPoint | null>(null);
+  // Grid snap size (mm) — mirrored from prop for stale-closure-free use in event handlers
+  const gridSnapRef = useRef<number>(0);
+  useEffect(() => { gridSnapRef.current = gridSnapMm || 0; }, [gridSnapMm]);
 
   // Always-current draw color — avoids stale closure in mouse callbacks
   const drawColorRef = useRef<string | undefined>(selectedColor);
@@ -797,6 +815,9 @@ export const InteractiveCanvas = ({
       }
       previewLabelRef.current = null;
     }
+
+    // Clear chain anchor whenever tool changes
+    chainStartRef.current = null;
 
     // Clean up any lingering wall-line preview objects when switching away from wall-line
     if (activeTool !== 'wall-line') {
@@ -1761,6 +1782,36 @@ export const InteractiveCanvas = ({
         }
       });
 
+      // Grid snap dot overlay
+      {
+        const gsUpm = unitsPerMetreRef.current;
+        const gsMm = gridSnapRef.current;
+        if (gsMm > 0 && gsUpm && gsUpm > 0) {
+          const gridWorld = (gsMm / 1000) * gsUpm;
+          const canvasW = canvas.getWidth();
+          const canvasH = canvas.getHeight();
+          const worldMinX = (0 - panX) / zoom;
+          const worldMaxX = (canvasW - panX) / zoom;
+          const worldMinY = (0 - panY) / zoom;
+          const worldMaxY = (canvasH - panY) / zoom;
+          const startX = Math.floor(worldMinX / gridWorld) * gridWorld;
+          const startY = Math.floor(worldMinY / gridWorld) * gridWorld;
+          ctx.save();
+          ctx.fillStyle = 'rgba(148,163,184,0.30)';
+          ctx.setLineDash([]);
+          let dotCount = 0;
+          for (let wx = startX; wx <= worldMaxX && dotCount < 1600; wx += gridWorld) {
+            for (let wy = startY; wy <= worldMaxY && dotCount < 1600; wy += gridWorld) {
+              ctx.beginPath();
+              ctx.arc(tpx(wx), tpy(wy), 1.5 * dpr, 0, Math.PI * 2);
+              ctx.fill();
+              dotCount++;
+            }
+          }
+          ctx.restore();
+        }
+      }
+
       if (previewLabelRef.current) {
         const { text, worldX, worldY, color } = previewLabelRef.current;
         drawLabel(text, worldX, worldY, color);
@@ -1815,6 +1866,29 @@ export const InteractiveCanvas = ({
         ctx.moveTo(cx, cy - r * 0.4); ctx.lineTo(cx, cy + r * 0.4);
         ctx.stroke();
         ctx.restore();
+      }
+
+      // Chain drawing anchor — amber dot showing where next wall will start
+      {
+        const chainAnchor = chainStartRef.current;
+        if (chainAnchor) {
+          const ax = tpx(chainAnchor.x), ay = tpy(chainAnchor.y);
+          const r = 7 * dpr;
+          ctx.save();
+          ctx.fillStyle = '#f59e0b';
+          ctx.strokeStyle = 'rgba(0,0,0,0.5)';
+          ctx.lineWidth = 1.5 * dpr;
+          ctx.setLineDash([]);
+          ctx.beginPath(); ctx.arc(ax, ay, r, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+          ctx.strokeStyle = 'white';
+          ctx.lineWidth = 1.5 * dpr;
+          const c = 3 * dpr;
+          ctx.beginPath();
+          ctx.moveTo(ax - c, ay - c); ctx.lineTo(ax + c, ay + c);
+          ctx.moveTo(ax + c, ay - c); ctx.lineTo(ax - c, ay + c);
+          ctx.stroke();
+          ctx.restore();
+        }
       }
 
       // Feature 2: Arc wall control-point handles (orange diamond, always visible)
@@ -3047,6 +3121,17 @@ export const InteractiveCanvas = ({
       }
     }
 
+    // Chain wall drawing: auto-start from last wall endpoint
+    if (activeTool === 'wall-line' && chainStartRef.current !== null) {
+      worldPoint = chainStartRef.current;
+      chainStartRef.current = null;
+    } else if (
+      gridSnapRef.current > 0 && unitsPerMetreRef.current &&
+      activeTool !== 'pan' && activeTool !== 'select' && activeTool !== 'eraser'
+    ) {
+      worldPoint = snapToGrid(worldPoint, gridSnapRef.current, unitsPerMetreRef.current);
+    }
+
     setIsDrawing(true);
     setStartPoint(worldPoint);
 
@@ -3376,6 +3461,9 @@ export const InteractiveCanvas = ({
           currentWorldPoint = (bestSnap as any).snapped;
           snappedWallEndRef.current = (bestSnap as any).snapped;
           perpSnapRef.current = { from: (bestSnap as any).guideFrom, to: (bestSnap as any).guideTo };
+        } else if (gridSnapRef.current > 0 && unitsPerMetreRef.current) {
+          currentWorldPoint = snapToGrid(currentWorldPoint, gridSnapRef.current, unitsPerMetreRef.current);
+          snappedWallEndRef.current = currentWorldPoint;
         } else {
           snappedWallEndRef.current = null;
         }
@@ -3702,6 +3790,7 @@ export const InteractiveCanvas = ({
         timestamp: new Date(),
       };
       onMeasurementComplete(measurement);
+      chainStartRef.current = worldEndPoint;
     } else if (activeTool === 'offset') {
       const minDist = 5 / transform.zoom;
       const dx0 = worldEndPoint.x - startPoint.x;

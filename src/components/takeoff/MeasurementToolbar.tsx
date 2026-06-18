@@ -28,6 +28,8 @@ interface MeasurementToolbarProps {
   windowSubtype?: string;
   onWindowSubtypeChange?: (type: string) => void;
   contextPanelOpen?: boolean;
+  gridSnapMm?: number;
+  onGridSnapChange?: (mm: number) => void;
 }
 
 const WALL_PRESETS = [64, 70, 90, 92, 110, 150];
@@ -134,6 +136,8 @@ export const MeasurementToolbar = ({
   windowSubtype = 'Awning',
   onWindowSubtypeChange,
   contextPanelOpen = true,
+  gridSnapMm = 0,
+  onGridSnapChange,
 }: MeasurementToolbarProps) => {
   const [customInput, setCustomInput] = useState('');
   type ModId = 'wall' | 'door' | 'window' | 'custom';
@@ -236,6 +240,26 @@ export const MeasurementToolbar = ({
             </TooltipTrigger>
             <TooltipContent>Redo (Ctrl+Y)</TooltipContent>
           </Tooltip>
+
+          {onGridSnapChange && (
+            <>
+              <Separator orientation="vertical" className="h-6 mx-1 shrink-0" />
+              <div className="flex items-center gap-1.5 shrink-0">
+                <span className="text-[11px] text-muted-foreground font-medium">Grid:</span>
+                <select
+                  value={gridSnapMm}
+                  onChange={e => onGridSnapChange(Number(e.target.value))}
+                  className="h-7 text-xs bg-background border border-border rounded px-1.5 text-foreground focus:outline-none focus:border-primary cursor-pointer"
+                >
+                  <option value={0}>Off</option>
+                  <option value={500}>500mm</option>
+                  <option value={600}>600mm</option>
+                  <option value={1000}>1m</option>
+                  <option value={2000}>2m</option>
+                </select>
+              </div>
+            </>
+          )}
         </div>
 
         {/* ── Row 2: Wall configuration (only when wall tool active) ─────── */}

@@ -85,6 +85,7 @@ export const PDFTakeoff = ({ projectId, estimateId, onAddCostItems }: PDFTakeoff
   const [windowSubtype, setWindowSubtype] = useState<string>('Awning');
   const [fsContextOpen, setFsContextOpen] = useState(true);
   const [focusMode, setFocusMode] = useState(false);
+  const [gridSnapMm, setGridSnapMm] = useState(0);
 
   const handleWallHatchTypeChange = (type: string) => {
     setWallHatchType(type);
@@ -833,6 +834,8 @@ export const PDFTakeoff = ({ projectId, estimateId, onAddCostItems }: PDFTakeoff
       windowSubtype={windowSubtype}
       onWindowSubtypeChange={setWindowSubtype}
       contextPanelOpen={contextPanelOpen}
+      gridSnapMm={gridSnapMm}
+      onGridSnapChange={setGridSnapMm}
     />
   );
 
@@ -1011,6 +1014,7 @@ export const PDFTakeoff = ({ projectId, estimateId, onAddCostItems }: PDFTakeoff
           wallThickness={wallThicknessMm}
           wallHatchType={wallHatchType}
           wallHatchSide={wallHatchSide}
+          gridSnapMm={gridSnapMm}
           onReupload={() => {
             dispatch({ type: 'SET_PDF_FILE', payload: null as any });
             setIsTakeoffFullscreen(false);
@@ -1368,6 +1372,7 @@ export const PDFTakeoff = ({ projectId, estimateId, onAddCostItems }: PDFTakeoff
                         wallThickness={wallThicknessMm}
                         wallHatchType={wallHatchType}
                         wallHatchSide={wallHatchSide}
+                        gridSnapMm={gridSnapMm}
                         onReupload={() => {
                           dispatch({ type: 'SET_PDF_FILE', payload: null as any });
                           setActiveTab('upload');
