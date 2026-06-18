@@ -349,10 +349,6 @@ export const InteractiveCanvas = ({
   // Grid snap size (mm) — mirrored from prop for stale-closure-free use in event handlers
   const gridSnapRef = useRef<number>(0);
   useEffect(() => { gridSnapRef.current = gridSnapMm || 0; }, [gridSnapMm]);
-  // Polygon live-area refs — stale-closure-free access in after:render
-  const polygonPointsRef = useRef<WorldPoint[]>([]);
-  const polygonCursorRef = useRef<WorldPoint | null>(null);
-  useEffect(() => { polygonPointsRef.current = polygonPoints; }, [polygonPoints]);
 
   // Always-current draw color — avoids stale closure in mouse callbacks
   const drawColorRef = useRef<string | undefined>(selectedColor);
@@ -398,6 +394,10 @@ export const InteractiveCanvas = ({
   const [polygonPoints, setPolygonPoints] = useState<WorldPoint[]>([]);
   const [polygonMarkers, setPolygonMarkers] = useState<Circle[]>([]);
   const [polygonLines, setPolygonLines] = useState<Line[]>([]);
+  // Polygon live-area refs — declared after polygonPoints to avoid TDZ in dep array
+  const polygonPointsRef = useRef<WorldPoint[]>([]);
+  const polygonCursorRef = useRef<WorldPoint | null>(null);
+  useEffect(() => { polygonPointsRef.current = polygonPoints; }, [polygonPoints]);
 
   // Count tool state - for grouped counting with numbered markers
   const [countPoints, setCountPoints] = useState<WorldPoint[]>([]);
