@@ -1551,14 +1551,16 @@ export const InteractiveCanvas = ({
                     M1 = ri2(Al1x, Al1y, dAx, dAy, Bl1x, Bl1y, dBx, dBy);
                     M2 = ri2(Al2x, Al2y, dAx, dAy, Bl2x, Bl2y, dBx, dBy);
                     if (!M1 || !M2) continue;
-                    miterCorners.set(`${mA.id}:${eiA}`, { l1: M1, l2: M2 });
-                    miterCorners.set(`${mB.id}:${eiB}`, { l1: M1, l2: M2 });
+                    // When ei===1, dA/dB point opposite to wallGeometry's p1→p2 direction,
+                    // so the normal is flipped — l1 and l2 sides are swapped vs wallGeometry.
+                    miterCorners.set(`${mA.id}:${eiA}`, eiA === 1 ? { l1: M2, l2: M1 } : { l1: M1, l2: M2 });
+                    miterCorners.set(`${mB.id}:${eiB}`, eiB === 1 ? { l1: M2, l2: M1 } : { l1: M1, l2: M2 });
                   } else {
                     M1 = ri2(Al1x, Al1y, dAx, dAy, Bl2x, Bl2y, dBx, dBy);
                     M2 = ri2(Al2x, Al2y, dAx, dAy, Bl1x, Bl1y, dBx, dBy);
                     if (!M1 || !M2) continue;
-                    miterCorners.set(`${mA.id}:${eiA}`, { l1: M1, l2: M2 });
-                    miterCorners.set(`${mB.id}:${eiB}`, { l1: M2, l2: M1 });
+                    miterCorners.set(`${mA.id}:${eiA}`, eiA === 1 ? { l1: M2, l2: M1 } : { l1: M1, l2: M2 });
+                    miterCorners.set(`${mB.id}:${eiB}`, eiB === 1 ? { l1: M1, l2: M2 } : { l1: M2, l2: M1 });
                   }
                 }
               }
