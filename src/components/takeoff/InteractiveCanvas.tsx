@@ -1993,6 +1993,160 @@ export const InteractiveCanvas = ({
         }
       }
 
+      // Feature 4: Proper wall junction geometry — mitered corners at connected wall endpoints
+      {
+        const upm = unitsPerMetreRef.current;
+        if (upm && upm > 0) {
+          const euVisual = Math.max(upm, 8 / (0.064 * zoom));
+          const walls = Array.from(measurementMapRef.current.values()).filter(
+            m => !!(m as any).wallThickness && m.worldPoints?.length >= 2
+          );
+          const THRESH = 18 / zoom;
+
+          // Ray-ray intersection: ray1 = P + t*D, ray2 = Q + s*E
+          // Returns intersection point or null if parallel
+          const rayIntersect = (
+            px: number, py: number, dx: number, dy: number,
+            qx: number, qy: number, ex: number, ey: number
+          ): { x: number; y: number } | null => {
+            const denom = dx * ey - dy * ex;
+            if (Math.abs(denom) < 1e-8) return null;
+            const t = ((qx - px) * ey - (qy - py) * ex) / denom;
+            return { x: px + dx * t, y: py + dy * t };
+          };
+
+          for (let i = 0; i < walls.length; i++) {
+            for (let j = i + 1; j < walls.length; j++) {
+              const mA = walls[i], mB = walls[j];
+              const thkA = (mA as any).wallThickness as number;
+              const thkB = (mB as any).wallThickness as number;
+              const hwA = (thkA / 1000) * euVisual / 2;
+              const hwB = (thkB / 1000) * euVisual / 2;
+
+              // Check all endpoint pairs
+              for (let epIdxA = 0; epIdxA < 2; epIdxA++) {
+                for (let epIdxB = 0; epIdxB < 2; epIdxB++) {
+                  const epA = mA.worldPoints[epIdxA];
+                  const epB = mB.worldPoints[epIdxB];
+                  if (Math.hypot(epA.x - epB.x, epA.y - epB.y) > THRESH) continue;
+
+                  // Junction point J (average)
+                  const jx = (epA.x + epB.x) / 2;
+                  const jy = (epA.y + epB.y) / 2;
+
+                  // Direction vectors pointing INTO each wall from junction
+                  const otherA = mA.worldPoints[1 - epIdxA];
+                  const otherB = mB.worldPoints[1 - epIdxB];
+                  const lenA = Math.hypot(otherA.x - jx, otherA.y - jy) || 1;
+                  const lenB = Math.hypot(otherB.x - jx, otherB.y - jy) || 1;
+                  const dAx = (otherA.x - jx) / lenA;
+                  const dAy = (otherA.y - jy) / lenA;
+                  const dBx = (otherB.x - jx) / lenB;
+                  const dBy = (otherB.y - jy) / lenB;
+
+                  // Perpendicular normals (right-hand rule)
+                  const nAx = -dAy, nAy = dAx;
+                  const nBx = -dBy, nBy = dBx;
+
+                  // Offset edge start points from junction
+                  const oA1x = jx + nAx * hwA, oA1y = jy + nAy * hwA; // left side of A
+                  const oA2x = jx - nAx * hwA, oA2y = jy - nAy * hwA; // right side of A
+                  const oB1x = jx + nBx * hwB, oB1y = jy + nBy * hwB; // left side of B
+                  const oB2x = jx - nBx * hwB, oB2y = jy - nBy * hwB; // right side of B
+
+                  // Cross-intersect: A-left with B-right, and A-right with B-left
+                  // (which pairing creates an outward vs inward corner depends on geometry)
+                  const cornerOuter = rayIntersect(oA1x, oA1y, dAx, dAy, oB2x, oB2y, dBx, dBy)
+                    ?? rayIntersect(oA1x, oA1y, dAx, dAy, oB1x, oB1y, dBx, dBy);
+                  const cornerInner = rayIntersect(oA2x, oA2y, dAx, dAy, oB1x, oB1y, dBx, dBy)
+                    ?? rayIntersect(oA2x, oA2y, dAx, dAy, oB2x, oB2y, dBx, dBy);
+
+                  if (!cornerOuter || !cornerInner) continue;
+
+                  // Parse wall color for fill
+                  const rawColor = mA.color || '#64748b';
+                  let fillR = 100, fillG = 116, fillB = 139;
+                  const hexMatch = rawColor.match(/^#([0-9a-fA-F]{6})$/);
+                  if (hexMatch) {
+                    fillR = parseInt(hexMatch[1].slice(0, 2), 16);
+                    fillG = parseInt(hexMatch[1].slice(2, 4), 16);
+                    fillB = parseInt(hexMatch[1].slice(4, 6), 16);
+                  }
+
+                  // Fill the gap triangle/polygon at junction
+                  ctx.save();
+                  ctx.setLineDash([]);
+                  ctx.fillStyle = `rgba(${fillR},${fillG},${fillB},0.55)`;
+                  ctx.beginPath();
+                  ctx.moveTo(tpx(oA1x), tpy(oA1y));
+                  ctx.lineTo(tpx(cornerOuter.x), tpy(cornerOuter.y));
+                  ctx.lineTo(tpx(oB2x), tpy(oB2y));
+                  ctx.lineTo(tpx(jx), tpy(jy));
+                  ctx.closePath();
+                  ctx.fill();
+
+                  ctx.fillStyle = `rgba(${fillR},${fillG},${fillB},0.55)`;
+                  ctx.beginPath();
+                  ctx.moveTo(tpx(oA2x), tpy(oA2y));
+                  ctx.lineTo(tpx(cornerInner.x), tpy(cornerInner.y));
+                  ctx.lineTo(tpx(oB1x), tpy(oB1y));
+                  ctx.lineTo(tpx(jx), tpy(jy));
+                  ctx.closePath();
+                  ctx.fill();
+
+                  // Draw mitered outer edge line
+                  ctx.strokeStyle = rawColor;
+                  ctx.lineWidth = 1.5 * dpr;
+                  ctx.beginPath();
+                  ctx.moveTo(tpx(oA1x), tpy(oA1y));
+                  ctx.lineTo(tpx(cornerOuter.x), tpy(cornerOuter.y));
+                  ctx.lineTo(tpx(oB2x), tpy(oB2y));
+                  ctx.stroke();
+
+                  // Draw mitered inner edge line
+                  ctx.beginPath();
+                  ctx.moveTo(tpx(oA2x), tpy(oA2y));
+                  ctx.lineTo(tpx(cornerInner.x), tpy(cornerInner.y));
+                  ctx.lineTo(tpx(oB1x), tpy(oB1y));
+                  ctx.stroke();
+
+                  ctx.restore();
+                }
+              }
+            }
+          }
+        }
+      }
+
+      // Feature 5: Wall midpoint diamond markers — permanent cyan diamond at each wall's mid-axis
+      {
+        const walls = Array.from(measurementMapRef.current.values()).filter(
+          m => !!(m as any).wallThickness && m.worldPoints?.length >= 2
+        );
+        walls.forEach((m) => {
+          const p1 = m.worldPoints[0], p2 = m.worldPoints[1];
+          // Skip walls too short to show a marker at this zoom level
+          if (Math.hypot(p2.x - p1.x, p2.y - p1.y) * zoom < 20) return;
+          const mpx = tpx((p1.x + p2.x) / 2);
+          const mpy = tpy((p1.y + p2.y) / 2);
+          const s = 4.5 * dpr;
+          ctx.save();
+          ctx.setLineDash([]);
+          ctx.fillStyle = (m.color || '#22d3ee') + 'cc';
+          ctx.strokeStyle = 'rgba(255,255,255,0.85)';
+          ctx.lineWidth = 1.2 * dpr;
+          ctx.beginPath();
+          ctx.moveTo(mpx, mpy - s);   // top
+          ctx.lineTo(mpx + s, mpy);   // right
+          ctx.lineTo(mpx, mpy + s);   // bottom
+          ctx.lineTo(mpx - s, mpy);   // left
+          ctx.closePath();
+          ctx.fill();
+          ctx.stroke();
+          ctx.restore();
+        });
+      }
+
       ctx.restore();
     };
 
