@@ -16,6 +16,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Plus, Trash2, TrendingUp, TrendingDown, DollarSign, Percent } from "lucide-react";
+import { TRADE_OPTIONS } from "@/lib/takeoff/types";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -94,26 +95,12 @@ export default function JobCostTracker({ projectId }: JobCostTrackerProps) {
 
   // ─── Derived values ───────────────────────────────────────────────────────
 
-  const estimateTrades = useMemo(() => {
-    const trades = new Set<string>();
-    estimateItems.forEach((item) => {
-      if (item.trade) trades.add(item.trade);
-    });
-    return Array.from(trades).sort();
-  }, [estimateItems]);
-
-  const entryTrades = useMemo(() => {
-    const trades = new Set<string>();
-    entries.forEach((e) => {
-      if (e.trade) trades.add(e.trade);
-    });
-    return Array.from(trades).sort();
-  }, [entries]);
-
+  // Always use the full TRADE_OPTIONS list; surface any extra trades from entries on top
   const allTrades = useMemo(() => {
-    const combined = new Set([...estimateTrades, ...entryTrades]);
-    return Array.from(combined).sort();
-  }, [estimateTrades, entryTrades]);
+    const extra = new Set<string>();
+    entries.forEach((e) => { if (e.trade && !TRADE_OPTIONS.includes(e.trade as any)) extra.add(e.trade); });
+    return [...TRADE_OPTIONS, ...Array.from(extra).sort()];
+  }, [entries]);
 
   const estimateTotal = useMemo(
     () => estimateItems.reduce((sum, item) => sum + computeItemPrice(item), 0),
@@ -180,6 +167,7 @@ export default function JobCostTracker({ projectId }: JobCostTrackerProps) {
     setFormDescription("");
     setFormSupplier("");
     setFormAmount("");
+    setFormTrade("");
     setFormType("invoice");
     setFormDate(format(new Date(), "yyyy-MM-dd"));
     setShowForm(false);
@@ -299,9 +287,6 @@ export default function JobCostTracker({ projectId }: JobCostTrackerProps) {
                         {t}
                       </SelectItem>
                     ))}
-                    <SelectItem value="Other" className="text-white hover:bg-slate-700">
-                      Other
-                    </SelectItem>
                   </SelectContent>
                 </Select>
               </div>
@@ -309,7 +294,7 @@ export default function JobCostTracker({ projectId }: JobCostTrackerProps) {
                 <Label className="text-xs text-slate-400 mb-1 block">Type</Label>
                 <Select value={formType} onValueChange={(v) => setFormType(v as CostType)}>
                   <SelectTrigger className="h-8 text-sm bg-slate-700 border-slate-600 text-white">
-                    <SelectValue />
+                    <SelectValue placeholder="Select type…" />
                   </SelectTrigger>
                   <SelectContent className="bg-slate-800 border-slate-600">
                     {COST_TYPES.map((t) => (
