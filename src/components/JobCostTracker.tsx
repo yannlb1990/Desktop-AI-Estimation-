@@ -3,6 +3,7 @@ import { format, parseISO } from "date-fns";
 import { toast } from "sonner";
 import { getUserStorageKey } from "@/lib/localAuth";
 import { loadJobCostsMerged, lsSaveJobCosts, syncJobCostsToSupabase } from "@/lib/db/jobCosts";
+import { syncProjectToSupabase } from "@/lib/db/projects";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -98,6 +99,10 @@ export default function JobCostTracker({ projectId }: JobCostTrackerProps) {
     const saved = localStorage.getItem(getUserStorageKey(BUDGET_LS_KEY(projectId)));
     if (saved) {
       setManualBudgets(JSON.parse(saved));
+    } else if (project?.trade_budgets && Object.keys(project.trade_budgets).length > 0) {
+      // Restored from Supabase — write back to standalone key for future fast reads
+      setManualBudgets(project.trade_budgets);
+      localStorage.setItem(getUserStorageKey(BUDGET_LS_KEY(projectId)), JSON.stringify(project.trade_budgets));
     } else if (items.length > 0) {
       // Pre-fill from estimate items on first open
       const init: Record<string, number> = {};
@@ -115,6 +120,16 @@ export default function JobCostTracker({ projectId }: JobCostTrackerProps) {
   const saveBudgets = useCallback((updated: Record<string, number>) => {
     setManualBudgets(updated);
     localStorage.setItem(getUserStorageKey(BUDGET_LS_KEY(projectId)), JSON.stringify(updated));
+    // Embed in project record so Supabase sync picks it up
+    try {
+      const projects = JSON.parse(localStorage.getItem(getUserStorageKey("local_projects")) || "[]");
+      const idx = projects.findIndex((p: any) => p.id === projectId);
+      if (idx !== -1) {
+        projects[idx].trade_budgets = updated;
+        localStorage.setItem(getUserStorageKey("local_projects"), JSON.stringify(projects));
+        syncProjectToSupabase(projects[idx]);
+      }
+    } catch { /* localStorage read error — standalone key still saved */ }
   }, [projectId]);
 
   const saveEntries = useCallback((updated: CostEntry[]) => {

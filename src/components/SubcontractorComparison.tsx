@@ -1,5 +1,6 @@
 import { useState } from "react"
 import { getUserStorageKey } from "@/lib/localAuth"
+import { syncProjectToSupabase } from "@/lib/db/projects"
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
@@ -33,12 +34,27 @@ const STORAGE_KEY = (pid: string) => `subcontractor_quotes_${pid}`
 
 const loadQuotes = (pid: string): SubbieQuote[] => {
   try {
-    return JSON.parse(localStorage.getItem(getUserStorageKey(STORAGE_KEY(pid))) || "[]")
+    const direct = localStorage.getItem(getUserStorageKey(STORAGE_KEY(pid)))
+    if (direct !== null) return JSON.parse(direct)
+    // Fallback: quotes embedded in project record (recovered from Supabase)
+    const projects = JSON.parse(localStorage.getItem(getUserStorageKey("local_projects")) || "[]")
+    return projects.find((p: any) => p.id === pid)?.subcontractor_quotes ?? []
   } catch { return [] }
 }
 
 const saveQuotes = (pid: string, quotes: SubbieQuote[]) => {
   localStorage.setItem(getUserStorageKey(STORAGE_KEY(pid)), JSON.stringify(quotes))
+  // Embed in project record so Supabase sync picks it up
+  try {
+    const projectsRaw = localStorage.getItem(getUserStorageKey("local_projects")) || "[]"
+    const projects = JSON.parse(projectsRaw)
+    const idx = projects.findIndex((p: any) => p.id === pid)
+    if (idx !== -1) {
+      projects[idx].subcontractor_quotes = quotes
+      localStorage.setItem(getUserStorageKey("local_projects"), JSON.stringify(projects))
+      syncProjectToSupabase(projects[idx])
+    }
+  } catch { /* localStorage read error — standalone key still saved */ }
 }
 
 const fmtAUD = (n: number) =>
