@@ -380,14 +380,48 @@ export default function JobCostTracker({ projectId }: JobCostTrackerProps) {
         </CardHeader>
         <CardContent className="p-0 mt-3">
           {activeTrades.length === 0 ? (
-            <div className="px-4 py-10 text-center">
-              <DollarSign className="w-8 h-8 text-slate-600 mx-auto mb-2" />
-              <p className="text-slate-400 text-sm font-medium">No trades monitored yet</p>
-              <p className="text-slate-500 text-xs mt-1 mb-4">Add a trade budget to start tracking costs vs budget</p>
-              <Button size="sm" variant="outline" onClick={() => { setShowMonitorForm(true); setMonitorTrade(availableTrades[0] || ""); }}
-                className="border-slate-600 text-slate-300 hover:text-white">
-                <Plus className="w-3.5 h-3.5 mr-1" /> Monitor first trade
-              </Button>
+            <div className="px-4 py-8">
+              {!showMonitorForm ? (
+                <div className="text-center">
+                  <DollarSign className="w-8 h-8 text-slate-600 mx-auto mb-2" />
+                  <p className="text-slate-400 text-sm font-medium">No trades monitored yet</p>
+                  <p className="text-slate-500 text-xs mt-1 mb-4">Add a trade budget to start tracking costs vs budget</p>
+                  <Button size="sm" variant="outline" onClick={() => { setShowMonitorForm(true); setMonitorTrade(availableTrades[0] || ""); }}
+                    className="border-slate-600 text-slate-300 hover:text-white">
+                    <Plus className="w-3.5 h-3.5 mr-1" /> Monitor first trade
+                  </Button>
+                </div>
+              ) : (
+                <div className="flex gap-3 items-end flex-wrap">
+                  <div>
+                    <Label className="text-xs text-slate-400 mb-1 block">Trade</Label>
+                    <Select value={monitorTrade} onValueChange={setMonitorTrade}>
+                      <SelectTrigger className="h-8 text-sm bg-slate-700 border-slate-600 text-white w-52">
+                        <SelectValue placeholder="Select trade…" />
+                      </SelectTrigger>
+                      <SelectContent className="bg-slate-800 border-slate-600">
+                        {availableTrades.map(t => (
+                          <SelectItem key={t} value={t} className="text-white hover:bg-slate-700">{t}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div>
+                    <Label className="text-xs text-slate-400 mb-1 block">Budget (optional)</Label>
+                    <div className="relative">
+                      <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400 text-sm">$</span>
+                      <Input
+                        type="number" min={0} value={monitorBudget}
+                        onChange={e => setMonitorBudget(e.target.value)}
+                        placeholder="0" className="h-8 text-sm bg-slate-700 border-slate-600 text-white pl-6 w-36"
+                        onKeyDown={e => e.key === "Enter" && handleAddMonitor()}
+                      />
+                    </div>
+                  </div>
+                  <Button size="sm" onClick={handleAddMonitor} className="bg-cyan-600 hover:bg-cyan-700">Add</Button>
+                  <Button size="sm" variant="ghost" onClick={() => setShowMonitorForm(false)} className="text-slate-400">Cancel</Button>
+                </div>
+              )}
             </div>
           ) : (
             <div className="overflow-x-auto">
