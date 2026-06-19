@@ -122,6 +122,36 @@ const Settings = () => {
   const [inviting, setInviting]         = useState(false);
   const [removingId, setRemovingId]     = useState<string | null>(null);
 
+  // ── Supabase settings sync ────────────────────────────────────────────────────
+  // All settings sections are stored in the `default_rates` table as a structured
+  // JSONB blob keyed by section name (company, branding, rates, etc.).
+
+  const syncUserSettings = useCallback(async (section: string, data: any) => {
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.user?.id) return;
+      const userId = session.user.id;
+      const { data: existing } = await (supabase as any)
+        .from('default_rates').select('rates').eq('user_id', userId).maybeSingle();
+      const merged = { ...(existing?.rates ?? {}), [section]: data };
+      await (supabase as any)
+        .from('default_rates')
+        .upsert({ user_id: userId, rates: merged, updated_at: new Date().toISOString() }, { onConflict: 'user_id' });
+    } catch (e) {
+      console.error('[syncUserSettings] failed:', e instanceof Error ? e.message : e);
+    }
+  }, []);
+
+  const loadUserSettingsFromSupabase = useCallback(async (): Promise<Record<string, any> | null> => {
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.user?.id) return null;
+      const { data } = await (supabase as any)
+        .from('default_rates').select('rates').eq('user_id', session.user.id).maybeSingle();
+      return data?.rates ?? null;
+    } catch { return null; }
+  }, []);
+
   // ── Load ─────────────────────────────────────────────────────────────────────
 
   const PROFILE_KEY = () => getUserStorageKey("estimate_profile");
@@ -204,15 +234,73 @@ const Settings = () => {
   }, [isBusinessPlan]);
 
   useEffect(() => {
-    loadProfile();
-    loadBranding();
-    loadRates();
-    loadLabourPresets();
-    loadSuppliers();
-    loadQuoteSettings();
-    setLoading(false);
-    loadTeamMembers();
-    syncSubscriptionFromDB();
+    if (!isSignedIn()) { navigate("/auth"); return; }
+
+    const init = async () => {
+      // Try Supabase first — hydrates state and writes to localStorage for fast subsequent loads
+      const remote = await loadUserSettingsFromSupabase();
+      if (remote) {
+        // Company
+        const c = remote.company ?? {};
+        if (c.company_name !== undefined) {
+          setCompanyName(c.company_name || localUser?.displayName || "");
+          setAbn(c.abn || ""); setCompanyACN(c.acn || ""); setPhone(c.phone || "");
+          setCompanyEmail(c.email || ""); setAddress(c.address || "");
+          setCity(c.city || ""); setState(c.state || localUser?.state || ""); setPostcode(c.postcode || "");
+          localStorage.setItem(PROFILE_KEY(), JSON.stringify(c));
+        } else { loadProfile(); }
+        // Branding
+        const b = remote.branding ?? {};
+        if (b.primary !== undefined) {
+          setLogoDataUrl(b.logo || ""); setBrandColor(b.primary || "#0f4c81");
+          setAccentColor(b.accent || "#f59e0b"); setCompanyTagline(b.tagline || "");
+          setBuilderLicence(b.licence || ""); setLiabilityInsurance(b.liability || "$20,000,000");
+          localStorage.setItem(getUserStorageKey("quote_brand"), JSON.stringify({ ...b, companyName: c.company_name, abn: c.abn, acn: c.acn, phone: c.phone, email: c.email }));
+        } else { loadBranding(); }
+        // Rates
+        const r = remote.rates ?? {};
+        if (r.overhead !== undefined) {
+          setOverheadPercentage(r.overhead || "15"); setMarginPercentage(r.margin || "18");
+          setMaterialMarkup(r.materialMarkup || "15"); setLabourRate(r.labourRate || "90");
+          localStorage.setItem(getUserStorageKey("default_rates"), JSON.stringify(r));
+        } else { loadRates(); }
+        // Labour presets
+        if (Array.isArray(remote.labour_presets)) {
+          setLabourPresets(remote.labour_presets);
+          localStorage.setItem(PRESETS_KEY(), JSON.stringify(remote.labour_presets));
+        } else { loadLabourPresets(); }
+        // Suppliers
+        if (Array.isArray(remote.suppliers)) {
+          setSuppliers(remote.suppliers);
+          localStorage.setItem(SUPPLIERS_KEY(), JSON.stringify(remote.suppliers));
+        } else { loadSuppliers(); }
+        // Quote settings
+        const q = remote.quote_settings ?? {};
+        if (q.prefix !== undefined) {
+          setQuotePrefix(q.prefix || "QTE"); setQuoteValidityDays(q.validityDays || "30");
+          setPdfTemplate(q.pdfTemplate || "detailed");
+          localStorage.setItem(QUOTE_KEY(), JSON.stringify(q));
+        } else { loadQuoteSettings(); }
+        // Notif prefs
+        const n = remote.notif_prefs ?? {};
+        if (Object.keys(n).length > 0) {
+          setNotifDueDate(n.dueDate ?? true); setNotifDaysBeforeStr(n.daysBefore ?? "3");
+          setNotifProjectUpdate(n.projectUpdate ?? false); setNotifWeeklyDigest(n.weeklyDigest ?? false);
+          setNotifEmail(n.notifEmail ?? "");
+          localStorage.setItem(getUserStorageKey("notif_prefs"), JSON.stringify(n));
+        }
+      } else {
+        // No Supabase data yet — load from localStorage (first-time or offline)
+        loadProfile(); loadBranding(); loadRates();
+        loadLabourPresets(); loadSuppliers(); loadQuoteSettings();
+      }
+
+      setLoading(false);
+      loadTeamMembers();
+      syncSubscriptionFromDB();
+    };
+
+    init();
   }, []);
 
   // ── Logo upload ───────────────────────────────────────────────────────────────
@@ -231,11 +319,11 @@ const Settings = () => {
   const handleSaveProfile = () => {
     setSaving(true);
     try {
-      localStorage.setItem(PROFILE_KEY(), JSON.stringify({
+      const profileData = {
         company_name: companyName, abn, acn: companyACN, phone, email: companyEmail,
-        address, city, state, postcode,
-        updated_at: new Date().toISOString(),
-      }));
+        address, city, state, postcode, updated_at: new Date().toISOString(),
+      };
+      localStorage.setItem(PROFILE_KEY(), JSON.stringify(profileData));
       const existingBrand = LOAD_BRAND();
       localStorage.setItem(getUserStorageKey("quote_brand"), JSON.stringify({
         ...existingBrand,
@@ -246,6 +334,7 @@ const Settings = () => {
         email: companyEmail || existingBrand.email,
         address: [address, city, state, postcode].filter(Boolean).join(", ") || existingBrand.address,
       }));
+      syncUserSettings('company', profileData);
       toast.success("Profile updated");
     } catch { toast.error("Failed to save profile"); }
     finally { setSaving(false); }
@@ -253,7 +342,7 @@ const Settings = () => {
 
   const handleSaveBranding = () => {
     const existing = LOAD_BRAND();
-    localStorage.setItem(getUserStorageKey("quote_brand"), JSON.stringify({
+    const brandData = {
       ...existing,
       logo: logoDataUrl,
       primary: brandColor,
@@ -261,17 +350,18 @@ const Settings = () => {
       tagline: companyTagline,
       licence: builderLicence,
       liability: liabilityInsurance,
-    }));
+    };
+    localStorage.setItem(getUserStorageKey("quote_brand"), JSON.stringify(brandData));
+    syncUserSettings('branding', brandData);
     toast.success("Branding saved — applied to all future quotes");
   };
 
   const handleSaveRates = () => {
     setSaving(true);
     try {
-      localStorage.setItem(getUserStorageKey("default_rates"), JSON.stringify({
-        overhead: overheadPercentage, margin: marginPercentage,
-        gst: gstPercentage, materialMarkup, labourRate,
-      }));
+      const ratesData = { overhead: overheadPercentage, margin: marginPercentage, gst: gstPercentage, materialMarkup, labourRate };
+      localStorage.setItem(getUserStorageKey("default_rates"), JSON.stringify(ratesData));
+      syncUserSettings('rates', ratesData);
       toast.success("Default rates saved");
     } catch { toast.error("Failed to save rates"); }
     finally { setSaving(false); }
@@ -282,6 +372,7 @@ const Settings = () => {
     const updated = [...labourPresets, { id: crypto.randomUUID(), name: newPresetName, rate: newPresetRate }];
     setLabourPresets(updated);
     localStorage.setItem(PRESETS_KEY(), JSON.stringify(updated));
+    syncUserSettings('labour_presets', updated);
     setNewPresetName(""); setNewPresetRate("");
     toast.success("Preset added");
   };
@@ -290,6 +381,7 @@ const Settings = () => {
     const updated = labourPresets.filter(p => p.id !== id);
     setLabourPresets(updated);
     localStorage.setItem(PRESETS_KEY(), JSON.stringify(updated));
+    syncUserSettings('labour_presets', updated);
   };
 
   const addSupplier = () => {
@@ -297,6 +389,7 @@ const Settings = () => {
     const updated = [...suppliers, { id: crypto.randomUUID(), ...newSupplier }];
     setSuppliers(updated);
     localStorage.setItem(SUPPLIERS_KEY(), JSON.stringify(updated));
+    syncUserSettings('suppliers', updated);
     setNewSupplier({ name: "", contact: "", phone: "", account: "", notes: "" });
     setAddingSupplier(false);
     toast.success("Supplier added");
@@ -306,21 +399,20 @@ const Settings = () => {
     const updated = suppliers.filter(s => s.id !== id);
     setSuppliers(updated);
     localStorage.setItem(SUPPLIERS_KEY(), JSON.stringify(updated));
+    syncUserSettings('suppliers', updated);
   };
 
   const saveNotifPrefs = () => {
-    localStorage.setItem(getUserStorageKey("notif_prefs"), JSON.stringify({
-      dueDate: notifDueDate, daysBefore: notifDaysBeforeStr,
-      projectUpdate: notifProjectUpdate, weeklyDigest: notifWeeklyDigest,
-      notifEmail,
-    }));
+    const notifData = { dueDate: notifDueDate, daysBefore: notifDaysBeforeStr, projectUpdate: notifProjectUpdate, weeklyDigest: notifWeeklyDigest, notifEmail };
+    localStorage.setItem(getUserStorageKey("notif_prefs"), JSON.stringify(notifData));
+    syncUserSettings('notif_prefs', notifData);
     toast.success("Notification preferences saved");
   };
 
   const handleSaveQuoteSettings = () => {
-    localStorage.setItem(QUOTE_KEY(), JSON.stringify({
-      prefix: quotePrefix, validityDays: quoteValidityDays, pdfTemplate,
-    }));
+    const quoteData = { prefix: quotePrefix, validityDays: quoteValidityDays, pdfTemplate };
+    localStorage.setItem(QUOTE_KEY(), JSON.stringify(quoteData));
+    syncUserSettings('quote_settings', quoteData);
     toast.success("Quote settings saved");
   };
 
@@ -903,6 +995,19 @@ const Settings = () => {
                     <p>• Regional areas: -8 to -12% typically</p>
                   </div>
                 </div>
+                <Button
+                  onClick={() => {
+                    const profileRaw = localStorage.getItem(PROFILE_KEY());
+                    const profileData = profileRaw ? JSON.parse(profileRaw) : {};
+                    const updated = { ...profileData, state, updated_at: new Date().toISOString() };
+                    localStorage.setItem(PROFILE_KEY(), JSON.stringify(updated));
+                    syncUserSettings('company', updated);
+                    toast.success("Regional settings saved");
+                  }}
+                  className="bg-primary text-primary-foreground"
+                >
+                  <Save className="mr-2 h-4 w-4" />Save Regional Settings
+                </Button>
               </div>
             </Card>
           </TabsContent>
