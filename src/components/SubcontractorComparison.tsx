@@ -21,6 +21,7 @@ export interface SubbieQuote {
   amount: number
   notes?: string
   submittedAt: string
+  usedInEstimate?: boolean
 }
 
 interface SubcontractorComparisonProps {
@@ -93,7 +94,11 @@ export const SubcontractorComparison = ({ projectId, onUsePrice }: Subcontractor
   }
 
   const handleUsePrice = (q: SubbieQuote) => {
-    if (onUsePrice) onUsePrice(q.trade, q.company, q.amount)
+    if (!onUsePrice) return
+    onUsePrice(q.trade, q.company, q.amount)
+    // Mark quote as used in state + localStorage
+    const updated = quotes.map(qq => qq.id === q.id ? { ...qq, usedInEstimate: true } : qq)
+    persist(updated)
     toast.success(`${fmtAUD(q.amount)} from ${q.company} added to estimate`)
   }
 
@@ -217,14 +222,20 @@ export const SubcontractorComparison = ({ projectId, onUsePrice }: Subcontractor
                             </TableCell>
                             <TableCell>
                               <div className="flex items-center gap-1">
-                                <Button
-                                  size="sm"
-                                  variant={i === 0 ? "default" : "outline"}
-                                  className={`h-7 text-xs ${i === 0 ? "bg-green-600 hover:bg-green-700 text-white" : ""}`}
-                                  onClick={() => handleUsePrice(q)}
-                                >
-                                  Use this
-                                </Button>
+                                {q.usedInEstimate ? (
+                                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-medium bg-green-500/15 text-green-400 border border-green-500/30">
+                                    <CheckCircle2 className="h-3 w-3" /> In estimate
+                                  </span>
+                                ) : (
+                                  <Button
+                                    size="sm"
+                                    variant={i === 0 ? "default" : "outline"}
+                                    className={`h-7 text-xs ${i === 0 ? "bg-green-600 hover:bg-green-700 text-white" : ""}`}
+                                    onClick={() => handleUsePrice(q)}
+                                  >
+                                    Use this
+                                  </Button>
+                                )}
                                 <Button
                                   size="sm"
                                   variant="ghost"

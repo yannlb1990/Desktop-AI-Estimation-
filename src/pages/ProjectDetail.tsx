@@ -664,7 +664,38 @@ const ProjectDetail = () => {
           </TabsContent>
 
           <TabsContent value="subbies">
-            <SubcontractorComparison projectId={projectId!} />
+            <SubcontractorComparison
+              projectId={projectId!}
+              onUsePrice={(trade, company, amount) => {
+                const projects = JSON.parse(localStorage.getItem(getUserStorageKey('local_projects')) || '[]');
+                const idx = projects.findIndex((p: any) => p.id === projectId);
+                const newItem = {
+                  id: `subbie-${crypto.randomUUID()}`,
+                  section_id: null,
+                  area: 'Subcontractor',
+                  trade,
+                  scope_of_work: `${company} — subcontractor quote`,
+                  material_type: 'Subcontract',
+                  quantity: 1,
+                  unit: 'lump sum',
+                  unit_price: amount,
+                  labour_hours: 0,
+                  labour_rate: 0,
+                  material_wastage_pct: 0,
+                  labour_wastage_pct: 0,
+                  markup_pct: 0,
+                  notes: `Quote from ${company}`,
+                  expanded: false,
+                };
+                if (idx !== -1) {
+                  projects[idx].estimate_items = [...(projects[idx].estimate_items || []), newItem];
+                } else {
+                  projects.push({ id: projectId, estimate_items: [newItem] });
+                }
+                localStorage.setItem(getUserStorageKey('local_projects'), JSON.stringify(projects));
+                window.dispatchEvent(new CustomEvent('estimate-updated', { detail: { projectId } }));
+              }}
+            />
           </TabsContent>
 
           <TabsContent value="documents">
