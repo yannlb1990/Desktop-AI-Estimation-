@@ -1546,11 +1546,17 @@ export const InteractiveCanvas = ({
                   const Bl1x = jx + nBx * hwB, Bl1y = jy + nBy * hwB;
                   const Bl2x = jx - nBx * hwB, Bl2y = jy - nBy * hwB;
                   const cross = dAx * dBy - dAy * dBx;
+                  const maxMit = 5 * Math.max(hwA, hwB);
+                  const clampPt = (M: WorldPoint): WorldPoint => {
+                    const d = Math.hypot(M.x - jx, M.y - jy);
+                    return d > maxMit ? { x: jx + (M.x - jx) * maxMit / d, y: jy + (M.y - jy) * maxMit / d } : M;
+                  };
                   let M1: WorldPoint | null, M2: WorldPoint | null;
                   if (cross <= 0) {
                     M1 = ri2(Al1x, Al1y, dAx, dAy, Bl1x, Bl1y, dBx, dBy);
                     M2 = ri2(Al2x, Al2y, dAx, dAy, Bl2x, Bl2y, dBx, dBy);
                     if (!M1 || !M2) continue;
+                    M1 = clampPt(M1); M2 = clampPt(M2);
                     // When ei===1, dA/dB point opposite to wallGeometry's p1→p2 direction,
                     // so the normal is flipped — l1 and l2 sides are swapped vs wallGeometry.
                     miterCorners.set(`${mA.id}:${eiA}`, eiA === 1 ? { l1: M2, l2: M1 } : { l1: M1, l2: M2 });
@@ -1559,10 +1565,32 @@ export const InteractiveCanvas = ({
                     M1 = ri2(Al1x, Al1y, dAx, dAy, Bl2x, Bl2y, dBx, dBy);
                     M2 = ri2(Al2x, Al2y, dAx, dAy, Bl1x, Bl1y, dBx, dBy);
                     if (!M1 || !M2) continue;
+                    M1 = clampPt(M1); M2 = clampPt(M2);
                     miterCorners.set(`${mA.id}:${eiA}`, eiA === 1 ? { l1: M2, l2: M1 } : { l1: M1, l2: M2 });
                     miterCorners.set(`${mB.id}:${eiB}`, eiB === 1 ? { l1: M1, l2: M2 } : { l1: M2, l2: M1 });
                   }
                 }
+              }
+            }
+          }
+
+          // T-junctions: wall endpoint that terminates into another wall's body (not its endpoints)
+          const tJunctionKeys = new Set<string>(); // "${wallId}:${ei}"
+          for (const mA of allWalls) {
+            if ((mA as any).arcControlPoint) continue;
+            for (const eiA of [0, 1] as const) {
+              const J = mA.worldPoints[eiA];
+              for (const mB of allWalls) {
+                if (mB.id === mA.id || (mB as any).arcControlPoint) continue;
+                const p1 = mB.worldPoints[0], p2 = mB.worldPoints[1];
+                const dx = p2.x - p1.x, dy = p2.y - p1.y;
+                const lenSq = dx * dx + dy * dy;
+                if (lenSq < 1e-10) continue;
+                const t = ((J.x - p1.x) * dx + (J.y - p1.y) * dy) / lenSq;
+                if (t < 0.02 || t > 0.98) continue; // skip near-endpoints (handled as L-corners)
+                const perpDistSq = Math.pow((J.x - p1.x) * dy - (J.y - p1.y) * dx, 2) / lenSq;
+                if (perpDistSq > THRESH_W * THRESH_W) continue;
+                tJunctionKeys.add(`${mA.id}:${eiA}`);
               }
             }
           }
@@ -1601,6 +1629,45 @@ export const InteractiveCanvas = ({
             ctx.restore();
           });
 
+          // Sub-pass A.5: Junction seals — filled circles eliminate sub-pixel gaps at all junction types
+          ctx.save();
+          ctx.fillStyle = WALL_FILL;
+          // L-corner seals (endpoint-to-endpoint)
+          for (let wi = 0; wi < allWalls.length; wi++) {
+            const mA = allWalls[wi];
+            if ((mA as any).arcControlPoint) continue;
+            for (let wj = wi + 1; wj < allWalls.length; wj++) {
+              const mB = allWalls[wj];
+              if ((mB as any).arcControlPoint) continue;
+              for (const eiA of [0, 1] as const) {
+                for (const eiB of [0, 1] as const) {
+                  const JA = mA.worldPoints[eiA], JB = mB.worldPoints[eiB];
+                  if (Math.hypot(JA.x - JB.x, JA.y - JB.y) > THRESH_W) continue;
+                  const Jx = (JA.x + JB.x) / 2, Jy = (JA.y + JB.y) / 2;
+                  const hwSA = ((mA as any).wallThickness / 1000) * euV / 2;
+                  const hwSB = ((mB as any).wallThickness / 1000) * euV / 2;
+                  const radW = Math.max(hwSA, hwSB);
+                  ctx.beginPath();
+                  ctx.arc(tpx(Jx), tpy(Jy), radW * zoom * dpr, 0, Math.PI * 2);
+                  ctx.fill();
+                }
+              }
+            }
+          }
+          // T-junction seals (endpoint-to-body)
+          tJunctionKeys.forEach(key => {
+            const [wallId, eiStr] = key.split(':');
+            const mA = allWalls.find(w => w.id === wallId);
+            if (!mA || (mA as any).arcControlPoint) return;
+            const ei = parseInt(eiStr) as 0 | 1;
+            const J = mA.worldPoints[ei];
+            const hwS = ((mA as any).wallThickness / 1000) * euV / 2;
+            ctx.beginPath();
+            ctx.arc(tpx(J.x), tpy(J.y), hwS * zoom * dpr, 0, Math.PI * 2);
+            ctx.fill();
+          });
+          ctx.restore();
+
           // Sub-pass B: face lines + end caps on top of all fills
           allWalls.forEach(m => {
             const isArc = !!(m as any).arcControlPoint;
@@ -1623,8 +1690,8 @@ export const InteractiveCanvas = ({
               const c_l1p2 = mit1 ? mit1.l1 : geo.l1p2, c_l2p2 = mit1 ? mit1.l2 : geo.l2p2;
               ctx.beginPath(); ctx.moveTo(tpx(c_l1p1.x), tpy(c_l1p1.y)); ctx.lineTo(tpx(c_l1p2.x), tpy(c_l1p2.y)); ctx.stroke();
               ctx.beginPath(); ctx.moveTo(tpx(c_l2p1.x), tpy(c_l2p1.y)); ctx.lineTo(tpx(c_l2p2.x), tpy(c_l2p2.y)); ctx.stroke();
-              if (!mit0) { ctx.beginPath(); ctx.moveTo(tpx(c_l1p1.x), tpy(c_l1p1.y)); ctx.lineTo(tpx(c_l2p1.x), tpy(c_l2p1.y)); ctx.stroke(); }
-              if (!mit1) { ctx.beginPath(); ctx.moveTo(tpx(c_l1p2.x), tpy(c_l1p2.y)); ctx.lineTo(tpx(c_l2p2.x), tpy(c_l2p2.y)); ctx.stroke(); }
+              if (!mit0 && !tJunctionKeys.has(`${m.id}:0`)) { ctx.beginPath(); ctx.moveTo(tpx(c_l1p1.x), tpy(c_l1p1.y)); ctx.lineTo(tpx(c_l2p1.x), tpy(c_l2p1.y)); ctx.stroke(); }
+              if (!mit1 && !tJunctionKeys.has(`${m.id}:1`)) { ctx.beginPath(); ctx.moveTo(tpx(c_l1p2.x), tpy(c_l1p2.y)); ctx.lineTo(tpx(c_l2p2.x), tpy(c_l2p2.y)); ctx.stroke(); }
             }
             ctx.restore();
           });
