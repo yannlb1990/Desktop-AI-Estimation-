@@ -30,7 +30,9 @@ export async function syncClientToSupabase(client: Client): Promise<void> {
   try {
     const row: ClientInsert = { ...client, user_id: userId, updated_at: new Date().toISOString() };
     await supabase.from('clients').upsert(row, { onConflict: 'id' });
-  } catch { /* silent — local data is source of truth */ }
+  } catch (e) {
+    console.error('[syncClient] Supabase sync failed:', e instanceof Error ? e.message : e);
+  }
 }
 
 export async function deleteClientFromSupabase(clientId: string): Promise<void> {
@@ -38,7 +40,9 @@ export async function deleteClientFromSupabase(clientId: string): Promise<void> 
   if (!userId) return;
   try {
     await supabase.from('clients').delete().eq('id', clientId).eq('user_id', userId);
-  } catch { /* silent */ }
+  } catch (e) {
+    console.error('[deleteClient] Supabase delete failed:', e instanceof Error ? e.message : e);
+  }
 }
 
 export async function loadClientsFromSupabase(): Promise<Client[]> {

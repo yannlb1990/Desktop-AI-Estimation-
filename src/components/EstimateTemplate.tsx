@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { ESTIMATE_TEMPLATES, EstimateTemplateData } from "@/data/estimateTemplates";
 import { getUserStorageKey } from "@/lib/localAuth";
+import { syncProjectToSupabase } from "@/lib/db/projects";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -691,6 +692,7 @@ export const EstimateTemplate = ({ projectId, estimateId }: EstimateTemplateProp
     projects[idx].consumables = consumables;
     projects[idx].estimate_totals = calculateTotals();
     localStorage.setItem(getUserStorageKey('local_projects'), JSON.stringify(projects));
+    syncProjectToSupabase(projects[idx]);
   }, [items, config, consumables, labourRates, overheadTotal, customConfigs, groupingMode, projectId]);
 
   const handleAIItems = (aiItems: any[]) => {

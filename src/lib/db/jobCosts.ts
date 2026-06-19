@@ -67,7 +67,9 @@ export async function syncJobCostsToSupabase(projectId: string, entries: CostEnt
     if (delErr) return;
     if (entries.length === 0) return;
     await supabase.from('job_cost_entries').insert(entries.map(e => toRow(e, projectId, userId)));
-  } catch { /* silent */ }
+  } catch (e) {
+    console.error('[syncJobCosts] Supabase sync failed:', e instanceof Error ? e.message : e);
+  }
 }
 
 export async function loadJobCostsFromSupabase(projectId: string): Promise<CostEntry[]> {

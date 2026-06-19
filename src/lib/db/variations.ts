@@ -93,7 +93,9 @@ export async function syncVariationsToSupabase(projectId: string, variations: Va
     if (delErr) return;
     if (variations.length === 0) return;
     await supabase.from('variations').insert(variations.map(v => toRow(v, projectId, userId)));
-  } catch { /* silent */ }
+  } catch (e) {
+    console.error('[syncVariations] Supabase sync failed:', e instanceof Error ? e.message : e);
+  }
 }
 
 export async function loadVariationsFromSupabase(projectId: string): Promise<Variation[]> {

@@ -79,9 +79,11 @@ export async function syncProjectToSupabase(project: any, retries = 3): Promise<
         .upsert(row, { onConflict: 'id' });
       if (!error) return;
       throw new Error(error.message);
-    } catch {
+    } catch (e) {
       if (attempt < retries) {
         await new Promise(r => setTimeout(r, attempt * 500));
+      } else {
+        console.error('[syncProject] Supabase sync failed after retries:', e instanceof Error ? e.message : e);
       }
     }
   }
@@ -93,7 +95,9 @@ export async function deleteProjectFromSupabase(projectId: string): Promise<void
   if (!userId) return;
   try {
     await (supabase as any).from('projects').delete().eq('id', projectId).eq('user_id', userId);
-  } catch { /* silent */ }
+  } catch (e) {
+    console.error('[deleteProject] Supabase delete failed:', e instanceof Error ? e.message : e);
+  }
 }
 
 /** Load all projects from Supabase, reconstruct full project objects. */

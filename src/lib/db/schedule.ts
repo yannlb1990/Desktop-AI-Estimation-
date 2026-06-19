@@ -73,7 +73,9 @@ export async function syncScheduleToSupabase(projectId: string, tasks: ScheduleT
     if (delErr) return;
     if (tasks.length === 0) return;
     await supabase.from('schedule_tasks').insert(tasks.map(t => toRow(t, projectId, userId)));
-  } catch { /* silent — localStorage is source of truth */ }
+  } catch (e) {
+    console.error('[syncSchedule] Supabase sync failed:', e instanceof Error ? e.message : e);
+  }
 }
 
 export async function loadScheduleFromSupabase(projectId: string): Promise<ScheduleTask[] | null> {
