@@ -353,7 +353,6 @@ const ProjectDetail = () => {
                     </SelectContent>
                   </Select>
                 </TourTip>
-              </div>
               <div className="text-muted-foreground space-y-1.5 mt-1">
                 {project.site_address && (
                   <div className="flex items-center gap-2 min-w-0">
