@@ -1,4 +1,5 @@
 import React, { useEffect } from "react";
+import { Analytics } from "@vercel/analytics/react";
 import { HelmetProvider } from "react-helmet-async";
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
@@ -73,6 +74,7 @@ const App = () => {
     <QueryClientProvider client={queryClient}>
       <TourProvider>
       <TooltipProvider>
+        <Analytics />
         <Toaster />
         <Sonner />
         <BrowserRouter>
