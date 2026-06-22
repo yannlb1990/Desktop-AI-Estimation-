@@ -15,10 +15,19 @@ const AcceptInvite = () => {
 
   useEffect(() => {
     const accept = async () => {
-      // Wait briefly for Supabase to establish the session from the magic link
-      await new Promise((r) => setTimeout(r, 1500));
+      // Wait for Supabase to exchange the invite token for a session.
+      // Check immediately first; fall back to onAuthStateChange with an 8s timeout.
+      const session = await new Promise<import("@supabase/supabase-js").Session | null>((resolve) => {
+        let resolved = false;
+        const timeout = setTimeout(() => { if (!resolved) { resolved = true; resolve(null); } }, 8000);
+        supabase.auth.getSession().then(({ data }) => {
+          if (data.session && !resolved) { resolved = true; clearTimeout(timeout); resolve(data.session); }
+        });
+        const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, s) => {
+          if (s && !resolved) { resolved = true; clearTimeout(timeout); subscription.unsubscribe(); resolve(s); }
+        });
+      });
 
-      const { data: { session } } = await supabase.auth.getSession();
       if (!session) {
         setStatus("error");
         setMessage("Session not found. Please use the invite link from your email.");

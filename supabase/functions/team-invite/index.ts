@@ -4,7 +4,6 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 const ALLOWED_ORIGINS = [
   "https://www.metricore.com.au",
   "https://metricore.com.au",
-  "http://localhost:3001",
   "http://localhost:8080",
 ];
 

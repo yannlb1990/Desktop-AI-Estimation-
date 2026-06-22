@@ -10,9 +10,10 @@ from pathlib import Path
 from typing import Optional
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI, File, UploadFile, HTTPException, BackgroundTasks
+from fastapi import FastAPI, File, UploadFile, HTTPException, BackgroundTasks, Security, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from fastapi.security.api_key import APIKeyHeader
 from pydantic_settings import BaseSettings
 
 from models import (
@@ -35,12 +36,21 @@ class Settings(BaseSettings):
     models_dir: str = "./models"
     max_file_size_mb: int = 100
     allowed_origins: list = ["http://localhost:5173", "http://localhost:3000", "http://localhost:8080"]
+    pdf_api_key: str = ""  # Set PDF_API_KEY env var to require auth on all extract endpoints
 
     class Config:
         env_file = ".env"
 
 
 settings = Settings()
+
+_api_key_header = APIKeyHeader(name="X-API-Key", auto_error=False)
+
+async def verify_api_key(api_key: str = Security(_api_key_header)):
+    if not settings.pdf_api_key:
+        return  # No key configured — open (local-only use)
+    if api_key != settings.pdf_api_key:
+        raise HTTPException(status_code=403, detail="Invalid or missing X-API-Key")
 
 # Global extractor instance
 extractor: Optional[PDFExtractor] = None
@@ -124,7 +134,8 @@ async def extract_pdf(
     extract_tables: bool = True,
     extract_dimensions: bool = True,
     pages: Optional[str] = None,  # Comma-separated page numbers
-    dpi: int = 200
+    dpi: int = 200,
+    _auth: None = Depends(verify_api_key)
 ):
     """
     Extract content from a PDF file.
@@ -208,7 +219,8 @@ async def extract_image(
     file: UploadFile = File(...),
     extract_layout: bool = True,
     extract_text: bool = True,
-    extract_dimensions: bool = True
+    extract_dimensions: bool = True,
+    _auth: None = Depends(verify_api_key)
 ):
     """
     Extract content from an image file (for scanned drawings).
@@ -266,7 +278,8 @@ async def extract_construction(
     background_tasks: BackgroundTasks,
     file: UploadFile = File(...),
     pages: Optional[str] = None,
-    dpi: int = 200
+    dpi: int = 200,
+    _auth: None = Depends(verify_api_key)
 ):
     """
     Extract construction-specific data from a PDF plan.
@@ -328,7 +341,8 @@ async def extract_construction(
 @app.post("/extract/batch")
 async def extract_batch(
     background_tasks: BackgroundTasks,
-    files: list[UploadFile] = File(...)
+    files: list[UploadFile] = File(...),
+    _auth: None = Depends(verify_api_key)
 ):
     """
     Extract content from multiple PDF files.

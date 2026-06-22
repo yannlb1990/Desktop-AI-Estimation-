@@ -16,9 +16,9 @@ const Navigation = () => {
   };
 
   const links = [
-    { label: "Features",        href: "#features",  internal: false },
-    { label: "Pricing",         href: "/pricing",   internal: true  },
-    { label: "Market Insights", href: "#insights",  internal: false },
+    { label: "Features",        href: "/#features",                          internal: false },
+    { label: "Pricing",         href: "/pricing",                            internal: true  },
+    { label: "Market Insights", href: signedIn ? "/insights" : "/#insights", internal: signedIn },
   ];
 
   return (

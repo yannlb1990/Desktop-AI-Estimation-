@@ -13,13 +13,19 @@ export const AIChatbot = () => {
 
   if (!isOpen) {
     return (
-      <Button
-        onClick={() => setIsOpen(true)}
-        className="fixed bottom-6 right-6 h-14 w-14 rounded-full bg-accent text-accent-foreground shadow-lg hover:bg-accent/90"
-        size="icon"
-      >
-        <Bot className="h-6 w-6" />
-      </Button>
+      <div className="fixed bottom-6 right-6 group">
+        <Button
+          onClick={() => setIsOpen(true)}
+          className="h-14 w-14 rounded-full bg-accent text-accent-foreground shadow-lg hover:bg-accent/90 hover:shadow-accent/20 hover:shadow-xl transition-all"
+          size="icon"
+          aria-label="AI Assistant"
+        >
+          <Bot className="h-6 w-6" />
+        </Button>
+        <span className="absolute bottom-full right-0 mb-2 whitespace-nowrap bg-popover border border-border text-popover-foreground text-xs font-medium px-2.5 py-1.5 rounded-lg shadow-md opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
+          AI Assistant
+        </span>
+      </div>
     );
   }
 

@@ -13,6 +13,7 @@ import { Ruler, ZoomIn, ZoomOut, Trash2, Square, Minus, Scan, Loader2, PenTool, 
 import { toast } from "sonner";
 import * as pdfjsLib from "pdfjs-dist";
 import { MeasurementsSidebar } from "./MeasurementsSidebar";
+import { getUserStorageKey } from "@/lib/localAuth";
 
 // Configure PDF.js worker
 pdfjsLib.GlobalWorkerOptions.workerSrc = '/pdf.worker.min.mjs';
@@ -135,7 +136,7 @@ export const PlanViewer = ({ planUrl, projectId, planPageId: propPlanPageId, wiz
   // Load scale from localStorage when propPlanPageId is provided
   useEffect(() => {
     if (propPlanPageId) {
-      const scaleData = localStorage.getItem(`plan_scale_${propPlanPageId}`);
+      const scaleData = localStorage.getItem(getUserStorageKey(`plan_scale_${propPlanPageId}`));
       if (scaleData) {
         try {
           const parsed = JSON.parse(scaleData);
@@ -186,7 +187,7 @@ export const PlanViewer = ({ planUrl, projectId, planPageId: propPlanPageId, wiz
 
   const loadMeasurements = () => {
     if (!planPageId) return;
-    const data: any[] = JSON.parse(localStorage.getItem(`plan_measurements_${planPageId}`) || '[]');
+    const data: any[] = JSON.parse(localStorage.getItem(getUserStorageKey(`plan_measurements_${planPageId}`)) || '[]');
     setMeasurements(data);
     if (fabricCanvas && data.length > 0) {
       redrawMeasurementsOnCanvas(data);
@@ -195,7 +196,7 @@ export const PlanViewer = ({ planUrl, projectId, planPageId: propPlanPageId, wiz
 
   const loadScaleFactor = () => {
     if (!planPageId) return;
-    const scaleData = localStorage.getItem(`plan_scale_${planPageId}`);
+    const scaleData = localStorage.getItem(getUserStorageKey(`plan_scale_${planPageId}`));
     if (scaleData) {
       try {
         const parsed = JSON.parse(scaleData);
@@ -586,7 +587,7 @@ export const PlanViewer = ({ planUrl, projectId, planPageId: propPlanPageId, wiz
       point_a: calibratePoints[0],
       point_b: calibratePoints[1],
     };
-    localStorage.setItem(`plan_scale_${currentPlanPageId}`, JSON.stringify(scaleData));
+    localStorage.setItem(getUserStorageKey(`plan_scale_${currentPlanPageId}`), JSON.stringify(scaleData));
     toast.success(`Scale set: ${calculatedScaleFactor.toFixed(2)} mm/unit`);
     
     // Clear calibration objects from canvas after successful application
@@ -999,8 +1000,8 @@ export const PlanViewer = ({ planUrl, projectId, planPageId: propPlanPageId, wiz
       created_at: new Date().toISOString(),
     };
 
-    const existing: any[] = JSON.parse(localStorage.getItem(`plan_measurements_${planPageId}`) || '[]');
-    localStorage.setItem(`plan_measurements_${planPageId}`, JSON.stringify([...existing, measurement]));
+    const existing: any[] = JSON.parse(localStorage.getItem(getUserStorageKey(`plan_measurements_${planPageId}`)) || '[]');
+    localStorage.setItem(getUserStorageKey(`plan_measurements_${planPageId}`), JSON.stringify([...existing, measurement]));
 
     addToHistory({ type: 'add_measurement', data: measurement });
     toast.success(`Measurement saved: ${label}`);
@@ -1032,7 +1033,7 @@ export const PlanViewer = ({ planUrl, projectId, planPageId: propPlanPageId, wiz
   // Redraw all measurements from localStorage onto canvas
   const redrawMeasurementsFromDatabase = () => {
     if (!fabricCanvas || !planPageId) return;
-    const data: any[] = JSON.parse(localStorage.getItem(`plan_measurements_${planPageId}`) || '[]');
+    const data: any[] = JSON.parse(localStorage.getItem(getUserStorageKey(`plan_measurements_${planPageId}`)) || '[]');
     redrawMeasurementsOnCanvas(data);
   };
 
@@ -1141,8 +1142,8 @@ export const PlanViewer = ({ planUrl, projectId, planPageId: propPlanPageId, wiz
     const action = history[historyIndex];
 
     if (action.type === 'add_measurement' && planPageId) {
-      const existing: any[] = JSON.parse(localStorage.getItem(`plan_measurements_${planPageId}`) || '[]');
-      localStorage.setItem(`plan_measurements_${planPageId}`, JSON.stringify(existing.filter((m: any) => m.id !== action.data.id)));
+      const existing: any[] = JSON.parse(localStorage.getItem(getUserStorageKey(`plan_measurements_${planPageId}`)) || '[]');
+      localStorage.setItem(getUserStorageKey(`plan_measurements_${planPageId}`), JSON.stringify(existing.filter((m: any) => m.id !== action.data.id)));
       clearMeasurementObjects();
       redrawMeasurementsFromDatabase();
       toast.success("Undone");
@@ -1157,8 +1158,8 @@ export const PlanViewer = ({ planUrl, projectId, planPageId: propPlanPageId, wiz
     const action = history[historyIndex + 1];
 
     if (action.type === 'add_measurement' && planPageId) {
-      const existing: any[] = JSON.parse(localStorage.getItem(`plan_measurements_${planPageId}`) || '[]');
-      localStorage.setItem(`plan_measurements_${planPageId}`, JSON.stringify([...existing, action.data]));
+      const existing: any[] = JSON.parse(localStorage.getItem(getUserStorageKey(`plan_measurements_${planPageId}`)) || '[]');
+      localStorage.setItem(getUserStorageKey(`plan_measurements_${planPageId}`), JSON.stringify([...existing, action.data]));
       clearMeasurementObjects();
       redrawMeasurementsFromDatabase();
       toast.success("Redone");
@@ -1176,11 +1177,11 @@ export const PlanViewer = ({ planUrl, projectId, planPageId: propPlanPageId, wiz
   
   const updateMeasurement = () => {
     if (!editingMeasurement || !planPageId) return;
-    const existing: any[] = JSON.parse(localStorage.getItem(`plan_measurements_${planPageId}`) || '[]');
+    const existing: any[] = JSON.parse(localStorage.getItem(getUserStorageKey(`plan_measurements_${planPageId}`)) || '[]');
     const updated = existing.map((m: any) =>
       m.id === editingMeasurement.id ? { ...m, label: editingMeasurement.label, trade: editingMeasurement.trade } : m
     );
-    localStorage.setItem(`plan_measurements_${planPageId}`, JSON.stringify(updated));
+    localStorage.setItem(getUserStorageKey(`plan_measurements_${planPageId}`), JSON.stringify(updated));
     toast.success("Measurement updated");
     setShowEditDialog(false);
     setEditingMeasurement(null);
@@ -1191,8 +1192,8 @@ export const PlanViewer = ({ planUrl, projectId, planPageId: propPlanPageId, wiz
   const deleteMeasurement = (id: string) => {
     if (!planPageId) return;
     const measurementToDelete = measurements.find(m => m.id === id);
-    const existing: any[] = JSON.parse(localStorage.getItem(`plan_measurements_${planPageId}`) || '[]');
-    localStorage.setItem(`plan_measurements_${planPageId}`, JSON.stringify(existing.filter((m: any) => m.id !== id)));
+    const existing: any[] = JSON.parse(localStorage.getItem(getUserStorageKey(`plan_measurements_${planPageId}`)) || '[]');
+    localStorage.setItem(getUserStorageKey(`plan_measurements_${planPageId}`), JSON.stringify(existing.filter((m: any) => m.id !== id)));
     if (measurementToDelete) {
       addToHistory({ type: 'delete_measurement', data: measurementToDelete });
     }
@@ -1424,7 +1425,7 @@ export const PlanViewer = ({ planUrl, projectId, planPageId: propPlanPageId, wiz
               </div>
               <Button size="sm" variant="outline" className="w-full mt-2" onClick={() => {
                 if (!planPageId) return;
-                const scaleData = localStorage.getItem(`plan_scale_${planPageId}`);
+                const scaleData = localStorage.getItem(getUserStorageKey(`plan_scale_${planPageId}`));
                 const parsed = scaleData ? JSON.parse(scaleData) : null;
                 toast.info(`Local scale_factor: ${parsed?.scale_factor ? parsed.scale_factor.toFixed(4) : 'null'}`);
               }}>

@@ -7,7 +7,6 @@ const FROM_EMAIL = "Metricore <noreply@metricore.com.au>";
 const ALLOWED_ORIGINS = [
   "https://www.metricore.com.au",
   "https://metricore.com.au",
-  "http://localhost:3001",
   "http://localhost:8080",
 ];
 
@@ -194,19 +193,20 @@ serve(async (req) => {
 
   const token = authHeader.replace(/^Bearer\s+/i, "");
   const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
-  let isAuthorized = token === serviceRoleKey;
+  const isServiceRole = token === serviceRoleKey;
+  let authenticatedUser: { email?: string | null } | null = null;
 
-  if (!isAuthorized) {
+  if (!isServiceRole) {
     const supabase = createClient(
       Deno.env.get("SUPABASE_URL") ?? "",
       Deno.env.get("SUPABASE_ANON_KEY") ?? "",
       { global: { headers: { Authorization: authHeader } } },
     );
     const { data: { user } } = await supabase.auth.getUser();
-    isAuthorized = !!user;
+    authenticatedUser = user;
   }
 
-  if (!isAuthorized) {
+  if (!isServiceRole && !authenticatedUser) {
     return new Response(JSON.stringify({ error: "Unauthorized" }), {
       status: 401, headers: { ...cors, "Content-Type": "application/json" },
     });
@@ -225,6 +225,13 @@ serve(async (req) => {
   } catch {
     return new Response(JSON.stringify({ error: "Invalid JSON body" }), {
       status: 400, headers: { ...cors, "Content-Type": "application/json" },
+    });
+  }
+
+  // Guard: non-service-role callers can only send to their own email address.
+  if (!isServiceRole && authenticatedUser && payload.to !== authenticatedUser.email) {
+    return new Response(JSON.stringify({ error: "Forbidden: recipient must match authenticated user email" }), {
+      status: 403, headers: { ...cors, "Content-Type": "application/json" },
     });
   }
 

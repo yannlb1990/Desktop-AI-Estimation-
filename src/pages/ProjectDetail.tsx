@@ -104,7 +104,7 @@ const ProjectDetail = () => {
     a.download = `${project.name.replace(/\s+/g, "_")}_estimate.csv`;
     a.click();
     URL.revokeObjectURL(url);
-    toast.success("Exported as CSV — open in Excel");
+    toast.success("Exported as CSV. Open in Excel or Google Sheets.");
   };
 
   useEffect(() => {
@@ -179,11 +179,11 @@ const ProjectDetail = () => {
     localStorage.setItem(getUserStorageKey('project_reminders'), JSON.stringify(reminders));
     const daysLeft = Math.ceil((dueDate.getTime() - Date.now()) / 86400000);
     if (daysLeft < 0) {
-      toast.warning(`Due date was ${Math.abs(daysLeft)} days ago — consider updating it`);
+      toast.warning(`Due date was ${Math.abs(daysLeft)} days ago. Consider updating it.`);
     } else if (daysLeft === 0) {
-      toast.warning("Due today — make sure the estimate is complete");
+      toast.warning("Due today. Make sure the estimate is complete.");
     } else {
-      toast.success(`Reminder saved — ${daysLeft} day${daysLeft !== 1 ? "s" : ""} until ${format(dueDate, "PPP")}`);
+      toast.success(`Reminder set for ${format(dueDate, "PPP")} (${daysLeft} day${daysLeft !== 1 ? "s" : ""} away)`);
     }
   };
 
@@ -273,7 +273,7 @@ const ProjectDetail = () => {
               )}
             </div>
             <div className="flex gap-1 md:gap-2 overflow-x-auto scrollbar-none">
-              <TourTip text="Start your estimate from a pre-built template — New Build, Bathroom, Kitchen, Deck or Commercial Fitout. Loads all standard line items instantly." position="bottom">
+              <TourTip text="Start your estimate from a pre-built template: New Build, Bathroom, Kitchen, Deck or Commercial Fitout. Loads all standard line items instantly." position="bottom">
                 <Button
                   variant="outline"
                   size="sm"
@@ -287,14 +287,14 @@ const ProjectDetail = () => {
                   <span className="hidden md:inline">Templates</span>
                 </Button>
               </TourTip>
-              <TourTip text="Generate a branded PDF quote — 2-page proposal with your logo, scope summary, pricing breakdown and signature block." position="bottom">
+              <TourTip text="Generate a branded PDF quote: a 2-page proposal with your logo, scope summary, pricing breakdown and signature block." position="bottom">
                 <QuoteGenerator project={project} estimate={estimate} />
               </TourTip>
               <TourTip text="Create a full corporate tender document including company profile, methodology, NCC compliance, programme and legal terms." position="bottom">
                 <FullTenderGenerator project={project} estimate={estimate} />
               </TourTip>
-              <TourTip text="Download the complete estimate as a CSV file — open it in Excel or Google Sheets for further review or sharing." position="bottom">
-                <Button size="sm" onClick={handleExportCSV} className="bg-accent text-accent-foreground hover:bg-accent/90 shrink-0" title="Export to Excel">
+              <TourTip text="Download the complete estimate as a CSV file. Open it in Excel or Google Sheets for further review or sharing." position="bottom">
+                <Button size="sm" variant="outline" onClick={handleExportCSV} className="shrink-0" title="Export to Excel">
                   <span className="hidden md:inline">Export to Excel</span>
                   <span className="md:hidden">Export</span>
                 </Button>
@@ -310,13 +310,31 @@ const ProjectDetail = () => {
             <div className="space-y-2">
               <div className="flex items-center gap-3 flex-wrap">
                 <h1 className="font-display text-2xl sm:text-3xl md:text-4xl font-bold">{project.name}</h1>
-                <div className={`px-3 py-1 rounded-full text-xs font-medium ${
-                  project.status === "complete" || project.status === "completed"
-                    ? "bg-accent/20 text-accent"
-                    : "bg-primary/10 text-primary"
-                }`}>
-                  {project.status || "active"}
-                </div>
+                {(() => {
+                  const statusMap: Record<string, { label: string; pulse: boolean; complete: boolean }> = {
+                    in_progress: { label: 'In Progress', pulse: true,  complete: false },
+                    active:      { label: 'Active',      pulse: true,  complete: false },
+                    complete:    { label: 'Complete',    pulse: false, complete: true  },
+                    completed:   { label: 'Complete',    pulse: false, complete: true  },
+                    on_hold:     { label: 'On Hold',     pulse: false, complete: false },
+                    draft:       { label: 'Draft',       pulse: false, complete: false },
+                  };
+                  const s = statusMap[project.status ?? ''] ?? { label: project.status || 'Active', pulse: false, complete: false };
+                  return (
+                    <div className={`flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold ${
+                      s.complete ? 'bg-accent/20 text-accent' : 'bg-primary/10 text-primary'
+                    }`}>
+                      {s.pulse && (
+                        <span className="relative flex h-1.5 w-1.5">
+                          <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-primary opacity-60" />
+                          <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-primary" />
+                        </span>
+                      )}
+                      {s.label}
+                    </div>
+                  );
+                })()}
+              </div>
                 <TourTip text="Track the quote status: Draft (in progress), Sent (submitted to client), Won or Lost. This feeds your win rate on the dashboard." position="bottom">
                   <Select value={project.quoteStatus || "draft"} onValueChange={handleQuoteStatusChange}>
                     <SelectTrigger className={`h-7 w-auto text-xs px-2.5 border rounded-full ${
@@ -336,22 +354,22 @@ const ProjectDetail = () => {
                   </Select>
                 </TourTip>
               </div>
-              <div className="text-muted-foreground space-y-1">
+              <div className="text-muted-foreground space-y-1.5 mt-1">
                 {project.site_address && (
                   <div className="flex items-center gap-2 min-w-0">
-                    <MapPin className="h-4 w-4 shrink-0" />
-                    <span className="truncate">Address: {project.site_address}</span>
+                    <MapPin className="h-3.5 w-3.5 shrink-0 text-muted-foreground/60" />
+                    <span className="truncate text-sm">{project.site_address}</span>
                   </div>
                 )}
                 {project.client_name && (
                   <div className="flex items-center gap-2 min-w-0">
-                    <User className="h-4 w-4 shrink-0" />
-                    <span className="truncate">Client: {project.client_name}</span>
+                    <User className="h-3.5 w-3.5 shrink-0 text-muted-foreground/60" />
+                    <span className="truncate text-sm">{project.client_name}</span>
                   </div>
                 )}
                 <div className="flex items-center gap-2 min-w-0">
-                  <CalendarIcon className="h-4 w-4 shrink-0" />
-                  <span className="truncate">Created: {new Date(project.created_at).toLocaleDateString()}</span>
+                  <CalendarIcon className="h-3.5 w-3.5 shrink-0 text-muted-foreground/60" />
+                  <span className="truncate text-sm">{new Date(project.created_at).toLocaleDateString('en-AU', { day: 'numeric', month: 'short', year: 'numeric' })}</span>
                 </div>
               </div>
             </div>
@@ -379,7 +397,7 @@ const ProjectDetail = () => {
                   </PopoverContent>
                 </Popover>
               </TourTip>
-              <TourTip text="Save a reminder for this project's due date — shown on your dashboard so you never miss a submission." position="left">
+              <TourTip text="Save a reminder for this project's due date. It shows on your dashboard so you never miss a submission." position="left">
                 <Button variant="outline" onClick={sendReminder} size="sm">
                   <Bell className="h-4 w-4 mr-2" />
                   Set Reminder
@@ -418,13 +436,12 @@ const ProjectDetail = () => {
         )}
 
         {/* ── Row 1: Main workflow steps ── */}
-        <div className="flex items-center rounded-xl border border-border bg-card p-1 mb-2">
+        <div className="flex items-center bg-card border border-border rounded-xl px-6 py-4 mb-2">
           {[
-            { key: "takeoff",  label: "1. Takeoff",  icon: Ruler,      tour: "Upload your PDF plans here. AI measures quantities automatically — review and adjust each item, then send everything to Estimate." },
-            { key: "estimate", label: "2. Estimate", icon: Calculator,  tour: "Review and price all takeoff items. Add labour, materials, margins and overheads. This is your full cost build-up before generating the client document." },
-            { key: "tender",   label: "3. Tender",   icon: FileText,    tour: "Generate the final client document. Choose a Quote (fast 2-page branded proposal) or a full Tender with compliance, programme and legal terms." },
+            { key: "takeoff",  label: "Takeoff",  icon: Ruler,      tour: "Upload your PDF plans here. AI measures quantities automatically. Review and adjust each item, then send everything to Estimate." },
+            { key: "estimate", label: "Estimate", icon: Calculator,  tour: "Review and price all takeoff items. Add labour, materials, margins and overheads. This is your full cost build-up before generating the client document." },
+            { key: "tender",   label: "Tender",   icon: FileText,    tour: "Generate the final client document. Choose a Quote (fast 2-page branded proposal) or a full Tender with compliance, programme and legal terms." },
           ].map((step, i) => {
-            const Icon = step.icon;
             const isActive = activeMainTab === step.key;
             const isPast =
               (step.key === "takeoff"  && (activeMainTab === "estimate" || activeMainTab === "tender")) ||
@@ -434,20 +451,27 @@ const ProjectDetail = () => {
                 <TourTip text={step.tour} position="bottom">
                   <button
                     onClick={() => setActiveMainTab(step.key)}
-                    className={`flex items-center gap-2 px-3 md:px-5 py-2.5 rounded-lg text-sm font-semibold transition-all flex-1 justify-center ${
-                      isActive
-                        ? "bg-primary text-primary-foreground shadow"
-                        : isPast
-                        ? "text-primary/80 hover:bg-primary/10"
-                        : "text-muted-foreground hover:bg-muted"
-                    }`}
+                    className="flex flex-col items-center gap-2 group min-w-0 flex-1"
                   >
-                    <Icon className="h-4 w-4 shrink-0" />
-                    <span className="hidden sm:inline">{step.label}</span>
-                    {isPast && <span className="hidden sm:inline ml-1 text-xs opacity-70">✓</span>}
+                    <div className={`w-9 h-9 rounded-full flex items-center justify-center text-sm font-bold border-2 transition-all duration-200 ${
+                      isActive
+                        ? "bg-primary border-primary text-primary-foreground shadow-[0_0_16px_hsl(var(--primary)/0.3)]"
+                        : isPast
+                        ? "bg-primary/10 border-primary text-primary"
+                        : "bg-muted border-border text-muted-foreground group-hover:border-primary/40"
+                    }`}>
+                      {isPast ? "✓" : i + 1}
+                    </div>
+                    <span className={`hidden sm:block text-xs font-semibold tracking-wide transition-colors ${
+                      isActive ? "text-primary" : isPast ? "text-primary/70" : "text-muted-foreground group-hover:text-foreground"
+                    }`}>
+                      {step.label}
+                    </span>
                   </button>
                 </TourTip>
-                {i < 2 && <span className="text-muted-foreground/40 text-lg select-none px-1">›</span>}
+                {i < 2 && (
+                  <div className={`flex-1 h-px mx-4 transition-colors ${isPast ? "bg-primary/40" : "bg-border"}`} />
+                )}
               </React.Fragment>
             );
           })}
@@ -472,18 +496,16 @@ const ProjectDetail = () => {
             onScroll={checkWorkflowScroll}
             className="flex items-center gap-0.5 rounded-xl border border-border bg-card/60 p-1 overflow-x-auto scrollbar-none"
           >
-            <span className="text-[10px] font-semibold text-muted-foreground/50 uppercase tracking-widest px-2 shrink-0 select-none">Tools</span>
-            <div className="w-px bg-border/60 self-stretch mx-1 shrink-0" />
             {[
-              { key: "overheads",  label: "Overheads", icon: Settings,     tour: "Add company overheads — insurance, supervision, site costs, preliminaries. These are added on top of your direct estimate costs." },
+              { key: "overheads",  label: "Overheads", icon: Settings,     tour: "Add company overheads: insurance, supervision, site costs, preliminaries. These are added on top of your direct estimate costs." },
               { key: "ffe",        label: "FF&E",       icon: Sofa,         tour: "Fixtures, Fittings & Equipment schedule. Enter appliances, furniture and fittings room by room with photos, supplier and pricing. Export as a branded PDF." },
-              { key: "insights",   label: "Insights",   icon: TrendingUp,   tour: "AI-generated cost breakdown analysis — compare your project's rates against current Australian market benchmarks." },
+              { key: "insights",   label: "Insights",   icon: TrendingUp,   tour: "AI-generated cost breakdown. Compare your project's rates against current Australian market benchmarks." },
               { key: "compliance", label: "NCC",        icon: ShieldCheck,  tour: "National Construction Code compliance checklist tailored to this project type. Identify gaps before submission." },
               { key: "subbies",    label: "Subbies",    icon: Users,        tour: "Enter and compare subcontractor quotes side by side for each trade. Easily select the best price and attach it to your estimate." },
-              { key: "documents",  label: "Docs",       icon: FolderOpen,   tour: "Store all project documents in one place — contracts, variations, site photos, council approvals and correspondence." },
+              { key: "documents",  label: "Docs",       icon: FolderOpen,   tour: "Store all project documents in one place: contracts, variations, site photos, council approvals and correspondence." },
               { key: "schedule",   label: "Schedule",   icon: CalendarIcon, tour: "Auto-generate a Gantt chart from your estimate trades. Adjust durations and dependencies, then print or export." },
               { key: "jobcost",    label: "Job Cost",   icon: BarChart2,    tour: "Track actual costs against your estimate in real time. Log invoices and expenses by trade to see your live margin." },
-              { key: "variations", label: "Variations", icon: GitBranch,    tour: "Manage change orders with a full approval workflow — draft, send for approval, track accepted variations and update your contract sum." },
+              { key: "variations", label: "Variations", icon: GitBranch,    tour: "Manage change orders with a full approval workflow. Draft, send for approval, track accepted variations and update your contract sum." },
             ].map((tool) => {
               const Icon = tool.icon;
               const isActive = activeMainTab === tool.key;
@@ -541,7 +563,7 @@ const ProjectDetail = () => {
           <TabsContent value="takeoff" forceMount className="space-y-4 data-[state=inactive]:hidden">
             <div className="md:hidden flex items-start gap-3 rounded-lg border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-600 dark:text-amber-400">
               <Monitor className="h-4 w-4 mt-0.5 shrink-0" />
-              <p>PDF takeoff works best on a desktop or laptop — the canvas tools are optimised for mouse precision.</p>
+              <p>PDF takeoff works best on a desktop or laptop. The canvas tools are optimised for mouse precision.</p>
             </div>
             <TakeoffErrorBoundary>
               <AIPlanAnalyzerEnhanced key={projectId} projectId={projectId!} estimateId={estimate?.id} />
@@ -595,7 +617,7 @@ const ProjectDetail = () => {
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-sm font-semibold text-foreground">Ready to send this to the client?</p>
-                  <p className="text-xs text-muted-foreground mt-0.5">Quote — fast branded proposal · Tender — full compliance document.</p>
+                  <p className="text-xs text-muted-foreground mt-0.5">Quote: fast branded proposal · Tender: full compliance document.</p>
                 </div>
                 <div className="flex gap-2 shrink-0 ml-4">
                   <Button
@@ -627,8 +649,8 @@ const ProjectDetail = () => {
             <Card className="p-6">
               <h3 className="font-display text-xl font-bold mb-2">Generate Quote or Tender</h3>
               <p className="text-muted-foreground mb-4">
-                <strong>Quote</strong> — fast, branded proposal with scope, pricing and signature block.<br />
-                <strong>Tender</strong> — full corporate document with company profile, compliance, methodology, programme and legal terms.
+                <strong>Quote</strong>: fast, branded proposal with scope, pricing and signature block.<br />
+                <strong>Tender</strong>: full corporate document with company profile, compliance, methodology, programme and legal terms.
               </p>
               <div className="flex gap-3">
                 <QuoteGenerator project={project} estimate={estimate} />
@@ -674,7 +696,7 @@ const ProjectDetail = () => {
                   section_id: null,
                   area: 'Subcontractor',
                   trade,
-                  scope_of_work: `${company} — subcontractor quote`,
+                  scope_of_work: `${company} (subcontractor quote)`,
                   material_type: 'Subcontract',
                   quantity: 1,
                   unit: 'lump sum',

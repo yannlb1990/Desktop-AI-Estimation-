@@ -151,7 +151,7 @@ export const PDFUploadManager = ({ projectId, onUploadComplete, onError }: PDFUp
         currentBlobUrl.current = blobUrl;
         const urlToUse = cloudUrl ?? blobUrl;
 
-        toast.success(`Plan loaded — ${pageCount} page${pageCount > 1 ? 's' : ''}${cloudUrl ? ' · saved to cloud' : ''}`);
+        toast.success(`Plan loaded: ${pageCount} page${pageCount > 1 ? 's' : ''}${cloudUrl ? ' · saved to cloud' : ''}`);
         savePlanToLibrary(projectId, { planId, filename: file.name, uploadedAt: new Date().toISOString(), pageCount });
         setUploadPct(100);
         currentBlobUrl.current = cloudUrl ? null : blobUrl;
@@ -170,7 +170,7 @@ export const PDFUploadManager = ({ projectId, onUploadComplete, onError }: PDFUp
 
   return (
     <div className="space-y-4">
-      <div className="border-2 border-dashed border-border rounded-lg p-8 text-center hover:border-secondary/50 transition-colors">
+      <div className="border-2 border-dashed border-border rounded-xl transition-all hover:border-primary/50 hover:bg-primary/[0.03] group">
         <input
           type="file"
           id="pdf-upload"
@@ -179,12 +179,14 @@ export const PDFUploadManager = ({ projectId, onUploadComplete, onError }: PDFUp
           className="hidden"
           disabled={uploading}
         />
-        <label htmlFor="pdf-upload" className="cursor-pointer">
+        <label htmlFor="pdf-upload" className="cursor-pointer block p-10">
           <div className="flex flex-col items-center gap-4">
             {uploading ? (
               <>
-                <FileText className="h-12 w-12 text-muted-foreground animate-pulse" />
-                <p className="text-lg font-medium">Loading plan…</p>
+                <div className="w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center">
+                  <FileText className="h-7 w-7 text-primary animate-pulse" />
+                </div>
+                <p className="text-base font-semibold">Loading plan…</p>
                 <p className="text-sm text-muted-foreground">
                   {uploadPct < 25 ? 'Reading file…' : uploadPct < 80 ? 'Saving to cloud…' : 'Almost done…'}
                 </p>
@@ -192,12 +194,22 @@ export const PDFUploadManager = ({ projectId, onUploadComplete, onError }: PDFUp
               </>
             ) : (
               <>
-                <Upload className="h-12 w-12 text-muted-foreground" />
-                <div>
-                  <p className="text-lg font-medium">Upload Plan</p>
-                  <p className="text-sm text-muted-foreground mt-1">PDF, PNG, JPG, or DXF up to 50MB</p>
+                <div className="w-16 h-16 rounded-full bg-muted flex items-center justify-center group-hover:bg-primary/10 transition-colors">
+                  <Upload className="h-7 w-7 text-muted-foreground group-hover:text-primary transition-colors" />
                 </div>
-                <Button type="button" variant="secondary">Choose File</Button>
+                <div className="text-center">
+                  <p className="text-base font-semibold">Drop your plan here</p>
+                  <p className="text-sm text-muted-foreground mt-0.5">or click to browse files</p>
+                </div>
+                <div className="flex items-center gap-2 flex-wrap justify-center">
+                  {['PDF', 'PNG', 'JPG', 'DXF'].map(t => (
+                    <span key={t} className="text-[11px] font-mono px-2 py-0.5 rounded-md bg-muted text-muted-foreground">{t}</span>
+                  ))}
+                  <span className="text-[11px] text-muted-foreground/60">· up to 50MB</span>
+                </div>
+                <Button type="button" className="bg-primary text-primary-foreground hover:bg-primary/90">
+                  Choose File
+                </Button>
               </>
             )}
           </div>
@@ -205,30 +217,24 @@ export const PDFUploadManager = ({ projectId, onUploadComplete, onError }: PDFUp
       </div>
 
       {cloudSaved === true && (
-        <Alert className="border-green-200 bg-green-50">
-          <Cloud className="h-4 w-4 text-green-600" />
-          <AlertDescription className="text-green-700">
-            Plan saved to cloud — it will reload automatically after any page refresh.
-          </AlertDescription>
-        </Alert>
+        <div className="flex items-center gap-3 rounded-lg border border-border border-l-2 border-l-accent bg-muted/30 px-4 py-3 text-sm">
+          <Cloud className="h-4 w-4 shrink-0 text-accent" />
+          <p className="text-muted-foreground">Plan saved to cloud — reloads automatically on every visit.</p>
+        </div>
       )}
 
       {cloudSaved === false && (
-        <Alert className="border-amber-200 bg-amber-50">
-          <CloudOff className="h-4 w-4 text-amber-600" />
-          <AlertDescription className="text-amber-700">
-            Plan stored locally only — you may need to re-upload after clearing browser data.
-          </AlertDescription>
-        </Alert>
+        <div className="flex items-center gap-3 rounded-lg border border-border border-l-2 border-l-orange-400/60 bg-muted/30 px-4 py-3 text-sm">
+          <CloudOff className="h-4 w-4 shrink-0 text-muted-foreground" />
+          <p className="text-muted-foreground">Stored locally — re-upload if you clear browser data.</p>
+        </div>
       )}
 
       {cloudSaved === null && !uploading && (
-        <Alert className="border-amber-200 bg-amber-50">
-          <CloudOff className="h-4 w-4 text-amber-600" />
-          <AlertDescription className="text-amber-700">
-            Plans are stored locally in your browser. Your PDF and all measurements will be restored automatically when you return to this project.
-          </AlertDescription>
-        </Alert>
+        <div className="flex items-center gap-3 rounded-lg border border-border border-l-2 border-l-primary/40 bg-muted/30 px-4 py-3 text-sm">
+          <CloudOff className="h-4 w-4 shrink-0 text-muted-foreground" />
+          <p className="text-muted-foreground">Plans save in your browser and restore automatically each visit.</p>
+        </div>
       )}
 
       {validationError && (
