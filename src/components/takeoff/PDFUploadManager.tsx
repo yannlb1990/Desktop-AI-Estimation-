@@ -230,13 +230,6 @@ export const PDFUploadManager = ({ projectId, onUploadComplete, onError }: PDFUp
         </div>
       )}
 
-      {cloudSaved === null && !uploading && (
-        <div className="flex items-center gap-3 rounded-lg border border-border border-l-2 border-l-primary/40 bg-muted/30 px-4 py-3 text-sm">
-          <CloudOff className="h-4 w-4 shrink-0 text-muted-foreground" />
-          <p className="text-muted-foreground">Plans save in your browser and restore automatically each visit.</p>
-        </div>
-      )}
-
       {validationError && (
         <Alert variant="destructive">
           <AlertCircle className="h-4 w-4" />
