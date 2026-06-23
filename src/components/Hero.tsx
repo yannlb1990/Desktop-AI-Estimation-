@@ -155,7 +155,7 @@ const Hero = () => {
             {/* Description — honest about what the tool does */}
             <p className="text-lg md:text-xl text-white/70 mb-8 leading-relaxed">
               Measure plans digitally, price by trade, and send professional
-              tenders — all in one tool designed for Australian construction.
+              tenders. One tool built for Australian construction.
               No guesswork, no spreadsheets.
             </p>
 
@@ -173,7 +173,7 @@ const Hero = () => {
                 size="lg"
                 variant="outline"
                 className="border-white/25 text-white bg-white/5 hover:bg-white/10 hover:border-white/40 text-lg px-8 py-6 h-auto font-semibold"
-                onClick={() => document.getElementById("features")?.scrollIntoView({ behavior: "smooth" })}
+                onClick={() => document.getElementById("demo")?.scrollIntoView({ behavior: "smooth" })}
               >
                 See How It Works
               </Button>

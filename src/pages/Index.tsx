@@ -1,6 +1,7 @@
 import { Helmet } from "react-helmet-async";
 import Navigation from "@/components/Navigation";
 import Hero from "@/components/Hero";
+import LaunchVideoSection from "@/components/LaunchVideoSection";
 import Features from "@/components/Features";
 import DashboardPreview from "@/components/DashboardPreview";
 import CTA from "@/components/CTA";
@@ -19,6 +20,7 @@ const Index = () => {
     <div className="min-h-screen">
       <Navigation />
       <Hero />
+      <LaunchVideoSection />
       <Features />
       <TakeoffVisual />
       <DashboardPreview />
