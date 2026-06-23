@@ -262,6 +262,8 @@ interface InteractiveCanvasProps {
    * dispatching DELETE_MEASUREMENT so removal is synchronous (same frame), not deferred.
    */
   canvasActionsRef?: React.MutableRefObject<{ removeObjects: (id: string) => void } | null>;
+  /** Parent ref that will be filled with the raw HTMLCanvasElement for Magnifier / export use. */
+  canvasElementRef?: React.MutableRefObject<HTMLCanvasElement | null>;
 }
 
 export const InteractiveCanvas = ({
@@ -292,6 +294,7 @@ export const InteractiveCanvas = ({
   onReupload,
   fileName,
   canvasActionsRef,
+  canvasElementRef,
 }: InteractiveCanvasProps) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -403,6 +406,11 @@ export const InteractiveCanvas = ({
   const [countPoints, setCountPoints] = useState<WorldPoint[]>([]);
   const [countMarkers, setCountMarkers] = useState<Circle[]>([]);
   const [countPreset, setCountPreset] = useState<string>('Custom'); // Preset name for count items
+  // Refs so tool-switch and Escape handler can read current values without stale closures
+  const countMarkersRef = useRef<Circle[]>([]);
+  const countPointsRef = useRef<WorldPoint[]>([]);
+  useEffect(() => { countMarkersRef.current = countMarkers; }, [countMarkers]);
+  useEffect(() => { countPointsRef.current = countPoints; }, [countPoints]);
 
   // Count preset options
   const COUNT_PRESETS = ['Toilet', 'Window', 'Door', 'Light', 'Power Point', 'Switch', 'Custom'];
@@ -441,6 +449,7 @@ export const InteractiveCanvas = ({
     canvasElement.height = initialHeight;
     container.appendChild(canvasElement);
     canvasRef.current = canvasElement;
+    if (canvasElementRef) canvasElementRef.current = canvasElement;
 
     const canvas = new FabricCanvas(canvasElement, {
       width: initialWidth,
@@ -475,6 +484,7 @@ export const InteractiveCanvas = ({
       }
       fabricCanvasRef.current = null;
       canvasRef.current = null;
+      if (canvasElementRef) canvasElementRef.current = null;
     };
   }, []);
 
@@ -822,6 +832,19 @@ export const InteractiveCanvas = ({
 
     // Clear chain anchor whenever tool changes
     chainStartRef.current = null;
+
+    // Cancel any in-progress count session when switching away from count tool
+    if (activeTool !== 'count' && countMarkersRef.current.length > 0) {
+      const c = fabricCanvasRef.current;
+      if (c) {
+        countMarkersRef.current.forEach(m => { try { c.remove(m); } catch (_) {} });
+        c.requestRenderAll();
+      }
+      setCountMarkers([]);
+      setCountPoints([]);
+      countMarkersRef.current = [];
+      countPointsRef.current = [];
+    }
 
     // Clean up any lingering wall-line preview objects when switching away from wall-line
     if (activeTool !== 'wall-line') {
@@ -2917,6 +2940,20 @@ export const InteractiveCanvas = ({
           previewLabelRef.current = null;
           canvas.renderAll();
         }
+        return;
+      }
+
+      // Escape: cancel in-progress count markers
+      if (e.key === 'Escape' && countMarkersRef.current.length > 0) {
+        const canvas = fabricCanvasRef.current;
+        if (canvas) {
+          countMarkersRef.current.forEach(m => { try { canvas.remove(m); } catch (_) {} });
+          canvas.requestRenderAll();
+        }
+        setCountMarkers([]);
+        setCountPoints([]);
+        countMarkersRef.current = [];
+        countPointsRef.current = [];
         return;
       }
 

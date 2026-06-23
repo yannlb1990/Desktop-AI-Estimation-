@@ -317,7 +317,7 @@ export const PDFTakeoff = ({ projectId, estimateId, onAddCostItems }: PDFTakeoff
     });
     setVerifyMeasurement(null);
     if (Math.abs(correctionPct) < 1) {
-      toast.success('Scale verified — no correction needed');
+      toast.success('Scale verified. No correction needed.');
     } else {
       toast.success(`Scale corrected by ${correctionPct > 0 ? '+' : ''}${correctionPct}% and locked`);
     }
@@ -487,6 +487,17 @@ export const PDFTakeoff = ({ projectId, estimateId, onAddCostItems }: PDFTakeoff
     }
     return () => { if (calibInstructTimerRef.current) clearTimeout(calibInstructTimerRef.current); };
   }, [state.calibrationMode, manualCalibrationPoints]);
+
+  // Auto-show magnifier when entering calibration mode so the user can place
+  // the scale line precisely without having to zoom in first.
+  // Auto-hide once calibration is complete or cancelled.
+  useEffect(() => {
+    if (state.calibrationMode === 'manual') {
+      setShowMagnifier(true);
+    } else {
+      setShowMagnifier(false);
+    }
+  }, [state.calibrationMode]);
 
   const handleFetchNCCCode = useCallback(async (id: string, area: string, materials: string[]) => {
     return await fetchNCCCode(area, materials);
@@ -743,7 +754,7 @@ export const PDFTakeoff = ({ projectId, estimateId, onAddCostItems }: PDFTakeoff
     });
 
     if (itemsCreated > 0) {
-      toast.success(`${itemsCreated} cost item${itemsCreated !== 1 ? 's' : ''} added — continue validating or switch to Costs tab`);
+      toast.success(`${itemsCreated} cost item${itemsCreated !== 1 ? 's' : ''} added. Continue validating or switch to Costs tab.`);
     }
   }, [state.measurements, dispatch]);
 
@@ -1018,6 +1029,7 @@ export const PDFTakeoff = ({ projectId, estimateId, onAddCostItems }: PDFTakeoff
           onMeasurementSelect={handleMeasurementSelect}
           canvasExportRef={canvasExportRef}
           canvasActionsRef={canvasActionsRef}
+          canvasElementRef={canvasRef}
           wallThickness={wallThicknessMm}
           wallHatchType={wallHatchType}
           wallHatchSide={wallHatchSide}
@@ -1027,6 +1039,11 @@ export const PDFTakeoff = ({ projectId, estimateId, onAddCostItems }: PDFTakeoff
             setIsTakeoffFullscreen(false);
             setActiveTab('upload');
           }}
+        />
+        <Magnifier
+          canvasRef={canvasRef as React.RefObject<HTMLCanvasElement>}
+          isVisible={showMagnifier}
+          onClose={() => setShowMagnifier(false)}
         />
       </div>
 
@@ -1188,7 +1205,7 @@ export const PDFTakeoff = ({ projectId, estimateId, onAddCostItems }: PDFTakeoff
                 onClick={() => setActiveTab('measure')}
                 className="bg-primary text-primary-foreground hover:bg-primary/90"
               >
-                Plan uploaded — Start Measuring
+                Plan uploaded. Start Measuring.
                 <span className="ml-2">→</span>
               </Button>
             </div>
@@ -1331,7 +1348,7 @@ export const PDFTakeoff = ({ projectId, estimateId, onAddCostItems }: PDFTakeoff
                 {isVerifyMode && (
                   <div className="flex items-center gap-3 px-4 py-2 bg-amber-500/10 border border-amber-500/40 rounded-lg text-sm text-amber-400 animate-pulse">
                     <Ruler className="h-4 w-4 shrink-0" />
-                    <span>Draw a line on any labelled dimension (e.g. "2200") — then enter the real value to correct the scale</span>
+                    <span>Draw a line on any labelled dimension (e.g. "2200"). Then enter the real value to correct the scale.</span>
                     <Button variant="ghost" size="sm" className="ml-auto h-7 text-amber-400 hover:text-amber-300" onClick={() => { setIsVerifyMode(false); dispatch({ type: 'SET_ACTIVE_TOOL', payload: 'pan' }); }}>
                       Cancel
                     </Button>
@@ -1376,6 +1393,7 @@ export const PDFTakeoff = ({ projectId, estimateId, onAddCostItems }: PDFTakeoff
                         onMeasurementSelect={handleMeasurementSelect}
                         canvasExportRef={canvasExportRef}
                         canvasActionsRef={canvasActionsRef}
+                        canvasElementRef={canvasRef}
                         wallThickness={wallThicknessMm}
                         wallHatchType={wallHatchType}
                         wallHatchSide={wallHatchSide}
@@ -1384,6 +1402,11 @@ export const PDFTakeoff = ({ projectId, estimateId, onAddCostItems }: PDFTakeoff
                           dispatch({ type: 'SET_PDF_FILE', payload: null as any });
                           setActiveTab('upload');
                         }}
+                      />
+                      <Magnifier
+                        canvasRef={canvasRef as React.RefObject<HTMLCanvasElement>}
+                        isVisible={showMagnifier}
+                        onClose={() => setShowMagnifier(false)}
                       />
                     </>
                   )}
@@ -1633,7 +1656,7 @@ export const PDFTakeoff = ({ projectId, estimateId, onAddCostItems }: PDFTakeoff
                           >
                             <Combine className="h-4 w-4 mr-2" />
                             {mixedUnits
-                              ? `Mixed units (${units.join(' + ')}) — select same unit`
+                              ? `Mixed units (${units.join(' + ')}). Select the same unit.`
                               : `Combine ${sidebarSelectedIds.size} selected (${total.toFixed(2)} ${units[0]})`}
                           </Button>
                         );
@@ -1663,7 +1686,7 @@ export const PDFTakeoff = ({ projectId, estimateId, onAddCostItems }: PDFTakeoff
                 onClick={() => setActiveTab('costs')}
                 className="bg-primary text-primary-foreground hover:bg-primary/90"
               >
-                Done Measuring — Go to Costs
+                Done Measuring
                 <span className="ml-2">→</span>
               </Button>
             </div>
@@ -1769,7 +1792,7 @@ export const PDFTakeoff = ({ projectId, estimateId, onAddCostItems }: PDFTakeoff
               </button>
             </div>
             {m.addedToEstimate ? (
-              <p className="text-[11px] text-green-600 dark:text-green-400 mb-2 font-medium">✓ Already in estimate — add again or update:</p>
+              <p className="text-[11px] text-green-600 dark:text-green-400 mb-2 font-medium">✓ Already in estimate. Add again or update:</p>
             ) : (
               <p className="text-[11px] text-muted-foreground mb-2">Add to estimate as:</p>
             )}
