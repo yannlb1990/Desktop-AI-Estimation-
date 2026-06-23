@@ -1,5 +1,7 @@
 import { useRef, useState } from "react";
-import { Play } from "lucide-react";
+import { ArrowRight, Play } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { isSignedIn } from "@/lib/localAuth";
 
 const LaunchVideoSection = () => {
   const iframeRef = useRef<HTMLIFrameElement>(null);
@@ -106,18 +108,19 @@ const LaunchVideoSection = () => {
           </div>
         </div>
 
-        {/* Three-stat strip */}
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-6 mt-14 max-w-3xl mx-auto text-center">
-          {[
-            { value: "Upload", label: "Drop any PDF or DXF plan" },
-            { value: "Measure", label: "Area, wall, length, count by trade" },
-            { value: "Tender", label: "Client-ready doc in one click" },
-          ].map(({ value, label }) => (
-            <div key={value} className="flex flex-col gap-1">
-              <div className="text-xl font-bold text-primary font-mono">{value}</div>
-              <div className="text-sm text-white/50">{label}</div>
-            </div>
-          ))}
+        {/* CTA below the video */}
+        <div className="text-center mt-12">
+          <Button
+            size="lg"
+            onClick={() => window.location.href = isSignedIn() ? "/dashboard" : "/auth?mode=signup"}
+            className="bg-primary text-primary-foreground hover:bg-primary/90 shadow-glow text-lg px-8 py-6 h-auto font-semibold"
+          >
+            Start Free Trial
+            <ArrowRight className="ml-2 h-5 w-5" />
+          </Button>
+          <p className="text-white/35 text-sm mt-3 font-mono">
+            Plans from $79/month · No credit card required · Cancel anytime
+          </p>
         </div>
       </div>
     </section>

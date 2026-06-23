@@ -3,6 +3,7 @@ import Navigation from "@/components/Navigation";
 import Hero from "@/components/Hero";
 import LaunchVideoSection from "@/components/LaunchVideoSection";
 import Features from "@/components/Features";
+import Testimonials from "@/components/Testimonials";
 import DashboardPreview from "@/components/DashboardPreview";
 import CTA from "@/components/CTA";
 import Footer from "@/components/Footer";
@@ -22,6 +23,7 @@ const Index = () => {
       <Hero />
       <LaunchVideoSection />
       <Features />
+      <Testimonials />
       <TakeoffVisual />
       <DashboardPreview />
       <CTA />
