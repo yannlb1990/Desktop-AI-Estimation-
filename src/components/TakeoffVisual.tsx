@@ -44,9 +44,9 @@ const measurementCards = [
 
 export const TakeoffVisual = () => {
   return (
-    <section className="py-24 bg-muted/40">
-      <div className="container mx-auto px-6">
-        <div className="grid lg:grid-cols-2 gap-12 items-center">
+    <section className="py-16 md:py-24 bg-muted/40">
+      <div className="container mx-auto px-4 sm:px-6">
+        <div className="grid lg:grid-cols-2 gap-10 items-center">
           <div className="space-y-6">
             <Badge variant="secondary" className="uppercase tracking-wide text-xs">
               Visual Walkthrough
@@ -110,7 +110,7 @@ export const TakeoffVisual = () => {
               </div>
 
               <div className="flex-1 space-y-4">
-                <div className="relative h-[420px] rounded-xl border border-border bg-gradient-to-br from-background via-muted/60 to-background overflow-hidden">
+                <div className="relative h-[280px] sm:h-[360px] md:h-[420px] rounded-xl border border-border bg-gradient-to-br from-background via-muted/60 to-background overflow-hidden">
                   <div className="absolute inset-0 opacity-40 bg-[radial-gradient(circle_at_25%_20%,hsl(var(--primary)/0.12),transparent_25%),radial-gradient(circle_at_80%_10%,hsl(var(--secondary)/0.12),transparent_30%),radial-gradient(circle_at_30%_80%,hsl(var(--accent)/0.12),transparent_28%)]" />
 
                   <div className="absolute inset-6 rounded-lg border border-dashed border-border/80 bg-card/60 backdrop-blur">

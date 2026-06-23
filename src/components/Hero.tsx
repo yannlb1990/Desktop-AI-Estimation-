@@ -27,7 +27,7 @@ const Hero = () => {
           </div>
 
           {/* Heading */}
-          <h1 className="font-display text-5xl md:text-7xl font-bold text-white mb-6 leading-tight">
+          <h1 className="font-display text-4xl sm:text-5xl md:text-7xl font-bold text-white mb-6 leading-tight">
             From Plans to
             <span className="block mt-1 bg-gradient-to-r from-primary via-cyan-300 to-white bg-clip-text text-transparent">
               Tenders in Minutes
@@ -35,7 +35,7 @@ const Hero = () => {
           </h1>
 
           {/* Description */}
-          <p className="text-xl md:text-2xl text-white/65 mb-10 leading-relaxed max-w-2xl mx-auto">
+          <p className="text-lg md:text-xl text-white/65 mb-10 leading-relaxed max-w-2xl mx-auto">
             Measure plans digitally, price by trade, and send professional
             tenders. One tool built for Australian construction.
           </p>
@@ -45,7 +45,7 @@ const Hero = () => {
             <Button
               size="lg"
               onClick={() => window.location.href = isSignedIn() ? "/dashboard" : "/auth?mode=signup"}
-              className="bg-primary text-primary-foreground hover:bg-primary/90 shadow-glow text-lg px-8 py-6 h-auto font-semibold"
+              className="bg-primary text-primary-foreground hover:bg-primary/90 shadow-glow text-base md:text-lg px-8 py-6 h-auto font-semibold w-full sm:w-auto"
             >
               Start for Free
               <ArrowRight className="ml-2 h-5 w-5" />
@@ -53,35 +53,35 @@ const Hero = () => {
             <Button
               size="lg"
               variant="outline"
-              className="border-white/25 text-white bg-white/5 hover:bg-white/10 hover:border-white/40 text-lg px-8 py-6 h-auto font-semibold"
+              className="border-white/25 text-white bg-white/5 hover:bg-white/10 hover:border-white/40 text-base md:text-lg px-8 py-6 h-auto font-semibold w-full sm:w-auto"
               onClick={() => document.getElementById("demo")?.scrollIntoView({ behavior: "smooth" })}
             >
               Watch the Demo
             </Button>
           </div>
 
-          {/* Stats */}
-          <div className="grid grid-cols-3 gap-8 pt-8 border-t border-white/10 max-w-xl mx-auto">
+          {/* Stats — compact on mobile */}
+          <div className="grid grid-cols-3 gap-4 pt-8 border-t border-white/10 max-w-sm sm:max-w-xl mx-auto">
             <div className="text-center">
               <div className="flex items-center gap-1 justify-center mb-1">
-                <Clock className="h-4 w-4 text-primary" />
+                <Clock className="h-3.5 w-3.5 text-primary" />
               </div>
-              <div className="font-mono text-2xl font-bold text-white">10×</div>
-              <div className="text-xs text-white/50 mt-0.5">Faster than manual</div>
+              <div className="font-mono text-xl sm:text-2xl font-bold text-white">10×</div>
+              <div className="text-[10px] sm:text-xs text-white/50 mt-0.5 leading-tight">Faster than manual</div>
             </div>
             <div className="text-center">
               <div className="flex items-center gap-1 justify-center mb-1">
-                <Zap className="h-4 w-4 text-primary" />
+                <Zap className="h-3.5 w-3.5 text-primary" />
               </div>
-              <div className="font-mono text-2xl font-bold text-white">26</div>
-              <div className="text-xs text-white/50 mt-0.5">Trades covered</div>
+              <div className="font-mono text-xl sm:text-2xl font-bold text-white">26</div>
+              <div className="text-[10px] sm:text-xs text-white/50 mt-0.5 leading-tight">Trades covered</div>
             </div>
             <div className="text-center">
               <div className="flex items-center gap-1 justify-center mb-1">
-                <CheckCircle className="h-4 w-4 text-primary" />
+                <CheckCircle className="h-3.5 w-3.5 text-primary" />
               </div>
-              <div className="font-mono text-2xl font-bold text-white">NCC</div>
-              <div className="text-xs text-white/50 mt-0.5">Rate references</div>
+              <div className="font-mono text-xl sm:text-2xl font-bold text-white">NCC</div>
+              <div className="text-[10px] sm:text-xs text-white/50 mt-0.5 leading-tight">Rate references</div>
             </div>
           </div>
 

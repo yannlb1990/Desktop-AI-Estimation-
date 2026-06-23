@@ -4,8 +4,8 @@ import { BarChart3, DollarSign, FileText, TrendingUp } from "lucide-react";
 
 const DashboardPreview = () => {
   return (
-    <section id="insights" className="py-24 bg-background">
-      <div className="container mx-auto px-6">
+    <section id="insights" className="py-16 md:py-24 bg-background">
+      <div className="container mx-auto px-4 sm:px-6">
         <div className="max-w-3xl mx-auto text-center mb-16">
           <h2 className="font-display text-4xl md:text-5xl font-bold mb-6">
             Your Command Center for
@@ -71,14 +71,14 @@ const DashboardPreview = () => {
                   { name: "Renovation - Brisbane North", value: "$125,000", status: "In Progress", date: "5 days ago" },
                   { name: "Extension - Sunshine Coast", value: "$215,000", status: "Complete", date: "1 week ago" }
                 ].map((project, index) => (
-                  <div key={index} className="flex items-center justify-between py-3 border-b border-border last:border-0">
-                    <div className="flex-1">
-                      <div className="font-medium text-foreground">{project.name}</div>
-                      <div className="text-sm text-muted-foreground">{project.date}</div>
+                  <div key={index} className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1.5 py-3 border-b border-border last:border-0">
+                    <div className="flex-1 min-w-0">
+                      <div className="font-medium text-foreground text-sm truncate">{project.name}</div>
+                      <div className="text-xs text-muted-foreground">{project.date}</div>
                     </div>
-                    <div className="flex items-center gap-4">
-                      <div className="font-mono font-semibold text-foreground">{project.value}</div>
-                      <div className={`px-3 py-1 rounded-full text-xs font-medium ${
+                    <div className="flex items-center gap-3 flex-shrink-0">
+                      <div className="font-mono font-semibold text-foreground text-sm">{project.value}</div>
+                      <div className={`px-2.5 py-0.5 rounded-full text-xs font-medium whitespace-nowrap ${
                         project.status === "Complete"
                           ? "bg-accent/20 text-accent"
                           : "bg-primary/10 text-primary"
