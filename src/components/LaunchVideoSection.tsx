@@ -48,8 +48,8 @@ const LaunchVideoSection = () => {
             </span>
           </h2>
           <p className="text-white/60 text-lg max-w-xl mx-auto">
-            Watch Metricore turn a PDF floor plan into a priced tender —
-            upload, calibrate, measure, estimate, schedule, send.
+            Watch Metricore turn a PDF floor plan into a priced tender.
+            Upload, calibrate, measure, estimate, schedule, send.
           </p>
         </div>
 
