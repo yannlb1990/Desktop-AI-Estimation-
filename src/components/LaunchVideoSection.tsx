@@ -113,7 +113,7 @@ const LaunchVideoSection = () => {
 
               <iframe
                 ref={iframeRef}
-                src="/launch-video/"
+                src="/launch-video/index.html"
                 title="Metricore product demo — from PDF plan to tender in 41 seconds"
                 className="absolute inset-0 w-full h-full border-0"
                 onLoad={() => setLoaded(true)}
