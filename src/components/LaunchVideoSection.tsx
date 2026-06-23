@@ -1,32 +1,17 @@
-import { useRef, useState, useEffect } from "react";
+import { useRef, useState } from "react";
 import { Play } from "lucide-react";
 
 const LaunchVideoSection = () => {
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const [loaded, setLoaded] = useState(false);
-  const [revealed, setRevealed] = useState(false);
-  const sectionRef = useRef<HTMLElement>(null);
-
-  // Reveal on scroll into view
-  useEffect(() => {
-    const el = sectionRef.current;
-    if (!el) return;
-    const obs = new IntersectionObserver(
-      ([entry]) => { if (entry.isIntersecting) setRevealed(true); },
-      { threshold: 0.15 }
-    );
-    obs.observe(el);
-    return () => obs.disconnect();
-  }, []);
 
   return (
     <section
-      ref={sectionRef}
       id="demo"
       className="relative py-24 overflow-hidden"
       style={{ background: "linear-gradient(180deg, #081521 0%, #0c1d2e 60%, #081521 100%)" }}
     >
-      {/* Animated grid backdrop */}
+      {/* Grid backdrop */}
       <div
         aria-hidden="true"
         className="pointer-events-none absolute inset-0 opacity-[0.04]"
@@ -49,14 +34,7 @@ const LaunchVideoSection = () => {
 
       <div className="container mx-auto px-6 relative z-10">
         {/* Section heading */}
-        <div
-          className="text-center mb-12"
-          style={{
-            opacity: revealed ? 1 : 0,
-            transform: revealed ? "translateY(0)" : "translateY(24px)",
-            transition: "opacity 0.6s ease, transform 0.6s ease",
-          }}
-        >
+        <div className="text-center mb-12">
           <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full border border-primary/30 bg-primary/10 mb-5">
             <Play className="h-3.5 w-3.5 text-primary fill-primary" />
             <span className="text-sm font-mono text-primary tracking-wider uppercase">
@@ -77,78 +55,59 @@ const LaunchVideoSection = () => {
 
         {/* Video player */}
         <div
+          className="relative rounded-2xl mx-auto"
           style={{
-            opacity: revealed ? 1 : 0,
-            transform: revealed ? "translateY(0) scale(1)" : "translateY(32px) scale(0.98)",
-            transition: "opacity 0.7s ease 0.15s, transform 0.7s ease 0.15s",
+            maxWidth: 1100,
+            boxShadow:
+              "0 0 0 1px rgba(31,182,201,0.25), 0 0 60px rgba(31,182,201,0.12), 0 40px 120px rgba(8,21,33,0.6)",
           }}
         >
-          {/* Outer glow frame */}
+          {/* 16:9 aspect ratio container */}
           <div
-            className="relative rounded-2xl mx-auto"
+            className="relative rounded-t-2xl overflow-hidden"
+            style={{ paddingBottom: "56.25%" }}
+          >
+            {/* Loading skeleton */}
+            {!loaded && (
+              <div className="absolute inset-0 flex items-center justify-center bg-[#081521]">
+                <div className="flex flex-col items-center gap-4">
+                  <div className="w-14 h-14 rounded-full border-2 border-primary/30 border-t-primary animate-spin" />
+                  <span className="text-white/40 text-sm font-mono tracking-wider">
+                    Loading demo…
+                  </span>
+                </div>
+              </div>
+            )}
+
+            <iframe
+              ref={iframeRef}
+              src="/launch-video/index.html"
+              title="Metricore product demo — from PDF plan to tender in 41 seconds"
+              className="absolute inset-0 w-full h-full border-0"
+              onLoad={() => setLoaded(true)}
+              allow="autoplay"
+            />
+          </div>
+
+          {/* Bottom caption bar */}
+          <div
+            className="flex items-center justify-between px-5 py-3 rounded-b-2xl"
             style={{
-              maxWidth: 1100,
-              boxShadow:
-                "0 0 0 1px rgba(31,182,201,0.25), 0 0 60px rgba(31,182,201,0.12), 0 40px 120px rgba(8,21,33,0.6)",
+              background: "rgba(8,21,33,0.92)",
+              borderTop: "1px solid rgba(255,255,255,0.06)",
             }}
           >
-            {/* 16:9 aspect ratio container */}
-            <div
-              className="relative rounded-2xl overflow-hidden"
-              style={{ paddingBottom: "56.25%" }}
-            >
-              {/* Loading skeleton */}
-              {!loaded && (
-                <div className="absolute inset-0 flex items-center justify-center bg-[#081521]">
-                  <div className="flex flex-col items-center gap-4">
-                    <div
-                      className="w-14 h-14 rounded-full border-2 border-primary/30 border-t-primary animate-spin"
-                    />
-                    <span className="text-white/40 text-sm font-mono tracking-wider">
-                      Loading demo…
-                    </span>
-                  </div>
-                </div>
-              )}
-
-              <iframe
-                ref={iframeRef}
-                src="/launch-video/index.html"
-                title="Metricore product demo — from PDF plan to tender in 41 seconds"
-                className="absolute inset-0 w-full h-full border-0"
-                onLoad={() => setLoaded(true)}
-                loading="lazy"
-                allow="autoplay"
-              />
-            </div>
-
-            {/* Bottom caption bar */}
-            <div
-              className="flex items-center justify-between px-5 py-3 rounded-b-2xl"
-              style={{
-                background: "rgba(8,21,33,0.92)",
-                borderTop: "1px solid rgba(255,255,255,0.06)",
-              }}
-            >
-              <span className="text-white/40 text-xs font-mono tracking-wide">
-                USE SPACE TO PLAY · ← → TO SCRUB
-              </span>
-              <span className="text-white/40 text-xs font-mono">
-                metricore.com.au
-              </span>
-            </div>
+            <span className="text-white/40 text-xs font-mono tracking-wide">
+              SPACE TO PLAY · ← → TO SCRUB
+            </span>
+            <span className="text-white/40 text-xs font-mono">
+              metricore.com.au
+            </span>
           </div>
         </div>
 
-        {/* Three-stat strip below the video */}
-        <div
-          className="grid grid-cols-1 sm:grid-cols-3 gap-6 mt-14 max-w-3xl mx-auto text-center"
-          style={{
-            opacity: revealed ? 1 : 0,
-            transform: revealed ? "translateY(0)" : "translateY(20px)",
-            transition: "opacity 0.6s ease 0.35s, transform 0.6s ease 0.35s",
-          }}
-        >
+        {/* Three-stat strip */}
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-6 mt-14 max-w-3xl mx-auto text-center">
           {[
             { value: "Upload", label: "Drop any PDF or DXF plan" },
             { value: "Measure", label: "Area, wall, length, count by trade" },
