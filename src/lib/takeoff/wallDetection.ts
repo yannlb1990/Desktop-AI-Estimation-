@@ -121,42 +121,64 @@ function classifyByPerimeter(segs: RawSeg[]): ('external' | 'internal')[] {
   });
 }
 
+// Return value includes a warning when too many segments found (likely a site/landscape plan)
+export interface DetectionResult {
+  walls: DetectedWall[];
+  tooMany: boolean;   // true when raw count exceeded MAX_SEGMENTS before filtering
+  rawCount: number;
+}
+
+const MAX_SEGMENTS = 25;
+const MIN_WALL_METRES = 1.5;   // raised from 0.4 — eliminates text, hatching, dim lines
+
 export async function detectWallsFromPDF(
   pdfUrl: string,
   pageIndex: number,
   unitsPerMetre: number,
-  minWallMetres = 0.4,
-): Promise<DetectedWall[]> {
+): Promise<DetectionResult> {
   const { canvas, pxPerPdfPoint } = await renderPageOffscreen(pdfUrl, pageIndex);
   const ctx = canvas.getContext('2d')!;
-  const { data } = ctx.getImageData(0, 0, canvas.width, canvas.height);
-  const gray = toGrayscale(data);
   const { width: w, height: h } = canvas;
 
-  const THR = 80;
-  const minPx = Math.max(4, Math.round(minWallMetres * unitsPerMetre * pxPerPdfPoint));
+  // Skip outer margins (4%) and bottom title-block area (15%)
+  const marginX = Math.round(w * 0.04);
+  const marginYTop = Math.round(h * 0.04);
+  const marginYBottom = Math.round(h * 0.15);  // title blocks live here
+  const scanW = w - marginX * 2;
+  const scanH = h - marginYTop - marginYBottom;
 
-  const rawH = scanHorizontal(gray, w, h, THR, minPx);
-  const rawV = scanVertical(gray, w, h, THR, minPx);
+  const { data } = ctx.getImageData(marginX, marginYTop, scanW, scanH);
+  const gray = toGrayscale(data);
+
+  const THR = 80;
+  const minPx = Math.max(6, Math.round(MIN_WALL_METRES * unitsPerMetre * pxPerPdfPoint));
+
+  const rawH = scanHorizontal(gray, scanW, scanH, THR, minPx);
+  const rawV = scanVertical(gray, scanW, scanH, THR, minPx);
   const mergedH = mergeColinear(rawH, true, 10, 2);
   const mergedV = mergeColinear(rawV, false, 10, 2);
 
   const MIN_THICK = 2;
-  const filtH = mergedH.filter(s => measureThickness(gray, w, h, s, THR) >= MIN_THICK);
-  const filtV = mergedV.filter(s => measureThickness(gray, w, h, s, THR) >= MIN_THICK);
+  const filtH = mergedH.filter(s => measureThickness(gray, scanW, scanH, s, THR) >= MIN_THICK);
+  const filtV = mergedV.filter(s => measureThickness(gray, scanW, scanH, s, THR) >= MIN_THICK);
 
   const all = [...filtH, ...filtV];
+  const rawCount = all.length;
+  const tooMany = rawCount > MAX_SEGMENTS;
+
+  if (tooMany) return { walls: [], tooMany: true, rawCount };
+
   const classes = classifyByPerimeter(all);
 
-  return all.map((seg, i) => {
-    const wx1 = seg.x1 / pxPerPdfPoint, wy1 = seg.y1 / pxPerPdfPoint;
-    const wx2 = seg.x2 / pxPerPdfPoint, wy2 = seg.y2 / pxPerPdfPoint;
+  const walls = all.map((seg, i) => {
+    // Re-add margins to get back to full-page coordinates before converting to world space
+    const wx1 = (seg.x1 + marginX) / pxPerPdfPoint;
+    const wy1 = (seg.y1 + marginYTop) / pxPerPdfPoint;
+    const wx2 = (seg.x2 + marginX) / pxPerPdfPoint;
+    const wy2 = (seg.y2 + marginYTop) / pxPerPdfPoint;
     const realValue = Math.hypot(wx2 - wx1, wy2 - wy1) / unitsPerMetre;
-    return {
-      id: crypto.randomUUID(),
-      worldPoints: [{ x: wx1, y: wy1 }, { x: wx2, y: wy2 }],
-      realValue,
-      classification: classes[i],
-    };
-  }).filter(w => w.realValue >= minWallMetres);
+    return { id: crypto.randomUUID(), worldPoints: [{ x: wx1, y: wy1 }, { x: wx2, y: wy2 }], realValue, classification: classes[i] };
+  }).filter(w => w.realValue >= MIN_WALL_METRES);
+
+  return { walls, tooMany: false, rawCount };
 }

@@ -14,7 +14,7 @@ import {
   FrameSettings, DEFAULT_FRAME_SETTINGS, FrameMaterial, StudSpacing,
   CeilingHeight, TimberSize, SteelSize, extractWallSegments, calculateFramingBOM,
 } from '@/lib/takeoff/framingCalculations';
-import { detectWallsFromPDF, DetectedWall } from '@/lib/takeoff/wallDetection';
+import { detectWallsFromPDF, DetectedWall, DetectionResult } from '@/lib/takeoff/wallDetection';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -178,6 +178,7 @@ export function FrameEstimator({
   const [scanning, setScanning] = useState(false);
   const [pendingWalls, setPendingWalls] = useState<DetectedWall[]>([]);
   const [rejectedIds, setRejectedIds] = useState<Set<string>>(new Set());
+  const [scanWarning, setScanWarning] = useState<string | null>(null);
 
   // Persist sections
   useEffect(() => {
@@ -262,14 +263,19 @@ export function FrameEstimator({
       return;
     }
     setScanning(true);
+    setScanWarning(null);
     try {
-      const walls = await detectWallsFromPDF(pdfUrl, pageIndex, unitsPerMetre, 0.4);
-      if (walls.length === 0) {
-        toast.info('No walls detected — try drawing manually');
+      const result: DetectionResult = await detectWallsFromPDF(pdfUrl, pageIndex, unitsPerMetre);
+      if (result.tooMany) {
+        setScanWarning(`Too many lines found (${result.rawCount}). This looks like a site or landscape plan — switch to a floor plan page, or use Manual mode.`);
+        setPendingWalls([]);
+      } else if (result.walls.length === 0) {
+        setScanWarning('No walls detected. Try a floor plan page (1:100–1:200 scale) or use Manual mode.');
+        setPendingWalls([]);
       } else {
-        setPendingWalls(walls);
+        setScanWarning(null);
+        setPendingWalls(result.walls);
         setRejectedIds(new Set());
-        toast.success(`Detected ${walls.length} wall segments — review below`);
       }
     } catch (err) {
       toast.error('Detection failed — ensure the plan is fully loaded');
@@ -421,11 +427,10 @@ export function FrameEstimator({
           {/* Auto mode */}
           {mode === 'auto' && (
             <div className="px-3 py-3 space-y-3">
-              <Button
-                size="sm"
-                className="w-full h-8 gap-1.5 text-xs"
+              <button
                 onClick={handleScan}
                 disabled={scanning || !isCalibrated || !pdfUrl}
+                className="w-full flex items-center justify-center gap-1.5 h-8 text-xs font-medium border border-border/60 rounded-md text-muted-foreground hover:text-foreground hover:border-border/90 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
               >
                 {scanning ? (
                   <>
@@ -438,15 +443,24 @@ export function FrameEstimator({
                     Scan Page for Walls
                   </>
                 )}
-              </Button>
-              <p className="text-[10px] text-muted-foreground leading-relaxed">
-                Detects thick dark lines from the plan and classifies EXT/INT by position. Review each segment before confirming.
+              </button>
+
+              <p className="text-[10px] text-muted-foreground/70 leading-relaxed">
+                Best on floor plan pages (1:100–1:200). Site and landscape plans may return too many false positives.
               </p>
 
+              {/* Warning banner */}
+              {scanWarning && (
+                <div className="flex items-start gap-2 px-2 py-2 bg-amber-950/30 border border-amber-800/30 rounded text-[11px] text-amber-300/90 leading-relaxed">
+                  <TriangleAlert className="h-3.5 w-3.5 shrink-0 mt-0.5" />
+                  {scanWarning}
+                </div>
+              )}
+
               {/* Section selector when multiple sections */}
-              {sections.length > 1 && (
+              {sections.length > 1 && pendingWalls.length > 0 && (
                 <div>
-                  <p className="text-[10px] text-muted-foreground mb-1.5">Add detected walls to:</p>
+                  <p className="text-[10px] text-muted-foreground mb-1">Add to:</p>
                   <div className="flex flex-wrap gap-1">
                     {sections.map(s => (
                       <button
@@ -455,8 +469,8 @@ export function FrameEstimator({
                         className={cn(
                           'px-2 py-0.5 text-[11px] rounded border transition-colors',
                           activeSectionId === s.id
-                            ? 'bg-primary/20 border-primary text-primary'
-                            : 'border-border/50 text-muted-foreground hover:border-border',
+                            ? 'border-border text-foreground'
+                            : 'border-border/40 text-muted-foreground hover:border-border/70',
                         )}
                       >
                         {s.name}
@@ -466,89 +480,90 @@ export function FrameEstimator({
                 </div>
               )}
 
-              {/* Review panel */}
+              {/* Review panel — only shows walls NOT rejected */}
               {pendingWalls.length > 0 && (
                 <div className="space-y-2">
                   <div className="flex items-center justify-between">
-                    <p className="text-[11px] font-semibold">
-                      {pendingWalls.length - rejectedIds.size} / {pendingWalls.length} walls kept
+                    <p className="text-[11px] text-muted-foreground">
+                      {pendingWalls.length - rejectedIds.size} of {pendingWalls.length} kept
+                      {rejectedIds.size > 0 && <span className="text-muted-foreground/50 ml-1">· {rejectedIds.size} removed</span>}
                     </p>
-                    <div className="flex gap-1">
-                      <Button size="sm" variant="outline" className="h-6 text-[10px] px-2"
-                        onClick={() => setRejectedIds(new Set(pendingWalls.map(w => w.id)))}>
-                        Reject All
-                      </Button>
-                      <Button size="sm" variant="outline" className="h-6 text-[10px] px-2"
-                        onClick={() => setRejectedIds(new Set())}>
-                        Keep All
-                      </Button>
+                    <div className="flex gap-2">
+                      {rejectedIds.size > 0 && (
+                        <button
+                          onClick={() => setRejectedIds(new Set())}
+                          className="text-[10px] text-muted-foreground hover:text-foreground transition-colors"
+                        >
+                          Restore all
+                        </button>
+                      )}
+                      <button
+                        onClick={() => setRejectedIds(new Set(pendingWalls.map(w => w.id)))}
+                        className="text-[10px] text-muted-foreground hover:text-foreground transition-colors"
+                      >
+                        Remove all
+                      </button>
                     </div>
                   </div>
 
-                  <div className="max-h-48 overflow-y-auto space-y-1 pr-0.5">
-                    {pendingWalls.map(w => {
-                      const rejected = rejectedIds.has(w.id);
-                      return (
-                        <div
-                          key={w.id}
+                  {/* Only show kept walls */}
+                  <div className="max-h-48 overflow-y-auto space-y-px">
+                    {pendingWalls.filter(w => !rejectedIds.has(w.id)).map(w => (
+                      <div
+                        key={w.id}
+                        className="flex items-center gap-2 px-2 py-1 rounded text-xs text-muted-foreground hover:bg-muted/20 transition-colors group"
+                      >
+                        <span className="font-mono tabular-nums w-12 shrink-0 text-foreground/80">
+                          {w.realValue.toFixed(2)}m
+                        </span>
+                        <button
+                          onClick={() => setPendingWalls(prev => prev.map(pw =>
+                            pw.id === w.id
+                              ? { ...pw, classification: pw.classification === 'external' ? 'internal' : 'external' as 'external' | 'internal' }
+                              : pw,
+                          ))}
                           className={cn(
-                            'flex items-center gap-2 px-2 py-1.5 rounded border text-xs transition-colors',
-                            rejected ? 'opacity-40 border-border/30 bg-muted/10' : 'border-border/50 bg-muted/30',
+                            'text-[10px] font-medium transition-colors shrink-0',
+                            w.classification === 'external'
+                              ? 'text-amber-400/80 hover:text-amber-300'
+                              : 'text-sky-400/80 hover:text-sky-300',
                           )}
                         >
-                          <span className="font-mono font-medium tabular-nums w-12 shrink-0">
-                            {w.realValue.toFixed(2)}m
-                          </span>
-                          <button
-                            onClick={() => setPendingWalls(prev => prev.map(pw =>
-                              pw.id === w.id
-                                ? { ...pw, classification: pw.classification === 'external' ? 'internal' : 'external' as 'external' | 'internal' }
-                                : pw,
-                            ))}
-                            className={cn(
-                              'px-1.5 py-0.5 rounded text-[10px] font-semibold border transition-colors shrink-0',
-                              w.classification === 'external'
-                                ? 'bg-amber-900/40 text-amber-300 border-amber-700/50 hover:bg-amber-900/60'
-                                : 'bg-sky-900/40 text-sky-300 border-sky-700/50 hover:bg-sky-900/60',
-                            )}
-                          >
-                            {w.classification === 'external' ? 'EXT' : 'INT'}
-                          </button>
-                          <div className="flex-1" />
-                          <button
-                            onClick={() => setRejectedIds(prev => {
-                              const next = new Set(prev);
-                              if (rejected) next.delete(w.id); else next.add(w.id);
-                              return next;
-                            })}
-                            className={cn(
-                              'h-5 w-5 rounded flex items-center justify-center border transition-colors shrink-0',
-                              rejected
-                                ? 'border-red-700/50 text-red-400 hover:bg-red-950/30'
-                                : 'border-emerald-700/50 text-emerald-400 hover:bg-emerald-950/30',
-                            )}
-                          >
-                            {rejected ? <X className="h-3 w-3" /> : <Check className="h-3 w-3" />}
-                          </button>
-                        </div>
-                      );
-                    })}
+                          {w.classification === 'external' ? 'ext' : 'int'}
+                        </button>
+                        <div className="flex-1" />
+                        <button
+                          onClick={() => setRejectedIds(prev => new Set([...prev, w.id]))}
+                          className="opacity-0 group-hover:opacity-100 transition-opacity text-muted-foreground/50 hover:text-red-400"
+                          title="Remove"
+                        >
+                          <X className="h-3 w-3" />
+                        </button>
+                      </div>
+                    ))}
+
+                    {pendingWalls.filter(w => !rejectedIds.has(w.id)).length === 0 && (
+                      <p className="text-[11px] text-muted-foreground/50 py-2 text-center">
+                        All removed — click "Restore all" to undo
+                      </p>
+                    )}
                   </div>
 
-                  <div className="flex gap-2">
-                    <Button
-                      size="sm"
-                      className="flex-1 h-7 text-xs gap-1"
+                  <div className="flex items-center gap-2 pt-1">
+                    <button
                       onClick={confirmWalls}
                       disabled={rejectedIds.size === pendingWalls.length || !activeSectionId}
+                      className="flex items-center gap-1 px-3 h-7 text-xs font-medium border border-border/60 rounded hover:border-border/90 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
                     >
                       <Check className="h-3 w-3" />
-                      Confirm {pendingWalls.length - rejectedIds.size} Walls
-                    </Button>
-                    <Button size="sm" variant="ghost" className="h-7 text-xs px-2 text-muted-foreground"
-                      onClick={() => { setPendingWalls([]); setRejectedIds(new Set()); }}>
+                      Confirm {pendingWalls.length - rejectedIds.size} wall{pendingWalls.length - rejectedIds.size !== 1 ? 's' : ''}
+                    </button>
+                    <button
+                      onClick={() => { setPendingWalls([]); setRejectedIds(new Set()); setScanWarning(null); }}
+                      className="text-[11px] text-muted-foreground/60 hover:text-muted-foreground transition-colors"
+                    >
                       Discard
-                    </Button>
+                    </button>
                   </div>
                 </div>
               )}
@@ -557,21 +572,17 @@ export function FrameEstimator({
 
           {/* Manual mode: tip when empty */}
           {mode === 'manual' && totalWalls === 0 && (
-            <div className="px-3 py-3 bg-slate-800/40 space-y-1.5">
-              <p className="text-xs font-semibold text-amber-300">How to use Manual mode</p>
-              <ol className="text-[11px] text-muted-foreground space-y-1 list-decimal list-inside">
-                <li>Press <kbd className="bg-muted px-1 rounded text-[10px]">W</kbd> to activate the Wall-line tool</li>
-                <li>Click two points on the plan for each wall segment</li>
-                <li>Toggle <span className="text-amber-300 font-medium">EXT</span> / <span className="text-sky-300 font-medium">INT</span> in the list below</li>
-                <li>BOM generates automatically</li>
-              </ol>
+            <div className="px-3 py-3 space-y-1">
+              <p className="text-[11px] text-muted-foreground/80">
+                Press <kbd className="bg-muted/60 px-1.5 py-0.5 rounded text-[10px] font-mono">W</kbd> to activate the wall tool, then click two points on the plan for each wall. Tag EXT / INT in the list below.
+              </p>
             </div>
           )}
 
           {/* Manual mode: active section selector (multi-section only) */}
           {mode === 'manual' && sections.length > 1 && (
-            <div className="px-3 py-2 bg-muted/10">
-              <p className="text-[10px] text-muted-foreground mb-1.5">Drawing walls into:</p>
+            <div className="px-3 py-2">
+              <p className="text-[10px] text-muted-foreground mb-1">Drawing into:</p>
               <div className="flex flex-wrap gap-1">
                 {sections.map(s => (
                   <button
@@ -580,8 +591,8 @@ export function FrameEstimator({
                     className={cn(
                       'flex items-center gap-1 px-2 py-0.5 text-[11px] rounded border transition-colors',
                       activeSectionId === s.id
-                        ? 'bg-primary/20 border-primary text-primary'
-                        : 'border-border/50 text-muted-foreground hover:border-border',
+                        ? 'border-border text-foreground'
+                        : 'border-border/40 text-muted-foreground hover:border-border/70',
                     )}
                   >
                     {activeSectionId === s.id ? <CircleDot className="h-2.5 w-2.5" /> : <Circle className="h-2.5 w-2.5" />}
@@ -707,14 +718,14 @@ export function FrameEstimator({
                                     });
                                   }}
                                   className={cn(
-                                    'px-1.5 py-0.5 rounded text-[10px] font-semibold border transition-colors shrink-0',
+                                    'text-[10px] font-medium transition-colors shrink-0',
                                     w.classification === 'external'
-                                      ? 'bg-amber-900/40 text-amber-300 border-amber-700/50 hover:bg-amber-900/60'
-                                      : 'bg-sky-900/40 text-sky-300 border-sky-700/50 hover:bg-sky-900/60',
+                                      ? 'text-amber-400/80 hover:text-amber-300'
+                                      : 'text-sky-400/80 hover:text-sky-300',
                                   )}
-                                  title="Click to toggle EXT / INT"
+                                  title="Click to toggle ext / int"
                                 >
-                                  {w.classification === 'external' ? 'EXT' : 'INT'}
+                                  {w.classification === 'external' ? 'ext' : 'int'}
                                 </button>
                                 {w.hasRakingPlate && (
                                   <span className="text-[9px] text-purple-300 font-medium">raking</span>
@@ -846,16 +857,14 @@ export function FrameEstimator({
           </div>
 
           {/* Add section */}
-          <div className="px-3 py-2">
-            <Button
-              variant="ghost"
-              size="sm"
-              className="w-full h-7 text-[11px] text-muted-foreground gap-1.5 border border-dashed border-border/40 hover:border-border hover:text-foreground"
+          <div className="px-3 py-2.5">
+            <button
               onClick={addSection}
+              className="flex items-center gap-1 text-[11px] text-muted-foreground/60 hover:text-muted-foreground transition-colors"
             >
               <Plus className="h-3 w-3" />
-              Add Section (different material or zone)
-            </Button>
+              Add zone (different material or area)
+            </button>
           </div>
         </div>
       )}
