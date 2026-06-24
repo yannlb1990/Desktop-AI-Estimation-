@@ -236,8 +236,8 @@ const Dashboard = () => {
           <div className="flex items-center gap-2">
             <AlertTriangle className="h-4 w-4 flex-shrink-0" />
             {sub.pastDueGraceDaysLeft > 0
-              ? <>Payment failed — please update your payment method. Access continues for {sub.pastDueGraceDaysLeft} more day{sub.pastDueGraceDaysLeft !== 1 ? 's' : ''}.</>
-              : <>Payment overdue — your grace period has ended. Update your payment method to keep access.</>
+              ? <>Payment failed. Please update your payment method. Access continues for {sub.pastDueGraceDaysLeft} more day{sub.pastDueGraceDaysLeft !== 1 ? 's' : ''}.</>
+              : <>Payment overdue. Your grace period has ended. Update your payment method to keep access.</>
             }
           </div>
           <Button size="sm" variant="outline" className="h-7 text-xs border-amber-400/60 text-amber-400 hover:bg-amber-500/10" onClick={() => navigate('/settings')}>
@@ -262,12 +262,12 @@ const Dashboard = () => {
           <div className={`border-b px-4 md:px-6 py-2.5 flex flex-wrap items-center justify-between gap-x-3 gap-y-2 text-sm ${colorClass}`}>
             <div className="flex items-center gap-2">
               {expired
-                ? <><AlertTriangle className="h-4 w-4 flex-shrink-0" /> Your free trial has ended — upgrade to keep full access</>
+                ? <><AlertTriangle className="h-4 w-4 flex-shrink-0" /> Your free trial has ended. Upgrade to keep full access.</>
                 : urgent
-                ? <><AlertTriangle className="h-4 w-4 flex-shrink-0" /> Trial ends in {d} day{d !== 1 ? 's' : ''} — upgrade now to keep your projects and data</>
+                ? <><AlertTriangle className="h-4 w-4 flex-shrink-0" /> Trial ends in {d} day{d !== 1 ? 's' : ''}. Upgrade now to keep your projects and data.</>
                 : warning
                 ? <><Zap className="h-4 w-4 flex-shrink-0" /> {d} days left in your free trial · You have full {sub.subscription?.selectedPlan ? PLAN_NAMES[sub.subscription.selectedPlan] : 'Pro'} access</>
-                : <><Zap className="h-4 w-4 flex-shrink-0" /> Free trial — {d} of 14 days remaining · Full {sub.subscription?.selectedPlan ? PLAN_NAMES[sub.subscription.selectedPlan] : 'Pro'} access included</>
+                : <><Zap className="h-4 w-4 flex-shrink-0" /> Free trial · {d} of 14 days remaining · Full {sub.subscription?.selectedPlan ? PLAN_NAMES[sub.subscription.selectedPlan] : 'Pro'} access included</>
               }
             </div>
             <div className="flex items-center gap-3">
@@ -323,7 +323,7 @@ const Dashboard = () => {
               size="sm"
               onClick={toggleTour}
               className={`hidden md:flex border ${tourEnabled ? 'border-violet-500/60 text-violet-400 bg-violet-500/10' : 'border-border text-muted-foreground'}`}
-              title={tourEnabled ? "Turn off Guide Mode" : "Turn on Guide Mode — hover over buttons to learn what they do"}
+              title={tourEnabled ? "Turn off Guide Mode" : "Turn on Guide Mode. Hover over buttons to learn what each one does."}
             >
               <BookOpen className="h-4 w-4 mr-1.5" />
               {tourEnabled ? "Guide On" : "Guide"}
@@ -668,7 +668,7 @@ const Dashboard = () => {
             {
               icon: <Upload className="h-5 w-5 text-primary" />,
               title: 'New Project',
-              desc: atProjectLimit ? `Limit reached (${projects.length}/${sub.caps.maxProjects}) — upgrade` : 'Upload plans & start measuring',
+              desc: atProjectLimit ? `Limit reached (${projects.length}/${sub.caps.maxProjects}). Upgrade to add more.` : 'Upload plans & start measuring',
               action: handleNewProject,
               primary: true,
               tour: 'Upload a PDF plan and let AI detect your takeoff quantities, or start a manual estimate from scratch.',
@@ -678,14 +678,14 @@ const Dashboard = () => {
               title: 'Quick Estimate',
               desc: 'Manual estimate, no plan needed',
               action: () => atProjectLimit ? navigate('/pricing') : navigate('/project/new?mode=manual'),
-              tour: 'Skip the PDF — enter rooms and items directly. Great for fast ballpark quotes.',
+              tour: 'Skip the PDF. Enter rooms and items directly. Great for fast ballpark quotes.',
             },
             {
               icon: <BarChart3 className="h-5 w-5 text-blue-400" />,
               title: 'Market Insights',
-              desc: sub.caps.marketInsights ? 'Current Australian build rates' : 'Pro plan — upgrade to access',
+              desc: sub.caps.marketInsights ? 'Current Australian build rates' : 'Pro plan. Upgrade to access.',
               action: () => sub.caps.marketInsights ? navigate('/insights') : navigate('/pricing'),
-              tour: 'Live Australian construction cost benchmarks — compare your rates against current market data.',
+              tour: 'Live Australian construction cost benchmarks. Compare your rates against current market data.',
             },
             {
               icon: <Package className="h-5 w-5 text-green-400" />,

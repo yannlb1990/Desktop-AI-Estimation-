@@ -204,15 +204,15 @@ export const ProjectInsightsTab = ({ projectId }: ProjectInsightsTabProps) => {
     items.forEach(item => {
       const label = [item.scope_of_work, item.material_type].filter(Boolean).join(" / ") || item.trade || "Item";
       if (!item.unit_price || Number(item.unit_price) === 0)
-        flags.push({ severity: "high", message: `"${label}" — $0 unit price, line total will be zero` });
+        flags.push({ severity: "high", message: `"${label}": $0 unit price, line total will be zero` });
       if (!item.markup_pct || Number(item.markup_pct) === 0)
-        flags.push({ severity: "high", message: `"${label}" — 0% markup, no profit on this line` });
+        flags.push({ severity: "high", message: `"${label}": 0% markup, no profit on this line` });
       if (Number(item.labour_hours) > 0 && (!item.labour_rate || Number(item.labour_rate) === 0))
-        flags.push({ severity: "medium", message: `"${label}" — has labour hours but $0/hr rate` });
+        flags.push({ severity: "medium", message: `"${label}": has labour hours but $0/hr rate` });
       if (Number(item.material_wastage_pct) > 25)
-        flags.push({ severity: "medium", message: `"${label}" — material waste at ${item.material_wastage_pct}% (unusually high)` });
+        flags.push({ severity: "medium", message: `"${label}": material waste at ${item.material_wastage_pct}% (unusually high)` });
       if (Number(item.labour_wastage_pct) > 20)
-        flags.push({ severity: "low", message: `"${label}" — labour waste at ${item.labour_wastage_pct}%` });
+        flags.push({ severity: "low", message: `"${label}": labour waste at ${item.labour_wastage_pct}%` });
     });
     const scopeCount: Record<string, number> = {};
     items.forEach(item => {
@@ -222,7 +222,7 @@ export const ProjectInsightsTab = ({ projectId }: ProjectInsightsTabProps) => {
     Object.entries(scopeCount).forEach(([key, count]) => {
       if (count > 1) {
         const [trade, scope] = key.split("::");
-        flags.push({ severity: "low", message: `"${scope || trade}" appears ${count} times under ${trade} — possible duplicate` });
+        flags.push({ severity: "low", message: `"${scope || trade}" appears ${count} times under ${trade}: possible duplicate` });
       }
     });
     return flags.sort((a, b) => (a.severity === "high" ? -1 : a.severity === "medium" ? 0 : 1) - (b.severity === "high" ? -1 : b.severity === "medium" ? 0 : 1));
@@ -234,7 +234,7 @@ export const ProjectInsightsTab = ({ projectId }: ProjectInsightsTabProps) => {
       <Card className="p-12 text-center">
         <ClipboardList className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
         <h3 className="font-semibold text-lg mb-2">No estimate items yet</h3>
-        <p className="text-muted-foreground text-sm">Add items in the Estimate tab — insights will populate automatically.</p>
+        <p className="text-muted-foreground text-sm">Add items in the Estimate tab. Insights will populate automatically.</p>
       </Card>
     );
   }
@@ -252,7 +252,7 @@ export const ProjectInsightsTab = ({ projectId }: ProjectInsightsTabProps) => {
             <Target className="h-5 w-5 text-primary" />
             <CardTitle>Estimate Health Score</CardTitle>
           </div>
-          <CardDescription>Quality check across all {items.length} line items — fix these before you send</CardDescription>
+          <CardDescription>Quality check across all {items.length} line items. Fix these before you send.</CardDescription>
         </CardHeader>
         <CardContent>
           <div className="flex items-start gap-8">
@@ -269,7 +269,7 @@ export const ProjectInsightsTab = ({ projectId }: ProjectInsightsTabProps) => {
               {health.issues.length === 0 ? (
                 <div className="flex items-center gap-2 text-green-600">
                   <CheckCircle2 className="h-5 w-5" />
-                  <span className="font-medium">No issues found — estimate looks complete</span>
+                  <span className="font-medium">No issues found. Estimate looks complete.</span>
                 </div>
               ) : health.issues.map((issue, i) => (
                 <div key={i} className={`flex items-start gap-2 p-2.5 rounded-lg text-sm ${
@@ -338,7 +338,7 @@ export const ProjectInsightsTab = ({ projectId }: ProjectInsightsTabProps) => {
               <TrendingUp className="h-5 w-5 text-primary" />
               <CardTitle>Markup by Trade</CardTitle>
             </div>
-            <CardDescription>Average markup % applied per trade — dashed line = 15% target</CardDescription>
+            <CardDescription>Average markup % per trade. Dashed line = 15% target.</CardDescription>
           </CardHeader>
           <CardContent>
             <ResponsiveContainer width="100%" height={260}>
@@ -373,7 +373,7 @@ export const ProjectInsightsTab = ({ projectId }: ProjectInsightsTabProps) => {
               <CardTitle>Waste Cost Exposure</CardTitle>
             </div>
             <CardDescription>
-              Total waste built into estimate: <strong>{au$(totalWaste)}</strong> — review if any seem excessive
+              Total waste built into estimate: <strong>{au$(totalWaste)}</strong>. Review if any seem excessive.
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -442,7 +442,7 @@ export const ProjectInsightsTab = ({ projectId }: ProjectInsightsTabProps) => {
               <Flame className="h-5 w-5 text-primary" />
               <CardTitle>Top Cost Drivers</CardTitle>
             </div>
-            <CardDescription>Biggest line items — focus negotiation and value-engineering here first</CardDescription>
+            <CardDescription>Biggest line items. Focus negotiation and value-engineering here first.</CardDescription>
           </CardHeader>
           <CardContent>
             <div className="space-y-4">
@@ -475,7 +475,7 @@ export const ProjectInsightsTab = ({ projectId }: ProjectInsightsTabProps) => {
           </div>
           <CardDescription>
             {riskFlags.length === 0
-              ? "No risks detected — estimate looks clean"
+              ? "No risks detected. Estimate looks clean."
               : `${riskFlags.length} issue${riskFlags.length > 1 ? "s" : ""} detected across your line items`}
           </CardDescription>
         </CardHeader>
@@ -483,7 +483,7 @@ export const ProjectInsightsTab = ({ projectId }: ProjectInsightsTabProps) => {
           {riskFlags.length === 0 ? (
             <div className="flex items-center gap-2 text-green-600 py-2">
               <CheckCircle2 className="h-5 w-5" />
-              <span className="font-medium">All clear — no pricing risks found</span>
+              <span className="font-medium">All clear. No pricing risks found.</span>
             </div>
           ) : (
             <div className="space-y-2">

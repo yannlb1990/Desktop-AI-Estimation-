@@ -14,9 +14,9 @@ const TYPE_ICONS: Record<ProjectType, React.ReactNode> = {
 };
 
 const TYPE_DESCRIPTIONS: Record<ProjectType, string> = {
-  residential: 'Houses, units, renovations — carpentry, tiling, plumbing, electrical',
-  commercial: 'Offices, retail, fitouts — full trade set including steel, HVAC, fire',
-  industrial: 'Warehouses, factories — structural steel, epoxy, crane, certifications',
+  residential: 'Houses, units, renovations: carpentry, tiling, plumbing, electrical',
+  commercial: 'Offices, retail, fitouts: full trade set including steel, HVAC, fire',
+  industrial: 'Warehouses, factories: structural steel, epoxy, crane, certifications',
 };
 
 interface ProfileConfigDialogProps {

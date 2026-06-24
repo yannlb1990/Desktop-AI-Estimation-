@@ -1214,7 +1214,7 @@ export function PDFAnalysisViewer({
               </Button>
             </TooltipTrigger>
             <TooltipContent>
-              <p>{isFullscreen ? 'Exit fullscreen takeoff mode' : 'Enter fullscreen for takeoff — tools float over the plan'}</p>
+              <p>{isFullscreen ? 'Exit fullscreen takeoff mode' : 'Enter fullscreen for takeoff. Tools float over the plan.'}</p>
             </TooltipContent>
           </Tooltip>
         </div>

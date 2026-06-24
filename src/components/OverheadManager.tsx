@@ -1,4 +1,5 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
+import { supabase } from "@/integrations/supabase/client";
 import { getUserStorageKey } from "@/lib/localAuth";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -91,11 +92,110 @@ export const OverheadManager = ({ projectId }: OverheadManagerProps) => {
   });
   const [templates, setTemplates] = useState<OverheadTemplate[]>(loadTemplates);
   const [libraryOpen, setLibraryOpen] = useState(true);
+  const suppressSave = useRef(false);
 
   // Reload when projectId changes
   useEffect(() => {
     setItems(loadFromStorage(projectId));
   }, [projectId]);
+
+  // ── Supabase: load overhead items on mount / projectId change ────────────────
+  useEffect(() => {
+    let cancelled = false;
+    suppressSave.current = true;
+    async function loadCloud() {
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (!session || cancelled) { suppressSave.current = false; return; }
+        const { data } = await supabase
+          .from('overhead_items')
+          .select('id, name, category, amount, frequency, notes')
+          .eq('project_id', projectId)
+          .eq('user_id', session.user.id)
+          .order('sort_order', { ascending: true });
+        if (cancelled) return;
+        if (data && data.length > 0) {
+          const cloud = data.map((r: any) => ({
+            id: r.id, name: r.name, category: r.category,
+            amount: Number(r.amount), frequency: r.frequency, notes: r.notes,
+          }));
+          setItems(cloud);
+          saveToStorage(projectId, cloud);
+        }
+      } catch {}
+      if (!cancelled) suppressSave.current = false;
+    }
+    loadCloud();
+    return () => { cancelled = true; suppressSave.current = false; };
+  }, [projectId]);
+
+  // ── Supabase: load templates on mount ────────────────────────────────────────
+  useEffect(() => {
+    let cancelled = false;
+    async function loadCloudTemplates() {
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (!session || cancelled) return;
+        const { data } = await supabase
+          .from('overhead_templates')
+          .select('id, name, category, amount, frequency, notes')
+          .eq('user_id', session.user.id)
+          .order('created_at', { ascending: true });
+        if (cancelled || !data || data.length === 0) return;
+        const cloud = data.map((r: any) => ({
+          id: r.id, name: r.name, category: r.category,
+          amount: Number(r.amount), frequency: r.frequency, notes: r.notes,
+        }));
+        setTemplates(cloud);
+        saveTemplates(cloud);
+      } catch {}
+    }
+    loadCloudTemplates();
+    return () => { cancelled = true; };
+  }, []);
+
+  // ── Supabase: debounced save items ───────────────────────────────────────────
+  useEffect(() => {
+    if (suppressSave.current) return;
+    const timer = setTimeout(async () => {
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (!session) return;
+        await supabase.from('overhead_items').delete()
+          .eq('project_id', projectId).eq('user_id', session.user.id);
+        if (items.length > 0) {
+          await supabase.from('overhead_items').insert(
+            items.map((item, i) => ({
+              id: item.id, project_id: projectId, user_id: session.user.id,
+              name: item.name, category: item.category, amount: item.amount,
+              frequency: item.frequency, notes: item.notes, sort_order: i,
+            }))
+          );
+        }
+      } catch {}
+    }, 1500);
+    return () => clearTimeout(timer);
+  }, [items, projectId]);
+
+  // ── Supabase: debounced save templates ──────────────────────────────────────
+  useEffect(() => {
+    const timer = setTimeout(async () => {
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (!session) return;
+        await supabase.from('overhead_templates').delete().eq('user_id', session.user.id);
+        if (templates.length > 0) {
+          await supabase.from('overhead_templates').insert(
+            templates.map(t => ({
+              id: t.id, user_id: session.user.id, name: t.name,
+              category: t.category, amount: t.amount, frequency: t.frequency, notes: t.notes,
+            }))
+          );
+        }
+      } catch {}
+    }, 1500);
+    return () => clearTimeout(timer);
+  }, [templates]);
 
   const saveItemAsTemplate = (item: OverheadItem) => {
     const already = templates.some(t => t.name === item.name && t.category === item.category && t.amount === item.amount);
@@ -199,7 +299,7 @@ export const OverheadManager = ({ projectId }: OverheadManagerProps) => {
           <BookmarkCheck className="h-4 w-4 text-primary" />
           <span className="font-semibold">Overhead Library</span>
           <Badge variant="secondary" className="ml-1">{templates.length}</Badge>
-          <span className="text-xs text-muted-foreground ml-2">Saved templates — reuse across any project</span>
+          <span className="text-xs text-muted-foreground ml-2">Saved templates. Reuse across any project.</span>
         </button>
         {libraryOpen && (
           <div className="mt-3">

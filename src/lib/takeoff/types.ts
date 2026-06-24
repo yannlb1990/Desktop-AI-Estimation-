@@ -108,6 +108,8 @@ export interface Measurement {
   pageIndex: number;
   planId?: string;       // Which plan this measurement belongs to (name + filesize key)
   wallThickness?: number;      // mm — set by wall-line tool
+  wallClassification?: 'external' | 'internal';  // framing classification
+  hasRakingPlate?: boolean;                      // wall carries a raking (angled) top plate at roof pitch
   wallHatchType?: WallHatchType; // fill pattern for wall-line / arc-wall
   wallHatchSide?: WallHatchSide; // which face(s) to draw face-lining hatches on
   arcControlPoint?: WorldPoint; // control point for arc-wall tool (passes through this point)
@@ -346,6 +348,15 @@ export type TakeoffAction =
   | { type: 'SET_ROOF_PITCH'; payload: { rise: number; run: number } }
   | { type: 'SET_DEPTH_INPUT'; payload: number }
   | { type: 'SET_SELECTED_COLOR'; payload: string }
+  | { type: 'LOAD_PERSISTED_STATE'; payload: {
+      measurements: TakeoffState['measurements'];
+      costItems: TakeoffState['costItems'];
+      scales: TakeoffState['scales'];
+      planId?: string;
+      pdfName?: string;
+      pdfUrl?: string;
+      pdfPageCount?: number;
+    }}
   | { type: 'UNDO' }
   | { type: 'REDO' }
   | { type: 'DELETE_LAST_MEASUREMENT' }

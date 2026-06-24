@@ -1,4 +1,5 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
+import { supabase } from '@/integrations/supabase/client';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -174,7 +175,7 @@ const LabourRateCell = ({ item, selectedState, onUpdateCostItem }: LabourRateCel
   const saveDefault = () => {
     setCustomRate(currentLabourTrade, currentRate);
     setSavedDefault(currentRate);
-    toast.success(`$${currentRate}/hr saved as profile default for ${currentLabourTrade} — applies to all new items`);
+    toast.success(`$${currentRate}/hr saved as profile default for ${currentLabourTrade}. Applies to all new items.`);
   };
 
   const resetDefault = () => {
@@ -237,7 +238,7 @@ const LabourRateCell = ({ item, selectedState, onUpdateCostItem }: LabourRateCel
                 <span className="text-muted-foreground">Profile default ({selectedState})</span>
                 <span className="font-mono font-semibold">${profileRate}/hr</span>
               </div>
-              <p className="text-[11px] text-muted-foreground">Market benchmarks — click to apply to this item</p>
+              <p className="text-[11px] text-muted-foreground">Market benchmarks. Click to apply to this item.</p>
               <div className="grid grid-cols-4 gap-1">
                 {([
                   { label: 'Award', rate: rateInfo.award, cls: 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-200' },
@@ -339,6 +340,25 @@ export const CostEstimator = ({
     catch { return []; }
   });
   const [targetMargin, setTargetMargin] = useState<number>(25);
+  const [defaultMatWaste, setDefaultMatWaste] = useState<number>(() => {
+    try { return JSON.parse(localStorage.getItem(prefsKey(projectId)) || '{}').defaultMatWaste ?? 5; }
+    catch { return 5; }
+  });
+  const [defaultLabWaste, setDefaultLabWaste] = useState<number>(() => {
+    try { return JSON.parse(localStorage.getItem(prefsKey(projectId)) || '{}').defaultLabWaste ?? 10; }
+    catch { return 10; }
+  });
+  // Draft state for % inputs — allows clearing zero before typing a new value
+  const [pctDrafts, setPctDrafts] = useState<Record<string, string>>({});
+  const pctKey = (id: string, field: string) => `${id}-${field}`;
+  const getPct = (id: string, field: string, fallback: number) =>
+    pctDrafts[pctKey(id, field)] ?? String(fallback);
+  const setPct = (id: string, field: string, raw: string) =>
+    setPctDrafts(p => ({ ...p, [pctKey(id, field)]: raw }));
+  const commitPct = (id: string, field: string, updates: Partial<CostItem>) => {
+    onUpdateCostItem(id, updates);
+    setPctDrafts(p => { const n = { ...p }; delete n[pctKey(id, field)]; return n; });
+  };
 
   const refreshTemplates = () => {
     try { setTemplateList(JSON.parse(localStorage.getItem(getUserStorageKey('estimate_templates')) || '[]')); }
@@ -353,9 +373,16 @@ export const CostEstimator = ({
     const updated = [...existing, entry];
     localStorage.setItem(key, JSON.stringify(updated));
     setTemplateList(updated);
+    // Cloud sync
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (!session) return;
+      supabase.from('estimate_templates').insert({
+        id: entry.id, user_id: session.user.id, name: entry.name, template: entry.items as any,
+      }).then(({ error }) => { if (error) console.warn('[templates] Cloud save failed:', error.message); });
+    });
     setSaveTemplateOpen(false);
     setTemplateName('');
-    toast.success(`Template "${entry.name}" saved — ${costItems.length} items`);
+    toast.success(`Template "${entry.name}" saved with ${costItems.length} items.`);
   };
 
   const handleLoadTemplate = (items: CostItem[]) => {
@@ -371,6 +398,9 @@ export const CostEstimator = ({
     const updated = templateList.filter(t => t.id !== id);
     localStorage.setItem(key, JSON.stringify(updated));
     setTemplateList(updated);
+    supabase.from('estimate_templates').delete().eq('id', id).then(({ error }) => {
+      if (error) console.warn('[templates] Cloud delete failed:', error.message);
+    });
   };
   const [selectedSOW, setSelectedSOW] = useState<string>('');
   const [selectedMeasurement, setSelectedMeasurement] = useState<string>('');
@@ -388,11 +418,81 @@ export const CostEstimator = ({
   // Inline custom material form state: itemId → form fields
   const [pendingCustomMaterial, setPendingCustomMaterial] = useState<Record<string, { name: string; qty: string; unit: string; cost: string }>>({});
 
-  // Persist prefs whenever they change
+  // ── Supabase sync: prefs ─────────────────────────────────────────────────────
+  // Load prefs from cloud on mount (overrides localStorage if found)
+  useEffect(() => {
+    let cancelled = false;
+    async function loadCloudPrefs() {
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (!session || cancelled) return;
+        const { data } = await supabase
+          .from('cost_estimator_prefs')
+          .select('selected_state, margin_percent, gst_enabled, default_mat_waste, default_lab_waste')
+          .eq('project_id', projectId)
+          .single();
+        if (cancelled || !data) return;
+        setSelectedState((data.selected_state as any) || 'NSW');
+        setMarginPercent(data.margin_percent ?? 15);
+        setGstEnabled(data.gst_enabled ?? true);
+        setDefaultMatWaste((data as any).default_mat_waste ?? 5);
+        setDefaultLabWaste((data as any).default_lab_waste ?? 10);
+      } catch {}
+    }
+    loadCloudPrefs();
+    return () => { cancelled = true; };
+  }, [projectId]);
+
+  // Persist prefs whenever they change (localStorage immediately, Supabase debounced)
   React.useEffect(() => {
-    try { localStorage.setItem(prefsKey(projectId), JSON.stringify({ selectedState, marginPercent, gstEnabled })); }
+    try { localStorage.setItem(prefsKey(projectId), JSON.stringify({ selectedState, marginPercent, gstEnabled, defaultMatWaste, defaultLabWaste })); }
     catch {}
-  }, [projectId, selectedState, marginPercent, gstEnabled]);
+    const timer = setTimeout(async () => {
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (!session) return;
+        await supabase.from('cost_estimator_prefs').upsert({
+          project_id: projectId,
+          user_id: session.user.id,
+          selected_state: selectedState,
+          margin_percent: marginPercent,
+          gst_enabled: gstEnabled,
+          default_mat_waste: defaultMatWaste,
+          default_lab_waste: defaultLabWaste,
+          updated_at: new Date().toISOString(),
+        } as any, { onConflict: 'project_id' });
+      } catch {}
+    }, 1500);
+    return () => clearTimeout(timer);
+  }, [projectId, selectedState, marginPercent, gstEnabled, defaultMatWaste, defaultLabWaste]);
+
+  // ── Supabase sync: estimate templates ────────────────────────────────────────
+  // Load templates from cloud on mount
+  useEffect(() => {
+    let cancelled = false;
+    async function loadCloudTemplates() {
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (!session || cancelled) return;
+        const { data } = await supabase
+          .from('estimate_templates')
+          .select('id, name, template, created_at')
+          .eq('user_id', session.user.id)
+          .order('created_at', { ascending: true });
+        if (cancelled || !data || data.length === 0) return;
+        const cloudTemplates = data.map((r: any) => ({
+          id: r.id,
+          name: r.name,
+          createdAt: r.created_at,
+          items: Array.isArray(r.template) ? r.template : [r.template],
+        }));
+        setTemplateList(cloudTemplates);
+        try { localStorage.setItem(getUserStorageKey('estimate_templates'), JSON.stringify(cloudTemplates)); } catch {}
+      } catch {}
+    }
+    loadCloudTemplates();
+    return () => { cancelled = true; };
+  }, []);
 
   // Persist consumables whenever they change
   React.useEffect(() => {
@@ -455,12 +555,14 @@ export const CostEstimator = ({
         labour_rate: item.hourlyRate ?? 65,
         material_wastage_pct: item.materialWastePercent ?? 5,
         labour_wastage_pct: item.labourWastePercent ?? 10,
-        markup_pct: 0,
+        markup_pct: item.markupPercent ?? 0,
         notes: item.description || item.notes || '',
         expanded: false,
         item_number: `${existing.length + newEstimateItems.length + 1}`,
         isEditing: false,
-        relatedMaterials: (item.relatedMaterials || []).filter(rm => rm.isAccepted),
+        relatedMaterials: (item.relatedMaterials || [])
+          .filter(rm => rm.isAccepted)
+          .map(rm => ({ ...rm, unit_price: rm.unitCost ?? 0 })),
         _transferredAt: Date.now(),
       };
       newEstimateItems.push(estimateItem);
@@ -496,7 +598,7 @@ export const CostEstimator = ({
     window.dispatchEvent(new CustomEvent('go-to-estimate-tab'));
 
     const transferredItemIds = newEstimateItems.map((e: any) => e.id);
-    toast.success(`${newEstimateItems.length} item${newEstimateItems.length > 1 ? 's' : ''} sent to Estimate — click "View Estimate" above`, {
+    toast.success(`${newEstimateItems.length} item${newEstimateItems.length > 1 ? 's' : ''} sent to Estimate. Click "View Estimate" above to review.`, {
       action: {
         label: 'Undo',
         onClick: () => {
@@ -548,7 +650,7 @@ export const CostEstimator = ({
     });
     rest.forEach(item => onDeleteCostItem(item.id));
     setSelectedCostIds(new Set());
-    toast.success(`Combined ${toMerge.length} items — total ${totalQty.toFixed(2)} ${first.unit}`);
+    toast.success(`Combined ${toMerge.length} items. Total: ${totalQty.toFixed(2)} ${first.unit}.`);
   };
 
   // Generate suggested related materials for an item
@@ -586,13 +688,14 @@ export const CostEstimator = ({
     let materialsCost = 0;
     let labourCost = 0;
     let fixingsCost = 0;
+    let markupTotal = 0;
 
     costItems.forEach(item => {
-      const { materialTotal, labourTotal } = calculateLineTotals(item);
+      const { materialTotal, labourTotal, lineSubtotal, lineTotal } = calculateLineTotals(item);
       materialsCost += materialTotal;
       labourCost += labourTotal;
+      markupTotal += lineTotal - lineSubtotal;
 
-      // Calculate fixings from related materials
       if (item.relatedMaterials) {
         fixingsCost += item.relatedMaterials
           .filter(rm => rm.isAccepted)
@@ -601,13 +704,14 @@ export const CostEstimator = ({
     });
 
     const consumablesTotal = consumables.reduce((sum, c) => sum + c.total, 0);
-    const subtotal = materialsCost + labourCost + fixingsCost + consumablesTotal;
+    // subtotal = raw costs + per-item markup + fixings + consumables
+    const subtotal = materialsCost + labourCost + markupTotal + fixingsCost + consumablesTotal;
     const margin = subtotal * (marginPercent / 100);
     const subtotalWithMargin = subtotal + margin;
     const gst = gstEnabled ? subtotalWithMargin * 0.10 : 0;
     const grandTotal = subtotalWithMargin + gst;
 
-    return { materialsCost, labourCost, fixingsCost, consumablesTotal, subtotal, margin, gst, grandTotal };
+    return { materialsCost, labourCost, markupTotal, fixingsCost, consumablesTotal, subtotal, margin, gst, grandTotal };
   }, [costItems, consumables, marginPercent, gstEnabled]);
 
   // Get unlinked measurements
@@ -659,8 +763,8 @@ export const CostEstimator = ({
       measurementType: measurement.measurementType,
       drawingNumber: measurement.drawingNumber || `Page ${measurement.pageIndex + 1}`,
       laborHours: measurement.labourHours,
-      materialWastePercent: 5,
-      labourWastePercent: 10,
+      materialWastePercent: defaultMatWaste,
+      labourWastePercent: defaultLabWaste,
       hourlyRate: getEffectiveRate(sowTrade, selectedState),
     };
 
@@ -690,8 +794,8 @@ export const CostEstimator = ({
       wasteFactor: 1.0,
       subtotal: 0,
       area: measurement?.area,
-      materialWastePercent: 5,
-      labourWastePercent: 10,
+      materialWastePercent: defaultMatWaste,
+      labourWastePercent: defaultLabWaste,
       hourlyRate: getEffectiveRate('Carpenter', selectedState),
     };
 
@@ -715,14 +819,14 @@ export const CostEstimator = ({
       wasteFactor: 1.0,
       subtotal: material.unitCost,
       trade: material.trade,
-      materialWastePercent: 5,
-      labourWastePercent: 10,
+      materialWastePercent: defaultMatWaste,
+      labourWastePercent: defaultLabWaste,
       hourlyRate: getEffectiveRate(CATEGORY_TO_TRADE[material.trade] || material.trade || 'Carpenter', selectedState),
     };
     onAddCostItem(newItem);
     toast.success(`Added "${material.name}" from library`);
     if (material.leadTimeWeeks && material.leadTimeWeeks >= 8) {
-      toast.warning(`Long lead time: ${material.leadTimeWeeks} weeks — order early`, { duration: 5000 });
+      toast.warning(`Long lead time: ${material.leadTimeWeeks} weeks. Order early to avoid delays.`, { duration: 5000 });
     }
   };
 
@@ -773,6 +877,7 @@ export const CostEstimator = ({
     csv += `\nSUMMARY\n`;
     csv += `Materials,$${totals.materialsCost.toFixed(2)}\n`;
     csv += `Labour,$${totals.labourCost.toFixed(2)}\n`;
+    csv += `Item Markup,$${totals.markupTotal.toFixed(2)}\n`;
     csv += `Fixings,$${totals.fixingsCost.toFixed(2)}\n`;
     csv += `Consumables,$${totals.consumablesTotal.toFixed(2)}\n`;
     csv += `Subtotal,$${totals.subtotal.toFixed(2)}\n`;
@@ -808,7 +913,7 @@ export const CostEstimator = ({
     link.download = `BOQ_${new Date().toISOString().split('T')[0]}.csv`;
     link.click();
     URL.revokeObjectURL(url);
-    toast.success('BOQ exported — open in Excel for best formatting');
+    toast.success('BOQ exported. Open in Excel for best formatting.');
   };
 
   const realMargin = marginPercent / (100 + marginPercent) * 100;
@@ -866,6 +971,32 @@ export const CostEstimator = ({
               className="w-20 h-9"
               min={0}
               max={100}
+            />
+          </div>
+
+          <div>
+            <Label className="text-sm text-muted-foreground">Mat Waste %</Label>
+            <Input
+              type="number"
+              value={defaultMatWaste}
+              onChange={(e) => setDefaultMatWaste(Number(e.target.value) || 0)}
+              className="w-20 h-9"
+              min={0}
+              max={100}
+              title="Default material waste % applied to new items"
+            />
+          </div>
+
+          <div>
+            <Label className="text-sm text-muted-foreground">Lab Waste %</Label>
+            <Input
+              type="number"
+              value={defaultLabWaste}
+              onChange={(e) => setDefaultLabWaste(Number(e.target.value) || 0)}
+              className="w-20 h-9"
+              min={0}
+              max={100}
+              title="Default labour waste % applied to new items"
             />
           </div>
 
@@ -1047,16 +1178,18 @@ export const CostEstimator = ({
               </TableHeader>
               <TableBody>
                 {costItems.map(item => {
-                  const { materialTotal, labourTotal, lineTotal } = calculateLineTotals(item);
+                  const { materialTotal, labourTotal, lineSubtotal, lineTotal } = calculateLineTotals(item);
                   const isExpanded = expandedItems.has(item.id);
                   const suggestions = getSuggestedMaterials(item);
+                  const needsPrice = item.unitCost === 0 && (item.laborHours ?? 0) === 0;
 
                   return (
                     <React.Fragment key={item.id}>
                       <TableRow className={cn(
                           "text-xs",
                           selectedCostIds.has(item.id) && "bg-blue-50/40 dark:bg-blue-950/20",
-                          recentlyTransferredIds.has(item.id) && "bg-green-50/60 dark:bg-green-950/20 transition-colors duration-700"
+                          recentlyTransferredIds.has(item.id) && "bg-green-50/60 dark:bg-green-950/20 transition-colors duration-700",
+                          needsPrice && "border-l-2 border-l-amber-400"
                         )}>
                         {/* Select checkbox */}
                         <TableCell className="px-1 w-8">
@@ -1182,8 +1315,10 @@ export const CostEstimator = ({
                         <TableCell className="px-1 w-14">
                           <Input
                             type="number"
-                            value={item.materialWastePercent ?? 5}
-                            onChange={(e) => onUpdateCostItem(item.id, { materialWastePercent: Number(e.target.value) })}
+                            value={getPct(item.id, 'mat', item.materialWastePercent ?? 5)}
+                            onChange={(e) => setPct(item.id, 'mat', e.target.value)}
+                            onFocus={(e) => e.target.select()}
+                            onBlur={(e) => { const v = parseFloat(e.target.value) || 0; commitPct(item.id, 'mat', { materialWastePercent: v, wasteFactor: 1 + v / 100 }); }}
                             className="h-8 text-xs text-center border-border px-1 w-full"
                           />
                         </TableCell>
@@ -1208,8 +1343,10 @@ export const CostEstimator = ({
                         <TableCell className="px-1 w-14">
                           <Input
                             type="number"
-                            value={item.labourWastePercent ?? 10}
-                            onChange={(e) => onUpdateCostItem(item.id, { labourWastePercent: Number(e.target.value) })}
+                            value={getPct(item.id, 'lab', item.labourWastePercent ?? 10)}
+                            onChange={(e) => setPct(item.id, 'lab', e.target.value)}
+                            onFocus={(e) => e.target.select()}
+                            onBlur={(e) => commitPct(item.id, 'lab', { labourWastePercent: parseFloat(e.target.value) || 0 })}
                             className="h-8 text-xs text-center border-border px-1 w-full"
                           />
                         </TableCell>
@@ -1218,16 +1355,27 @@ export const CostEstimator = ({
                         <TableCell className="px-1 w-14">
                           <Input
                             type="number"
-                            value={item.markupPercent ?? 0}
-                            onChange={(e) => onUpdateCostItem(item.id, { markupPercent: Number(e.target.value) })}
+                            value={getPct(item.id, 'mkp', item.markupPercent ?? 0)}
+                            onChange={(e) => setPct(item.id, 'mkp', e.target.value)}
+                            onFocus={(e) => e.target.select()}
+                            onBlur={(e) => commitPct(item.id, 'mkp', { markupPercent: parseFloat(e.target.value) || 0 })}
                             className="h-8 text-xs text-center border-border px-1 w-full"
                           />
                         </TableCell>
 
                         {/* Line Total */}
                         <TableCell className="px-1 w-28 text-right">
-                          <div className="font-mono font-semibold text-sm">${lineTotal.toFixed(0)}</div>
-                          <div className="text-[10px] text-muted-foreground">M:{materialTotal.toFixed(0)} L:{labourTotal.toFixed(0)}</div>
+                          {needsPrice ? (
+                            <div className="text-[10px] text-amber-500 font-semibold">Enter price ↑</div>
+                          ) : (
+                            <>
+                              <div className="font-mono font-semibold text-sm">${lineTotal.toFixed(0)}</div>
+                              <div className="text-[10px] text-muted-foreground">
+                                M:{materialTotal.toFixed(0)} L:{labourTotal.toFixed(0)}
+                                {(item.markupPercent ?? 0) > 0 && <span className="text-green-600 ml-1">+{(lineTotal - lineSubtotal).toFixed(0)}</span>}
+                              </div>
+                            </>
+                          )}
                         </TableCell>
 
                         {/* Transfer + Delete */}
@@ -1554,7 +1702,7 @@ export const CostEstimator = ({
 
       {/* Totals Summary */}
       <Card className="p-4">
-        <div className="grid grid-cols-4 md:grid-cols-8 gap-2 text-center">
+        <div className="grid grid-cols-4 md:grid-cols-9 gap-2 text-center">
           <div className="p-2 bg-muted rounded">
             <div className="text-xs text-muted-foreground">Materials</div>
             <div className="text-sm font-bold">${totals.materialsCost.toFixed(2)}</div>
@@ -1571,6 +1719,12 @@ export const CostEstimator = ({
             <div className="text-xs text-muted-foreground">Consumables</div>
             <div className="text-sm font-bold">${totals.consumablesTotal.toFixed(2)}</div>
           </div>
+          {totals.markupTotal > 0 && (
+            <div className="p-2 bg-green-100 dark:bg-green-900/30 rounded">
+              <div className="text-xs text-green-700">Item Markup</div>
+              <div className="text-sm font-bold text-green-800">+${totals.markupTotal.toFixed(2)}</div>
+            </div>
+          )}
           <div className="p-2 bg-muted rounded">
             <div className="text-xs text-muted-foreground">Subtotal</div>
             <div className="text-sm font-bold">${totals.subtotal.toFixed(2)}</div>

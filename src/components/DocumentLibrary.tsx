@@ -321,7 +321,7 @@ function printSavedQuote(q: SavedQuoteSnapshot) {
 </body></html>`
 
   const win = window.open("", "_blank")
-  if (!win) { toast.error("Pop-up blocked — allow pop-ups for this site"); return }
+  if (!win) { toast.error("Pop-ups are blocked. Allow pop-ups for this site."); return }
   win.document.write(html)
   win.document.close()
 }

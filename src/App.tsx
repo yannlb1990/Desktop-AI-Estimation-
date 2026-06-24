@@ -1,4 +1,4 @@
-import React, { useEffect } from "react";
+import React, { useEffect, useState } from "react";
 import { Analytics } from "@vercel/analytics/react";
 import { HelmetProvider } from "react-helmet-async";
 import { Toaster } from "@/components/ui/toaster";
@@ -54,20 +54,43 @@ import Support from "./pages/Support";
 
 const queryClient = new QueryClient();
 
-// Guards all protected routes: must be signed in + trial must not be expired
-const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
+// Syncs subscription from Supabase before any protected route renders.
+// This prevents localStorage tampering — trial dates are recomputed from
+// session.user.created_at (server-sourced) on every app load.
+function useAuthSync() {
+  // true once the Supabase sync is done (or we're not signed in, so no sync needed)
+  const [ready, setReady] = useState(!isSignedIn());
+
+  useEffect(() => {
+    if (!isSignedIn()) { setReady(true); return; }
+    // Run sync, then unblock rendering regardless of success/failure
+    syncSubscriptionFromDB().finally(() => setReady(true));
+  }, []);
+
+  return ready;
+}
+
+// Guards all protected routes: must be signed in, sync must be complete, trial must not be expired
+const ProtectedRoute = ({ children, syncReady }: { children: React.ReactNode; syncReady: boolean }) => {
   if (!isSignedIn()) return <Navigate to="/auth" replace />;
+  // Hold rendering until server-side subscription data has been applied to localStorage
+  if (!syncReady) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-background">
+        <div className="flex flex-col items-center gap-3">
+          <div className="h-8 w-8 rounded-full border-2 border-primary border-t-transparent animate-spin" />
+          <p className="text-sm text-muted-foreground">Loading your workspace…</p>
+        </div>
+      </div>
+    );
+  }
   const { isTrialExpired } = getSubscriptionStatus();
   if (isTrialExpired) return <Navigate to="/pricing" replace />;
   return <>{children}</>;
 };
 
 const App = () => {
-  // On every app start, pull paid subscription state from DB so the
-  // synchronous ProtectedRoute check always has fresh data.
-  useEffect(() => {
-    if (isSignedIn()) syncSubscriptionFromDB();
-  }, []);
+  const syncReady = useAuthSync();
 
   return (
     <HelmetProvider>
@@ -92,15 +115,15 @@ const App = () => {
             <Route path="/terms" element={<TermsOfService />} />
             <Route path="/about" element={<About />} />
             <Route path="/support" element={<Support />} />
-            <Route path="/app" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
-            <Route path="/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
-            <Route path="/project/new" element={<ProtectedRoute><NewProject /></ProtectedRoute>} />
-            <Route path="/project/:projectId" element={<ProtectedRoute><ProjectDetail /></ProtectedRoute>} />
-            <Route path="/insights" element={<ProtectedRoute><MarketInsights /></ProtectedRoute>} />
-            <Route path="/clients" element={<ProtectedRoute><Clients /></ProtectedRoute>} />
-            <Route path="/settings" element={<ProtectedRoute><Settings /></ProtectedRoute>} />
-            <Route path="/materials" element={<ProtectedRoute><MaterialsLibrary /></ProtectedRoute>} />
-            <Route path="/admin/rates" element={<ProtectedRoute><AdminRates /></ProtectedRoute>} />
+            <Route path="/app" element={<ProtectedRoute syncReady={syncReady}><Dashboard /></ProtectedRoute>} />
+            <Route path="/dashboard" element={<ProtectedRoute syncReady={syncReady}><Dashboard /></ProtectedRoute>} />
+            <Route path="/project/new" element={<ProtectedRoute syncReady={syncReady}><NewProject /></ProtectedRoute>} />
+            <Route path="/project/:projectId" element={<ProtectedRoute syncReady={syncReady}><ProjectDetail /></ProtectedRoute>} />
+            <Route path="/insights" element={<ProtectedRoute syncReady={syncReady}><MarketInsights /></ProtectedRoute>} />
+            <Route path="/clients" element={<ProtectedRoute syncReady={syncReady}><Clients /></ProtectedRoute>} />
+            <Route path="/settings" element={<ProtectedRoute syncReady={syncReady}><Settings /></ProtectedRoute>} />
+            <Route path="/materials" element={<ProtectedRoute syncReady={syncReady}><MaterialsLibrary /></ProtectedRoute>} />
+            <Route path="/admin/rates" element={<ProtectedRoute syncReady={syncReady}><AdminRates /></ProtectedRoute>} />
             {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
             <Route path="*" element={<NotFound />} />
           </Routes>

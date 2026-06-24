@@ -327,7 +327,7 @@ Please respond to approve or reject this variation.`;
         updateStatus(variation.id, "pending_approval");
       })
       .catch(() => {
-        toast.error("Clipboard access denied — status updated anyway");
+        toast.error("Clipboard access denied. Status updated anyway.");
         updateStatus(variation.id, "pending_approval");
       });
   };

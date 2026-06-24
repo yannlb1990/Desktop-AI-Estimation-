@@ -89,7 +89,7 @@ export const TenderGenerator = ({ project, estimate }: TenderGeneratorProps) => 
 
   const handlePrint = () => {
     window.print()
-    toast.success("Opening print dialog — choose 'Save as PDF'")
+    toast.success("Opening print dialog. Choose 'Save as PDF'.")
   }
 
   return (
@@ -244,7 +244,7 @@ export const TenderGenerator = ({ project, estimate }: TenderGeneratorProps) => 
                 <TabsContent value="pricing" className="space-y-3 mt-0">
                   <p className="text-xs text-muted-foreground font-medium uppercase tracking-wide">Contract Sum</p>
                   <div>
-                    <Label className="text-xs">Subtotal (ex GST) — $</Label>
+                    <Label className="text-xs">Subtotal (ex GST, $)</Label>
                     <Input
                       type="number"
                       value={subtotal}

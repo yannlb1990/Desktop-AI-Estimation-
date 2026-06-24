@@ -1,6 +1,7 @@
-import { useReducer, useEffect } from 'react';
+import { useReducer, useEffect, useRef } from 'react';
 import { TakeoffState, TakeoffAction, Measurement } from '@/lib/takeoff/types';
 import { getEffectiveQuantity } from '@/lib/takeoff/calculations';
+import { supabase } from '@/integrations/supabase/client';
 
 // Fields on Measurement whose change should cascade to linked cost item quantities
 const QUANTITY_FIELDS = new Set<keyof Measurement>([
@@ -42,6 +43,7 @@ interface PersistedState {
   pdfName?: string;
   pdfUrl?: string;       // Supabase public URL (survives reload)
   pdfPageCount?: number;
+  _localUpdatedAt?: number; // milliseconds — used to resolve localStorage vs Supabase conflict
 }
 
 const storageKey = (projectId: string) => `takeoff_${projectId}`;
@@ -94,7 +96,7 @@ function savePersisted(projectId: string, state: TakeoffState) {
       pdfUrl: persistableUrl,
       pdfPageCount: persistableUrl ? state.pdfFile?.pageCount : undefined,
     };
-    localStorage.setItem(storageKey(projectId), JSON.stringify(persisted));
+    localStorage.setItem(storageKey(projectId), JSON.stringify({ ...persisted, _localUpdatedAt: Date.now() }));
   } catch {
     // localStorage full — silently skip
   }
@@ -330,6 +332,24 @@ function takeoffReducer(state: TakeoffState, action: TakeoffAction): TakeoffStat
     case 'SET_SELECTED_COLOR':
       return { ...state, selectedColor: action.payload };
 
+    case 'LOAD_PERSISTED_STATE': {
+      const { measurements, costItems, scales, pdfUrl, pdfName, pdfPageCount, planId } = action.payload;
+      const hasScales = Object.keys(scales || {}).length > 0;
+      return {
+        ...state,
+        measurements: measurements || [],
+        costItems: costItems || [],
+        scales: scales || {},
+        isCalibrated: hasScales,
+        currentScale: hasScales ? (scales[state.currentPageIndex] ?? scales[0] ?? null) : null,
+        pdfFile: pdfUrl?.startsWith('https://')
+          ? { file: null as any, url: pdfUrl, name: pdfName || 'plan.pdf', pageCount: pdfPageCount || 1, planId }
+          : state.pdfFile,
+        uploadStatus: pdfUrl?.startsWith('https://') ? 'success' : state.uploadStatus,
+        pageCount: pdfUrl?.startsWith('https://') ? (pdfPageCount || 0) : state.pageCount,
+      };
+    }
+
     case 'UNDO':
       if (state.historyIndex > 0) {
         return {
@@ -387,10 +407,98 @@ export function useTakeoffState(projectId?: string) {
     buildInitialState
   );
 
-  // Auto-persist whenever measurements, costItems, scales, or pdfFile changes
+  // Suppress cloud save for 3s after loading from cloud to avoid immediate write-back
+  const suppressCloudSaveUntil = useRef<number>(0);
+  const cloudSyncStatus = useRef<'idle' | 'loading' | 'ready'>('idle');
+
+  // ── Load from Supabase on mount ────────────────────────────────────────────
   useEffect(() => {
     if (!projectId) return;
+    let cancelled = false;
+    cloudSyncStatus.current = 'loading';
+
+    async function loadFromCloud() {
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (!session || cancelled) { cloudSyncStatus.current = 'ready'; return; }
+
+        const { data, error } = await supabase
+          .from('takeoff_sessions')
+          .select('measurements, cost_items, scales, plan_id, pdf_name, pdf_url, pdf_page_count, updated_at')
+          .eq('project_id', projectId)
+          .single();
+
+        if (cancelled || error || !data) { cloudSyncStatus.current = 'ready'; return; }
+
+        // Conflict resolution: use whichever source is newer
+        const cloudTs = new Date(data.updated_at).getTime();
+        const localRaw = localStorage.getItem(storageKey(projectId));
+        const localTs: number = localRaw ? (JSON.parse(localRaw)._localUpdatedAt ?? 0) : 0;
+
+        if (cloudTs > localTs) {
+          suppressCloudSaveUntil.current = Date.now() + 3000;
+          dispatch({
+            type: 'LOAD_PERSISTED_STATE',
+            payload: {
+              measurements: (data.measurements as any) ?? [],
+              costItems: (data.cost_items as any) ?? [],
+              scales: (data.scales as any) ?? {},
+              planId: data.plan_id ?? undefined,
+              pdfName: data.pdf_name ?? undefined,
+              pdfUrl: data.pdf_url ?? undefined,
+              pdfPageCount: data.pdf_page_count ?? undefined,
+            },
+          });
+        }
+      } catch (err) {
+        console.warn('[takeoff] Cloud load failed:', err);
+      } finally {
+        if (!cancelled) cloudSyncStatus.current = 'ready';
+      }
+    }
+
+    loadFromCloud();
+    return () => { cancelled = true; };
+  }, [projectId]);
+
+  // ── Persist on every change: localStorage immediately, Supabase debounced ─
+  useEffect(() => {
+    if (!projectId) return;
+
+    // Always keep localStorage in sync immediately (same-browser fast reload)
     savePersisted(projectId, state);
+
+    // Don't queue a cloud save if we just loaded from cloud (suppress window)
+    if (Date.now() < suppressCloudSaveUntil.current) return;
+
+    const timer = setTimeout(async () => {
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (!session) return;
+
+        const url = state.pdfFile?.url;
+        const persistableUrl = url?.startsWith('https://') ? url : null;
+
+        const { error } = await supabase.from('takeoff_sessions').upsert({
+          project_id: projectId,
+          user_id: session.user.id,
+          measurements: state.measurements as any,
+          cost_items: state.costItems as any,
+          scales: state.scales as any,
+          plan_id: state.pdfFile?.planId ?? null,
+          pdf_name: persistableUrl ? (state.pdfFile?.name ?? null) : null,
+          pdf_url: persistableUrl,
+          pdf_page_count: persistableUrl ? (state.pdfFile?.pageCount ?? null) : null,
+          updated_at: new Date().toISOString(),
+        }, { onConflict: 'project_id' });
+
+        if (error) console.warn('[takeoff] Cloud save failed:', error.message);
+      } catch (err) {
+        console.warn('[takeoff] Cloud save error:', err);
+      }
+    }, 1500);
+
+    return () => clearTimeout(timer);
   }, [state.measurements, state.costItems, state.scales, state.pdfFile, projectId]);
 
   return { state, dispatch };

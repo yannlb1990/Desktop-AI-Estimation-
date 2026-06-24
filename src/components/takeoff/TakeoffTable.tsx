@@ -162,7 +162,7 @@ export const TakeoffTable = ({
     if (toMerge.length < 2) return;
     const units = [...new Set(toMerge.map(m => m.unit))];
     if (units.length > 1) {
-      toast.error(`Can't combine — mixed units: ${units.join(', ')}. Select items with the same unit.`);
+      toast.error(`Can't combine items with mixed units (${units.join(', ')}). Select items with the same unit.`);
       return;
     }
     const [first, ...rest] = toMerge;
@@ -885,7 +885,7 @@ export const TakeoffTable = ({
                 >
                   <Combine className="h-4 w-4 mr-2" />
                   {mixedUnits
-                    ? `Mixed units (${units.join(' + ')}) — select same unit to combine`
+                    ? `Mixed units (${units.join(' + ')}). Select the same unit to combine.`
                     : `Combine ${selectedIds.size} Selected (${total.toFixed(2)} ${units[0]})`}
                 </Button>
               );
@@ -961,7 +961,7 @@ export const TakeoffTable = ({
           <SheetTitle className="flex items-center justify-between">
             <span>Takeoff Measurements ({measurements.length})</span>
             <span className="text-xs font-normal text-muted-foreground">
-              Validate, assign type/area, then Add to Estimate — sheet stays open so you can keep going
+              Validate, assign type/area, then Add to Estimate. The sheet stays open so you can keep going.
             </span>
           </SheetTitle>
         </SheetHeader>

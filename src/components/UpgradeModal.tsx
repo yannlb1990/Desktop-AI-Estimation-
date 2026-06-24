@@ -34,7 +34,7 @@ export const UpgradeModal = ({ open, onClose, feature, requiredPlan = 'Professio
           </p>
           <div className="flex items-center gap-2 justify-center text-sm text-muted-foreground">
             <Zap className="h-4 w-4 text-primary" />
-            <span>14-day free trial included — no credit card required</span>
+            <span>14-day free trial included. No credit card required.</span>
           </div>
         </div>
 

@@ -196,7 +196,7 @@ export const AIExtractionPanel: React.FC<AIExtractionPanelProps> = ({
 
       {error && apiAvailable === false && (
         <div className="p-2 bg-muted/50 border border-border rounded-md text-xs text-muted-foreground">
-          AI extraction is optional. Manual takeoff works without it — upload your plan and start measuring.
+          AI extraction is optional. Manual takeoff works without it. Upload your plan and start measuring.
         </div>
       )}
 
@@ -227,7 +227,7 @@ export const AIExtractionPanel: React.FC<AIExtractionPanelProps> = ({
 
       {extractionResult && (
         <div className="text-[11px] text-muted-foreground text-center italic mb-1">
-          AI-generated — review all values before use
+          AI-generated. Review all values before use.
         </div>
       )}
 

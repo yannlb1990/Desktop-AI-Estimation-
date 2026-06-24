@@ -253,7 +253,7 @@ export const FixturesSummary = ({ pdfUrl }: FixturesSummaryProps) => {
         )}
 
         <p className="text-[11px] text-muted-foreground italic text-center mt-3">
-          AI-generated — verify counts against the architectural schedule before ordering.
+          AI-generated. Verify counts against the architectural schedule before ordering.
         </p>
       </div>
     </Card>

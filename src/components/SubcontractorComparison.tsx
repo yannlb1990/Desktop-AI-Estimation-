@@ -1,4 +1,5 @@
-import { useState } from "react"
+import { useState, useEffect, useRef } from "react"
+import { supabase } from "@/integrations/supabase/client"
 import { getUserStorageKey } from "@/lib/localAuth"
 import { syncProjectToSupabase } from "@/lib/db/projects"
 import { Button } from "@/components/ui/button"
@@ -64,6 +65,63 @@ export const SubcontractorComparison = ({ projectId, onUsePrice }: Subcontractor
   const [quotes, setQuotes] = useState<SubbieQuote[]>(() => loadQuotes(projectId))
   const [addOpen, setAddOpen] = useState(false)
   const [expandedTrades, setExpandedTrades] = useState<Set<string>>(new Set())
+  const suppressSave = useRef(false)
+
+  // ── Supabase: load quotes on mount / projectId change ────────────────────────
+  useEffect(() => {
+    let cancelled = false
+    suppressSave.current = true
+    async function loadCloud() {
+      try {
+        const { data: { session } } = await supabase.auth.getSession()
+        if (!session || cancelled) { suppressSave.current = false; return }
+        const { data } = await supabase
+          .from('subcontractor_quotes')
+          .select('id, trade, company, contact, phone, amount, notes, submitted_at, used_in_estimate')
+          .eq('project_id', projectId)
+          .eq('user_id', session.user.id)
+          .order('submitted_at', { ascending: true })
+        if (cancelled) return
+        if (data && data.length > 0) {
+          const cloud: SubbieQuote[] = data.map((r: any) => ({
+            id: r.id, trade: r.trade, company: r.company,
+            contact: r.contact ?? undefined, phone: r.phone ?? undefined,
+            amount: Number(r.amount), notes: r.notes ?? undefined,
+            submittedAt: r.submitted_at, usedInEstimate: r.used_in_estimate ?? false,
+          }))
+          setQuotes(cloud)
+          localStorage.setItem(getUserStorageKey(STORAGE_KEY(projectId)), JSON.stringify(cloud))
+        }
+      } catch {}
+      if (!cancelled) suppressSave.current = false
+    }
+    loadCloud()
+    return () => { cancelled = true; suppressSave.current = false }
+  }, [projectId])
+
+  // ── Supabase: debounced save quotes ─────────────────────────────────────────
+  useEffect(() => {
+    if (suppressSave.current) return
+    const timer = setTimeout(async () => {
+      try {
+        const { data: { session } } = await supabase.auth.getSession()
+        if (!session) return
+        await supabase.from('subcontractor_quotes').delete()
+          .eq('project_id', projectId).eq('user_id', session.user.id)
+        if (quotes.length > 0) {
+          await supabase.from('subcontractor_quotes').insert(
+            quotes.map(q => ({
+              id: q.id, project_id: projectId, user_id: session.user.id,
+              trade: q.trade, company: q.company, contact: q.contact ?? null,
+              phone: q.phone ?? null, amount: q.amount, notes: q.notes ?? null,
+              submitted_at: q.submittedAt, used_in_estimate: q.usedInEstimate ?? false,
+            } as any))
+          )
+        }
+      } catch {}
+    }, 1500)
+    return () => clearTimeout(timer)
+  }, [quotes, projectId])
 
   // New quote form state
   const [newTrade, setNewTrade] = useState<string>(TRADE_OPTIONS[0])

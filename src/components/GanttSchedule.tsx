@@ -961,7 +961,7 @@ export default function GanttSchedule({ projectId }: GanttScheduleProps) {
         {/* ── Toolbar ──────────────────────────────────────────────────────── */}
         <div className="flex items-center justify-between gantt-no-print">
           <div>
-            <h2 className="text-lg font-semibold text-white">{projectName} — Schedule</h2>
+            <h2 className="text-lg font-semibold text-white">{projectName} · Schedule</h2>
             <p className="text-xs text-slate-500 mt-0.5">{tasks.length} tasks · click any bar to edit</p>
           </div>
           <div className="flex items-center gap-1.5">
@@ -990,7 +990,7 @@ export default function GanttSchedule({ projectId }: GanttScheduleProps) {
                 if (!next) { setExclHolidays(false); localStorage.setItem("gantt_exclHolidays", "0"); }
               }}
               className={`h-8 gap-1 text-xs ${workDays ? "bg-cyan-600 hover:bg-cyan-700 border-cyan-600 text-white" : "bg-transparent border border-slate-700 text-slate-300 hover:bg-slate-700 hover:text-white"}`}
-              title="Exclude weekends — hit Reset to regenerate with working-day dates"
+              title="Exclude weekends. Hit Reset to regenerate with working-day dates."
             >
               <CalendarCheck className="w-3.5 h-3.5" /> Work Days
             </Button>

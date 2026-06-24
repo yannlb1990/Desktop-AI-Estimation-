@@ -49,7 +49,7 @@ const NewProject = () => {
     if (caps.maxProjects !== Infinity) {
       const existing: any[] = JSON.parse(localStorage.getItem(getUserStorageKey('local_projects')) || '[]');
       if (existing.length >= caps.maxProjects) {
-        toast.error(`Plan limit: ${caps.maxProjects} projects — upgrade to add more`);
+        toast.error(`You've reached the ${caps.maxProjects}-project limit. Upgrade your plan to add more.`);
         navigate("/dashboard");
         return;
       }
@@ -346,7 +346,7 @@ const NewProject = () => {
                 setUploadedFile(null);
               }}
             >
-              Cancel — go back
+              Cancel
             </Button>
           </div>
         </Card>

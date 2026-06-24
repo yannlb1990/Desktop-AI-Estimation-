@@ -211,7 +211,7 @@ const MarketInsights = () => {
     const now = new Date();
     const q = `Q${Math.ceil((now.getMonth() + 1) / 3)} ${now.getFullYear()}`;
     setLastRefresh(q);
-    toast.success("Prices refreshed — data current as of " + q);
+    toast.success("Prices refreshed. Data current as of " + q + ".");
   };
 
   const exportCSV = () => {
@@ -308,7 +308,7 @@ const MarketInsights = () => {
         <div className="mb-6">
           <h1 className="font-display text-3xl font-bold mb-1">Market Insights</h1>
           <p className="text-muted-foreground text-sm">
-            Australian construction pricing — {selectedState} · {lastRefresh} · 9 suppliers tracked
+            Australian construction pricing · {selectedState} · {lastRefresh} · 9 suppliers tracked
           </p>
         </div>
 

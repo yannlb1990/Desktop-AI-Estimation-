@@ -10,6 +10,7 @@ import { ViewportControls } from './ViewportControls';
 import { Magnifier } from './Magnifier';
 import { TakeoffTable } from './TakeoffTable';
 import { CostEstimator } from './CostEstimator';
+import { FrameEstimator } from './FrameEstimator';
 import { DetectionResultsPanel } from './DetectionResultsPanel';
 import { useTakeoffState } from '@/hooks/useTakeoffState';
 import { WorldPoint, MeasurementUnit, Measurement, PDFViewportData, CostItem, DistanceUnit } from '@/lib/takeoff/types';
@@ -78,6 +79,7 @@ export const PDFTakeoff = ({ projectId, estimateId, onAddCostItems }: PDFTakeoff
   const [sidebarSelectedIds, setSidebarSelectedIds] = useState<Set<string>>(new Set());
   const [upgradeModal, setUpgradeModal] = useState<{ open: boolean; feature: string }>({ open: false, feature: '' });
   const [modMode, setModMode] = useState<'wall' | 'door' | 'window' | 'custom' | null>(null);
+  const [wallClassification, setWallClassification] = useState<'external' | 'internal'>('internal');
   const [wallThicknessMm, setWallThicknessMm] = useState(90);
   const [wallHatchType, setWallHatchType] = useState<string>('none');
   const [wallHatchSide, setWallHatchSide] = useState<string>('both');
@@ -132,12 +134,16 @@ export const PDFTakeoff = ({ projectId, estimateId, onAddCostItems }: PDFTakeoff
 
   // Sidebar list: only show measurements belonging to the current plan.
   const currentPlanId = state.pdfFile?.planId;
-  const filteredMeasurements = useMemo(() => {
+  // All measurements for the current plan (not page-filtered) — used by CostEstimator so items from all pages are linkable
+  const planMeasurements = useMemo(() => {
     if (!currentPlanId) return [];
-    const planMeasurements = state.measurements.filter(m => m.planId === currentPlanId);
+    return state.measurements.filter(m => m.planId === currentPlanId);
+  }, [state.measurements, currentPlanId]);
+
+  const filteredMeasurements = useMemo(() => {
     if (pageFilter === 'all') return planMeasurements;
     return planMeasurements.filter((m) => m.pageIndex === pageFilter);
-  }, [pageFilter, state.measurements, currentPlanId]);
+  }, [pageFilter, planMeasurements]);
 
   // Calculate totals by unit type
   const totalsByUnit = useMemo(() => {
@@ -342,6 +348,10 @@ export const PDFTakeoff = ({ projectId, estimateId, onAddCostItems }: PDFTakeoff
     // never renders a text label next to the line (only symbols are shown).
     // Stamp with the stable plan identifier (name + filesize — survives session reloads).
     let m: Measurement = { ...measurement, planId: state.pdfFile?.planId };
+    // Stamp classification on wall-line measurements (wallThickness indicates wall-line tool)
+    if (m.wallThickness !== undefined) {
+      m = { ...m, wallClassification };
+    }
     if (modMode === 'wall') {
       m = { ...m, color: '#f59e0b', measurementType: 'Wall', label: '' };
     } else if (modMode === 'door') {
@@ -854,6 +864,8 @@ export const PDFTakeoff = ({ projectId, estimateId, onAddCostItems }: PDFTakeoff
       contextPanelOpen={contextPanelOpen}
       gridSnapMm={gridSnapMm}
       onGridSnapChange={setGridSnapMm}
+      wallClassification={wallClassification}
+      onWallClassificationChange={setWallClassification}
     />
   );
 
@@ -1010,6 +1022,8 @@ export const PDFTakeoff = ({ projectId, estimateId, onAddCostItems }: PDFTakeoff
             modMode === 'wall' ? '#f59e0b' :
             modMode === 'door' ? '#8b5cf6' :
             modMode === 'window' ? '#06b6d4' :
+            (state.activeTool === 'wall-line' || state.activeTool === 'arc-wall')
+              ? (wallClassification === 'external' ? '#f59e0b' : '#38bdf8') :
             state.selectedColor
           }
           measurements={state.measurements.filter(m => {
@@ -1501,6 +1515,14 @@ export const PDFTakeoff = ({ projectId, estimateId, onAddCostItems }: PDFTakeoff
                   />
                 </Card>
 
+                {/* Frame Estimator — appears when wall-line measurements exist */}
+                <FrameEstimator
+                  measurements={filteredMeasurements}
+                  isCalibrated={state.isCalibrated}
+                  unitsPerMetre={state.currentScale?.unitsPerMetre ?? null}
+                  onAddCostItems={(items) => items.forEach(item => dispatch({ type: 'ADD_COST_ITEM', payload: item }))}
+                />
+
                 <Card className="p-4">
                   <div className="space-y-3 max-h-[400px] overflow-y-auto">
                     {filteredMeasurements.length === 0 ? (
@@ -1528,6 +1550,23 @@ export const PDFTakeoff = ({ projectId, estimateId, onAddCostItems }: PDFTakeoff
                                 <span className="capitalize">
                                   {(m as any).arcControlPoint ? 'Arc Wall' : (m as any).wallThickness ? 'Wall' : m.type}
                                 </span>
+                                {/* Ext/Int classification toggle — only on wall-line measurements */}
+                                {m.wallThickness !== undefined && (
+                                  <button
+                                    onClick={() => dispatch({
+                                      type: 'UPDATE_MEASUREMENT',
+                                      payload: { id: m.id, updates: { wallClassification: m.wallClassification === 'external' ? 'internal' : 'external' } }
+                                    })}
+                                    className={`inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold border transition-colors ${
+                                      m.wallClassification === 'external'
+                                        ? 'bg-amber-900/40 text-amber-300 border-amber-700/50 hover:bg-amber-900/60'
+                                        : 'bg-sky-900/40 text-sky-300 border-sky-700/50 hover:bg-sky-900/60'
+                                    }`}
+                                    title="Click to toggle External / Internal"
+                                  >
+                                    {m.wallClassification === 'external' ? 'EXT' : 'INT'}
+                                  </button>
+                                )}
                                 {m.addedToEstimate && (
                                   <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 text-[10px] font-medium">
                                     ✓ In estimate
@@ -1547,6 +1586,21 @@ export const PDFTakeoff = ({ projectId, estimateId, onAddCostItems }: PDFTakeoff
                               placeholder="Label"
                               className="h-8"
                             />
+                            {/* Raking plate checkbox — only on external walls */}
+                            {m.wallThickness !== undefined && m.wallClassification === 'external' && (
+                              <label className="flex items-center gap-2 cursor-pointer select-none">
+                                <Checkbox
+                                  checked={m.hasRakingPlate ?? false}
+                                  onCheckedChange={(checked) =>
+                                    dispatch({
+                                      type: 'UPDATE_MEASUREMENT',
+                                      payload: { id: m.id, updates: { hasRakingPlate: !!checked } }
+                                    })
+                                  }
+                                />
+                                <span className="text-[11px] text-muted-foreground">Has raking plate</span>
+                              </label>
+                            )}
                             <Select
                               value={m.measurementType ?? ''}
                               onValueChange={(val) =>
@@ -1714,7 +1768,7 @@ export const PDFTakeoff = ({ projectId, estimateId, onAddCostItems }: PDFTakeoff
             </div>
             <CostEstimator
               projectId={projectId}
-              measurements={state.measurements}
+              measurements={planMeasurements}
               costItems={state.costItems}
               enabledTrades={appProfile.enabledTrades}
               onAddCostItem={(item) => dispatch({ type: 'ADD_COST_ITEM', payload: item })}

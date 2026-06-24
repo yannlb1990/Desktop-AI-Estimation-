@@ -47,14 +47,20 @@ export const Magnifier = ({ canvasRef, isVisible, onClose }: MagnifierProps) => 
     const ctx = magnifierCanvas.getContext('2d');
     if (!ctx) return;
 
-    magnifierCanvas.width = lensSize;
-    magnifierCanvas.height = lensSize;
+    // Source canvas backing store is in physical pixels (CSS × devicePixelRatio).
+    // mousePos is in CSS pixels, so we must scale source coords AND the output canvas to physical pixels.
+    const dpr = window.devicePixelRatio || 1;
+    const physLensSize = lensSize * dpr;
 
-    const sourceSize = lensSize / magnification;
-    const sourceX = mousePos.x - sourceSize / 2;
-    const sourceY = mousePos.y - sourceSize / 2;
+    magnifierCanvas.width = physLensSize;
+    magnifierCanvas.height = physLensSize;
 
-    ctx.clearRect(0, 0, lensSize, lensSize);
+    const cssSourceSize = lensSize / magnification;
+    const sourceSize = cssSourceSize * dpr;
+    const sourceX = mousePos.x * dpr - sourceSize / 2;
+    const sourceY = mousePos.y * dpr - sourceSize / 2;
+
+    ctx.clearRect(0, 0, physLensSize, physLensSize);
     ctx.drawImage(
       sourceCanvas,
       sourceX,
@@ -63,24 +69,24 @@ export const Magnifier = ({ canvasRef, isVisible, onClose }: MagnifierProps) => 
       sourceSize,
       0,
       0,
-      lensSize,
-      lensSize
+      physLensSize,
+      physLensSize
     );
 
-    // Draw crosshair
+    // Draw crosshair (coordinates in physical pixels)
     ctx.strokeStyle = 'hsl(var(--destructive))';
-    ctx.lineWidth = 1;
+    ctx.lineWidth = dpr;
     ctx.beginPath();
-    ctx.moveTo(lensSize / 2, 0);
-    ctx.lineTo(lensSize / 2, lensSize);
-    ctx.moveTo(0, lensSize / 2);
-    ctx.lineTo(lensSize, lensSize / 2);
+    ctx.moveTo(physLensSize / 2, 0);
+    ctx.lineTo(physLensSize / 2, physLensSize);
+    ctx.moveTo(0, physLensSize / 2);
+    ctx.lineTo(physLensSize, physLensSize / 2);
     ctx.stroke();
 
     // Draw center dot
     ctx.fillStyle = 'hsl(var(--destructive))';
     ctx.beginPath();
-    ctx.arc(lensSize / 2, lensSize / 2, 3, 0, Math.PI * 2);
+    ctx.arc(physLensSize / 2, physLensSize / 2, 3 * dpr, 0, Math.PI * 2);
     ctx.fill();
   }, [isVisible, mousePos, magnification, lensSize, canvasRef]);
 

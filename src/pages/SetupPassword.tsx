@@ -113,10 +113,10 @@ const SetupPassword = () => {
 
       const { data: { user } } = await supabase.auth.getUser();
       localStorage.setItem(`${user?.email ?? userEmail}:show_welcome`, "true");
-      toast.success("Welcome to Metricore — your account is ready!");
+      toast.success("Welcome to Metricore. Your account is ready!");
       navigate("/dashboard");
     } catch (err: any) {
-      toast.error(err.message ?? "Could not set password — please try again");
+      toast.error(err.message ?? "Could not set password. Please try again.");
     } finally {
       setIsLoading(false);
     }
@@ -132,7 +132,7 @@ const SetupPassword = () => {
       const { resolvedPlan, resolvedBilling } = await setupAccount();
       await redirectToStripeCheckout(resolvedPlan, resolvedBilling);
     } catch (err: any) {
-      toast.error(err.message ?? "Something went wrong — please try again");
+      toast.error(err.message ?? "Something went wrong. Please try again.");
       setIsCheckingOut(false);
     }
   };
@@ -252,10 +252,10 @@ const SetupPassword = () => {
                       await setupAccount();
                       const { data: { user } } = await supabase.auth.getUser();
                       localStorage.setItem(`${user?.email ?? userEmail}:show_welcome`, "true");
-                      toast.success("Welcome to Metricore — your account is ready!");
+                      toast.success("Welcome to Metricore. Your account is ready!");
                       navigate("/dashboard");
                     } catch (err: any) {
-                      toast.error(err.message ?? "Could not set password — please try again");
+                      toast.error(err.message ?? "Could not set password. Please try again.");
                     } finally {
                       setIsLoading(false);
                     }
@@ -288,7 +288,7 @@ const SetupPassword = () => {
                 >
                   {isCheckingOut
                     ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Opening checkout…</>
-                    : <><CreditCard className="h-4 w-4" />Subscribe to {PLAN_NAMES[planId]} — skip the trial</>}
+                    : <><CreditCard className="h-4 w-4" />Subscribe to {PLAN_NAMES[planId]} and skip the trial</>}
                 </Button>
                 <p className="text-center text-xs text-muted-foreground">
                   Skip the trial and go straight to your paid plan

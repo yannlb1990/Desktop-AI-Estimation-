@@ -43,7 +43,7 @@ const About = () => {
             <div>
               <h2 className="text-foreground font-semibold text-xl mb-3">Built for Australia</h2>
               <p>
-                Our rate database is calibrated to Australian conditions — covering 26 trades with
+                Our rate database is calibrated to Australian conditions, covering 26 trades with
                 regional pricing variations and NCC compliance references built in. We understand
                 that a concrete slab in Brisbane has different material and labour costs than one
                 in Hobart, and our estimates reflect that.
@@ -53,7 +53,7 @@ const About = () => {
             <div>
               <h2 className="text-foreground font-semibold text-xl mb-3">Our Mission</h2>
               <p>
-                We believe every builder — from sole traders to mid-size contractors — deserves
+                We believe every builder, from sole traders to mid-size contractors, deserves
                 access to the same quality of estimation tools that large construction firms have.
                 Metricore levels the playing field with enterprise-grade AI at an accessible price.
               </p>
@@ -62,7 +62,7 @@ const About = () => {
             <div className="pt-4 border-t border-border">
               <h2 className="text-foreground font-semibold text-xl mb-4">Get in Touch</h2>
               <p>
-                Questions, feedback, or partnership enquiries — we'd love to hear from you.
+                Questions, feedback, or partnership enquiries? We'd love to hear from you.
               </p>
               <a
                 href="mailto:admin@metricore.com.au"

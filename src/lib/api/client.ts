@@ -50,7 +50,7 @@ export async function callEdge<Req, Res>(
   if (auth === 'bearer') {
     const { data: { session } } = await supabase.auth.getSession();
     if (!session) {
-      throw new EdgeFunctionError('Not authenticated — please sign in', 401);
+      throw new EdgeFunctionError('Not authenticated. Please sign in.', 401);
     }
     headers['Authorization'] = `Bearer ${session.access_token}`;
   }

@@ -30,6 +30,8 @@ interface MeasurementToolbarProps {
   contextPanelOpen?: boolean;
   gridSnapMm?: number;
   onGridSnapChange?: (mm: number) => void;
+  wallClassification?: 'external' | 'internal';
+  onWallClassificationChange?: (c: 'external' | 'internal') => void;
 }
 
 const WALL_PRESETS = [64, 70, 90, 92, 110, 150];
@@ -138,6 +140,8 @@ export const MeasurementToolbar = ({
   contextPanelOpen = true,
   gridSnapMm = 0,
   onGridSnapChange,
+  wallClassification = 'internal',
+  onWallClassificationChange,
 }: MeasurementToolbarProps) => {
   const [customInput, setCustomInput] = useState('');
   type ModId = 'wall' | 'door' | 'window' | 'custom';
@@ -375,6 +379,42 @@ export const MeasurementToolbar = ({
                         {label}
                       </button>
                     ))}
+                  </div>
+                </div>
+              </>
+            )}
+
+            {/* Wall Classification — Ext vs Int */}
+            {onWallClassificationChange && (
+              <>
+                <div className="w-px bg-amber-900/30 self-stretch shrink-0" />
+                <div className="shrink-0">
+                  <p className="text-[10px] font-semibold text-amber-400/80 uppercase tracking-widest mb-1.5">
+                    Type
+                  </p>
+                  <div className="flex flex-col gap-1">
+                    <button
+                      onClick={() => onWallClassificationChange('external')}
+                      className={cn(
+                        'h-7 px-3 rounded text-xs font-medium transition-colors',
+                        wallClassification === 'external'
+                          ? 'bg-amber-600 text-white'
+                          : 'bg-slate-700/60 text-slate-300 hover:bg-slate-600'
+                      )}
+                    >
+                      External
+                    </button>
+                    <button
+                      onClick={() => onWallClassificationChange('internal')}
+                      className={cn(
+                        'h-7 px-3 rounded text-xs font-medium transition-colors',
+                        wallClassification === 'internal'
+                          ? 'bg-sky-600 text-white'
+                          : 'bg-slate-700/60 text-slate-300 hover:bg-slate-600'
+                      )}
+                    >
+                      Internal
+                    </button>
                   </div>
                 </div>
               </>

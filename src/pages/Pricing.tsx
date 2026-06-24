@@ -1,5 +1,5 @@
 import { Helmet } from "react-helmet-async";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -13,6 +13,7 @@ import Footer from "@/components/Footer";
 import { PLAN_PRICES, PLAN_NAMES, PlanId, TRIAL_DAYS, getSubscriptionStatus } from "@/lib/subscription";
 import { isSignedIn } from "@/lib/localAuth";
 import { redirectToStripeCheckout } from "@/lib/api/stripe";
+import { syncSubscriptionFromDB } from "@/lib/stripeCheckout";
 import { toast } from "sonner";
 
 // ── Plan definitions ──────────────────────────────────────────────────────────
@@ -115,7 +116,7 @@ const FEATURE_LABELS: Record<FeatureKey, { label: string; icon: React.ReactNode;
 const FAQ = [
   { q: "Is a credit card required for the trial?", a: "No. You get 14 days of full access with no card required." },
   { q: "What happens when the trial ends?", a: "You move onto the plan you selected. If you don't upgrade, your account switches to read-only until you choose a plan." },
-  { q: "Can I switch plans?", a: "Yes — upgrade or downgrade any time. Upgrades apply immediately; downgrades apply at the next billing cycle." },
+  { q: "Can I switch plans?", a: "Yes, upgrade or downgrade any time. Upgrades apply immediately; downgrades apply at the next billing cycle." },
   { q: "Are prices in AUD?", a: "Yes. All prices are in Australian dollars and include GST." },
   { q: "What counts as a 'project'?", a: "One construction job with plans, measurements and an estimate. Archived projects don't count toward your limit." },
   { q: "Do you offer refunds?", a: "All payments are final. If you have a billing question contact us at support@metricore.com.au and we'll do our best to help." },
@@ -133,6 +134,16 @@ const Pricing = () => {
   const signedIn = isSignedIn();
   const { isTrialExpired, isTrialing, subscription } = getSubscriptionStatus();
   const alreadyPaid = subscription?.activePlan !== 'trial' && !!subscription?.subscribedAt;
+
+  // Re-sync on mount — if user has full access (e.g. admin), redirect away from pricing immediately
+  useEffect(() => {
+    if (!signedIn) return;
+    syncSubscriptionFromDB().then(() => {
+      const { isTrialExpired: expired } = getSubscriptionStatus();
+      if (!expired) navigate('/dashboard', { replace: true });
+    });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const selectedPlan = PLANS.find(p => p.id === selected)!;
 
@@ -326,7 +337,7 @@ const Pricing = () => {
                     disabled={checkingOut}
                     onClick={(e) => { e.stopPropagation(); handleDirectSubscribe(plan.id); }}
                   >
-                    Or subscribe now — ${PLAN_PRICES[plan.id][billing]}/mo
+                    Or subscribe now for ${PLAN_PRICES[plan.id][billing]}/mo
                   </button>
                 )}
               </div>
@@ -341,7 +352,7 @@ const Pricing = () => {
               <div className="flex items-center gap-2 mb-1">
                 <Badge className="bg-primary text-primary-foreground">{PLAN_NAMES[selected]}</Badge>
                 {billing === 'annual' && (
-                  <Badge variant="outline" className="text-green-600 border-green-500/30">Annual — save ${saving(selected)}/yr</Badge>
+                  <Badge variant="outline" className="text-green-600 border-green-500/30">Annual · save ${saving(selected)}/yr</Badge>
                 )}
               </div>
               <h2 className="font-display text-2xl font-bold mb-1">
@@ -375,7 +386,7 @@ const Pricing = () => {
                   disabled={checkingOut}
                   onClick={() => handleDirectSubscribe(selected)}
                 >
-                  Or subscribe now — ${PLAN_PRICES[selected][billing]}/mo
+                  Or subscribe now for ${PLAN_PRICES[selected][billing]}/mo
                 </button>
               )}
             </div>
@@ -511,7 +522,7 @@ const Pricing = () => {
               ) : alreadyPaid ? (
                 "Already Subscribed"
               ) : signedIn ? (
-                <>Subscribe — {PLAN_NAMES[selected]} <ArrowRight className="ml-2 h-5 w-5" /></>
+                <>Subscribe to {PLAN_NAMES[selected]} <ArrowRight className="ml-2 h-5 w-5" /></>
               ) : (
                 <>Start Free Trial with {PLAN_NAMES[selected]} <ArrowRight className="ml-2 h-5 w-5" /></>
               )}

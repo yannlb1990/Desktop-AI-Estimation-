@@ -229,7 +229,7 @@ export const PlanIntelligencePanel: React.FC<PlanIntelligencePanelProps> = ({
     }
 
     if (pageTexts.length === 0) {
-      setError('No readable text in PDF. Document may be scanned — try the AI Extraction panel instead.');
+      setError('No readable text in PDF. Document may be scanned. Try the AI Extraction panel instead.');
       setStatus('error');
       return;
     }
@@ -412,7 +412,7 @@ export const PlanIntelligencePanel: React.FC<PlanIntelligencePanelProps> = ({
       )}
 
       <p className="text-xs text-muted-foreground leading-tight">
-        Reads all plan text and uses AI to surface notes, material specs, applicable Australian standards, and action items — including details commonly missed in manual reviews.
+        Reads all plan text and uses AI to surface notes, material specs, applicable Australian standards, and action items. Includes details commonly missed in manual reviews.
       </p>
     </Card>
   );

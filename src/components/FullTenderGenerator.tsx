@@ -373,7 +373,7 @@ export const FullTenderGenerator = ({ project, estimate }: FullTenderProps) => {
       .map((l) => `<link rel="stylesheet" href="${(l as HTMLLinkElement).href}">`)
       .join('\n')
     const win = window.open('', '_blank', 'width=900,height=700')
-    if (!win) { toast.error("Pop-ups blocked — allow pop-ups and try again"); return }
+    if (!win) { toast.error("Pop-ups are blocked. Allow pop-ups for this site and try again."); return }
     const projectName = project?.name || 'Tender'
     const dateStr = today.toLocaleDateString("en-AU", { day: "2-digit", month: "2-digit", year: "numeric" }).replace(/\//g, "-")
     const docTitle = `${tenderNumber} - ${companyName} - ${projectName} - ${dateStr}`
@@ -417,7 +417,7 @@ ${clone.outerHTML}
 </body></html>`
     win.document.write(html)
     win.document.close()
-    toast.success("Print window opened — choose 'Save as PDF'")
+    toast.success("Print window opened. Choose 'Save as PDF'.")
   }
 
   const fmt = (d: Date) => d.toLocaleDateString("en-AU", { day: "numeric", month: "long", year: "numeric" })

@@ -154,7 +154,7 @@ export const SOWGeneratorDialog: React.FC<Props> = ({
             {/* Trade preview + exclusion notes */}
             <section className="space-y-3">
               <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                Trade Sections — {byTrade.size} trade{byTrade.size !== 1 ? 's' : ''}
+                Trade Sections · {byTrade.size} trade{byTrade.size !== 1 ? 's' : ''}
               </h3>
 
               {byTrade.size === 0 && (

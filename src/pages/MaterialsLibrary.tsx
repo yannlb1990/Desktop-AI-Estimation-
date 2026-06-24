@@ -119,7 +119,7 @@ export default function MaterialsLibrary() {
       if (count > 0) {
         toast.success(`Imported ${count} materials`);
       } else {
-        toast.error('No valid rows found — check CSV format');
+        toast.error('No valid rows found. Check the CSV format and try again.');
       }
     };
     reader.readAsText(file);
@@ -191,7 +191,7 @@ export default function MaterialsLibrary() {
         <Card className="p-4 bg-primary/5 border-primary/20">
           <p className="text-sm text-muted-foreground">
             Build your personal catalogue of materials with your own supplier pricing.
-            Materials saved here can be pulled directly into any project estimate — saving you from re-entering prices every time.
+            Materials saved here can be pulled directly into any project estimate, saving you from re-entering prices every time.
             <span className="ml-1 font-medium text-foreground">Overseas items show lead time warnings in estimates.</span>
           </p>
         </Card>
@@ -445,7 +445,7 @@ Waterproofing Membrane,Waterproofing,M2,28.50,Sika,local,,SIKA-WP-01,`}
                 />
                 {form.leadTimeWeeks && form.leadTimeWeeks >= 8 && (
                   <p className="text-xs text-amber-600">
-                    Long lead time — order well before scheduled install date.
+                    Long lead time. Order well before the scheduled install date.
                   </p>
                 )}
               </div>

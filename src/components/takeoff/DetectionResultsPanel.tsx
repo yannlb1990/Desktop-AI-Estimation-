@@ -100,9 +100,9 @@ export const DetectionResultsPanel: React.FC<DetectionResultsPanelProps> = ({
       onScanComplete?.(openings);
       const w = openings.filter(o => o.type === 'window').length;
       const d = openings.filter(o => o.type === 'door').length;
-      toast.success(`Scan complete — ${w} window${w !== 1 ? 's' : ''}, ${d} door${d !== 1 ? 's' : ''} found across ${totalPages} page${totalPages !== 1 ? 's' : ''}`);
+      toast.success(`Scan complete. Found ${w} window${w !== 1 ? 's' : ''}, ${d} door${d !== 1 ? 's' : ''} across ${totalPages} page${totalPages !== 1 ? 's' : ''}`);
     } catch (err) {
-      toast.error('Scan failed — see console');
+      toast.error('Scan failed. Check the browser console for details.');
       console.error(err);
     } finally {
       setScanning(false);

@@ -120,7 +120,7 @@ export function RecipePickerDialog({
       );
 
       if (items.length === 0) {
-        toast.error('No items produced — check assembly components');
+        toast.error('No items produced. Check the assembly components and try again.');
         return;
       }
 
@@ -128,7 +128,7 @@ export function RecipePickerDialog({
       toast.success(`${items.length} item${items.length > 1 ? 's' : ''} added from recipe`);
       handleClose();
     } catch {
-      toast.error('Failed to explode recipe — try again');
+      toast.error('Failed to explode recipe. Please try again.');
     } finally {
       setLoadingAdd(false);
     }

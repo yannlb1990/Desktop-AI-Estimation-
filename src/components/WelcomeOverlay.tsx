@@ -13,7 +13,7 @@ const steps = [
   {
     icon: Upload,
     label: "Upload your plan",
-    desc: "PDF plans — any scale",
+    desc: "PDF plans, any scale",
     color: "text-primary",
     bg: "bg-primary/10",
   },

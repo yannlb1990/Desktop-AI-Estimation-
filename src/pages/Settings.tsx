@@ -1,9 +1,10 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { getLocalUser, isSignedIn, getUserStorageKey } from "@/lib/localAuth";
-import { getSubscriptionStatus, PLAN_NAMES, loadSubscription } from "@/lib/subscription";
+import { getSubscriptionStatus, PLAN_NAMES, PLAN_PRICES, loadSubscription } from "@/lib/subscription";
 import { supabase } from "@/integrations/supabase/client";
-import { syncSubscriptionFromDB } from "@/lib/stripeCheckout";
+import { syncSubscriptionFromDB, redirectToStripeCheckout } from "@/lib/stripeCheckout";
+import { cancelSubscription } from "@/lib/api/stripe";
 import { inviteTeamMember } from "@/lib/api/team";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -57,9 +58,13 @@ const Settings = () => {
   const logoInputRef = useRef<HTMLInputElement>(null);
 
   const localUser = getLocalUser();
-  const { isTrialing, isTrialExpired, daysLeftInTrial, subscription, effectivePlan } = getSubscriptionStatus();
+  const { isTrialing, isTrialExpired, daysLeftInTrial, subscription, effectivePlan, isPastDue, pastDueGraceDaysLeft } = getSubscriptionStatus();
   const isBusinessPlan = effectivePlan === "business";
   const isPaidPlan = subscription?.activePlan !== "trial" && !!subscription?.subscribedAt;
+
+  const [cancelling, setCancelling] = useState(false);
+  const [upgrading, setUpgrading] = useState<string | null>(null);
+  const [chosenPlan, setChosenPlan] = useState<string>(subscription?.selectedPlan ?? "pro");
 
   // ── Company Profile ─────────────────────────────────────────────────────────
   const [companyName, setCompanyName] = useState("");
@@ -353,7 +358,7 @@ const Settings = () => {
     };
     localStorage.setItem(getUserStorageKey("quote_brand"), JSON.stringify(brandData));
     syncUserSettings('branding', brandData);
-    toast.success("Branding saved — applied to all future quotes");
+    toast.success("Branding saved. Applied to all future quotes.");
   };
 
   const handleSaveRates = () => {
@@ -478,10 +483,35 @@ const Settings = () => {
   };
 
   const statusBadge = () => {
+    if (isPastDue) return <Badge variant="destructive">Payment Failed</Badge>;
     if (isTrialExpired) return <Badge variant="destructive">Trial Expired</Badge>;
     if (isTrialing) return <Badge className="bg-blue-500 text-white">Trial Active</Badge>;
     if (isPaidPlan) return <Badge className="bg-green-500 text-white">Active</Badge>;
     return <Badge variant="outline">Unknown</Badge>;
+  };
+
+  const handleUpgrade = async (planId: string) => {
+    setUpgrading(planId);
+    try {
+      await redirectToStripeCheckout(planId, subscription?.billingPeriod ?? "monthly");
+    } catch (e: any) {
+      toast.error(e?.message ?? "Could not start checkout. Please try again.");
+      setUpgrading(null);
+    }
+  };
+
+  const handleCancelSubscription = async () => {
+    if (!confirm("Cancel your subscription? You'll keep access until the end of your billing period.")) return;
+    setCancelling(true);
+    try {
+      const result = await cancelSubscription();
+      const cancelDate = new Date(result.cancel_at).toLocaleDateString("en-AU", { day: "numeric", month: "short", year: "numeric" });
+      toast.success(`Subscription cancelled. Access ends ${cancelDate}.`);
+    } catch (e: any) {
+      toast.error(e?.message ?? "Could not cancel. Contact support@metricore.com.au.");
+    } finally {
+      setCancelling(false);
+    }
   };
 
   const activeMembers = teamMembers.filter(m => m.status === "active");
@@ -669,14 +699,14 @@ const Settings = () => {
                   <Label className="mb-2 block">Colour Scheme</Label>
                   <div className="grid grid-cols-2 gap-4 max-w-lg">
                     <div>
-                      <p className="text-xs text-muted-foreground mb-1.5">Primary — document header</p>
+                      <p className="text-xs text-muted-foreground mb-1.5">Primary (document header)</p>
                       <div className="flex items-center gap-2">
                         <input type="color" value={brandColor} onChange={e => setBrandColor(e.target.value)} className="h-9 w-12 rounded cursor-pointer border border-border" />
                         <Input value={brandColor} onChange={e => setBrandColor(e.target.value)} placeholder="#0f4c81" className="font-mono text-sm" />
                       </div>
                     </div>
                     <div>
-                      <p className="text-xs text-muted-foreground mb-1.5">Accent — highlights &amp; totals</p>
+                      <p className="text-xs text-muted-foreground mb-1.5">Accent (highlights &amp; totals)</p>
                       <div className="flex items-center gap-2">
                         <input type="color" value={accentColor} onChange={e => setAccentColor(e.target.value)} className="h-9 w-12 rounded cursor-pointer border border-border" />
                         <Input value={accentColor} onChange={e => setAccentColor(e.target.value)} placeholder="#f59e0b" className="font-mono text-sm" />
@@ -956,8 +986,8 @@ const Settings = () => {
                     <div className="font-semibold capitalize mb-1">{t}</div>
                     <div className="text-xs text-muted-foreground">
                       {t === "simple"
-                        ? "Prices only — no payment schedule or terms. Best for quick residential quotes."
-                        : "Full breakdown — includes payment schedule, inclusions, exclusions, and terms. Best for commercial work."}
+                        ? "Prices only, no payment schedule or terms. Best for quick residential quotes."
+                        : "Full breakdown with payment schedule, inclusions, exclusions, and terms. Best for commercial work."}
                     </div>
                     {pdfTemplate === t && <CheckCircle className="h-4 w-4 text-primary mt-2" />}
                   </button>
@@ -1065,42 +1095,104 @@ const Settings = () => {
           </TabsContent>
 
           {/* ── Subscription & Billing ─────────────────────────────────────────── */}
-          <TabsContent value="billing" className="space-y-6">
-            <Card className="p-6">
-              <h3 className="font-display text-xl font-bold mb-6 flex items-center gap-2">
-                <CreditCard className="h-5 w-5" />Subscription & Billing
+          <TabsContent value="billing" className="space-y-4">
+            <Card className="p-5">
+              <h3 className="font-display text-base font-bold mb-4 flex items-center gap-2">
+                <CreditCard className="h-4 w-4" />Subscription & Billing
               </h3>
 
-              <div className="space-y-4">
-                <div className="flex items-center justify-between p-4 bg-muted/40 rounded-xl border border-border">
-                  <div>
-                    <div className="text-sm text-muted-foreground mb-0.5">Current Plan</div>
-                    <div className="font-bold text-lg">{planLabel()}</div>
-                  </div>
-                  {statusBadge()}
+              {/* Past due warning */}
+              {isPastDue && (
+                <div className="flex items-center gap-3 p-3 mb-4 bg-red-500/10 border border-red-500/30 rounded-lg text-sm text-red-600 dark:text-red-400">
+                  <XCircle className="h-4 w-4 shrink-0" />
+                  <span>
+                    Payment failed. Access ends in{" "}
+                    <strong>{pastDueGraceDaysLeft} day{pastDueGraceDaysLeft !== 1 ? "s" : ""}</strong>.{" "}
+                    Contact <a href="mailto:support@metricore.com.au" className="underline">support@metricore.com.au</a> to update your payment method.
+                  </span>
                 </div>
+              )}
 
-                {isTrialing && (
-                  <div className="flex items-center gap-3 p-4 bg-blue-500/10 border border-blue-500/30 rounded-xl text-sm text-blue-700 dark:text-blue-400">
-                    <Clock className="h-4 w-4 shrink-0" />
-                    Your trial ends in <strong>{daysLeftInTrial} day{daysLeftInTrial !== 1 ? "s" : ""}</strong>. Subscribe from the <button className="underline font-medium" onClick={() => navigate("/pricing")}>Pricing page</button>.
-                  </div>
-                )}
-
-                {isTrialExpired && (
-                  <Button className="bg-primary text-primary-foreground" onClick={() => navigate("/pricing")}>
-                    Subscribe Now
-                  </Button>
-                )}
+              {/* Current plan row */}
+              <div className="flex items-center justify-between pb-4 border-b border-border">
+                <div>
+                  <div className="text-xs text-muted-foreground uppercase tracking-wide mb-0.5">Current Plan</div>
+                  <div className="font-semibold">{planLabel()}</div>
+                  {isPaidPlan && (
+                    <div className="text-xs text-muted-foreground mt-0.5">
+                      Billed {subscription?.billingPeriod === "annual" ? "annually" : "monthly"}
+                      {subscription?.currentPeriodEnd && (
+                        <> · Renews {new Date(subscription.currentPeriodEnd).toLocaleDateString("en-AU", { day: "numeric", month: "short", year: "numeric" })}</>
+                      )}
+                    </div>
+                  )}
+                </div>
+                <div className="flex items-center gap-2">
+                  {statusBadge()}
+                  {isPaidPlan && (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="h-7 text-xs text-destructive hover:text-destructive"
+                      onClick={handleCancelSubscription}
+                      disabled={cancelling}
+                    >
+                      {cancelling ? <Loader2 className="h-3 w-3 animate-spin" /> : "Cancel plan"}
+                    </Button>
+                  )}
+                </div>
               </div>
-            </Card>
 
-            <Card className="p-6">
-              <h3 className="font-semibold mb-2">Need help with billing?</h3>
-              <p className="text-sm text-muted-foreground mb-3">
-                For invoice copies, payment issues, or plan changes contact us at <strong>support@metricore.com.au</strong>
+              {/* Trial / expired: inline upgrade cards */}
+              {(isTrialing || isTrialExpired) && (
+                <div className="mt-4">
+                  <div className="flex items-center gap-1.5 text-xs text-muted-foreground mb-3">
+                    {isTrialing ? (
+                      <><Clock className="h-3 w-3" />Trial ends in <strong className="text-foreground">{daysLeftInTrial} day{daysLeftInTrial !== 1 ? "s" : ""}</strong>. Pick a plan to keep access.</>
+                    ) : (
+                      <><XCircle className="h-3 w-3 text-destructive" /><span className="text-destructive font-medium">Trial expired.</span> Subscribe to restore full access.</>
+                    )}
+                  </div>
+                  <div className="grid grid-cols-3 gap-3">
+                    {(["starter", "pro", "business"] as const).map(planId => {
+                      const isChosen = chosenPlan === planId;
+                      return (
+                        <div
+                          key={planId}
+                          className={`rounded-lg border p-3 cursor-pointer transition-colors ${isChosen ? "border-primary bg-primary/5" : "border-border hover:border-muted-foreground/40"}`}
+                          onClick={() => setChosenPlan(planId)}
+                        >
+                          <div className="font-semibold text-sm">{PLAN_NAMES[planId]}</div>
+                          <div className="mt-1">
+                            <span className="text-xl font-bold">${PLAN_PRICES[planId].monthly}</span>
+                            <span className="text-xs text-muted-foreground">/mo</span>
+                          </div>
+                          <Button
+                            size="sm"
+                            className="w-full mt-2 h-7 text-xs"
+                            variant={isChosen ? "default" : "outline"}
+                            onClick={e => {
+                              e.stopPropagation();
+                              if (isChosen) handleUpgrade(planId);
+                              else setChosenPlan(planId);
+                            }}
+                            disabled={!!upgrading}
+                          >
+                            {upgrading === planId ? <Loader2 className="h-3 w-3 animate-spin" /> : isChosen ? "Subscribe" : "Select"}
+                          </Button>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
+              <p className="text-xs text-muted-foreground mt-4 pt-3 border-t border-border">
+                Questions about billing?{" "}
+                <a href="mailto:support@metricore.com.au" className="underline hover:text-foreground transition-colors">
+                  support@metricore.com.au
+                </a>
               </p>
-              <p className="text-xs text-muted-foreground">All payments are final · Contact us for any billing questions</p>
             </Card>
           </TabsContent>
 
@@ -1215,7 +1307,7 @@ const Settings = () => {
                   <li>• Enter a colleague's email and click Send Invite</li>
                   <li>• They receive an email with a sign-up link</li>
                   <li>• Once they accept they get their own dashboard with Business plan access</li>
-                  <li>• Each member has separate projects and data — no shared workspace</li>
+                  <li>• Each member has separate projects and data. No shared workspace.</li>
                   <li>• Remove a member any time to free up a seat</li>
                 </ul>
               </Card>

@@ -17,6 +17,8 @@ export interface Subscription {
   stripeStatus?: 'active' | 'past_due' | 'canceled';
   // ISO timestamp when past_due was first detected (for 3-day grace period)
   pastDueSince?: string;
+  // Stripe current_period_end — next renewal date for paid subs
+  currentPeriodEnd?: string;
 }
 
 // ── Prices (AUD, monthly base) ────────────────────────────────────────────────
@@ -139,10 +141,27 @@ export interface SubscriptionStatus {
   pastDueGraceDaysLeft: number; // days remaining in grace period (0 = grace expired)
 }
 
+const ADMIN_EMAIL = 'yannlb1990@gmail.com';
+
 export function getSubscriptionStatus(): SubscriptionStatus {
   const sub = loadSubscription();
 
   const GRACE_MS = 3 * 86_400_000
+
+  // Admin account — full business access, all caps, never expired
+  if (sub?.email === ADMIN_EMAIL) {
+    return {
+      subscription: sub,
+      isActive: true,
+      isTrialing: false,
+      isTrialExpired: false,
+      daysLeftInTrial: 0,
+      effectivePlan: 'business',
+      caps: PLAN_CAPS.business,
+      isPastDue: false,
+      pastDueGraceDaysLeft: 0,
+    };
+  }
 
   if (!sub) {
     return {

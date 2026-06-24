@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect } from "react"
 import { getUserStorageKey } from "@/lib/localAuth"
+import { supabase } from "@/integrations/supabase/client"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -237,7 +238,7 @@ export const QuoteGenerator = ({ project, estimate }: QuoteGeneratorProps) => {
   const refreshEstimateLines = () => {
     const imported = buildLinesFromEstimate()
     if (imported.length === 0) {
-      toast.info("No estimate items found — add items in the Estimate tab first")
+      toast.info("No estimate items yet. Add items in the Estimate tab first.")
       return
     }
     setQuoteLines(prev => {
@@ -320,7 +321,7 @@ export const QuoteGenerator = ({ project, estimate }: QuoteGeneratorProps) => {
       .map((l) => `<link rel="stylesheet" href="${(l as HTMLLinkElement).href}">`)
       .join('\n')
     const win = window.open('', '_blank', 'width=900,height=700')
-    if (!win) { toast.error("Pop-ups blocked — allow pop-ups and try again"); return }
+    if (!win) { toast.error("Pop-ups are blocked. Allow pop-ups for this site and try again."); return }
     const projectName = project?.name || 'Quote'
     const dateStr = today.toLocaleDateString("en-AU", { day: "2-digit", month: "2-digit", year: "numeric" }).replace(/\//g, "-")
     const docTitle = `${quoteNumber} - ${companyName} - ${projectName} - ${dateStr}`
@@ -364,7 +365,7 @@ ${clone.outerHTML}
 </body></html>`
     win.document.write(html)
     win.document.close()
-    toast.success("Print window opened — choose 'Save as PDF'")
+    toast.success("Print window opened. Choose 'Save as PDF'.")
   }
 
   const handleSaveToLibrary = () => {
@@ -403,7 +404,7 @@ ${clone.outerHTML}
       clientName: project?.client_name || "",
       siteAddress: project?.site_address || "",
     })
-    toast.success(`Quote saved to Document Library — ${au$(totalIncGst)}`)
+    toast.success(`Quote saved to Document Library (${au$(totalIncGst)})`)
   }
 
   // Version history
@@ -414,6 +415,33 @@ ${clone.outerHTML}
     if (!versionKey) return []
     try { return JSON.parse(localStorage.getItem(versionKey) || '[]') } catch { return [] }
   })
+
+  // ── Supabase: load versions on mount ─────────────────────────────────────────
+  useEffect(() => {
+    if (!project?.id) return
+    let cancelled = false
+    async function loadCloudVersions() {
+      try {
+        const { data: { session } } = await supabase.auth.getSession()
+        if (!session || cancelled) return
+        const { data } = await supabase
+          .from('quote_versions')
+          .select('id, version_number, saved_at, quote_number, total, lines')
+          .eq('project_id', project.id)
+          .eq('user_id', session.user.id)
+          .order('version_number', { ascending: true })
+        if (cancelled || !data || data.length === 0) return
+        const cloud = data.map((r: any) => ({
+          id: r.id, versionNumber: r.version_number, savedAt: r.saved_at,
+          quoteNumber: r.quote_number, total: Number(r.total), lines: r.lines ?? [],
+        }))
+        setVersions(cloud)
+        if (versionKey) localStorage.setItem(versionKey, JSON.stringify(cloud))
+      } catch {}
+    }
+    loadCloudVersions()
+    return () => { cancelled = true }
+  }, [project?.id])
 
   const saveVersion = () => {
     if (!versionKey) return
@@ -428,7 +456,16 @@ ${clone.outerHTML}
     const updated = [...versions, next]
     localStorage.setItem(versionKey, JSON.stringify(updated))
     setVersions(updated)
-    toast.success(`Version ${next.versionNumber} saved — ${au$(totalIncGst)}`)
+    toast.success(`Version ${next.versionNumber} saved (${au$(totalIncGst)})`)
+    // Cloud sync
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (!session || !project?.id) return
+      supabase.from('quote_versions').insert({
+        id: next.id, project_id: project.id, user_id: session.user.id,
+        version_number: next.versionNumber, saved_at: next.savedAt,
+        quote_number: next.quoteNumber, total: next.total, lines: next.lines as any,
+      }).then(({ error }) => { if (error) console.warn('[versions] Cloud save failed:', error.message) })
+    })
   }
 
   const restoreVersion = (v: typeof versions[0]) => {
@@ -443,6 +480,9 @@ ${clone.outerHTML}
     const updated = versions.filter(v => v.id !== id)
     localStorage.setItem(versionKey, JSON.stringify(updated))
     setVersions(updated)
+    supabase.from('quote_versions').delete().eq('id', id).then(({ error }) => {
+      if (error) console.warn('[versions] Cloud delete failed:', error.message)
+    })
   }
 
   const headerGradient = `linear-gradient(135deg, ${primaryColor}ee 0%, ${primaryColor} 60%, ${primaryColor}cc 100%)`
@@ -595,8 +635,8 @@ ${clone.outerHTML}
                         </p>
                         <p className="text-xs text-muted-foreground mt-0.5">
                           {absorbOverheads
-                            ? "Overheads & margin absorbed into each line price — client sees clean trade rates only"
-                            : "Overheads & margin shown as a separate line — transparent cost breakdown"}
+                            ? "Overheads & margin absorbed into each line price. Client sees clean trade rates."
+                            : "Overheads & margin shown as a separate line for a transparent cost breakdown."}
                         </p>
                       </div>
                       {/* Toggle pill */}
@@ -626,7 +666,7 @@ ${clone.outerHTML}
 
                   {quoteLines.length === 0 ? (
                     <p className="text-xs text-muted-foreground text-center py-2">
-                      No lines yet — use the buttons above to get started.
+                      No lines yet. Use the buttons above to get started.
                     </p>
                   ) : (
                     <>
@@ -1059,7 +1099,7 @@ ${clone.outerHTML}
                     {builderLicence && (
                       <div className="mt-3 p-3 bg-green-50 border border-green-100 rounded-lg flex items-center gap-2 text-sm text-green-800">
                         <span>✓</span>
-                        <span>Licensed builder — Licence No. <strong>{builderLicence}</strong>. All works comply with National Construction Code (NCC) and applicable Australian Standards.</span>
+                        <span>Licensed builder · Licence No. <strong>{builderLicence}</strong>. All works comply with National Construction Code (NCC) and applicable Australian Standards.</span>
                       </div>
                     )}
                   </section>

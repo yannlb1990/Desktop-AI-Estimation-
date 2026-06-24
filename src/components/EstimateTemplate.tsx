@@ -329,8 +329,7 @@ export const EstimateTemplate = ({ projectId, estimateId }: EstimateTemplateProp
     const labourHrs = parseFloat(newItem.labour_hours) || 0;
 
     if (qty === 0 || unitPrice === 0) {
-      toast.error("Quantity and unit price must be greater than 0");
-      return;
+      toast.warning("Adding item with zero quantity or price — update values before generating quote");
     }
 
     // Create new estimate item
@@ -611,9 +610,10 @@ export const EstimateTemplate = ({ projectId, estimateId }: EstimateTemplateProp
     let totalMarkup = 0;
 
     items.forEach(item => {
-      // Material calculation with wastage
+      // Material calculation with wastage — per-item % takes precedence, falls back to global config
+      const matWastePct = item.material_wastage_pct ?? config.materialWastage;
       const matBase = (item.quantity || 0) * (item.unit_price || 0);
-      const matWaste = matBase * ((item.material_wastage_pct || 0) / 100);
+      const matWaste = matBase * (matWastePct / 100);
       let matTotal = matBase + matWaste;
       totalMaterials += matTotal;
 
@@ -626,9 +626,10 @@ export const EstimateTemplate = ({ projectId, estimateId }: EstimateTemplateProp
         });
       }
 
-      // Labour calculation with wastage — always use current labourRates state so rate changes apply to existing items
+      // Labour calculation with wastage — per-item % takes precedence, falls back to global config
+      const labWastePct = item.labour_wastage_pct ?? config.labourWastage;
       const labBase = (item.labour_hours || 0) * (labourRates[item.trade] || item.labour_rate || config.defaultLabourRate);
-      const labWaste = labBase * ((item.labour_wastage_pct || 0) / 100);
+      const labWaste = labBase * (labWastePct / 100);
       const labTotal = labBase + labWaste;
       totalLabour += labTotal;
 
@@ -725,10 +726,13 @@ export const EstimateTemplate = ({ projectId, estimateId }: EstimateTemplateProp
     const labBase = labourHrs * tradeRate;
     const labWithWaste = labBase * (1 + config.labourWastage / 100);
 
+    const subtotal = matWithWaste + labWithWaste;
+    const markupAmt = subtotal * (config.defaultMarkup / 100);
     return {
       materials: matWithWaste,
       labour: labWithWaste,
-      total: matWithWaste + labWithWaste
+      markup: markupAmt,
+      total: subtotal + markupAmt
     };
   };
 
@@ -817,11 +821,11 @@ export const EstimateTemplate = ({ projectId, estimateId }: EstimateTemplateProp
 
   const renderItem = (item: EstimateItem) => {
     const matBase = item.quantity * item.unit_price;
-    const matWaste = matBase * (item.material_wastage_pct / 100);
+    const matWaste = matBase * (config.materialWastage / 100);
     const relatedMatsTotal = (item.relatedMaterials || []).reduce((s, rm) => s + (rm.quantity || 0) * (rm.unit_price || 0), 0);
     const matTotalWithRelated = matBase + matWaste + relatedMatsTotal;
     const labBase = item.labour_hours * (labourRates[item.trade] || item.labour_rate || config.defaultLabourRate);
-    const labWaste = labBase * (item.labour_wastage_pct / 100);
+    const labWaste = labBase * (config.labourWastage / 100);
     const labTotal = labBase + labWaste;
     const subtotal = matTotalWithRelated + labTotal;
     const markup = subtotal * (item.markup_pct / 100);
@@ -981,10 +985,12 @@ export const EstimateTemplate = ({ projectId, estimateId }: EstimateTemplateProp
                 type="number"
                 step="0.1"
                 min="0"
-                value={editValues.markup_pct !== undefined ? editValues.markup_pct : 0}
+                value={editValues.markup_pct !== undefined ? editValues.markup_pct : item.markup_pct}
                 onChange={(e) => {
-                  const value = e.target.value;
-                  setEditValues({ ...editValues, markup_pct: value === '' ? 0 : parseFloat(value) });
+                  setEditValues({ ...editValues, markup_pct: e.target.value === '' ? undefined : parseFloat(e.target.value) });
+                }}
+                onBlur={(e) => {
+                  if (e.target.value === '') setEditValues({ ...editValues, markup_pct: 0 });
                 }}
                 className="h-8 w-20 text-right"
               />
@@ -1233,7 +1239,7 @@ export const EstimateTemplate = ({ projectId, estimateId }: EstimateTemplateProp
             />
           </div>
           <div>
-            <Label htmlFor="margin">Margin %</Label>
+            <Label htmlFor="margin">Margin % <span className="text-[10px] text-muted-foreground font-normal">(applied as markup)</span></Label>
             <Input
               id="margin"
               type="number"
@@ -1296,6 +1302,17 @@ export const EstimateTemplate = ({ projectId, estimateId }: EstimateTemplateProp
               step="0.1"
               value={config.contingencyPct}
               onChange={(e) => setConfig({ ...config, contingencyPct: parseFloat(e.target.value) || 0 })}
+            />
+          </div>
+          <div>
+            <Label htmlFor="defaultMarkup">Default Markup %</Label>
+            <Input
+              id="defaultMarkup"
+              type="number"
+              min="0"
+              step="0.1"
+              value={config.defaultMarkup}
+              onChange={(e) => setConfig({ ...config, defaultMarkup: parseFloat(e.target.value) || 0 })}
             />
           </div>
           
@@ -1493,11 +1510,19 @@ export const EstimateTemplate = ({ projectId, estimateId }: EstimateTemplateProp
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
           <div>
             <Label>Area *</Label>
-            <Input
+            <Select
               value={newItem.area}
-              onChange={(e) => setNewItem({ ...newItem, area: e.target.value })}
-              placeholder="e.g., Kitchen"
-            />
+              onValueChange={(v) => setNewItem({ ...newItem, area: v })}
+            >
+              <SelectTrigger>
+                <SelectValue placeholder="Select area" />
+              </SelectTrigger>
+              <SelectContent>
+                {ESTIMATE_AREAS.map(a => (
+                  <SelectItem key={a} value={a}>{a}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
           <div>
             <Label>Trade *</Label>
@@ -1613,6 +1638,11 @@ export const EstimateTemplate = ({ projectId, estimateId }: EstimateTemplateProp
                 className="w-12 h-5 text-right text-xs border border-input rounded px-1 bg-background font-mono focus:outline-none focus:ring-1 focus:ring-primary"
               />
               <span className="text-xs text-muted-foreground">% waste)</span>
+            </div>
+            <div className="flex items-center gap-1.5 text-sm">
+              <span className="text-muted-foreground">Markup:</span>
+              <span>${calculateLineTotal().markup.toFixed(2)}</span>
+              <span className="text-xs text-muted-foreground">({config.defaultMarkup}%)</span>
             </div>
             <div className="text-lg font-bold">
               Line Total: <span className="text-accent">${calculateLineTotal().total.toFixed(2)}</span>
@@ -1731,10 +1761,10 @@ export const EstimateTemplate = ({ projectId, estimateId }: EstimateTemplateProp
                       const isCollapsed = collapsedGroups.has(groupName);
                       const sectionTotal = groupItems.reduce((sum, item) => {
                         const mb = item.quantity * item.unit_price;
-                        const mw = mb * (item.material_wastage_pct / 100);
+                        const mw = mb * (config.materialWastage / 100);
                         const rt = (item.relatedMaterials || []).reduce((s, rm) => s + (rm.quantity || 0) * (rm.unit_price || 0), 0);
                         const lb = item.labour_hours * (labourRates[item.trade] || item.labour_rate || config.defaultLabourRate);
-                        const lw = lb * (item.labour_wastage_pct / 100);
+                        const lw = lb * (config.labourWastage / 100);
                         return sum + (mb + mw + rt + lb + lw) * (1 + item.markup_pct / 100);
                       }, 0);
                       return (
@@ -1927,9 +1957,9 @@ export const EstimateTemplate = ({ projectId, estimateId }: EstimateTemplateProp
                   let total = 0;
                   items.forEach(item => {
                     const matBase = (item.quantity || 0) * (item.unit_price || 0);
-                    const matWaste = matBase * ((item.material_wastage_pct || 0) / 100);
+                    const matWaste = matBase * (config.materialWastage / 100);
                     const labBase = (item.labour_hours || 0) * (labourRates[item.trade] || item.labour_rate || config.defaultLabourRate);
-                    const labWaste = labBase * ((item.labour_wastage_pct || 0) / 100);
+                    const labWaste = labBase * (config.labourWastage / 100);
                     const sub = matBase + matWaste + labBase + labWaste;
                     total += sub * (1 + ((item.markup_pct || 0) / 100));
                   });

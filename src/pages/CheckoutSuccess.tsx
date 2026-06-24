@@ -66,7 +66,7 @@ const CheckoutSuccess = () => {
           <CheckCircle className="h-16 w-16 text-green-500" />
           <h1 className="font-display text-2xl font-bold">Payment confirmed!</h1>
           <p className="text-muted-foreground max-w-sm">
-            Your subscription is activating — this can take a few moments.
+            Your subscription is activating. This can take a few moments.
             Redirecting you now; your plan will be ready shortly.
           </p>
           <div className="flex gap-3">

@@ -157,7 +157,7 @@ const Auth = () => {
       if (result.needsVerification) {
         setPendingEmail(parsed.data.email);
         setNeedsVerification(true);
-        toast.error("Please verify your email first — check your inbox");
+        toast.error("Please verify your email first. Check your inbox.");
         return;
       }
 
@@ -173,7 +173,7 @@ const Auth = () => {
       toast.success("Welcome back!");
       navigate("/dashboard");
     } catch {
-      toast.error("Something went wrong — please try again");
+      toast.error("Something went wrong. Please try again.");
     } finally {
       setIsLoading(false);
     }
@@ -236,13 +236,13 @@ const Auth = () => {
       localStorage.removeItem('metricore_oauth_plan');
       localStorage.removeItem('metricore_oauth_billing');
       if (error instanceof EdgeFunctionError && error.status === 409) {
-        toast.error("That email is already registered — please sign in instead");
+        toast.error("That email is already registered. Please sign in instead.");
         setIsLogin(true);
         setEmail(email.trim());
       } else if (error instanceof EdgeFunctionError) {
         toast.error(error.message);
       } else {
-        toast.error("Something went wrong — please try again");
+        toast.error("Something went wrong. Please try again.");
       }
     } finally {
       setIsLoading(false);
@@ -265,9 +265,9 @@ const Auth = () => {
     });
     setResetLoading(false);
     if (error) {
-      toast.error("Couldn't send reset email — try again in a moment");
+      toast.error("Couldn't send reset email. Try again in a moment.");
     } else {
-      toast.success("Password reset email sent — check your inbox");
+      toast.success("Password reset email sent. Check your inbox.");
     }
   };
 
@@ -280,7 +280,7 @@ const Auth = () => {
     });
     setResendLoading(false);
     if (error) {
-      toast.error("Couldn't resend — try again in a moment");
+      toast.error("Couldn't resend. Try again in a moment.");
     } else {
       toast.success("Verification email resent!");
     }
@@ -624,7 +624,7 @@ const Auth = () => {
                 >
                   {isLoading
                     ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Creating your account…</>
-                    : `Get Started — ${TRIAL_DAYS}-Day Free Trial`}
+                    : `Start Your ${TRIAL_DAYS}-Day Free Trial`}
                 </Button>
 
                 <div className="flex items-center gap-3">
@@ -642,7 +642,7 @@ const Auth = () => {
                 >
                   {isLoading
                     ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Creating your account…</>
-                    : <><CreditCard className="h-4 w-4" />Subscribe to {PLAN_NAMES[selectedPlan]} — ${price}/mo</>}
+                    : <><CreditCard className="h-4 w-4" />Subscribe to {PLAN_NAMES[selectedPlan]} · ${price}/mo</>}
                 </Button>
 
                 {/* What happens next */}
@@ -650,7 +650,7 @@ const Auth = () => {
                   <Mail className="h-3.5 w-3.5 shrink-0 mt-0.5 text-primary" />
                   <span>
                     We'll send a verification link to your email. Click it to confirm your account,
-                    then sign in to start your {TRIAL_DAYS}-day free trial — no credit card needed.
+                    then sign in to start your {TRIAL_DAYS}-day free trial. No credit card needed.
                   </span>
                 </div>
               </form>

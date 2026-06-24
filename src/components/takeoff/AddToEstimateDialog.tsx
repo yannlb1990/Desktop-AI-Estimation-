@@ -51,7 +51,7 @@ export const AddToEstimateDialog: React.FC<AddToEstimateDialogProps> = ({
 
       <DialogFooter>
         <Button variant="ghost" onClick={onSkip} className="w-full">
-          No thanks — just save the measurement
+          No thanks, just save the measurement
         </Button>
       </DialogFooter>
     </DialogContent>
