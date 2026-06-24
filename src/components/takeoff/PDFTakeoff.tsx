@@ -500,16 +500,9 @@ export const PDFTakeoff = ({ projectId, estimateId, onAddCostItems }: PDFTakeoff
     return () => { if (calibInstructTimerRef.current) clearTimeout(calibInstructTimerRef.current); };
   }, [state.calibrationMode, manualCalibrationPoints]);
 
-  // Auto-show magnifier when entering calibration mode so the user can place
-  // the scale line precisely without having to zoom in first.
-  // Auto-hide once calibration is complete or cancelled.
-  useEffect(() => {
-    if (state.calibrationMode === 'manual') {
-      setShowMagnifier(true);
-    } else {
-      setShowMagnifier(false);
-    }
-  }, [state.calibrationMode]);
+  // Magnifier is opt-in only — do NOT auto-show during calibration (it
+  // opens uninvited, blocks the plan, and the canvasRef may not point to
+  // the right element in fullscreen mode). Users zoom the PDF manually instead.
 
   const handleFetchNCCCode = useCallback(async (id: string, area: string, materials: string[]) => {
     return await fetchNCCCode(area, materials);

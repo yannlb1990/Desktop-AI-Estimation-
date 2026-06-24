@@ -78,7 +78,8 @@ async function extractVectorSegments(
         break;
 
       case OPS.transform: {
-        gs.ctm = matMul(gs.ctm, [a[0], a[1], a[2], a[3], a[4], a[5]]);
+        // PDF spec: cm pre-multiplies — new_CTM = [a b c d e f] × old_CTM
+        gs.ctm = matMul([a[0], a[1], a[2], a[3], a[4], a[5]], gs.ctm);
         break;
       }
 
@@ -141,8 +142,10 @@ async function extractVectorSegments(
     }
   }
 
-  // Filter: minimum length + near-axis only (walls are H or V in plan view)
+  // Filter: minimum length + near-axis + not a full-page spanning line
   const ANGLE_TOL = 8; // degrees from horizontal/vertical
+  const pageW = viewport.width;   // page dimensions in world space (PDF pts at scale 1)
+  const pageH = viewport.height;
   const filtered: Seg[] = [];
 
   for (const seg of worldSegs) {
@@ -150,8 +153,15 @@ async function extractVectorSegments(
     const dy = Math.abs(seg.y2 - seg.y1);
     const len = Math.hypot(dx, dy);
     if (len < minLengthWorld) continue;
+
     const deg = Math.atan2(dy, dx) * 180 / Math.PI; // 0=horizontal, 90=vertical
     if (deg > ANGLE_TOL && deg < 90 - ANGLE_TOL) continue; // diagonal — skip
+
+    // Reject lines that span most of the page — structural grids, plan borders, title block borders
+    const isHoriz = dx >= dy;
+    const spanRatio = isHoriz ? dx / pageW : dy / pageH;
+    if (spanRatio > 0.72) continue;
+
     filtered.push(seg);
   }
 
@@ -282,22 +292,22 @@ async function detectPixelFallback(
   const marginX = Math.round(w * 0.04);
   const marginYTop = Math.round(h * 0.04);
   const marginYBot = Math.round(h * 0.15);
-  const scanW = w - marginX * 2;
-  const scanH = h - marginYTop - marginYBot;
+  const sW = w - marginX * 2;
+  const sH = h - marginYTop - marginYBot;
 
-  const { data } = ctx.getImageData(marginX, marginYTop, scanW, scanH);
+  const { data } = ctx.getImageData(marginX, marginYTop, sW, sH);
   const gray = toGray(data);
 
   const THR = 80;
   const minPx = Math.max(6, Math.round(1.5 * unitsPerMetre * pxPerPt));
 
-  const rawH = scanH(gray, scanW, scanH, THR, minPx);
-  const rawV = scanV(gray, scanW, scanH, THR, minPx);
+  const rawH = scanH(gray, sW, sH, THR, minPx);
+  const rawV = scanV(gray, sW, sH, THR, minPx);
   const mH = mergeColinear(rawH.map(s => normalise(s, true)), true, 10, 2);
   const mV = mergeColinear(rawV.map(s => normalise(s, false)), false, 10, 2);
   const all = [
-    ...mH.filter(s => thickness(gray, scanW, scanH, s, THR) >= 2),
-    ...mV.filter(s => thickness(gray, scanW, scanH, s, THR) >= 2),
+    ...mH.filter(s => thickness(gray, sW, sH, s, THR) >= 2),
+    ...mV.filter(s => thickness(gray, sW, sH, s, THR) >= 2),
   ];
 
   const rawCount = all.length;
@@ -305,6 +315,7 @@ async function detectPixelFallback(
 
   const classes = classifyByPerimeter(all);
   const walls: DetectedWall[] = all.map((seg, i) => {
+    // seg coords are in the cropped (marginX, marginYTop) image — add margins back before converting to world
     const wx1 = (seg.x1 + marginX) / pxPerPt;
     const wy1 = (seg.y1 + marginYTop) / pxPerPt;
     const wx2 = (seg.x2 + marginX) / pxPerPt;
