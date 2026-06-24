@@ -110,6 +110,7 @@ export interface Measurement {
   wallThickness?: number;      // mm — set by wall-line tool
   wallClassification?: 'external' | 'internal';  // framing classification
   hasRakingPlate?: boolean;                      // wall carries a raking (angled) top plate at roof pitch
+  frameSectionId?: string;                       // Frame Estimator section this wall belongs to
   wallHatchType?: WallHatchType; // fill pattern for wall-line / arc-wall
   wallHatchSide?: WallHatchSide; // which face(s) to draw face-lining hatches on
   arcControlPoint?: WorldPoint; // control point for arc-wall tool (passes through this point)

@@ -80,6 +80,7 @@ export const PDFTakeoff = ({ projectId, estimateId, onAddCostItems }: PDFTakeoff
   const [upgradeModal, setUpgradeModal] = useState<{ open: boolean; feature: string }>({ open: false, feature: '' });
   const [modMode, setModMode] = useState<'wall' | 'door' | 'window' | 'custom' | null>(null);
   const [wallClassification, setWallClassification] = useState<'external' | 'internal'>('internal');
+  const [activeFrameSectionId, setActiveFrameSectionId] = useState<string | null>(null);
   const [wallThicknessMm, setWallThicknessMm] = useState(90);
   const [wallHatchType, setWallHatchType] = useState<string>('none');
   const [wallHatchSide, setWallHatchSide] = useState<string>('both');
@@ -351,6 +352,7 @@ export const PDFTakeoff = ({ projectId, estimateId, onAddCostItems }: PDFTakeoff
     // Stamp classification on wall-line measurements (wallThickness indicates wall-line tool)
     if (m.wallThickness !== undefined) {
       m = { ...m, wallClassification };
+      if (activeFrameSectionId) m = { ...m, frameSectionId: activeFrameSectionId };
     }
     if (modMode === 'wall') {
       m = { ...m, color: '#f59e0b', measurementType: 'Wall', label: '' };
@@ -361,7 +363,7 @@ export const PDFTakeoff = ({ projectId, estimateId, onAddCostItems }: PDFTakeoff
     }
 
     dispatch({ type: 'ADD_MEASUREMENT', payload: m });
-  }, [dispatch, isVerifyMode, modMode, state.pdfFile?.planId, doorSubtype, windowSubtype]);
+  }, [dispatch, isVerifyMode, modMode, state.pdfFile?.planId, doorSubtype, windowSubtype, wallClassification, activeFrameSectionId]);
 
   const handleDeleteLastMeasurement = useCallback(() => {
     const measurements = state.measurements;
@@ -1521,6 +1523,12 @@ export const PDFTakeoff = ({ projectId, estimateId, onAddCostItems }: PDFTakeoff
                   isCalibrated={state.isCalibrated}
                   unitsPerMetre={state.currentScale?.unitsPerMetre ?? null}
                   onAddCostItems={(items) => items.forEach(item => dispatch({ type: 'ADD_COST_ITEM', payload: item }))}
+                  pdfUrl={state.pdfFile?.url ?? undefined}
+                  pageIndex={state.currentPageIndex}
+                  projectId={projectId}
+                  onWallDetected={(m) => dispatch({ type: 'ADD_MEASUREMENT', payload: { ...m, planId: state.pdfFile?.planId } })}
+                  onActiveSectionChange={(sectionId) => setActiveFrameSectionId(sectionId)}
+                  onUpdateMeasurement={(id, updates) => dispatch({ type: 'UPDATE_MEASUREMENT', payload: { id, updates } })}
                 />
 
                 <Card className="p-4">
