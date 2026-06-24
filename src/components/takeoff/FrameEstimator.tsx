@@ -37,27 +37,30 @@ interface FrameEstimatorProps {
   onUpdateMeasurement?: (id: string, updates: Partial<Measurement>) => void;
 }
 
-// ─── Pill toggle ──────────────────────────────────────────────────────────────
+// ─── Inline option row (replaces pill toggle) ─────────────────────────────────
 
-function PillToggle<T extends string>({
-  options, value, onChange,
-}: { options: { label: string; value: T }[]; value: T; onChange: (v: T) => void }) {
+function OptionRow<T extends string>({
+  label, options, value, onChange,
+}: { label: string; options: { label: string; value: T }[]; value: T; onChange: (v: T) => void }) {
   return (
-    <div className="flex rounded-md border border-border/50 overflow-hidden">
-      {options.map(opt => (
-        <button
-          key={opt.value}
-          onClick={() => onChange(opt.value)}
-          className={cn(
-            'flex-1 text-[11px] py-1 font-medium transition-colors',
-            value === opt.value
-              ? 'bg-primary text-primary-foreground'
-              : 'text-muted-foreground hover:text-foreground hover:bg-muted/50',
-          )}
-        >
-          {opt.label}
-        </button>
-      ))}
+    <div className="flex items-baseline gap-2 py-0.5">
+      <span className="text-[10px] text-muted-foreground/40 w-14 shrink-0 text-right">{label}</span>
+      <div className="flex gap-2.5 flex-wrap">
+        {options.map(opt => (
+          <button
+            key={opt.value}
+            onClick={() => onChange(opt.value)}
+            className={cn(
+              'text-[11px] transition-colors leading-none',
+              value === opt.value
+                ? 'text-foreground font-medium'
+                : 'text-muted-foreground/40 hover:text-muted-foreground',
+            )}
+          >
+            {opt.label}
+          </button>
+        ))}
+      </div>
     </div>
   );
 }
@@ -81,56 +84,41 @@ function BOMRow({ label, value, unit, sub }: { label: string; value: string | nu
 function SectionSettings({ settings, onChange }: { settings: FrameSettings; onChange: (s: FrameSettings) => void }) {
   const set = (patch: Partial<FrameSettings>) => onChange({ ...settings, ...patch });
   return (
-    <div className="space-y-2.5 pt-1 pb-1">
-      <div>
-        <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-widest mb-1">Material</p>
-        <PillToggle
-          options={[{ label: 'Timber', value: 'timber' }, { label: 'Steel', value: 'steel' }]}
-          value={settings.material}
-          onChange={(v) => set({ material: v as FrameMaterial })}
-        />
-      </div>
-      <div>
-        <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-widest mb-1">Stud Spacing</p>
-        <PillToggle
-          options={[{ label: '300mm', value: '300' }, { label: '450mm', value: '450' }, { label: '600mm', value: '600' }]}
-          value={String(settings.studSpacingMm)}
-          onChange={(v) => set({ studSpacingMm: Number(v) as StudSpacing })}
-        />
-      </div>
-      <div>
-        <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-widest mb-1">Ceiling Height</p>
-        <PillToggle
-          options={[{ label: '2400', value: '2400' }, { label: '2440', value: '2440' }, { label: '2700', value: '2700' }, { label: '3000', value: '3000' }]}
-          value={String(settings.ceilingHeightMm)}
-          onChange={(v) => set({ ceilingHeightMm: Number(v) as CeilingHeight })}
-        />
-      </div>
-      <div>
-        <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-widest mb-1">
-          {settings.material === 'timber' ? 'Timber Size' : 'Steel Size'}
-        </p>
-        <PillToggle
-          options={settings.material === 'timber'
-            ? [{ label: '70×35', value: '70x35' }, { label: '90×35', value: '90x35' }, { label: '90×45', value: '90x45' }, { label: '140×45', value: '140x45' }]
-            : [{ label: '64mm', value: '64mm' }, { label: '76mm', value: '76mm' }, { label: '92mm', value: '92mm' }]}
-          value={settings.material === 'timber' ? settings.timberSize : settings.steelSize}
-          onChange={(v) => settings.material === 'timber'
-            ? set({ timberSize: v as TimberSize })
-            : set({ steelSize: v as SteelSize })}
-        />
-      </div>
-      <div className="flex items-center gap-2 pt-0.5">
+    <div className="pl-1 space-y-0.5 py-1">
+      <OptionRow
+        label="material"
+        options={[{ label: 'Timber', value: 'timber' }, { label: 'Steel', value: 'steel' }]}
+        value={settings.material}
+        onChange={(v) => set({ material: v as FrameMaterial })}
+      />
+      <OptionRow
+        label="spacing"
+        options={[{ label: '300', value: '300' }, { label: '450', value: '450' }, { label: '600mm', value: '600' }]}
+        value={String(settings.studSpacingMm)}
+        onChange={(v) => set({ studSpacingMm: Number(v) as StudSpacing })}
+      />
+      <OptionRow
+        label="height"
+        options={[{ label: '2400', value: '2400' }, { label: '2440', value: '2440' }, { label: '2700', value: '2700' }, { label: '3000', value: '3000' }]}
+        value={String(settings.ceilingHeightMm)}
+        onChange={(v) => set({ ceilingHeightMm: Number(v) as CeilingHeight })}
+      />
+      <OptionRow
+        label={settings.material === 'timber' ? 'size' : 'section'}
+        options={settings.material === 'timber'
+          ? [{ label: '70×35', value: '70x35' }, { label: '90×35', value: '90x35' }, { label: '90×45', value: '90x45' }, { label: '140×45', value: '140x45' }]
+          : [{ label: '64mm', value: '64mm' }, { label: '76mm', value: '76mm' }, { label: '92mm', value: '92mm' }]}
+        value={settings.material === 'timber' ? settings.timberSize : settings.steelSize}
+        onChange={(v) => settings.material === 'timber' ? set({ timberSize: v as TimberSize }) : set({ steelSize: v as SteelSize })}
+      />
+      <div className="flex items-center gap-2 pt-1 pl-16">
         <Switch
           checked={settings.doubleTopPlate}
           onCheckedChange={(v) => set({ doubleTopPlate: v })}
           className="scale-75 origin-left"
         />
-        <span className="text-xs text-muted-foreground">
-          Double top plate{' '}
-          {settings.doubleTopPlate
-            ? <span className="text-amber-400">(on)</span>
-            : <span className="text-muted-foreground/60">(off)</span>}
+        <span className="text-[11px] text-muted-foreground/60">
+          double top plate
         </span>
       </div>
     </div>
@@ -267,7 +255,8 @@ export function FrameEstimator({
     try {
       const result: DetectionResult = await detectWallsFromPDF(pdfUrl, pageIndex, unitsPerMetre);
       if (result.tooMany) {
-        setScanWarning(`Too many lines found (${result.rawCount}). This looks like a site or landscape plan — switch to a floor plan page, or use Manual mode.`);
+        const via = result.method === 'vector' ? 'vector paths' : 'pixel scan';
+        setScanWarning(`Too many lines detected via ${via} (${result.rawCount}). This page may be a site or landscape plan — switch to a floor plan page or use Manual mode.`);
         setPendingWalls([]);
       } else if (result.walls.length === 0) {
         setScanWarning('No walls detected. Try a floor plan page (1:100–1:200 scale) or use Manual mode.');
@@ -751,8 +740,8 @@ export function FrameEstimator({
                         <div className="space-y-2 pt-0.5">
                           {bom.external.count > 0 && (
                             <div>
-                              <div className="text-[10px] font-semibold uppercase tracking-widest text-amber-400 mb-1">
-                                External — {bom.external.lengthM.toFixed(2)} LM
+                              <div className="text-[10px] text-muted-foreground/50 mb-1">
+                                ext walls — {bom.external.lengthM.toFixed(2)} LM
                               </div>
                               <div className="border border-border/30 rounded divide-y divide-border/20 overflow-hidden">
                                 <BOMRow label="Studs" value={bom.external.studs} unit="pcs" />
@@ -768,8 +757,8 @@ export function FrameEstimator({
 
                           {bom.internal.count > 0 && (
                             <div>
-                              <div className="text-[10px] font-semibold uppercase tracking-widest text-sky-400 mb-1">
-                                Internal — {bom.internal.lengthM.toFixed(2)} LM
+                              <div className="text-[10px] text-muted-foreground/50 mb-1">
+                                int walls — {bom.internal.lengthM.toFixed(2)} LM
                               </div>
                               <div className="border border-border/30 rounded divide-y divide-border/20 overflow-hidden">
                                 <BOMRow label="Studs" value={bom.internal.studs} unit="pcs" />
