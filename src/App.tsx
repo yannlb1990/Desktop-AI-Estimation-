@@ -47,6 +47,7 @@ import SetupPassword from "./pages/SetupPassword";
 import ResetPassword from "./pages/ResetPassword";
 import NotFound from "./pages/NotFound";
 import AdminRates from "./pages/AdminRates";
+import QuoteApproval from "./pages/QuoteApproval";
 import PrivacyPolicy from "./pages/PrivacyPolicy";
 import TermsOfService from "./pages/TermsOfService";
 import About from "./pages/About";
@@ -124,6 +125,7 @@ const App = () => {
             <Route path="/settings" element={<ProtectedRoute syncReady={syncReady}><Settings /></ProtectedRoute>} />
             <Route path="/materials" element={<ProtectedRoute syncReady={syncReady}><MaterialsLibrary /></ProtectedRoute>} />
             <Route path="/admin/rates" element={<ProtectedRoute syncReady={syncReady}><AdminRates /></ProtectedRoute>} />
+            <Route path="/quote/:token" element={<QuoteApproval />} />
             {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
             <Route path="*" element={<NotFound />} />
           </Routes>

@@ -9,7 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { Calculator, DollarSign, Plus, Trash2, FileDown, Percent, Clock, ExternalLink, ChevronDown, ChevronRight, Wrench, CheckCircle2, Package, Link2, Unlink, Combine, BookmarkPlus, BookOpen, RotateCcw } from 'lucide-react';
+import { Calculator, DollarSign, Plus, Trash2, FileDown, Percent, Clock, ExternalLink, ChevronDown, ChevronRight, Wrench, CheckCircle2, Package, Link2, Unlink, Combine, BookmarkPlus, BookOpen, RotateCcw, Mail } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { getUserStorageKey } from '@/lib/localAuth';
 import { Measurement, CostItem, MeasurementArea, TRADE_OPTIONS, RelatedMaterial, ConsumableItem } from '@/lib/takeoff/types';
@@ -21,6 +21,7 @@ import { getEffectiveQuantity } from '@/lib/takeoff/calculations';
 import { RATE_TRADE_TO_OPTION } from '@/lib/takeoff/profile';
 import { toast } from 'sonner';
 import { MaterialPickerDialog } from './MaterialPickerDialog';
+import { SupplierQuoteDialog } from '@/components/SupplierQuoteDialog';
 import { RecipePickerDialog } from '@/components/recipes/RecipePickerDialog';
 import { MaterialEntry } from '@/lib/materials/types';
 import { useSubscription } from '@/hooks/useSubscription';
@@ -415,6 +416,7 @@ export const CostEstimator = ({
   const [transferredIds, setTransferredIds] = useState<Set<string>>(() => getTransferred(projectId));
   const [recentlyTransferredIds, setRecentlyTransferredIds] = useState<Set<string>>(new Set());
   const [selectedCostIds, setSelectedCostIds] = useState<Set<string>>(new Set());
+  const [quoteDialogItems, setQuoteDialogItems] = useState<CostItem[] | null>(null);
   // Inline custom material form state: itemId → form fields
   const [pendingCustomMaterial, setPendingCustomMaterial] = useState<Record<string, { name: string; qty: string; unit: string; cost: string }>>({});
 
@@ -1020,6 +1022,21 @@ export const CostEstimator = ({
             <FileDown className="h-4 w-4 mr-1" />
             BOQ
           </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            disabled={costItems.length === 0}
+            onClick={() => {
+              const toQuote = selectedCostIds.size > 0
+                ? costItems.filter(i => selectedCostIds.has(i.id))
+                : costItems;
+              setQuoteDialogItems(toQuote);
+            }}
+            title="Request a supplier quote for selected items (or all items)"
+          >
+            <Mail className="h-4 w-4 mr-1" />
+            Quote Supplier
+          </Button>
           {costItems.length > 0 && (
             <Button
               size="sm"
@@ -1074,6 +1091,12 @@ export const CostEstimator = ({
         open={showLibraryPicker}
         onOpenChange={setShowLibraryPicker}
         onSelect={handleAddFromLibrary}
+      />
+
+      <SupplierQuoteDialog
+        open={quoteDialogItems !== null}
+        onClose={() => setQuoteDialogItems(null)}
+        items={quoteDialogItems ?? []}
       />
 
       <RecipePickerDialog

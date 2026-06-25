@@ -30,7 +30,7 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "sonner";
-import { ArrowLeft, FileText, DollarSign, Ruler, Loader2, Settings, Calculator, TrendingUp, ShieldCheck, MapPin, User, Calendar as CalendarIcon, Clock, Bell, Package, ChevronDown, ChevronUp, ChevronLeft, ChevronRight, Users, FolderOpen, Sofa, BookOpen, BarChart2, GitBranch, PlusCircle, Check, Monitor } from "lucide-react";
+import { ArrowLeft, FileText, DollarSign, Ruler, Loader2, Settings, Calculator, TrendingUp, ShieldCheck, MapPin, User, Calendar as CalendarIcon, Clock, Bell, Package, ChevronDown, ChevronUp, ChevronLeft, ChevronRight, Users, FolderOpen, Sofa, BookOpen, BarChart2, GitBranch, PlusCircle, Check, Monitor, Share2, ClipboardList } from "lucide-react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { SubcontractorComparison } from "@/components/SubcontractorComparison";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
@@ -53,6 +53,7 @@ import { FFEModule } from "@/components/ffe/FFEModule";
 import GanttSchedule from "@/components/GanttSchedule";
 import JobCostTracker from "@/components/JobCostTracker";
 import VariationsLog from "@/components/VariationsLog";
+import { ProgressClaimGenerator } from "@/components/ProgressClaimGenerator";
 import { syncProjectToSupabase } from "@/lib/db/projects";
 import { TourTip } from "@/components/TourTip";
 
@@ -105,6 +106,43 @@ const ProjectDetail = () => {
     a.click();
     URL.revokeObjectURL(url);
     toast.success("Exported as CSV. Open in Excel or Google Sheets.");
+  };
+
+  const handleShareQuote = () => {
+    if (!project) return;
+    const token = btoa(project.id + ':' + Date.now()).replace(/[^a-zA-Z0-9]/g, '').slice(0, 24);
+    const items = estimate?.estimate_items || [];
+    const grandTotal = items.reduce((sum: number, i: any) => sum + (i.total_price ?? i.subtotal ?? i.total ?? 0), 0);
+    const now = new Date();
+    const expires = new Date(now);
+    expires.setDate(expires.getDate() + 30);
+    const payload = {
+      token,
+      projectId: project.id,
+      projectName: project.name,
+      clientName: project.client_name || '',
+      siteAddress: project.site_address || project.address || '',
+      grandTotal,
+      estimateItems: items.map((i: any) => ({
+        id: i.id,
+        category: i.category || i.trade || 'General',
+        name: i.description || i.name || '',
+        quantity: i.quantity ?? 1,
+        unit: i.unit || 'Item',
+        unitCost: i.unit_price ?? i.unitCost ?? 0,
+        total: i.total_price ?? i.subtotal ?? i.total ?? 0,
+      })),
+      generatedAt: now.toISOString(),
+      expiresAt: expires.toISOString(),
+      status: 'pending',
+    };
+    localStorage.setItem(`quote_share_${token}`, JSON.stringify(payload));
+    const url = `${window.location.origin}/quote/${token}`;
+    navigator.clipboard.writeText(url).then(() => {
+      toast.success('Link copied — valid for 30 days', { description: url });
+    }).catch(() => {
+      toast.info('Share link generated', { description: url });
+    });
   };
 
   useEffect(() => {
@@ -353,6 +391,15 @@ const ProjectDetail = () => {
                     </SelectContent>
                   </Select>
                 </TourTip>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="h-7 px-2.5 text-xs border rounded-full border-border bg-muted text-muted-foreground hover:text-foreground"
+                  onClick={handleShareQuote}
+                >
+                  <Share2 className="h-3 w-3 mr-1.5" />
+                  Share Quote
+                </Button>
               <div className="text-muted-foreground space-y-1.5 mt-1">
                 {project.site_address && (
                   <div className="flex items-center gap-2 min-w-0">
@@ -504,7 +551,8 @@ const ProjectDetail = () => {
               { key: "documents",  label: "Docs",       icon: FolderOpen,   tour: "Store all project documents in one place: contracts, variations, site photos, council approvals and correspondence." },
               { key: "schedule",   label: "Schedule",   icon: CalendarIcon, tour: "Auto-generate a Gantt chart from your estimate trades. Adjust durations and dependencies, then print or export." },
               { key: "jobcost",    label: "Job Cost",   icon: BarChart2,    tour: "Track actual costs against your estimate in real time. Log invoices and expenses by trade to see your live margin." },
-              { key: "variations", label: "Variations", icon: GitBranch,    tour: "Manage change orders with a full approval workflow. Draft, send for approval, track accepted variations and update your contract sum." },
+              { key: "variations",     label: "Variations",   icon: GitBranch,     tour: "Manage change orders with a full approval workflow. Draft, send for approval, track accepted variations and update your contract sum." },
+              { key: "progressclaim", label: "Progress Claim", icon: ClipboardList, tour: "Generate SOPA-compliant progress claims with a full breakdown by stage, retention, and GST. Download as a professional PDF." },
             ].map((tool) => {
               const Icon = tool.icon;
               const isActive = activeMainTab === tool.key;
@@ -555,6 +603,7 @@ const ProjectDetail = () => {
             <TabsTrigger value="schedule" />
             <TabsTrigger value="jobcost" />
             <TabsTrigger value="variations" />
+            <TabsTrigger value="progressclaim" />
             {project.plan_file_url && <TabsTrigger value="plans" />}
           </TabsList>
 
@@ -751,6 +800,16 @@ const ProjectDetail = () => {
 
           <TabsContent value="variations">
             <VariationsLog projectId={projectId!} projectName={project?.name ?? ""} clientEmail={project?.client_email} />
+          </TabsContent>
+
+          <TabsContent value="progressclaim">
+            <ProgressClaimGenerator
+              projectName={project?.name ?? ""}
+              siteAddress={project?.site_address ?? ""}
+              clientName={project?.client_name ?? ""}
+              state={project?.state ?? "NSW"}
+              contractSum={project?.grand_total ?? 0}
+            />
           </TabsContent>
         </Tabs>
       </div>
