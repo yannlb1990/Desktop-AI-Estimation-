@@ -24,9 +24,10 @@ import { exportMeasurementsToJSON } from '@/lib/takeoff/export';
 import { ledgerToCsv } from '@/lib/takeoff/ledger';
 import { shortcutToTool, shouldHandleShortcut } from '@/lib/takeoff/shortcuts';
 import { TAKEOFF_UNITS, UNIT_GROUPS } from '@/lib/takeoff/units';
-import { generateTakeoffPdf } from '@/lib/takeoff/pdfReport';
+import { generateTakeoffPdf, generateAnnotatedTakeoffPdf } from '@/lib/takeoff/pdfReport';
 import { GroupLegend } from './GroupLegend';
 import { MaterialExtractorPanel } from './MaterialExtractorPanel';
+import { AIPlanAnalysisPanel } from './AIPlanAnalysisPanel';
 import { PlanIntelligencePanel } from './PlanIntelligencePanel';
 import { SOWGeneratorDialog } from './SOWGeneratorDialog';
 import { ProfileConfigDialog } from './ProfileConfigDialog';
@@ -1554,6 +1555,25 @@ export const PDFTakeoff = ({ projectId, estimateId, onAddCostItems }: PDFTakeoff
                       <Download className="h-4 w-4 mr-2" />
                       PDF
                     </Button>
+                    <Button
+                      variant="outline"
+                      className="flex-1"
+                      size="sm"
+                      onClick={() => {
+                        if (!sub.caps.takeoffPdfReport) { setUpgradeModal({ open: true, feature: 'Annotated PDF Export' }); return; }
+                        const dataUrl = canvasRef.current?.toDataURL('image/png') ?? '';
+                        generateAnnotatedTakeoffPdf({
+                          projectName: state.pdfFile?.name?.replace(/\.pdf$/i, '') || 'Takeoff',
+                          planName: state.pdfFile?.name,
+                          measurements: filteredMeasurements,
+                          canvasDataUrl: dataUrl,
+                        });
+                      }}
+                      disabled={!filteredMeasurements.length}
+                    >
+                      <Download className="h-4 w-4 mr-2" />
+                      Annotated
+                    </Button>
                   </div>
 
                   <GroupLegend measurements={filteredMeasurements} />
@@ -1585,6 +1605,14 @@ export const PDFTakeoff = ({ projectId, estimateId, onAddCostItems }: PDFTakeoff
                   onWallDetected={(m) => dispatch({ type: 'ADD_MEASUREMENT', payload: { ...m, planId: state.pdfFile?.planId } })}
                   onActiveSectionChange={(sectionId) => setActiveFrameSectionId(sectionId)}
                   onUpdateMeasurement={(id, updates) => dispatch({ type: 'UPDATE_MEASUREMENT', payload: { id, updates } })}
+                />
+
+                {/* AI Plan Analyser */}
+                <AIPlanAnalysisPanel
+                  canvasElementRef={canvasRef}
+                  projectState="QLD"
+                  isCalibrated={state.isCalibrated}
+                  onAddCostItems={(items) => items.forEach(item => dispatch({ type: 'ADD_COST_ITEM', payload: item as any }))}
                 />
 
                 <Card className="p-4">
