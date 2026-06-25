@@ -312,6 +312,15 @@ export function FrameEstimator({
   const [rejectedIds, setRejectedIds] = useState<Set<string>>(new Set());
   const [scanWarning, setScanWarning] = useState<string | null>(null);
 
+  // Roof truss BOM state
+  const [roofOpen, setRoofOpen] = useState(false);
+  const [roofAreaM2, setRoofAreaM2] = useState('');
+  const [roofPitchDeg, setRoofPitchDeg] = useState('22.5');
+  const [roofSpacingMm, setRoofSpacingMm] = useState('600');
+  const [roofType, setRoofType] = useState<'gable' | 'hip'>('gable');
+  const [roofRidgeLengthM, setRoofRidgeLengthM] = useState('');
+  const [roofHipLengthM, setRoofHipLengthM] = useState('');
+
   // Persist sections
   useEffect(() => {
     if (!storageKey) return;
@@ -355,6 +364,40 @@ export function FrameEstimator({
     [...wallsBySection.values()].reduce((s, w) => s + w.length, 0),
     [wallsBySection],
   );
+
+  // Roof truss BOM derived values
+  const roofBOM = useMemo(() => {
+    const area = parseFloat(roofAreaM2);
+    const pitch = parseFloat(roofPitchDeg);
+    const spacing = parseFloat(roofSpacingMm);
+    if (isNaN(area) || area <= 0 || isNaN(pitch) || pitch <= 0 || isNaN(spacing) || spacing <= 0) return null;
+
+    const pitchRad = (pitch * Math.PI) / 180;
+    const slopeFactor = 1 / Math.cos(pitchRad); // horizontal → rafter length
+    const spacingM = spacing / 1000;
+
+    // Truss count: roof span / spacing, +1 for end truss
+    // We can't know span without width input; approximate from area / ridge length
+    const ridgeLen = parseFloat(roofRidgeLengthM);
+    const ridgeLM = isNaN(ridgeLen) || ridgeLen <= 0 ? 0 : ridgeLen;
+
+    // Truss count from area + assumed spacing grid
+    const trussCount = ridgeLM > 0
+      ? Math.ceil(ridgeLM / spacingM) + 1
+      : Math.ceil(Math.sqrt(area) / spacingM) + 1; // fallback estimate
+
+    // Rafter / truss timber: 2 rafters per truss × slope factor × half-span
+    // We compute rafter LM as: area × slopeFactor (total raked roof area → total rafter run)
+    const rafterLM = area * slopeFactor;
+
+    // Hip rafter length
+    const hipLen = parseFloat(roofHipLengthM);
+    const hipRafterLM = roofType === 'hip' && !isNaN(hipLen) && hipLen > 0
+      ? hipLen * slopeFactor * 4 // 4 hips
+      : 0;
+
+    return { trussCount, rafterLM: Math.round(rafterLM * 10) / 10, ridgeLM, hipRafterLM: Math.round(hipRafterLM * 10) / 10 };
+  }, [roofAreaM2, roofPitchDeg, roofSpacingMm, roofType, roofRidgeLengthM, roofHipLengthM]);
 
   // ─── Section operations ────────────────────────────────────────────────────
 
@@ -502,6 +545,27 @@ export function FrameEstimator({
     onAddCostItems(items);
     toast.success(`${items.length} items from ${sec.name} → Cost Estimator`);
   }, [sections, bomBySection, onAddCostItems]);
+
+  const pushRoofBOM = useCallback(() => {
+    if (!onAddCostItems || !roofBOM) return;
+    const items: CostItem[] = [];
+    const makeRoofItem = (name: string, qty: number, unit: 'count' | 'LM'): CostItem => ({
+      id: crypto.randomUUID(),
+      category: 'Framing',
+      name: `[Roof Truss] ${name}`,
+      description: `Roof truss BOM — ${roofType} roof, ${roofPitchDeg}° pitch, ${roofSpacingMm}mm spacing`,
+      unit,
+      unitCost: 0,
+      quantity: qty,
+      linkedMeasurements: [],
+    });
+    items.push(makeRoofItem('Trusses', roofBOM.trussCount, 'count'));
+    if (roofBOM.rafterLM > 0) items.push(makeRoofItem('Rafter timber', roofBOM.rafterLM, 'LM'));
+    if (roofBOM.ridgeLM > 0) items.push(makeRoofItem('Ridge beam', roofBOM.ridgeLM, 'LM'));
+    if (roofBOM.hipRafterLM > 0) items.push(makeRoofItem('Hip rafters', roofBOM.hipRafterLM, 'LM'));
+    onAddCostItems(items);
+    toast.success(`${items.length} roof truss items → Cost Estimator`);
+  }, [roofBOM, onAddCostItems, roofType, roofPitchDeg, roofSpacingMm]);
 
   // ─── Render ───────────────────────────────────────────────────────────────
 
@@ -988,6 +1052,131 @@ export function FrameEstimator({
               <Plus className="h-3 w-3" />
               Add zone (different material or area)
             </button>
+          </div>
+
+          {/* ── Roof Truss BOM ─────────────────────────────────────────────── */}
+          <div className="border-t border-border/30">
+            <button
+              onClick={() => setRoofOpen(p => !p)}
+              className="w-full flex items-center gap-2 px-3 py-2.5 hover:bg-muted/30 transition-colors text-left group"
+            >
+              {roofOpen ? <ChevronDown className="h-3 w-3 text-muted-foreground/60" /> : <ChevronRight className="h-3 w-3 text-muted-foreground/60" />}
+              <span className="text-xs font-medium text-muted-foreground">Roof Truss BOM</span>
+              {roofBOM && (
+                <span className="ml-auto text-[10px] font-mono text-amber-400/80">{roofBOM.trussCount} trusses</span>
+              )}
+            </button>
+
+            {roofOpen && (
+              <div className="px-3 pb-3 space-y-3">
+                {/* Type selector */}
+                <OptionRow
+                  label="type"
+                  options={[{ label: 'Gable', value: 'gable' as const }, { label: 'Hip', value: 'hip' as const }]}
+                  value={roofType}
+                  onChange={setRoofType}
+                />
+
+                {/* Pitch */}
+                <OptionRow
+                  label="pitch"
+                  options={[
+                    { label: '15°', value: '15' },
+                    { label: '22.5°', value: '22.5' },
+                    { label: '25°', value: '25' },
+                    { label: '30°', value: '30' },
+                    { label: '35°', value: '35' },
+                  ]}
+                  value={roofPitchDeg}
+                  onChange={setRoofPitchDeg}
+                />
+
+                {/* Spacing */}
+                <OptionRow
+                  label="spacing"
+                  options={[
+                    { label: '450mm', value: '450' },
+                    { label: '600mm', value: '600' },
+                    { label: '900mm', value: '900' },
+                    { label: '1200mm', value: '1200' },
+                  ]}
+                  value={roofSpacingMm}
+                  onChange={setRoofSpacingMm}
+                />
+
+                {/* Inputs */}
+                <div className="space-y-1.5">
+                  <div className="flex items-center gap-2">
+                    <span className="text-[10px] text-muted-foreground/40 w-14 shrink-0 text-right">area m²</span>
+                    <Input
+                      type="number"
+                      placeholder="e.g. 120"
+                      value={roofAreaM2}
+                      onChange={e => setRoofAreaM2(e.target.value)}
+                      className="h-6 text-xs px-2 flex-1"
+                      min="0"
+                    />
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-[10px] text-muted-foreground/40 w-14 shrink-0 text-right">ridge LM</span>
+                    <Input
+                      type="number"
+                      placeholder="ridge length m"
+                      value={roofRidgeLengthM}
+                      onChange={e => setRoofRidgeLengthM(e.target.value)}
+                      className="h-6 text-xs px-2 flex-1"
+                      min="0"
+                    />
+                  </div>
+                  {roofType === 'hip' && (
+                    <div className="flex items-center gap-2">
+                      <span className="text-[10px] text-muted-foreground/40 w-14 shrink-0 text-right">hip LM</span>
+                      <Input
+                        type="number"
+                        placeholder="hip rafter length m"
+                        value={roofHipLengthM}
+                        onChange={e => setRoofHipLengthM(e.target.value)}
+                        className="h-6 text-xs px-2 flex-1"
+                        min="0"
+                      />
+                    </div>
+                  )}
+                </div>
+
+                {/* Results */}
+                {roofBOM && (
+                  <div className="border border-border/30 rounded divide-y divide-border/20 overflow-hidden">
+                    <div className="flex items-center justify-between px-2 py-1.5 text-sm font-semibold">
+                      <span>Trusses</span>
+                      <span className="font-mono text-amber-400">{roofBOM.trussCount} pcs</span>
+                    </div>
+                    {roofBOM.rafterLM > 0 && (
+                      <BOMRow label="Rafter timber" value={roofBOM.rafterLM} unit="LM" />
+                    )}
+                    {roofBOM.ridgeLM > 0 && (
+                      <BOMRow label="Ridge beam" value={roofBOM.ridgeLM} unit="LM" />
+                    )}
+                    {roofBOM.hipRafterLM > 0 && (
+                      <BOMRow label="Hip rafters ×4" value={roofBOM.hipRafterLM} unit="LM" />
+                    )}
+                    <div className="px-2 py-1 text-[10px] text-muted-foreground/40 italic">
+                      {roofPitchDeg}° pitch · {roofSpacingMm}mm spacing · slope ×{(1 / Math.cos(parseFloat(roofPitchDeg) * Math.PI / 180)).toFixed(3)}
+                    </div>
+                  </div>
+                )}
+
+                {roofBOM && onAddCostItems && (
+                  <Button
+                    variant="outline"
+                    className="w-full h-7 text-xs gap-1.5"
+                    onClick={pushRoofBOM}
+                  >
+                    <SendToBack className="h-3 w-3" />
+                    Push Roof Truss BOM to Cost Estimator
+                  </Button>
+                )}
+              </div>
+            )}
           </div>
         </div>
       )}

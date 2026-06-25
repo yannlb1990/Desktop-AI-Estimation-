@@ -511,16 +511,13 @@ export const PDFTakeoff = ({ projectId, estimateId, onAddCostItems }: PDFTakeoff
     setMeasurementPopup(null);
   }, [state.activeTool]);
 
-  // Auto-dismiss the "Draw a line…" calibration instruction after 5 s.
-  // Phase (b) — the distance input — is never auto-dismissed.
+  // Always show calibration popover — never auto-dismiss
   useEffect(() => {
-    if (state.calibrationMode === 'manual' && !manualCalibrationPoints) {
+    if (calibInstructTimerRef.current) clearTimeout(calibInstructTimerRef.current);
+    if (state.calibrationMode === 'manual') {
       setCalibInstructVisible(true);
-      if (calibInstructTimerRef.current) clearTimeout(calibInstructTimerRef.current);
-      calibInstructTimerRef.current = setTimeout(() => setCalibInstructVisible(false), 5000);
     } else {
-      if (calibInstructTimerRef.current) clearTimeout(calibInstructTimerRef.current);
-      setCalibInstructVisible(true); // always show phase (b)
+      setCalibInstructVisible(false);
     }
     return () => { if (calibInstructTimerRef.current) clearTimeout(calibInstructTimerRef.current); };
   }, [state.calibrationMode, manualCalibrationPoints]);
@@ -788,70 +785,86 @@ export const PDFTakeoff = ({ projectId, estimateId, onAddCostItems }: PDFTakeoff
     }
   }, [state.measurements, dispatch]);
 
-  // Calibration overlay — floats above the canvas during manual calibration.
-  const calibrationBar = state.calibrationMode === 'manual' ? (
-    <div className="absolute top-3 left-1/2 -translate-x-1/2 z-40 flex items-center gap-2.5
-                    bg-gray-900/95 border border-blue-500/50 rounded-lg px-4 py-2.5
-                    shadow-2xl backdrop-blur-sm text-sm select-none pointer-events-auto">
-      <Ruler className="h-4 w-4 text-blue-400 shrink-0" />
+  // Calibration popover — floats above canvas, always visible during manual calibration
+  const calibrationBar = state.calibrationMode === 'manual' && calibInstructVisible ? (
+    <div className="absolute top-3 left-1/2 -translate-x-1/2 z-40 flex flex-col gap-2
+                    bg-gray-900/97 border border-blue-500/60 rounded-xl px-4 py-3
+                    shadow-2xl backdrop-blur-sm select-none pointer-events-auto min-w-[320px]">
+      {/* Step indicator */}
+      <div className="flex items-center gap-2">
+        <Ruler className="h-3.5 w-3.5 text-blue-400 shrink-0" />
+        <span className="text-[10px] font-semibold text-blue-400 uppercase tracking-widest">
+          Calibrate Scale
+        </span>
+        <div className="flex gap-1 ml-auto">
+          <span className={`h-1.5 w-6 rounded-full transition-colors ${!manualCalibrationPoints ? 'bg-blue-500' : 'bg-blue-800'}`} />
+          <span className={`h-1.5 w-6 rounded-full transition-colors ${manualCalibrationPoints ? 'bg-blue-500' : 'bg-blue-800/40'}`} />
+        </div>
+        <button
+          onClick={handleCalibrationCancel}
+          className="h-5 w-5 flex items-center justify-center rounded text-gray-500 hover:text-gray-200 hover:bg-gray-700 transition-colors ml-1"
+          title="Cancel (Esc)"
+        >
+          <X className="h-3.5 w-3.5" />
+        </button>
+      </div>
+
       {!manualCalibrationPoints ? (
-        calibInstructVisible ? (
-          <>
-            <span className="text-gray-300">Draw a line on any known dimension</span>
-            <button
-              onClick={handleCalibrationCancel}
-              className="ml-1 h-5 w-5 flex items-center justify-center rounded text-gray-500 hover:text-gray-200 hover:bg-gray-700 transition-colors"
-              title="Cancel"
-            >
-              <X className="h-3.5 w-3.5" />
-            </button>
-          </>
-        ) : null
+        /* Step 1 — draw line */
+        <div className="flex items-start gap-2">
+          <div className="flex-shrink-0 w-5 h-5 rounded-full bg-blue-600 text-white text-[10px] font-bold flex items-center justify-center mt-0.5">1</div>
+          <div>
+            <p className="text-sm text-gray-200 leading-snug">Click two points on a known dimension</p>
+            <p className="text-[11px] text-gray-500 mt-0.5">e.g. a door width, room length, or grid line</p>
+          </div>
+        </div>
       ) : (
-        <>
-          <span className="text-gray-500 text-xs tabular-nums shrink-0">
-            {Math.hypot(
-              manualCalibrationPoints[1].x - manualCalibrationPoints[0].x,
-              manualCalibrationPoints[1].y - manualCalibrationPoints[0].y
-            ).toFixed(0)} px =
-          </span>
-          <input
-            autoFocus
-            type="number"
-            placeholder="0.0"
-            value={manualDistance}
-            onChange={e => setManualDistance(e.target.value)}
-            onKeyDown={e => { if (e.key === 'Enter') applyManualCalibration(); if (e.key === 'Escape') handleCalibrationCancel(); }}
-            className="w-20 h-7 text-sm bg-gray-800 border border-gray-600 rounded px-2 text-gray-100 focus:outline-none focus:border-blue-400"
-            min="0"
-            step="0.01"
-          />
-          <select
-            value={manualUnit}
-            onChange={e => setManualUnit(e.target.value as DistanceUnit)}
-            className="h-7 text-sm bg-gray-800 border border-gray-600 rounded px-1.5 text-gray-100 focus:outline-none focus:border-blue-400 cursor-pointer"
-          >
-            <option value="m">m</option>
-            <option value="mm">mm</option>
-            <option value="cm">cm</option>
-            <option value="ft">ft</option>
-            <option value="in">in</option>
-          </select>
-          <button
-            onClick={applyManualCalibration}
-            disabled={!manualDistance || parseFloat(manualDistance) <= 0}
-            className="px-3 h-7 bg-blue-600 hover:bg-blue-500 disabled:opacity-40 disabled:cursor-not-allowed text-white rounded text-xs font-medium transition-colors"
-          >
-            Apply
-          </button>
-          <button
-            onClick={handleCalibrationCancel}
-            className="h-5 w-5 flex items-center justify-center rounded text-gray-500 hover:text-gray-200 hover:bg-gray-700 transition-colors"
-            title="Cancel"
-          >
-            <X className="h-3.5 w-3.5" />
-          </button>
-        </>
+        /* Step 2 — enter distance */
+        <div className="flex items-start gap-2">
+          <div className="flex-shrink-0 w-5 h-5 rounded-full bg-blue-600 text-white text-[10px] font-bold flex items-center justify-center mt-0.5">2</div>
+          <div className="flex-1 space-y-2">
+            <div>
+              <p className="text-sm text-gray-200 leading-snug">Enter the real-world distance</p>
+              <p className="text-[11px] text-gray-500">
+                Drawn line: {Math.hypot(
+                  manualCalibrationPoints[1].x - manualCalibrationPoints[0].x,
+                  manualCalibrationPoints[1].y - manualCalibrationPoints[0].y
+                ).toFixed(0)} px
+              </p>
+            </div>
+            <div className="flex items-center gap-1.5">
+              <input
+                autoFocus
+                type="number"
+                placeholder="0.0"
+                value={manualDistance}
+                onChange={e => setManualDistance(e.target.value)}
+                onKeyDown={e => { if (e.key === 'Enter') applyManualCalibration(); if (e.key === 'Escape') handleCalibrationCancel(); }}
+                className="w-24 h-7 text-sm bg-gray-800 border border-gray-600 rounded px-2 text-gray-100 focus:outline-none focus:border-blue-400"
+                min="0"
+                step="0.01"
+              />
+              <select
+                value={manualUnit}
+                onChange={e => setManualUnit(e.target.value as DistanceUnit)}
+                className="h-7 text-sm bg-gray-800 border border-gray-600 rounded px-1.5 text-gray-100 focus:outline-none focus:border-blue-400 cursor-pointer"
+              >
+                <option value="m">m</option>
+                <option value="mm">mm</option>
+                <option value="cm">cm</option>
+                <option value="ft">ft</option>
+                <option value="in">in</option>
+              </select>
+              <button
+                onClick={applyManualCalibration}
+                disabled={!manualDistance || parseFloat(manualDistance) <= 0}
+                className="px-3 h-7 bg-blue-600 hover:bg-blue-500 disabled:opacity-40 disabled:cursor-not-allowed text-white rounded text-xs font-medium transition-colors"
+              >
+                Apply ↵
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   ) : null;
