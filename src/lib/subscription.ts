@@ -141,7 +141,7 @@ export interface SubscriptionStatus {
   pastDueGraceDaysLeft: number; // days remaining in grace period (0 = grace expired)
 }
 
-const ADMIN_EMAIL = 'yannlb1990@gmail.com';
+const ADMIN_EMAIL = (import.meta.env.VITE_OWNER_EMAIL as string | undefined) ?? '';
 
 export function getSubscriptionStatus(): SubscriptionStatus {
   const sub = loadSubscription();

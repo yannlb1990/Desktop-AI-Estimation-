@@ -9,7 +9,7 @@ import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
-import { Measurement, CostItem } from '@/lib/takeoff/types';
+import { Measurement, CostItem, WallOpening } from '@/lib/takeoff/types';
 import {
   FrameSettings, DEFAULT_FRAME_SETTINGS, FrameMaterial, StudSpacing,
   CeilingHeight, TimberSize, SteelSize, extractWallSegments, calculateFramingBOM,
@@ -61,6 +61,150 @@ function OptionRow<T extends string>({
           </button>
         ))}
       </div>
+    </div>
+  );
+}
+
+// ─── Wall list with opening deductions ───────────────────────────────────────
+
+function WallList({
+  walls, measurements, onUpdateMeasurement,
+}: {
+  walls: import('@/lib/takeoff/framingCalculations').WallSegment[];
+  measurements: Measurement[];
+  onUpdateMeasurement?: (id: string, updates: Partial<Measurement>) => void;
+}) {
+  const [expandedWallId, setExpandedWallId] = useState<string | null>(null);
+  const [addingTo, setAddingTo] = useState<string | null>(null);
+  const [newOpeningType, setNewOpeningType] = useState<'door' | 'window'>('door');
+  const [newOpeningWidth, setNewOpeningWidth] = useState('');
+
+  const commitOpening = (wallId: string, currentOpenings: WallOpening[]) => {
+    const w = parseInt(newOpeningWidth, 10);
+    if (isNaN(w) || w < 400 || w > 6000) { toast.error('Width must be 400–6000mm'); return; }
+    const next: WallOpening[] = [
+      ...currentOpenings,
+      { id: crypto.randomUUID(), type: newOpeningType, widthMm: w },
+    ];
+    onUpdateMeasurement?.(wallId, { wallOpenings: next });
+    setNewOpeningWidth('');
+    setAddingTo(null);
+  };
+
+  const removeOpening = (wallId: string, openingId: string, currentOpenings: WallOpening[]) => {
+    onUpdateMeasurement?.(wallId, { wallOpenings: currentOpenings.filter(o => o.id !== openingId) });
+  };
+
+  return (
+    <div className="space-y-0.5">
+      {walls.map((w, idx) => {
+        const m = measurements.find(m => m.id === w.id);
+        const openings = m?.wallOpenings ?? [];
+        const isExpanded = expandedWallId === w.id;
+        const isAdding = addingTo === w.id;
+
+        return (
+          <div key={w.id}>
+            <div className="flex items-center gap-1.5 text-xs py-0.5 group">
+              <span className="text-muted-foreground/50 w-4 text-right shrink-0 font-mono text-[10px]">
+                {String.fromCharCode(65 + idx)}
+              </span>
+              <span className="font-mono tabular-nums w-12 shrink-0">{w.lengthM.toFixed(2)}m</span>
+              <button
+                onClick={() => {
+                  if (!m || !onUpdateMeasurement) return;
+                  onUpdateMeasurement(m.id, {
+                    wallClassification: m.wallClassification === 'external' ? 'internal' : 'external',
+                  });
+                }}
+                className={cn(
+                  'text-[10px] font-medium transition-colors shrink-0',
+                  w.classification === 'external'
+                    ? 'text-amber-400/80 hover:text-amber-300'
+                    : 'text-sky-400/80 hover:text-sky-300',
+                )}
+                title="Click to toggle ext / int"
+              >
+                {w.classification === 'external' ? 'ext' : 'int'}
+              </button>
+              {w.hasRakingPlate && <span className="text-[9px] text-purple-300 font-medium">raking</span>}
+              <div className="flex-1" />
+              {openings.length > 0 && (
+                <button
+                  onClick={() => setExpandedWallId(isExpanded ? null : w.id)}
+                  className="text-[10px] text-muted-foreground/60 hover:text-foreground transition-colors"
+                >
+                  {openings.length} opening{openings.length !== 1 ? 's' : ''}
+                </button>
+              )}
+              {onUpdateMeasurement && (
+                <button
+                  onClick={() => { setAddingTo(isAdding ? null : w.id); setExpandedWallId(w.id); }}
+                  className="opacity-0 group-hover:opacity-100 transition-opacity text-[10px] text-muted-foreground/50 hover:text-foreground"
+                  title="Add door or window opening"
+                >
+                  <Plus className="h-3 w-3" />
+                </button>
+              )}
+            </div>
+
+            {/* Expanded openings list */}
+            {isExpanded && openings.length > 0 && (
+              <div className="ml-6 space-y-px mb-1">
+                {openings.map(o => (
+                  <div key={o.id} className="flex items-center gap-1.5 text-[10px] text-muted-foreground group/op">
+                    <span className={o.type === 'door' ? 'text-violet-400' : 'text-cyan-400'}>{o.type}</span>
+                    <span className="font-mono tabular-nums">{o.widthMm}mm</span>
+                    <button
+                      onClick={() => removeOpening(w.id, o.id, openings)}
+                      className="opacity-0 group-hover/op:opacity-100 transition-opacity text-muted-foreground/40 hover:text-red-400 ml-auto"
+                    >
+                      <X className="h-2.5 w-2.5" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* Inline add opening form */}
+            {isAdding && (
+              <div className="ml-6 flex items-center gap-1.5 mb-1">
+                <button
+                  onClick={() => setNewOpeningType(newOpeningType === 'door' ? 'window' : 'door')}
+                  className={cn('text-[10px] font-medium px-1.5 py-0.5 rounded border transition-colors shrink-0',
+                    newOpeningType === 'door' ? 'border-violet-600 text-violet-400' : 'border-cyan-600 text-cyan-400')}
+                >
+                  {newOpeningType}
+                </button>
+                <Input
+                  type="number"
+                  placeholder="width mm"
+                  value={newOpeningWidth}
+                  onChange={e => setNewOpeningWidth(e.target.value)}
+                  onKeyDown={e => {
+                    if (e.key === 'Enter') commitOpening(w.id, openings);
+                    if (e.key === 'Escape') { setAddingTo(null); setNewOpeningWidth(''); }
+                  }}
+                  className="h-5 text-[10px] px-1 w-20"
+                  autoFocus
+                />
+                <button
+                  onClick={() => commitOpening(w.id, openings)}
+                  className="text-[10px] text-muted-foreground/60 hover:text-foreground transition-colors"
+                >
+                  <Check className="h-3 w-3" />
+                </button>
+                <button
+                  onClick={() => { setAddingTo(null); setNewOpeningWidth(''); }}
+                  className="text-[10px] text-muted-foreground/60 hover:text-foreground transition-colors"
+                >
+                  <X className="h-3 w-3" />
+                </button>
+              </div>
+            )}
+          </div>
+        );
+      })}
     </div>
   );
 }
@@ -291,7 +435,7 @@ export function FrameEstimator({
         color: '#f59e0b',
         label: '',
         pageIndex: pageIndex ?? 0,
-        timestamp: new Date(),
+        timestamp: new Date().toISOString(),
         wallThickness: 90,
         wallClassification: w.classification,
         frameSectionId: activeSectionId,
@@ -342,6 +486,7 @@ export function FrameEstimator({
       makeItem('Top Plate', totalTopLM, 'LM'),
       ...(bom.external.rakingPlateLM > 0 ? [makeItem('Raking Plate', bom.external.rakingPlateLM, 'LM')] : []),
       makeItem('Noggings', totalNoggings, 'count'),
+      ...(bom.totalLintelLM > 0 ? [makeItem('Lintels', bom.totalLintelLM, 'LM')] : []),
     ];
 
     if (sec.settings.material === 'timber') {
@@ -688,41 +833,13 @@ export function FrameEstimator({
                         />
                       )}
 
-                      {/* Wall list */}
+                      {/* Wall list with opening deductions */}
                       {walls.length > 0 && (
-                        <div className="space-y-0.5">
-                          {walls.map((w, idx) => {
-                            const m = measurements.find(m => m.id === w.id);
-                            return (
-                              <div key={w.id} className="flex items-center gap-1.5 text-xs py-0.5">
-                                <span className="text-muted-foreground/50 w-4 text-right shrink-0 font-mono text-[10px]">
-                                  {String.fromCharCode(65 + idx)}
-                                </span>
-                                <span className="font-mono tabular-nums w-12 shrink-0">{w.lengthM.toFixed(2)}m</span>
-                                <button
-                                  onClick={() => {
-                                    if (!m || !onUpdateMeasurement) return;
-                                    onUpdateMeasurement(m.id, {
-                                      wallClassification: m.wallClassification === 'external' ? 'internal' : 'external',
-                                    });
-                                  }}
-                                  className={cn(
-                                    'text-[10px] font-medium transition-colors shrink-0',
-                                    w.classification === 'external'
-                                      ? 'text-amber-400/80 hover:text-amber-300'
-                                      : 'text-sky-400/80 hover:text-sky-300',
-                                  )}
-                                  title="Click to toggle ext / int"
-                                >
-                                  {w.classification === 'external' ? 'ext' : 'int'}
-                                </button>
-                                {w.hasRakingPlate && (
-                                  <span className="text-[9px] text-purple-300 font-medium">raking</span>
-                                )}
-                              </div>
-                            );
-                          })}
-                        </div>
+                        <WallList
+                          walls={walls}
+                          measurements={measurements}
+                          onUpdateMeasurement={onUpdateMeasurement}
+                        />
                       )}
 
                       {walls.length === 0 && (
@@ -742,15 +859,22 @@ export function FrameEstimator({
                             <div>
                               <div className="text-[10px] text-muted-foreground/50 mb-1">
                                 ext walls — {bom.external.lengthM.toFixed(2)} LM
+                                {bom.external.openingCount > 0 && (
+                                  <span className="text-violet-400/70 ml-1">· {bom.external.openingCount} opening{bom.external.openingCount !== 1 ? 's' : ''} deducted</span>
+                                )}
                               </div>
                               <div className="border border-border/30 rounded divide-y divide-border/20 overflow-hidden">
                                 <BOMRow label="Studs" value={bom.external.studs} unit="pcs" />
+                                {bom.external.trimmerStuds > 0 && <BOMRow label={`Trimmers (${bom.external.openingCount} openings)`} value={bom.external.trimmerStuds} unit="pcs" sub />}
                                 <BOMRow label="Bottom plate" value={bom.external.bottomPlateLM} unit="LM" />
                                 <BOMRow label="Top plate" value={bom.external.topPlateLM} unit="LM" />
                                 {bom.external.rakingPlateLM > 0 && (
                                   <BOMRow label="Raking plate" value={bom.external.rakingPlateLM} unit="LM" />
                                 )}
                                 <BOMRow label={`Noggings (${bom.external.noggingRows}r)`} value={bom.external.noggings} unit="pcs" />
+                                {bom.external.lintels.length > 0 && (
+                                  <BOMRow label={`Lintels (${bom.external.lintels.length})`} value={bom.external.lintels.reduce((s, l) => s + l.lm, 0)} unit="LM" />
+                                )}
                               </div>
                             </div>
                           )}
@@ -759,12 +883,19 @@ export function FrameEstimator({
                             <div>
                               <div className="text-[10px] text-muted-foreground/50 mb-1">
                                 int walls — {bom.internal.lengthM.toFixed(2)} LM
+                                {bom.internal.openingCount > 0 && (
+                                  <span className="text-violet-400/70 ml-1">· {bom.internal.openingCount} opening{bom.internal.openingCount !== 1 ? 's' : ''} deducted</span>
+                                )}
                               </div>
                               <div className="border border-border/30 rounded divide-y divide-border/20 overflow-hidden">
                                 <BOMRow label="Studs" value={bom.internal.studs} unit="pcs" />
+                                {bom.internal.trimmerStuds > 0 && <BOMRow label={`Trimmers (${bom.internal.openingCount} openings)`} value={bom.internal.trimmerStuds} unit="pcs" sub />}
                                 <BOMRow label="Bottom plate" value={bom.internal.bottomPlateLM} unit="LM" />
                                 <BOMRow label="Top plate" value={bom.internal.topPlateLM} unit="LM" />
                                 <BOMRow label={`Noggings (${bom.internal.noggingRows}r)`} value={bom.internal.noggings} unit="pcs" />
+                                {bom.internal.lintels.length > 0 && (
+                                  <BOMRow label={`Lintels (${bom.internal.lintels.length})`} value={bom.internal.lintels.reduce((s, l) => s + l.lm, 0)} unit="LM" />
+                                )}
                               </div>
                             </div>
                           )}
@@ -792,6 +923,9 @@ export function FrameEstimator({
                             <BOMRow label="Bottom plate total" value={bom.external.bottomPlateLM + bom.internal.bottomPlateLM} unit="LM" />
                             <BOMRow label="Top plate total" value={bom.external.topPlateLM + bom.internal.topPlateLM} unit="LM" />
                             <BOMRow label="Noggings total" value={bom.external.noggings + bom.internal.noggings} unit="pcs" />
+                            {bom.totalLintelLM > 0 && (
+                              <BOMRow label={`Lintels (${bom.lintels.length})`} value={bom.totalLintelLM} unit="LM" />
+                            )}
                           </div>
 
                           {/* Fixings */}

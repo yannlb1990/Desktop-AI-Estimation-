@@ -179,6 +179,24 @@ function wallGeometry(p1: WorldPoint, p2: WorldPoint, thicknessMm: number, upm: 
   };
 }
 
+/** Quadratic bezier arc length via Simpson's rule (n=16 intervals — accurate to <0.1% for typical wall curves). */
+function bezierArcLength(p1: WorldPoint, Q: WorldPoint, p2: WorldPoint): number {
+  const n = 16;
+  const h = 1 / n;
+  let len = 0;
+  for (let i = 0; i <= n; i++) {
+    const t = i * h;
+    const dt = 1 - t;
+    // First derivative of quadratic bezier: 2(1-t)(Q-P1) + 2t(P2-Q)
+    const dx = 2 * dt * (Q.x - p1.x) + 2 * t * (p2.x - Q.x);
+    const dy = 2 * dt * (Q.y - p1.y) + 2 * t * (p2.y - Q.y);
+    const speed = Math.sqrt(dx * dx + dy * dy);
+    const w = i === 0 || i === n ? 1 : i % 2 === 0 ? 2 : 4;
+    len += w * speed;
+  }
+  return (len * h) / 3;
+}
+
 /** Quadratic bezier arc-wall geometry given start, end, a through-point (ctrl), thickness mm, and upm. */
 function arcWallGeometry(
   p1: WorldPoint, p2: WorldPoint, ctrl: WorldPoint,
@@ -264,6 +282,8 @@ interface InteractiveCanvasProps {
   canvasActionsRef?: React.MutableRefObject<{ removeObjects: (id: string) => void } | null>;
   /** Parent ref that will be filled with the raw HTMLCanvasElement for Magnifier / export use. */
   canvasElementRef?: React.MutableRefObject<HTMLCanvasElement | null>;
+  /** Pre-fill the count name from the toolbar when count tool is active. */
+  countName?: string;
 }
 
 export const InteractiveCanvas = ({
@@ -295,6 +315,7 @@ export const InteractiveCanvas = ({
   fileName,
   canvasActionsRef,
   canvasElementRef,
+  countName: countNameProp = '',
 }: InteractiveCanvasProps) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -406,6 +427,12 @@ export const InteractiveCanvas = ({
   const [countPoints, setCountPoints] = useState<WorldPoint[]>([]);
   const [countMarkers, setCountMarkers] = useState<Circle[]>([]);
   const [countPreset, setCountPreset] = useState<string>('Custom'); // Preset name for count items
+  // Sync toolbar countName prop → internal preset (only when no points yet placed)
+  useEffect(() => {
+    if (countNameProp && countPointsRef.current.length === 0) {
+      setCountPreset(countNameProp || 'Custom');
+    }
+  }, [countNameProp]);
   // Refs so tool-switch and Escape handler can read current values without stale closures
   const countMarkersRef = useRef<Circle[]>([]);
   const countPointsRef = useRef<WorldPoint[]>([]);
@@ -3253,7 +3280,7 @@ export const InteractiveCanvas = ({
       color: isCalibrated ? '#4CAF50' : '#FF9800',
       label: labelText,
       pageIndex: pageIndex,
-      timestamp: new Date(),
+      timestamp: new Date().toISOString(),
     };
 
     onMeasurementComplete(measurement);
@@ -3462,10 +3489,13 @@ export const InteractiveCanvas = ({
         // Reset arc state BEFORE emitting measurement so subsequent draws start fresh
         arcStateRef.current = { phase: 0, p1: null, p2: null };
 
-        const chord = Math.hypot(p2.x - p1.x, p2.y - p1.y);
+        // Arc length via quadratic bezier — the Q control point is derived the same way as in arcWallGeometry
+        const _Qx = 2 * ctrl.x - (p1.x + p2.x) / 2;
+        const _Qy = 2 * ctrl.y - (p1.y + p2.y) / 2;
+        const arcLen = bezierArcLength(p1, { x: _Qx, y: _Qy }, p2);
         const result = eu
-          ? { realValue: chord / eu, unit: 'm' as const }
-          : { realValue: chord, unit: 'px' as const };
+          ? { realValue: arcLen / eu, unit: 'm' as const }
+          : { realValue: arcLen, unit: 'px' as const };
 
         const id = crypto.randomUUID();
         measurementObjectsRef.current.set(id, [outerArc, innerArc, capS, capE]);
@@ -4111,7 +4141,7 @@ export const InteractiveCanvas = ({
         color: drawColorRef.current || (isCalibrated ? '#FF6B6B' : '#FF9800'),
         label: labelText,
         pageIndex: pageIndex,
-        timestamp: new Date(),
+        timestamp: new Date().toISOString(),
       };
 
       onMeasurementComplete(measurement);
@@ -4177,7 +4207,7 @@ export const InteractiveCanvas = ({
         wallHatchType: wallHatchTypeRef.current as any,
         wallHatchSide: wallHatchSideRef.current as any,
         pageIndex,
-        timestamp: new Date(),
+        timestamp: new Date().toISOString(),
       };
       onMeasurementComplete(measurement);
       chainStartRef.current = worldEndPoint;
@@ -4223,7 +4253,7 @@ export const InteractiveCanvas = ({
         color: refColor,
         label: labelText,
         pageIndex,
-        timestamp: new Date(),
+        timestamp: new Date().toISOString(),
       };
       onMeasurementComplete(measurement);
     } else if (activeTool === 'rectangle') {
@@ -4280,7 +4310,7 @@ export const InteractiveCanvas = ({
         color: isCalibrated ? '#4CAF50' : '#FF9800',
         label: labelText,
         pageIndex: pageIndex,
-        timestamp: new Date(),
+        timestamp: new Date().toISOString(),
       };
 
       onMeasurementComplete(measurement);
@@ -4344,7 +4374,7 @@ export const InteractiveCanvas = ({
         color: isCalibrated ? '#9C27B0' : '#FF9800',
         label: labelText,
         pageIndex: pageIndex,
-        timestamp: new Date(),
+        timestamp: new Date().toISOString(),
       };
 
       onMeasurementComplete(measurement);
@@ -4410,7 +4440,7 @@ export const InteractiveCanvas = ({
       color: '#FF9800',
       label: labelText,
       pageIndex: pageIndex,
-      timestamp: new Date(),
+      timestamp: new Date().toISOString(),
       // Store the preset name for the table
       countName: countPreset,
     } as any;

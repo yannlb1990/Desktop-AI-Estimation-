@@ -30,15 +30,20 @@ const initialState: TakeoffState = {
   roofPitch: { rise: 4, run: 12 },
   depthInput: 0.1,
   selectedColor: '#FF0000',
+  rotations: {},
   history: [[]],
   historyIndex: 0
 };
 
+const SCHEMA_VERSION = 2;
+
 // What we persist to localStorage (excludes pdfFile blob which can't survive reload)
 interface PersistedState {
+  _schemaVersion?: number;
   measurements: TakeoffState['measurements'];
   costItems: TakeoffState['costItems'];
   scales: TakeoffState['scales'];
+  rotations?: TakeoffState['rotations'];
   planId?: string;       // Stable plan identifier (name + size) — persisted even for blob URLs
   pdfName?: string;
   pdfUrl?: string;       // Supabase public URL (survives reload)
@@ -52,7 +57,27 @@ function loadPersisted(projectId: string): PersistedState {
   try {
     const raw = localStorage.getItem(storageKey(projectId));
     if (!raw) return { measurements: [], costItems: [], scales: {} };
-    const data: PersistedState = JSON.parse(raw);
+    let data: PersistedState;
+    try {
+      data = JSON.parse(raw);
+    } catch {
+      // Corrupted JSON — return clean state rather than crashing
+      console.warn('[takeoff] Corrupted localStorage state — resetting');
+      return { measurements: [], costItems: [], scales: {} };
+    }
+    // Schema version check — future migrations go here
+    if (data._schemaVersion !== undefined && data._schemaVersion > SCHEMA_VERSION) {
+      console.warn('[takeoff] State from newer schema version — resetting');
+      return { measurements: [], costItems: [], scales: {} };
+    }
+    // Migrate WallHatchSide: 'l1'/'l2' → 'left'/'right'
+    if (data.measurements) {
+      data.measurements = data.measurements.map((m: any) => {
+        if (m.wallHatchSide === 'l1') return { ...m, wallHatchSide: 'left' };
+        if (m.wallHatchSide === 'l2') return { ...m, wallHatchSide: 'right' };
+        return m;
+      });
+    }
     // Migrate old Wall/Door/Window measurements that stored the value in the label.
     // New code stores label: '' so no text renders on canvas; clear any old labels here.
     if (data.measurements) {
@@ -88,10 +113,12 @@ function savePersisted(projectId: string, state: TakeoffState) {
     // fail to load after a page refresh, causing "Failed to load PDF" errors.
     const persistableUrl = url && url.startsWith('https://') ? url : undefined;
     const persisted: PersistedState = {
+      _schemaVersion: SCHEMA_VERSION,
       measurements: state.measurements,
       costItems: state.costItems,
       scales: state.scales,
-      planId: state.pdfFile?.planId,  // Always persist — name+size key survives blob URL expiry
+      rotations: state.rotations,
+      planId: state.pdfFile?.planId,
       pdfName: persistableUrl ? state.pdfFile?.name : undefined,
       pdfUrl: persistableUrl,
       pdfPageCount: persistableUrl ? state.pdfFile?.pageCount : undefined,
@@ -111,6 +138,7 @@ function buildInitialState(projectId?: string): TakeoffState {
     measurements: persisted.measurements || [],
     costItems: persisted.costItems || [],
     scales: persisted.scales || {},
+    rotations: persisted.rotations || {},
     isCalibrated: hasScales,
     currentScale: hasScales ? persisted.scales[0] || null : null,
     // Restore PDF only from cloud (https://) URLs — blob:// URLs expire on reload
@@ -159,13 +187,16 @@ function takeoffReducer(state: TakeoffState, action: TakeoffAction): TakeoffStat
     case 'SET_UPLOAD_ERROR':
       return { ...state, uploadError: action.payload, uploadStatus: 'error' };
 
-    case 'SET_CURRENT_PAGE':
+    case 'SET_CURRENT_PAGE': {
+      const savedRotation = state.rotations[action.payload] ?? 0;
       return {
         ...state,
         currentPageIndex: action.payload,
         currentScale: state.scales[action.payload] || null,
-        isCalibrated: !!state.scales[action.payload]
+        isCalibrated: !!state.scales[action.payload],
+        transform: { ...state.transform, rotation: savedRotation as 0 | 90 | 180 | 270 },
       };
+    }
 
     case 'SET_SCALE':
       return {
@@ -192,8 +223,14 @@ function takeoffReducer(state: TakeoffState, action: TakeoffAction): TakeoffStat
     case 'SET_CALIBRATION_MODE':
       return { ...state, calibrationMode: action.payload };
 
-    case 'SET_TRANSFORM':
-      return { ...state, transform: { ...state.transform, ...action.payload } };
+    case 'SET_TRANSFORM': {
+      const newTransform = { ...state.transform, ...action.payload };
+      // Persist rotation per page so it survives page navigation
+      const newRotations = action.payload.rotation !== undefined
+        ? { ...state.rotations, [state.currentPageIndex]: action.payload.rotation }
+        : state.rotations;
+      return { ...state, transform: newTransform, rotations: newRotations };
+    }
 
     case 'SET_ACTIVE_TOOL':
       return { ...state, activeTool: action.payload, currentMeasurement: null };
@@ -340,6 +377,7 @@ function takeoffReducer(state: TakeoffState, action: TakeoffAction): TakeoffStat
         measurements: measurements || [],
         costItems: costItems || [],
         scales: scales || {},
+        rotations: (action.payload as any).rotations || state.rotations,
         isCalibrated: hasScales,
         currentScale: hasScales ? (scales[state.currentPageIndex] ?? scales[0] ?? null) : null,
         pdfFile: pdfUrl?.startsWith('https://')

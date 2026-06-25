@@ -1,4 +1,4 @@
-import { Measurement, WorldPoint } from './types';
+import { Measurement, WorldPoint, WallOpening } from './types';
 
 export type FrameMaterial = 'timber' | 'steel';
 export type StudSpacing = 300 | 450 | 600;
@@ -26,13 +26,17 @@ export const DEFAULT_FRAME_SETTINGS: FrameSettings = {
 
 export interface SectionBOM {
   count: number;         // number of wall runs
-  lengthM: number;       // total linear metres
-  studs: number;
-  bottomPlateLM: number;
+  lengthM: number;       // gross linear metres (before opening deductions)
+  netLengthM: number;    // net linear metres after deducting openings
+  studs: number;         // net stud count (includes trimmer/king additions, excludes studs in opening gaps)
+  trimmerStuds: number;  // 2 per opening (short studs supporting lintel ends)
+  bottomPlateLM: number; // plate LM — door widths deducted, window widths kept
   topPlateLM: number;
-  rakingPlateLM: number; // angled top plate at roof pitch (external walls with hasRakingPlate only)
-  noggingRows: number;   // rows per wall (1 or 2 depending on ceiling height)
-  noggings: number;      // total count
+  rakingPlateLM: number;
+  noggingRows: number;
+  noggings: number;
+  openingCount: number;  // total door + window openings
+  lintels: { widthMm: number; lm: number }[];
 }
 
 export interface JunctionAnalysis {
@@ -59,6 +63,8 @@ export interface FramingBOM {
   junctions: JunctionAnalysis;
   fixings: FramingFixings;
   totalStuds: number;    // studs + junction extra studs combined
+  lintels: { widthMm: number; lm: number }[];  // all lintels from all sections
+  totalLintelLM: number;
 }
 
 // ── Wall segment extracted from Measurement ──────────────────────────────────
@@ -71,6 +77,7 @@ export interface WallSegment {
   hasRakingPlate: boolean;
   p1: WorldPoint;
   p2: WorldPoint;
+  openings: WallOpening[];
 }
 
 export function extractWallSegments(measurements: Measurement[]): WallSegment[] {
@@ -84,6 +91,7 @@ export function extractWallSegments(measurements: Measurement[]): WallSegment[] 
       hasRakingPlate: m.hasRakingPlate ?? false,
       p1: m.worldPoints[0],
       p2: m.worldPoints[1],
+      openings: m.wallOpenings ?? [],
     }));
 }
 
@@ -173,13 +181,31 @@ function calcSection(
   const lengthM = walls.reduce((s, w) => s + w.lengthM, 0);
   const { studSpacingMm, ceilingHeightMm, doubleTopPlate } = settings;
 
-  // Studs per run: CEIL(length / spacing) + 1 end stud
-  const studs = walls.reduce(
-    (s, w) => s + Math.ceil((w.lengthM * 1000) / studSpacingMm) + 1,
-    0,
-  );
+  // ── Opening deductions ────────────────────────────────────────────────────
+  const allOpenings = walls.flatMap(w => w.openings);
+  const openingCount = allOpenings.length;
 
-  const bottomPlateLM = lengthM;
+  // Bottom plate: deduct door widths only (window sills stay)
+  const doorDeductionM = allOpenings
+    .filter(o => o.type === 'door')
+    .reduce((s, o) => s + o.widthMm / 1000, 0);
+
+  // Studs per run: CEIL(length / spacing) + 1 end stud
+  // Per opening: remove studs that fall inside the opening gap, add 2 trimmers
+  let studs = 0;
+  let trimmerStuds = 0;
+  walls.forEach(w => {
+    const baseStuds = Math.ceil((w.lengthM * 1000) / studSpacingMm) + 1;
+    const openingStudsRemoved = w.openings.reduce(
+      (s, o) => s + Math.max(0, Math.floor(o.widthMm / studSpacingMm) - 1),
+      0,
+    );
+    const trimmersAdded = w.openings.length * 2; // 2 short trimmers per opening
+    studs += baseStuds - openingStudsRemoved + trimmersAdded;
+    trimmerStuds += trimmersAdded;
+  });
+
+  const bottomPlateLM = Math.max(0, lengthM - doorDeductionM);
 
   // Double top plate when setting is on (user-controlled, default true for all walls)
   const topPlateLM = doubleTopPlate ? lengthM * 2 : lengthM;
@@ -189,14 +215,28 @@ function calcSection(
     ? walls.filter(w => w.hasRakingPlate).reduce((s, w) => s + w.lengthM, 0)
     : 0;
 
-  // Noggings: 1 row ≤ 2700mm ceiling, 2 rows above
+  // Noggings: 1 row ≤ 2700mm ceiling, 2 rows above (only in solid stud bays, skip opening span)
   const noggingRows = ceilingHeightMm > 2700 ? 2 : 1;
-  const noggings = walls.reduce(
-    (s, w) => s + Math.ceil((w.lengthM * 1000) / 1200) * noggingRows,
-    0,
-  );
+  const noggings = walls.reduce((s, w) => {
+    const solidM = Math.max(0, w.lengthM - w.openings.reduce((os, o) => os + o.widthMm / 1000, 0));
+    return s + Math.ceil((solidM * 1000) / 1200) * noggingRows;
+  }, 0);
 
-  return { count, lengthM, studs, bottomPlateLM, topPlateLM, rakingPlateLM, noggingRows, noggings };
+  // Lintels: one per opening, spanning width + 45mm bearing each side
+  const lintels = allOpenings.map(o => ({
+    widthMm: o.widthMm,
+    lm: (o.widthMm + 90) / 1000,
+  }));
+
+  const netLengthM = Math.max(0, lengthM - allOpenings.reduce((s, o) => s + o.widthMm / 1000, 0));
+
+  return {
+    count, lengthM, netLengthM,
+    studs, trimmerStuds,
+    bottomPlateLM, topPlateLM, rakingPlateLM,
+    noggingRows, noggings,
+    openingCount, lintels,
+  };
 }
 
 // ── Fixings cascade from material ─────────────────────────────────────────────
@@ -246,5 +286,8 @@ export function calculateFramingBOM(
     fixings.lBrackets = (junctions.externalCorners + junctions.internalCorners) * 2;
   }
 
-  return { external, internal, junctions, fixings, totalStuds };
+  const lintels = [...external.lintels, ...internal.lintels];
+  const totalLintelLM = lintels.reduce((s, l) => s + l.lm, 0);
+
+  return { external, internal, junctions, fixings, totalStuds, lintels, totalLintelLM };
 }

@@ -32,6 +32,10 @@ interface MeasurementToolbarProps {
   onGridSnapChange?: (mm: number) => void;
   wallClassification?: 'external' | 'internal';
   onWallClassificationChange?: (c: 'external' | 'internal') => void;
+  countName?: string;
+  onCountNameChange?: (name: string) => void;
+  countItemSize?: string;
+  onCountItemSizeChange?: (size: string) => void;
 }
 
 const WALL_PRESETS = [64, 70, 90, 92, 110, 150];
@@ -142,6 +146,10 @@ export const MeasurementToolbar = ({
   onGridSnapChange,
   wallClassification = 'internal',
   onWallClassificationChange,
+  countName = '',
+  onCountNameChange,
+  countItemSize = '',
+  onCountItemSizeChange,
 }: MeasurementToolbarProps) => {
   const [customInput, setCustomInput] = useState('');
   type ModId = 'wall' | 'door' | 'window' | 'custom';
@@ -420,6 +428,35 @@ export const MeasurementToolbar = ({
               </>
             )}
 
+          </div>
+        )}
+
+        {/* ── Row 2a: Count category (when count tool active) ────────────── */}
+        {(contextPanelOpen ?? true) && activeTool === 'count' && onCountNameChange && (
+          <div className="flex items-center gap-3 px-3 py-2 bg-slate-800/70 border border-orange-900/40 rounded-lg">
+            <p className="text-[10px] font-semibold text-orange-400/80 uppercase tracking-widest shrink-0">
+              Count
+            </p>
+            <div className="w-px bg-orange-900/30 self-stretch shrink-0" />
+            <input
+              type="text"
+              placeholder="Category name (e.g. Door — Internal)"
+              value={countName}
+              onChange={e => onCountNameChange?.(e.target.value)}
+              className="flex-1 bg-transparent text-xs text-foreground placeholder:text-muted-foreground/40 outline-none border-b border-muted/20 pb-0.5"
+            />
+            {onCountItemSizeChange && (
+              <>
+                <div className="w-px bg-orange-900/30 self-stretch shrink-0" />
+                <input
+                  type="text"
+                  placeholder="Size (optional)"
+                  value={countItemSize}
+                  onChange={e => onCountItemSizeChange?.(e.target.value)}
+                  className="w-24 bg-transparent text-xs text-foreground placeholder:text-muted-foreground/40 outline-none border-b border-muted/20 pb-0.5"
+                />
+              </>
+            )}
           </div>
         )}
 

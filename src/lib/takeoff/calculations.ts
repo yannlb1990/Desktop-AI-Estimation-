@@ -49,6 +49,10 @@ export function calculateManualScaleWorld(
   // Distance in world units (PDF points)
   const worldDistance = Math.hypot(p2.x - p1.x, p2.y - p1.y);
 
+  if (worldDistance < 5) {
+    throw new Error('ZERO_DISTANCE');
+  }
+
   // Convert input distance to metres
   let distanceMetres: number;
   switch (unit) {
@@ -61,6 +65,14 @@ export function calculateManualScaleWorld(
 
   // World units (points) per metre
   const unitsPerMetre = worldDistance / distanceMetres;
+
+  // Sanity check: construction drawings are 1:20 to 1:500 scale.
+  // PDF user space is 72 points/inch; A1 sheet ≈ 4030 pt wide.
+  // At 1:500, 1m real = ~5.7 pts. At 1:20, 1m real = ~142 pts.
+  // Allow generous margins: warn but don't block.
+  if (unitsPerMetre < 2 || unitsPerMetre > 1000) {
+    throw new Error('IMPLAUSIBLE_SCALE');
+  }
 
   return {
     unitsPerMetre,

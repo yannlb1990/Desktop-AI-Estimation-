@@ -54,7 +54,14 @@ export type WallHatchType =
   | 'wet-area'
   | 'glazing';
 
-export type WallHatchSide = 'l1' | 'both' | 'l2';
+export type WallHatchSide = 'left' | 'both' | 'right';
+
+// Opening (door or window) within a wall — used for BOM deductions
+export interface WallOpening {
+  id: string;
+  type: 'door' | 'window';
+  widthMm: number;
+}
 export type MeasurementUnit = string;
 export type ToolType = 'select' | 'pan' | 'eraser' | 'line' | 'rectangle' | 'polygon' | 'circle' | 'count' | 'wall-line' | 'arc-wall' | 'offset' | null;
 
@@ -116,7 +123,8 @@ export interface Measurement {
   arcControlPoint?: WorldPoint; // control point for arc-wall tool (passes through this point)
   modSubtype?: string;          // subtype for door/window mark-as (e.g. 'Internal', 'Awning')
   doorFlipped?: boolean;        // mirror the door swing symbol (swaps hinge endpoint)
-  timestamp: Date;
+  timestamp: string;   // ISO 8601 — JSON-safe (Date objects don't survive JSON.parse)
+  wallOpenings?: WallOpening[];  // door/window openings for BOM deductions
 
   // Enhanced fields for takeoff table
   area?: MeasurementArea;
@@ -320,6 +328,7 @@ export interface TakeoffState {
   roofPitch: { rise: number; run: number };
   depthInput: number;
   selectedColor: string;
+  rotations: Record<number, 0 | 90 | 180 | 270>;  // per-page rotation, keyed by pageIndex
   
   // History for undo/redo
   history: Measurement[][];

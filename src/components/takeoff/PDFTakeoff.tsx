@@ -86,6 +86,8 @@ export const PDFTakeoff = ({ projectId, estimateId, onAddCostItems }: PDFTakeoff
   const [wallHatchSide, setWallHatchSide] = useState<string>('both');
   const [doorSubtype, setDoorSubtype] = useState<string>('Internal');
   const [windowSubtype, setWindowSubtype] = useState<string>('Awning');
+  const [countName, setCountName] = useState('');
+  const [countItemSize, setCountItemSize] = useState('');
   const [fsContextOpen, setFsContextOpen] = useState(true);
   const [focusMode, setFocusMode] = useState(false);
   const [gridSnapMm, setGridSnapMm] = useState(0);
@@ -204,12 +206,23 @@ export const PDFTakeoff = ({ projectId, estimateId, onAddCostItems }: PDFTakeoff
       if (key === 'w') { setModMode(null); dispatch({ type: 'SET_ACTIVE_TOOL', payload: 'wall-line' }); return; }
       if (key === 'd') { setModMode('door'); dispatch({ type: 'SET_ACTIVE_TOOL', payload: 'line' }); return; }
       if (key === 'q') { setModMode('window'); dispatch({ type: 'SET_ACTIVE_TOOL', payload: 'line' }); return; }
+      // ArrowLeft / ArrowRight: page navigation (only when no active drawing tool)
+      if (e.key === 'ArrowLeft' && !state.activeTool && state.pdfFile && state.currentPageIndex > 0) {
+        e.preventDefault();
+        dispatch({ type: 'SET_CURRENT_PAGE', payload: state.currentPageIndex - 1 });
+        return;
+      }
+      if (e.key === 'ArrowRight' && !state.activeTool && state.pdfFile && state.currentPageIndex < (state.pdfFile.pageCount - 1)) {
+        e.preventDefault();
+        dispatch({ type: 'SET_CURRENT_PAGE', payload: state.currentPageIndex + 1 });
+        return;
+      }
       const tool = shortcutToTool(e.key);
       if (tool !== null) { setModMode(null); dispatch({ type: 'SET_ACTIVE_TOOL', payload: tool }); }
     };
     document.addEventListener('keydown', handleKeyDown);
     return () => document.removeEventListener('keydown', handleKeyDown);
-  }, [dispatch]);
+  }, [dispatch, state.activeTool, state.pdfFile, state.currentPageIndex]);
 
   // Auto-open context panel when a special mode activates
   useEffect(() => {
@@ -463,7 +476,19 @@ export const PDFTakeoff = ({ projectId, estimateId, onAddCostItems }: PDFTakeoff
     if (!manualCalibrationPoints) return;
     const distance = parseFloat(manualDistance);
     if (isNaN(distance) || distance <= 0) { toast.error('Enter a valid distance'); return; }
-    const scale = calculateManualScaleWorld(manualCalibrationPoints[0], manualCalibrationPoints[1], distance, manualUnit);
+    let scale;
+    try {
+      scale = calculateManualScaleWorld(manualCalibrationPoints[0], manualCalibrationPoints[1], distance, manualUnit);
+    } catch (err: any) {
+      if (err?.message === 'ZERO_DISTANCE') {
+        toast.error('The two calibration points are the same — click two distinct points');
+      } else if (err?.message === 'IMPLAUSIBLE_SCALE') {
+        toast.error('Scale looks wrong — check the distance you typed matches a real dimension on the plan');
+      } else {
+        toast.error('Calibration failed — try again');
+      }
+      return;
+    }
     dispatch({ type: 'SET_SCALE', payload: { pageIndex: state.currentPageIndex, scale } });
     setManualCalibrationPoints(null);
     setManualDistance('');
@@ -525,7 +550,7 @@ export const PDFTakeoff = ({ projectId, estimateId, onAddCostItems }: PDFTakeoff
         label: `AI: ${dim.text}`,
         color: '#10B981',
         pageIndex: dim.page,
-        timestamp: new Date(),
+        timestamp: new Date().toISOString(),
         validated: false,
         addedToEstimate: false,
         comments: `Extracted from PDF: ${dim.text} (${dim.unit})`,
@@ -560,7 +585,7 @@ export const PDFTakeoff = ({ projectId, estimateId, onAddCostItems }: PDFTakeoff
         label: area.name,
         color: '#6366f1',
         pageIndex: area.page,
-        timestamp: new Date(),
+        timestamp: new Date().toISOString(),
         validated: false,
         addedToEstimate: false,
         measurementType: 'Floor',
@@ -861,6 +886,10 @@ export const PDFTakeoff = ({ projectId, estimateId, onAddCostItems }: PDFTakeoff
       onGridSnapChange={setGridSnapMm}
       wallClassification={wallClassification}
       onWallClassificationChange={setWallClassification}
+      countName={countName}
+      onCountNameChange={setCountName}
+      countItemSize={countItemSize}
+      onCountItemSizeChange={setCountItemSize}
     />
   );
 
@@ -917,11 +946,17 @@ export const PDFTakeoff = ({ projectId, estimateId, onAddCostItems }: PDFTakeoff
               onChange={e => dispatch({ type: 'SET_CURRENT_PAGE', payload: Number(e.target.value) - 1 })}
               className="h-7 text-sm bg-gray-800 border border-gray-600 rounded text-gray-100 px-1 cursor-pointer focus:outline-none focus:border-blue-400 min-w-[100px]"
             >
-              {Array.from({ length: state.pdfFile.pageCount }, (_, i) => i + 1).map(p => (
-                <option key={p} value={p} className="bg-gray-800">
-                  Page {p} / {state.pdfFile.pageCount}
-                </option>
-              ))}
+              {Array.from({ length: state.pdfFile.pageCount }, (_, i) => i + 1).map(p => {
+                const scaleForPage = state.scales[i];
+                const dot = scaleForPage
+                  ? (scaleForPage.scaleMethod === 'manual' ? '🟢' : '🟡')
+                  : '🔴';
+                return (
+                  <option key={p} value={p} className="bg-gray-800">
+                    {dot} Page {p} / {state.pdfFile!.pageCount}
+                  </option>
+                );
+              })}
             </select>
             <Button variant="ghost" size="sm" onClick={handlePageNext} disabled={state.currentPageIndex === state.pdfFile.pageCount - 1} className="h-8 text-gray-200 hover:bg-gray-700"><ChevronRight className="h-4 w-4" /></Button>
           </div>
@@ -970,6 +1005,19 @@ export const PDFTakeoff = ({ projectId, estimateId, onAddCostItems }: PDFTakeoff
 
       {/* Canvas — full width, takes all remaining vertical space */}
       <div className="flex-1 overflow-hidden relative">
+        {/* Calibration status badge — always visible on canvas */}
+        {state.pdfFile && (
+          <div className={`absolute bottom-3 left-3 z-20 flex items-center gap-1.5 px-2 py-1 rounded text-[10px] font-mono backdrop-blur-sm pointer-events-none ${
+            state.isCalibrated
+              ? 'bg-slate-900/70 text-green-400 border border-green-800/40'
+              : 'bg-slate-900/70 text-amber-400 border border-amber-800/40'
+          }`}>
+            {state.isCalibrated
+              ? `1:${Math.round(state.currentScale!.unitsPerMetre / (72 / 0.0254) * 1000) || '?'} · Page ${state.currentPageIndex + 1}${state.pdfFile.pageCount > 1 ? ` / ${state.pdfFile.pageCount}` : ''}`
+              : `Not calibrated · Page ${state.currentPageIndex + 1}${state.pdfFile.pageCount > 1 ? ` / ${state.pdfFile.pageCount}` : ''}`
+            }
+          </div>
+        )}
         {/* Floating context picker — shown when toolbar context rows are hidden */}
         {(focusMode || !fsContextOpen) && modMode === 'door' && (
           <div className="absolute top-3 left-3 z-20 flex items-center gap-1.5 px-2 py-1.5 bg-slate-800/95 border border-violet-700/60 rounded-lg backdrop-blur-sm shadow-lg">
@@ -1043,6 +1091,7 @@ export const PDFTakeoff = ({ projectId, estimateId, onAddCostItems }: PDFTakeoff
           wallHatchType={wallHatchType}
           wallHatchSide={wallHatchSide}
           gridSnapMm={gridSnapMm}
+          countName={countName}
           onReupload={() => {
             dispatch({ type: 'SET_PDF_FILE', payload: null as any });
             setIsTakeoffFullscreen(false);
@@ -1407,6 +1456,7 @@ export const PDFTakeoff = ({ projectId, estimateId, onAddCostItems }: PDFTakeoff
                         wallHatchType={wallHatchType}
                         wallHatchSide={wallHatchSide}
                         gridSnapMm={gridSnapMm}
+                        countName={countName}
                         onReupload={() => {
                           dispatch({ type: 'SET_PDF_FILE', payload: null as any });
                           setActiveTab('upload');

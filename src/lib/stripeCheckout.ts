@@ -8,7 +8,7 @@ type SubscriptionRow = Database["public"]["Tables"]["subscriptions"]["Row"];
 // Reads the user's paid subscription from Supabase DB and merges it into localStorage.
 // Called on app start and after a successful checkout.
 // Returns true if sync succeeded, false otherwise.
-const ADMIN_EMAIL = 'yannlb1990@gmail.com';
+const ADMIN_EMAIL = (import.meta.env.VITE_OWNER_EMAIL as string | undefined) ?? '';
 
 export async function syncSubscriptionFromDB(retries = 3): Promise<boolean> {
   const { data: { session } } = await supabase.auth.getSession();

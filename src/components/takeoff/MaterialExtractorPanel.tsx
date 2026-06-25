@@ -68,7 +68,7 @@ function materialToMeasurement(item: ExtractedMaterial): Measurement {
     label: item.material,
     area: roomToArea(item.room),
     pageIndex: 0,
-    timestamp: new Date(),
+    timestamp: new Date().toISOString(),
     comments: `AI extracted — ${item.floor} › ${item.room}`,
   };
 }
