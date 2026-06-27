@@ -1084,7 +1084,10 @@ export const InteractiveCanvas = ({
 
     measurements.forEach(measurement => {
       if (objectsMap.has(measurement.id)) return; // already drawn
-      if (!measurement.worldPoints || measurement.worldPoints.length < 2) return;
+      if (!measurement.worldPoints || measurement.worldPoints.length < 1) return;
+      // count needs only 1 point; text needs only 1 point; everything else needs 2+
+      const needsOnePoint = (measurement as any).type === 'count' || (measurement as any).type === 'text';
+      if (!needsOnePoint && measurement.worldPoints.length < 2) return;
 
       const color = measurement.color || '#FF6B6B';
       let shape: any = null;
@@ -1242,6 +1245,26 @@ export const InteractiveCanvas = ({
           objectsMap.set(measurement.id, shapes);
         }
         return; // handled above
+      } else if ((measurement as any).type === 'text') {
+        // Restore persisted text annotation
+        const wp = measurement.worldPoints[0];
+        const textObj = new IText(measurement.label || 'Annotation', {
+          left: wp.x,
+          top: wp.y,
+          fontSize: 14,
+          fill: '#f59e0b',
+          fontFamily: 'Inter, sans-serif',
+          selectable: true,
+          evented: true,
+        });
+        (textObj as any)._measurementId = measurement.id;
+        textObj.on('editing:exited', () => {
+          onMeasurementUpdate?.(measurement.id, { label: textObj.text || 'Annotation' });
+        });
+        canvas.add(textObj);
+        objectsMap.set(measurement.id, [textObj]);
+        shapeToMeasurementIdRef.current.set(textObj, measurement.id);
+        return;
       }
 
       if (!shape) return;
@@ -3503,6 +3526,7 @@ export const InteractiveCanvas = ({
 
     // Handle text annotation tool
     if (activeTool === 'text') {
+      const measurementId = crypto.randomUUID();
       const textObj = new IText('Annotation', {
         left: worldPoint.x,
         top: worldPoint.y,
@@ -3512,9 +3536,26 @@ export const InteractiveCanvas = ({
         selectable: true,
         evented: true,
       });
+      (textObj as any)._measurementId = measurementId;
+      // Save label changes back to state when user finishes editing
+      textObj.on('editing:exited', () => {
+        onMeasurementUpdate?.(measurementId, { label: textObj.text || 'Annotation' });
+      });
       canvas.add(textObj);
       canvas.setActiveObject(textObj);
       canvas.renderAll();
+      // Persist as a measurement so it survives page reload
+      onMeasurementComplete?.({
+        id: measurementId,
+        type: 'text' as any,
+        worldPoints: [worldPoint],
+        realValue: 0,
+        unit: 'EA',
+        label: 'Annotation',
+        color: '#f59e0b',
+        pageIndex,
+        measurementType: 'Other',
+      } as any);
       onToolChange?.('select');
       return;
     }
