@@ -98,7 +98,7 @@ export const SmartMaterialSearch = () => {
       <Card className="p-6">
         <h3 className="font-display text-xl font-bold mb-4">Smart Material Price Search</h3>
         <p className="text-sm text-muted-foreground mb-4">
-          AI-powered search across major Australian building suppliers
+          Smart material search across major Australian building suppliers
         </p>
         
         <div className="flex gap-2 mb-6">

@@ -277,7 +277,7 @@ export const MeasurementToolbar = ({
             <>
               <div className="flex-1 shrink-0 min-w-0" />
               <Separator orientation="vertical" className="h-6 mx-1.5 shrink-0" />
-              <span className="text-[11px] font-semibold text-cyan-400/90 bg-cyan-950/50 border border-cyan-800/40 px-2.5 py-0.5 rounded shrink-0 select-none whitespace-nowrap">
+              <span className="text-[11px] font-semibold text-amber-300/90 bg-amber-950/50 border border-amber-800/40 px-2.5 py-0.5 rounded shrink-0 select-none whitespace-nowrap">
                 {activeTool === 'select' ? 'Select' :
                  activeTool === 'pan' ? 'Pan' :
                  activeTool === 'eraser' ? 'Eraser' :

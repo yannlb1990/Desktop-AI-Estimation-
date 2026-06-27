@@ -1,5 +1,5 @@
 import React, { useState, useCallback } from 'react';
-import { Loader2, Sparkles, PackageSearch, ChevronDown, ChevronUp, CheckSquare, Square } from 'lucide-react';
+import { Loader2, Layers, PackageSearch, ChevronDown, ChevronUp, CheckSquare, Square } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -191,7 +191,7 @@ export const MaterialExtractorPanel: React.FC<MaterialExtractorPanelProps> = ({
           </>
         ) : (
           <>
-            <Sparkles className="h-4 w-4 mr-2" />
+            <Layers className="h-4 w-4 mr-2" />
             {status === 'done' ? 'Re-extract Materials' : 'Extract Materials with AI'}
           </>
         )}

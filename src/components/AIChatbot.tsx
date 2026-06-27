@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useLocation } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { Bot, X, Minimize2, Maximize2, Sparkles } from "lucide-react";
+import { MessageSquare, X, Minimize2, Maximize2 } from "lucide-react";
 
 export const AIChatbot = () => {
   const [isOpen, setIsOpen] = useState(false);
@@ -20,7 +20,7 @@ export const AIChatbot = () => {
           size="icon"
           aria-label="AI Assistant"
         >
-          <Bot className="h-6 w-6" />
+          <MessageSquare className="h-6 w-6" />
         </Button>
         <span className="absolute bottom-full right-0 mb-2 whitespace-nowrap bg-popover border border-border text-popover-foreground text-xs font-medium px-2.5 py-1.5 rounded-lg shadow-md opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
           AI Assistant
@@ -33,7 +33,7 @@ export const AIChatbot = () => {
     <Card className={`fixed ${isMinimized ? 'bottom-6 right-6 w-80' : 'bottom-6 right-6 w-96 h-[420px]'} shadow-2xl flex flex-col`}>
       <div className="flex items-center justify-between p-4 border-b border-border bg-accent/10">
         <div className="flex items-center gap-2">
-          <Bot className="h-5 w-5 text-accent" />
+          <MessageSquare className="h-5 w-5 text-accent" />
           <h3 className="font-semibold">AI Assistant</h3>
         </div>
         <div className="flex gap-1">
@@ -59,7 +59,7 @@ export const AIChatbot = () => {
       {!isMinimized && (
         <div className="flex-1 flex flex-col items-center justify-center p-6 text-center">
           <div className="w-16 h-16 rounded-full bg-accent/10 flex items-center justify-center mb-4">
-            <Sparkles className="h-8 w-8 text-accent" />
+            <MessageSquare className="h-8 w-8 text-accent" />
           </div>
           <h4 className="font-semibold text-lg mb-2">AI Chat Coming Soon</h4>
           <p className="text-sm text-muted-foreground mb-4">

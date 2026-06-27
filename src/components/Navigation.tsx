@@ -80,7 +80,7 @@ const Navigation = () => {
                 <Button
                   size="sm"
                   onClick={() => navigate("/auth?plan=pro&mode=signup")}
-                  className="bg-cyan-400 text-[#09111f] hover:bg-cyan-300 rounded-full font-bold"
+                  className="bg-amber-600 text-white hover:bg-amber-500 rounded-full font-bold"
                 >
                   Start Free Trial
                 </Button>
@@ -133,7 +133,7 @@ const Navigation = () => {
                   </Button>
                   <Button
                     size="sm"
-                    className="flex-1 bg-cyan-400 text-[#09111f] hover:bg-cyan-300 rounded-full font-bold"
+                    className="flex-1 bg-amber-600 text-white hover:bg-amber-500 rounded-full font-bold"
                     onClick={() => navigate("/auth?plan=pro&mode=signup")}
                   >
                     Start Free Trial

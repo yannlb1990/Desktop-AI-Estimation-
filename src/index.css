@@ -3,103 +3,104 @@
 @tailwind utilities;
 
 /* Design system — all colors in HSL.
-   Palette: dark steel-navy backgrounds, bright cyan (#00c8ff) primary accent.
-   Inspired by professional aviation/tech dark UI.
+   Palette source: colorhunt.co/palette/0000001f150c412d15e1dcc9
+   #000000 deep black · #1F150C dark warm brown · #412D15 medium brown · #E1DCC9 warm cream
+   Derived CTA accent: warm amber/copper hsl(36,68%,48%) ≈ #C47A1E
 */
 
 @layer base {
-  /* ── LIGHT MODE (fallback, rarely used) ───────────────────────────────── */
+  /* ── LIGHT MODE (warm parchment) ─────────────────────────────────────── */
   :root {
-    --background: 215 30% 97%;
-    --foreground: 215 40% 10%;
+    --background: 46 28% 95%;         /* warm near-white */
+    --foreground: 30 42% 8%;          /* dark brown text */
 
-    --card: 0 0% 100%;
-    --card-foreground: 215 40% 10%;
+    --card: 46 25% 98%;
+    --card-foreground: 30 42% 8%;
 
-    --popover: 0 0% 100%;
-    --popover-foreground: 215 40% 10%;
+    --popover: 46 25% 98%;
+    --popover-foreground: 30 42% 8%;
 
-    --primary: 199 100% 40%;
-    --primary-foreground: 0 0% 100%;
+    --primary: 33 55% 25%;            /* dark brown CTA for light bg */
+    --primary-foreground: 46 26% 92%;
 
-    --secondary: 215 20% 92%;
-    --secondary-foreground: 215 40% 15%;
+    --secondary: 40 22% 88%;
+    --secondary-foreground: 30 38% 14%;
 
-    --muted: 215 20% 94%;
-    --muted-foreground: 215 15% 45%;
+    --muted: 40 20% 91%;
+    --muted-foreground: 33 22% 40%;
 
-    --accent: 199 100% 40%;
-    --accent-foreground: 0 0% 100%;
+    --accent: 36 50% 82%;
+    --accent-foreground: 33 55% 18%;
 
-    --destructive: 0 84% 60%;
-    --destructive-foreground: 0 0% 98%;
+    --destructive: 5 76% 50%;
+    --destructive-foreground: 46 26% 92%;
 
-    --border: 215 20% 82%;
-    --input: 215 20% 82%;
-    --ring: 199 100% 40%;
+    --border: 38 22% 78%;
+    --input: 38 22% 78%;
+    --ring: 33 55% 25%;
 
     --radius: 0.75rem;
 
-    --gradient-primary: linear-gradient(135deg, hsl(215 40% 12%) 0%, hsl(199 100% 30%) 100%);
-    --gradient-hero: linear-gradient(180deg, hsl(215 40% 10%) 0%, hsl(215 50% 20%) 100%);
-    --gradient-accent: linear-gradient(90deg, hsl(199 100% 40%) 0%, hsl(185 100% 40%) 100%);
+    --gradient-primary: linear-gradient(135deg, hsl(30 42% 8%) 0%, hsl(33 51% 17%) 100%);
+    --gradient-hero: linear-gradient(180deg, hsl(30 42% 8%) 0%, hsl(33 45% 16%) 100%);
+    --gradient-accent: linear-gradient(90deg, hsl(36 68% 48%) 0%, hsl(36 58% 40%) 100%);
 
-    --shadow-sm: 0 2px 8px hsl(215 40% 10% / 0.06);
-    --shadow-md: 0 4px 16px hsl(215 40% 10% / 0.10);
-    --shadow-lg: 0 8px 32px hsl(215 40% 10% / 0.14);
-    --shadow-glow: 0 0 40px hsl(199 100% 50% / 0.20);
+    --shadow-sm: 0 2px 8px hsl(30 40% 10% / 0.08);
+    --shadow-md: 0 4px 16px hsl(30 40% 10% / 0.12);
+    --shadow-lg: 0 8px 32px hsl(30 40% 10% / 0.16);
+    --shadow-glow: 0 0 40px hsl(36 68% 48% / 0.22);
 
     --transition-smooth: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   }
 
   /* ── DARK MODE (default — applied via <html class="dark">) ────────────── */
   .dark {
-    /* Backgrounds — very dark steel navy */
-    --background: 215 42% 7%;          /* #09111f */
-    --foreground: 210 25% 93%;         /* #e3eaf2 near-white */
+    /* Backgrounds — warm near-black, #000 → #1F150C territory */
+    --background: 30 44% 4%;           /* ~#0B0704 deeper than #1F150C */
+    --foreground: 46 26% 84%;          /* #E1DCC9 warm cream */
 
-    /* Card surfaces — one step lighter than bg */
-    --card: 215 38% 11%;               /* #0f1c2e */
-    --card-foreground: 210 25% 93%;
+    /* Card surfaces — #1F150C territory, one step lighter */
+    --card: 30 40% 8%;                 /* ~#1A110A */
+    --card-foreground: 46 26% 84%;
 
     /* Popovers / dropdowns */
-    --popover: 215 38% 11%;
-    --popover-foreground: 210 25% 93%;
+    --popover: 30 38% 9%;
+    --popover-foreground: 46 26% 84%;
 
-    /* Primary — bright cyan, the brand accent */
-    --primary: 199 100% 50%;           /* #00c8ff */
-    --primary-foreground: 215 42% 7%;  /* dark text on cyan button */
+    /* Primary — warm amber/copper, derived from palette */
+    --primary: 36 68% 48%;             /* ~#C47A1E rich amber */
+    --primary-foreground: 30 44% 5%;   /* dark brown on amber */
 
-    /* Secondary — dark steel surface (used for secondary buttons, badges) */
-    --secondary: 215 32% 19%;          /* #1e2f47 */
-    --secondary-foreground: 210 20% 88%;
+    /* Secondary — between #1F150C and #412D15 */
+    --secondary: 32 42% 13%;           /* ~#2B1C0B */
+    --secondary-foreground: 46 22% 76%;
 
     /* Muted backgrounds (table rows, hover states) */
-    --muted: 215 28% 15%;              /* #162030 */
-    --muted-foreground: 215 18% 58%;   /* #7f93ad */
+    --muted: 30 36% 11%;               /* slightly lighter than bg */
+    --muted-foreground: 38 16% 52%;    /* warm mid-grey cream */
 
-    /* Accent = same bright cyan (for hover highlights) */
-    --accent: 199 100% 50%;
-    --accent-foreground: 215 42% 7%;
+    /* Accent — #412D15 for hover highlights */
+    --accent: 33 45% 17%;              /* ~#391F0A */
+    --accent-foreground: 46 26% 84%;
 
-    --destructive: 0 84% 60%;
-    --destructive-foreground: 0 0% 98%;
+    --destructive: 5 76% 52%;
+    --destructive-foreground: 46 26% 84%;
 
-    /* Borders — visible steel-blue lines, critical for outline button legibility */
-    --border: 215 30% 26%;             /* #283f58 — clearly visible on dark navy */
-    --input: 215 30% 26%;              /* same — outline buttons use border-input */
-    --ring: 199 100% 50%;              /* cyan focus ring */
+    /* Borders — warm brown lines, clearly visible on dark */
+    --border: 33 40% 20%;              /* ~#412010 slightly brighter than #412D15 */
+    --input: 33 40% 20%;
+    --ring: 36 68% 48%;               /* same amber as primary */
 
     /* Gradients */
-    --gradient-primary: linear-gradient(135deg, hsl(215 42% 9%) 0%, hsl(215 60% 18%) 100%);
-    --gradient-hero: linear-gradient(180deg, hsl(215 42% 7%) 0%, hsl(215 50% 13%) 100%);
-    --gradient-accent: linear-gradient(90deg, hsl(199 100% 50%) 0%, hsl(185 100% 45%) 100%);
+    --gradient-primary: linear-gradient(135deg, hsl(30 44% 4%) 0%, hsl(33 51% 17%) 100%);
+    --gradient-hero: linear-gradient(180deg, hsl(30 44% 4%) 0%, hsl(30 40% 8%) 100%);
+    --gradient-accent: linear-gradient(90deg, hsl(36 68% 48%) 0%, hsl(36 58% 40%) 100%);
 
-    /* Shadows — stronger in dark mode */
-    --shadow-sm: 0 2px 8px hsl(0 0% 0% / 0.4);
-    --shadow-md: 0 4px 20px hsl(0 0% 0% / 0.50);
-    --shadow-lg: 0 8px 40px hsl(0 0% 0% / 0.60);
-    --shadow-glow: 0 0 40px hsl(199 100% 50% / 0.25);
+    /* Shadows */
+    --shadow-sm: 0 2px 8px hsl(0 0% 0% / 0.50);
+    --shadow-md: 0 4px 20px hsl(0 0% 0% / 0.65);
+    --shadow-lg: 0 8px 40px hsl(0 0% 0% / 0.78);
+    --shadow-glow: 0 0 40px hsl(36 68% 48% / 0.28);
 
     --transition-smooth: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   }
@@ -135,7 +136,7 @@
     font-family: 'Space Grotesk', 'Roboto Mono', monospace;
   }
 
-  /* ── Scrollbars — themed for dark UI ─────────────────────────────────── */
+  /* ── Scrollbars — warm dark UI ────────────────────────────────────────── */
   ::-webkit-scrollbar {
     width: 6px;
     height: 6px;
@@ -148,7 +149,7 @@
     border-radius: 3px;
   }
   ::-webkit-scrollbar-thumb:hover {
-    background: hsl(199 100% 50% / 0.5);
+    background: hsl(36 68% 48% / 0.5);
   }
 }
 
@@ -180,13 +181,18 @@
     transition: var(--transition-smooth);
   }
 
-  /* Cyan glow effect — use on hero elements */
-  .glow-cyan {
-    box-shadow: 0 0 20px hsl(199 100% 50% / 0.3), 0 0 60px hsl(199 100% 50% / 0.15);
+  /* Amber glow effect — use on hero/CTA elements */
+  .glow-amber {
+    box-shadow: 0 0 20px hsl(36 68% 48% / 0.35), 0 0 60px hsl(36 68% 48% / 0.15);
   }
 
-  /* Subtle card border highlight — top edge only, like the image */
+  /* Legacy alias — kept so any .glow-cyan class still compiles */
+  .glow-cyan {
+    box-shadow: 0 0 20px hsl(36 68% 48% / 0.35), 0 0 60px hsl(36 68% 48% / 0.15);
+  }
+
+  /* Subtle card border highlight — top edge, amber tint */
   .card-highlight {
-    border-top: 1px solid hsl(199 100% 50% / 0.4);
+    border-top: 1px solid hsl(36 68% 48% / 0.4);
   }
 }

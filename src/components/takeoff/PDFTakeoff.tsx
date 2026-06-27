@@ -929,17 +929,17 @@ export const PDFTakeoff = ({ projectId, estimateId, onAddCostItems }: PDFTakeoff
   // Calibration popover — floats above canvas, always visible during manual calibration
   const calibrationBar = state.calibrationMode === 'manual' && calibInstructVisible ? (
     <div className="absolute top-3 left-1/2 -translate-x-1/2 z-40 flex flex-col gap-2
-                    bg-gray-900/97 border border-blue-500/60 rounded-xl px-4 py-3
+                    bg-gray-900/97 border border-amber-600/60 rounded-xl px-4 py-3
                     shadow-2xl backdrop-blur-sm select-none pointer-events-auto min-w-[320px]">
       {/* Step indicator */}
       <div className="flex items-center gap-2">
-        <Ruler className="h-3.5 w-3.5 text-blue-400 shrink-0" />
-        <span className="text-[10px] font-semibold text-blue-400 uppercase tracking-widest">
+        <Ruler className="h-3.5 w-3.5 text-amber-400 shrink-0" />
+        <span className="text-[10px] font-semibold text-amber-400 uppercase tracking-widest">
           Calibrate Scale
         </span>
         <div className="flex gap-1 ml-auto">
-          <span className={`h-1.5 w-6 rounded-full transition-colors ${!manualCalibrationPoints ? 'bg-blue-500' : 'bg-blue-800'}`} />
-          <span className={`h-1.5 w-6 rounded-full transition-colors ${manualCalibrationPoints ? 'bg-blue-500' : 'bg-blue-800/40'}`} />
+          <span className={`h-1.5 w-6 rounded-full transition-colors ${!manualCalibrationPoints ? 'bg-amber-500' : 'bg-amber-900'}`} />
+          <span className={`h-1.5 w-6 rounded-full transition-colors ${manualCalibrationPoints ? 'bg-amber-500' : 'bg-amber-900/40'}`} />
         </div>
         <button
           onClick={handleCalibrationCancel}
@@ -953,7 +953,7 @@ export const PDFTakeoff = ({ projectId, estimateId, onAddCostItems }: PDFTakeoff
       {!manualCalibrationPoints ? (
         /* Step 1 — draw line */
         <div className="flex items-start gap-2">
-          <div className="flex-shrink-0 w-5 h-5 rounded-full bg-blue-600 text-white text-[10px] font-bold flex items-center justify-center mt-0.5">1</div>
+          <div className="flex-shrink-0 w-5 h-5 rounded-full bg-amber-600 text-white text-[10px] font-bold flex items-center justify-center mt-0.5">1</div>
           <div>
             <p className="text-sm text-gray-200 leading-snug">Click two points on a known dimension</p>
             <p className="text-[11px] text-gray-500 mt-0.5">e.g. a door width, room length, or grid line</p>
@@ -962,7 +962,7 @@ export const PDFTakeoff = ({ projectId, estimateId, onAddCostItems }: PDFTakeoff
       ) : (
         /* Step 2 — enter distance */
         <div className="flex items-start gap-2">
-          <div className="flex-shrink-0 w-5 h-5 rounded-full bg-blue-600 text-white text-[10px] font-bold flex items-center justify-center mt-0.5">2</div>
+          <div className="flex-shrink-0 w-5 h-5 rounded-full bg-amber-600 text-white text-[10px] font-bold flex items-center justify-center mt-0.5">2</div>
           <div className="flex-1 space-y-2">
             <div>
               <p className="text-sm text-gray-200 leading-snug">Enter the real-world distance</p>
@@ -981,14 +981,14 @@ export const PDFTakeoff = ({ projectId, estimateId, onAddCostItems }: PDFTakeoff
                 value={manualDistance}
                 onChange={e => setManualDistance(e.target.value)}
                 onKeyDown={e => { if (e.key === 'Enter') applyManualCalibration(); if (e.key === 'Escape') handleCalibrationCancel(); }}
-                className="w-24 h-7 text-sm bg-gray-800 border border-gray-600 rounded px-2 text-gray-100 focus:outline-none focus:border-blue-400"
+                className="w-24 h-7 text-sm bg-gray-800 border border-gray-600 rounded px-2 text-gray-100 focus:outline-none focus:border-amber-500"
                 min="0"
                 step="0.01"
               />
               <select
                 value={manualUnit}
                 onChange={e => setManualUnit(e.target.value as DistanceUnit)}
-                className="h-7 text-sm bg-gray-800 border border-gray-600 rounded px-1.5 text-gray-100 focus:outline-none focus:border-blue-400 cursor-pointer"
+                className="h-7 text-sm bg-gray-800 border border-gray-600 rounded px-1.5 text-gray-100 focus:outline-none focus:border-amber-500 cursor-pointer"
               >
                 <option value="m">m</option>
                 <option value="mm">mm</option>
@@ -999,7 +999,7 @@ export const PDFTakeoff = ({ projectId, estimateId, onAddCostItems }: PDFTakeoff
               <button
                 onClick={applyManualCalibration}
                 disabled={!manualDistance || parseFloat(manualDistance) <= 0}
-                className="px-3 h-7 bg-blue-600 hover:bg-blue-500 disabled:opacity-40 disabled:cursor-not-allowed text-white rounded text-xs font-medium transition-colors"
+                className="px-3 h-7 bg-amber-700 hover:bg-amber-600 disabled:opacity-40 disabled:cursor-not-allowed text-white rounded text-xs font-medium transition-colors"
               >
                 Apply ↵
               </button>
@@ -1350,7 +1350,7 @@ export const PDFTakeoff = ({ projectId, estimateId, onAddCostItems }: PDFTakeoff
                             <select
                               value={state.currentPageIndex + 1}
                               onChange={e => dispatch({ type: 'SET_CURRENT_PAGE', payload: Number(e.target.value) - 1 })}
-                              className="h-7 text-sm bg-gray-800 border border-gray-600 rounded text-gray-100 px-1 cursor-pointer focus:outline-none focus:border-blue-400 min-w-[100px]"
+                              className="h-7 text-sm bg-gray-800 border border-gray-600 rounded text-gray-100 px-1 cursor-pointer focus:outline-none focus:border-amber-500 min-w-[100px]"
                             >
                               {Array.from({ length: state.pdfFile.pageCount }, (_, idx) => idx + 1).map(p => {
                                 const scaleForPage = state.scales[p - 1];
@@ -1410,10 +1410,10 @@ export const PDFTakeoff = ({ projectId, estimateId, onAddCostItems }: PDFTakeoff
                       </div>
                     )}
                     {isTakeoffFullscreen && (focusMode || !fsContextOpen) && modMode === 'window' && (
-                      <div className="absolute top-3 left-3 z-20 flex items-center gap-1.5 px-2 py-1.5 bg-slate-800/95 border border-cyan-700/60 rounded-lg backdrop-blur-sm shadow-lg">
-                        <span className="text-[10px] font-semibold text-cyan-400 uppercase tracking-widest mr-1 shrink-0">Window</span>
+                      <div className="absolute top-3 left-3 z-20 flex items-center gap-1.5 px-2 py-1.5 bg-slate-800/95 border border-amber-700/60 rounded-lg backdrop-blur-sm shadow-lg">
+                        <span className="text-[10px] font-semibold text-amber-400 uppercase tracking-widest mr-1 shrink-0">Window</span>
                         {(['Awning','Casement','Sliding','Fixed','Louvre','Skylight'] as const).map((id) => (
-                          <button key={id} onClick={() => setWindowSubtype(id)} className={`h-6 px-2 rounded text-xs font-medium transition-colors ${windowSubtype === id ? 'bg-cyan-600 text-white' : 'bg-slate-700 text-slate-300 hover:bg-slate-600'}`}>{id}</button>
+                          <button key={id} onClick={() => setWindowSubtype(id)} className={`h-6 px-2 rounded text-xs font-medium transition-colors ${windowSubtype === id ? 'bg-amber-600 text-white' : 'bg-slate-700 text-slate-300 hover:bg-slate-600'}`}>{id}</button>
                         ))}
                       </div>
                     )}
@@ -1540,6 +1540,14 @@ export const PDFTakeoff = ({ projectId, estimateId, onAddCostItems }: PDFTakeoff
                     </div>
                   )}
                 </div>
+
+                {/* Plan Intelligence — below PDF canvas, full-width within the 3-col area */}
+                <AIPlanAnalysisPanel
+                  canvasElementRef={canvasRef}
+                  projectState="QLD"
+                  isCalibrated={state.isCalibrated}
+                  onAddCostItems={(items) => items.forEach(item => dispatch({ type: 'ADD_COST_ITEM', payload: item as any }))}
+                />
               </div>
 
               {/* Right Sidebar - Measurements */}
@@ -1655,7 +1663,7 @@ export const PDFTakeoff = ({ projectId, estimateId, onAddCostItems }: PDFTakeoff
                 </Card>
 
                 <Card className="p-4">
-                  <div className="space-y-3 max-h-[400px] overflow-y-auto">
+                  <div className="space-y-3 max-h-[calc(100vh-300px)] overflow-y-auto">
                     {filteredMeasurements.length === 0 ? (
                       <p className="text-sm text-muted-foreground">No measurements yet</p>
                     ) : (
@@ -1664,7 +1672,7 @@ export const PDFTakeoff = ({ projectId, estimateId, onAddCostItems }: PDFTakeoff
                         return (
                           <div
                             key={m.id}
-                            className={`p-3 border rounded-md space-y-2 transition-colors ${isSelected ? 'border-blue-500 bg-blue-950/20' : 'border-border/60 bg-muted/40'}`}
+                            className={`p-3 border rounded-md space-y-2 transition-colors ${isSelected ? 'border-amber-500 bg-amber-950/20' : 'border-border/60 bg-muted/40'}`}
                           >
                             <div className="flex items-center justify-between text-xs text-muted-foreground">
                               <div className="flex items-center gap-2">
@@ -1691,7 +1699,7 @@ export const PDFTakeoff = ({ projectId, estimateId, onAddCostItems }: PDFTakeoff
                                     className={`inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold border transition-colors ${
                                       m.wallClassification === 'external'
                                         ? 'bg-amber-900/40 text-amber-300 border-amber-700/50 hover:bg-amber-900/60'
-                                        : 'bg-sky-900/40 text-sky-300 border-sky-700/50 hover:bg-sky-900/60'
+                                        : 'bg-stone-700/40 text-stone-300 border-stone-600/50 hover:bg-stone-700/60'
                                     }`}
                                     title="Click to toggle External / Internal"
                                   >
@@ -1816,7 +1824,7 @@ export const PDFTakeoff = ({ projectId, estimateId, onAddCostItems }: PDFTakeoff
                           <Button
                             variant="outline"
                             size="sm"
-                            className={`w-full ${mixedUnits ? 'border-amber-400 text-amber-400 opacity-70 cursor-not-allowed' : 'border-blue-400 text-blue-400 hover:bg-blue-950/20'}`}
+                            className={`w-full ${mixedUnits ? 'border-amber-400 text-amber-400 opacity-70 cursor-not-allowed' : 'border-amber-500 text-amber-400 hover:bg-amber-950/20'}`}
                             disabled={mixedUnits}
                             onClick={() => {
                               if (mixedUnits) return;
@@ -1874,13 +1882,6 @@ export const PDFTakeoff = ({ projectId, estimateId, onAddCostItems }: PDFTakeoff
                   onUpdateMeasurement={(id, updates) => dispatch({ type: 'UPDATE_MEASUREMENT', payload: { id, updates } })}
                 />
 
-                {/* AI Plan Analyser */}
-                <AIPlanAnalysisPanel
-                  canvasElementRef={canvasRef}
-                  projectState="QLD"
-                  isCalibrated={state.isCalibrated}
-                  onAddCostItems={(items) => items.forEach(item => dispatch({ type: 'ADD_COST_ITEM', payload: item as any }))}
-                />
               </div>
             </div>
           )}
@@ -2011,7 +2012,7 @@ export const PDFTakeoff = ({ projectId, estimateId, onAddCostItems }: PDFTakeoff
                   className={`px-2.5 py-1 rounded text-xs font-medium border transition-colors ${
                     type === 'wall' ? 'border-amber-400 text-amber-700 hover:bg-amber-50 dark:text-amber-300 dark:hover:bg-amber-950/30' :
                     type === 'door' ? 'border-violet-400 text-violet-700 hover:bg-violet-50 dark:text-violet-300 dark:hover:bg-violet-950/30' :
-                    'border-cyan-400 text-cyan-700 hover:bg-cyan-50 dark:text-cyan-300 dark:hover:bg-cyan-950/30'
+                    'border-amber-500 text-amber-700 hover:bg-amber-50 dark:text-amber-300 dark:hover:bg-amber-950/30'
                   }`}
                 >
                   {type.charAt(0).toUpperCase() + type.slice(1)}

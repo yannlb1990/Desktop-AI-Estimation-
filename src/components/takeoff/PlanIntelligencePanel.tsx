@@ -1,6 +1,6 @@
 import React, { useState, useCallback } from 'react';
 import {
-  Loader2, Brain, AlertTriangle, AlertCircle, Info, CheckCircle2,
+  Loader2, ScanLine, AlertTriangle, AlertCircle, Info, CheckCircle2,
   Wrench, BookOpen, ClipboardList, Download,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -111,14 +111,14 @@ function SpecCard({ spec }: { spec: MaterialSpec }) {
 
 function StandardCard({ std }: { std: StandardRef }) {
   return (
-    <div className={`p-2.5 rounded border ${std.compliance_required ? 'bg-blue-50 border-blue-200' : 'bg-gray-50 border-gray-200'}`}>
+    <div className={`p-2.5 rounded border ${std.compliance_required ? 'bg-amber-950/30 border-amber-800/40' : 'bg-gray-50 border-gray-200'}`}>
       <div className="flex items-start justify-between gap-2">
         <div>
           <p className="text-xs font-bold">{std.code}</p>
           <p className="text-[11px] text-muted-foreground">{std.title}</p>
         </div>
         {std.compliance_required && (
-          <Badge className="bg-blue-600 text-white text-[10px] shrink-0">Required</Badge>
+          <Badge className="bg-amber-700 text-white text-[10px] shrink-0">Required</Badge>
         )}
       </div>
       <p className="text-xs mt-1 leading-relaxed">{std.context}</p>
@@ -269,7 +269,7 @@ export const PlanIntelligencePanel: React.FC<PlanIntelligencePanelProps> = ({
       {/* Header */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
-          <Brain className="h-5 w-5 text-primary" />
+          <ScanLine className="h-5 w-5 text-primary" />
           <h3 className="font-semibold text-sm">Plan Intelligence</h3>
         </div>
         {result && (
@@ -295,7 +295,7 @@ export const PlanIntelligencePanel: React.FC<PlanIntelligencePanelProps> = ({
         {busy ? (
           <><Loader2 className="h-4 w-4 mr-2 animate-spin" />{progress || 'Working…'}</>
         ) : (
-          <><Brain className="h-4 w-4 mr-2" />{result ? 'Re-analyse Plan' : 'Analyse Full Plan'}</>
+          <><ScanLine className="h-4 w-4 mr-2" />{result ? 'Re-analyse Plan' : 'Analyse Full Plan'}</>
         )}
       </Button>
 

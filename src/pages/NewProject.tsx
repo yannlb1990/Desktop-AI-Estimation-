@@ -10,7 +10,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Card } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "sonner";
-import { ArrowLeft, Upload, Zap, Loader2, FileText, Brain, CheckCircle } from "lucide-react";
+import { ArrowLeft, Upload, Zap, Loader2, FileText, ScanLine, CheckCircle } from "lucide-react";
 import { z } from "zod";
 import { analyzePDFWithData, PlanAnalysisResult, EstimatedLineItem } from "@/lib/aiPlanAnalyzer";
 import AIPlanAnalyzer from "@/components/AIPlanAnalyzer";
@@ -284,7 +284,7 @@ const NewProject = () => {
               Back to Upload
             </Button>
             <div className="flex items-center gap-2 text-sm text-muted-foreground">
-              <Brain className="h-4 w-4" />
+              <ScanLine className="h-4 w-4" />
               Analyzing: {formData.name || uploadedFile?.name}
             </div>
           </div>
@@ -310,7 +310,7 @@ const NewProject = () => {
         <Card className="p-12 text-center max-w-md">
           <div className="flex flex-col items-center gap-6">
             <div className="relative">
-              <Brain className="h-16 w-16 text-accent animate-pulse" />
+              <ScanLine className="h-16 w-16 text-accent animate-pulse" />
               <Loader2 className="h-8 w-8 text-primary absolute -bottom-1 -right-1 animate-spin" />
             </div>
             <div>
@@ -389,7 +389,7 @@ const NewProject = () => {
         <div className="mb-8">
           <h1 className="font-display text-2xl sm:text-3xl md:text-4xl font-bold mb-2">New Project</h1>
           <p className="text-muted-foreground">
-            Upload plans for AI-powered takeoff or create a manual estimate
+            Upload plans for smart takeoff or create a manual estimate
           </p>
         </div>
 
@@ -468,7 +468,7 @@ const NewProject = () => {
 
                 <div className="bg-muted/50 p-6 rounded-lg border border-border">
                   <div className="flex items-start gap-3">
-                    <Brain className="h-6 w-6 text-accent mt-1 flex-shrink-0" />
+                    <ScanLine className="h-6 w-6 text-accent mt-1 flex-shrink-0" />
                     <div className="flex-1">
                       <h3 className="font-semibold text-lg mb-2">AI-Powered Plan Analysis</h3>
                       <p className="text-sm text-muted-foreground mb-3">
@@ -522,7 +522,7 @@ const NewProject = () => {
                       </>
                     ) : (
                       <>
-                        <Brain className="mr-2 h-4 w-4" />
+                        <ScanLine className="mr-2 h-4 w-4" />
                         Analyze Plans
                       </>
                     )}

@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Brain, Loader2, ChevronDown, ChevronRight, Plus } from 'lucide-react';
+import { ScanLine, Loader2, ChevronDown, ChevronRight, Plus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -47,7 +47,7 @@ export function AIPlanAnalysisPanel({
     onAddCostItems([{
       id: crypto.randomUUID(),
       trade: trade.trade,
-      description: `${trade.trade} (AI estimate — ${Math.round(trade.confidence * 100)}% confidence)`,
+      description: `${trade.trade} (estimated — ${Math.round(trade.confidence * 100)}% confidence)`,
       quantity: trade.quantity,
       unit: trade.unit,
       rate: 0,
@@ -61,7 +61,7 @@ export function AIPlanAnalysisPanel({
       result.estimatedTrades.map((t) => ({
         id: crypto.randomUUID(),
         trade: t.trade,
-        description: `${t.trade} (AI estimate — ${Math.round(t.confidence * 100)}% confidence)`,
+        description: `${t.trade} (estimated — ${Math.round(t.confidence * 100)}% confidence)`,
         quantity: t.quantity,
         unit: t.unit,
         rate: 0,
@@ -77,9 +77,9 @@ export function AIPlanAnalysisPanel({
         onClick={() => setExpanded((v) => !v)}
       >
         <div className="flex items-center gap-2">
-          <Brain className="h-4 w-4 text-purple-400" />
-          <span className="font-semibold text-sm">AI Plan Analyser</span>
-          <Badge className="text-[10px] px-1.5 py-0.5 bg-purple-900/40 text-purple-300 border border-purple-700/50">Beta</Badge>
+          <ScanLine className="h-4 w-4 text-amber-500" />
+          <span className="font-semibold text-sm">Plan Intelligence</span>
+          <Badge className="text-[10px] px-1.5 py-0.5 bg-amber-900/40 text-amber-300 border border-amber-700/50">Beta</Badge>
         </div>
         {expanded ? <ChevronDown className="h-4 w-4 text-muted-foreground" /> : <ChevronRight className="h-4 w-4 text-muted-foreground" />}
       </button>
@@ -89,7 +89,7 @@ export function AIPlanAnalysisPanel({
           {!result && !loading && (
             <div className="space-y-2">
               <p className="text-xs text-muted-foreground">
-                Capture the current page and let Claude estimate rooms, openings, and trade quantities from the plan image.
+                Capture the current page and let Metricore estimate rooms, openings, and trade quantities from the plan image.
               </p>
               {!isCalibrated && (
                 <p className="text-[11px] text-amber-400">
@@ -98,11 +98,11 @@ export function AIPlanAnalysisPanel({
               )}
               <Button
                 size="sm"
-                className="w-full gap-2 bg-purple-700 hover:bg-purple-600 text-white"
+                className="w-full gap-2 bg-amber-700 hover:bg-amber-600 text-white"
                 onClick={handleAnalyse}
                 disabled={loading}
               >
-                <Brain className="h-3.5 w-3.5" />
+                <ScanLine className="h-3.5 w-3.5" />
                 Analyse Current Page
               </Button>
             </div>
@@ -110,8 +110,8 @@ export function AIPlanAnalysisPanel({
 
           {loading && (
             <div className="flex flex-col items-center gap-2 py-4">
-              <Loader2 className="h-6 w-6 text-purple-400 animate-spin" />
-              <p className="text-xs text-muted-foreground">Analysing plan with Claude…</p>
+              <Loader2 className="h-6 w-6 text-amber-500 animate-spin" />
+              <p className="text-xs text-muted-foreground">Analysing plan…</p>
             </div>
           )}
 

@@ -27,7 +27,7 @@ type QuoteStatus = 'draft' | 'sent' | 'won' | 'lost';
 
 const QUOTE_STATUS_CONFIG: Record<QuoteStatus, { label: string; color: string; bg: string; icon: React.ReactNode }> = {
   draft:  { label: 'Draft',  color: 'text-muted-foreground', bg: 'bg-muted/60 border-border',         icon: <FileText className="h-3 w-3" /> },
-  sent:   { label: 'Sent',   color: 'text-purple-400',       bg: 'bg-purple-400/10 border-purple-400/30', icon: <Send className="h-3 w-3" /> },
+  sent:   { label: 'Sent',   color: 'text-orange-400',       bg: 'bg-orange-400/10 border-orange-400/30', icon: <Send className="h-3 w-3" /> },
   won:    { label: 'Won',    color: 'text-green-400',        bg: 'bg-green-400/10 border-green-400/30',  icon: <Trophy className="h-3 w-3" /> },
   lost:   { label: 'Lost',   color: 'text-red-400',          bg: 'bg-red-400/10 border-red-400/30',      icon: <XCircle className="h-3 w-3" /> },
 };
@@ -62,10 +62,10 @@ const fmtDate = (d: string | undefined) => {
 };
 
 const STAGE_CONFIG: Record<Stage, { color: string; dot: string; bg: string }> = {
-  'Takeoff':      { color: 'text-blue-400',   dot: 'bg-blue-400',   bg: 'bg-blue-400/10 border-blue-400/30' },
+  'Takeoff':      { color: 'text-amber-400',  dot: 'bg-amber-400',  bg: 'bg-amber-400/10 border-amber-400/30' },
   'Estimating':   { color: 'text-amber-400',  dot: 'bg-amber-400',  bg: 'bg-amber-400/10 border-amber-400/30' },
   'Tender Ready': { color: 'text-green-400',  dot: 'bg-green-400',  bg: 'bg-green-400/10 border-green-400/30' },
-  'Sent':         { color: 'text-purple-400', dot: 'bg-purple-400', bg: 'bg-purple-400/10 border-purple-400/30' },
+  'Sent':         { color: 'text-orange-400', dot: 'bg-orange-400', bg: 'bg-orange-400/10 border-orange-400/30' },
 };
 
 // ── Project completion score ─────────────────────────────────────────────────
@@ -257,7 +257,7 @@ const Dashboard = () => {
           ? 'bg-red-500/10 border-red-500/30 text-red-400'
           : warning
           ? 'bg-amber-500/10 border-amber-500/30 text-amber-400'
-          : 'bg-blue-500/10 border-blue-500/30 text-blue-400';
+          : 'bg-amber-500/10 border-amber-500/30 text-amber-400';
         return (
           <div className={`border-b px-4 md:px-6 py-2.5 flex flex-wrap items-center justify-between gap-x-3 gap-y-2 text-sm ${colorClass}`}>
             <div className="flex items-center gap-2">
@@ -681,7 +681,7 @@ const Dashboard = () => {
               tour: 'Skip the PDF. Enter rooms and items directly. Great for fast ballpark quotes.',
             },
             {
-              icon: <BarChart3 className="h-5 w-5 text-blue-400" />,
+              icon: <BarChart3 className="h-5 w-5 text-amber-400" />,
               title: 'Market Insights',
               desc: sub.caps.marketInsights ? 'Current Australian build rates' : 'Pro plan. Upgrade to access.',
               action: () => sub.caps.marketInsights ? navigate('/insights') : navigate('/pricing'),

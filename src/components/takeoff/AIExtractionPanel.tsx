@@ -1,6 +1,6 @@
 import React, { useState, useCallback, useEffect } from 'react';
 import DOMPurify from 'dompurify';
-import { Loader2, Sparkles, FileSearch, Table2, Ruler, AlertCircle, CheckCircle2, ChevronDown, ChevronUp, DoorOpen, LayoutDashboard } from 'lucide-react';
+import { Loader2, Layers, FileSearch, Table2, Ruler, AlertCircle, CheckCircle2, ChevronDown, ChevronUp, DoorOpen, LayoutDashboard } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -177,7 +177,7 @@ export const AIExtractionPanel: React.FC<AIExtractionPanelProps> = ({
     <Card className="p-4 space-y-4">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
-          <Sparkles className="h-5 w-5 text-primary" />
+          <Layers className="h-5 w-5 text-primary" />
           <h3 className="font-semibold">AI Extraction</h3>
         </div>
         {apiAvailable === true && (
