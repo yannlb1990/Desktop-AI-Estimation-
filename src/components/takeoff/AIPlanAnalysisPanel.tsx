@@ -1,10 +1,11 @@
 import React, { useState } from 'react';
-import { ScanLine, Loader2, ChevronDown, ChevronRight, Plus } from 'lucide-react';
+import { ScanLine, Loader2, ChevronDown, ChevronRight, Plus, Lock } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { useAIPlanAnalysis, AnalysisTrade } from '@/hooks/useAIPlanAnalysis';
 import { CostItem } from '@/lib/takeoff/types';
+import { getSubscriptionStatus } from '@/lib/subscription';
 
 interface AIPlanAnalysisPanelProps {
   canvasElementRef: React.RefObject<HTMLCanvasElement | null>;
@@ -32,6 +33,8 @@ export function AIPlanAnalysisPanel({
   const { analyse, loading, result, error, reset } = useAIPlanAnalysis();
   const [expanded, setExpanded] = useState(true);
   const [roomsOpen, setRoomsOpen] = useState(false);
+  const { caps, isTrialing, effectivePlan } = getSubscriptionStatus();
+  const locked = !caps.planAnalysis;
 
   const handleAnalyse = async () => {
     const canvas = canvasElementRef.current;
@@ -86,7 +89,29 @@ export function AIPlanAnalysisPanel({
 
       {expanded && (
         <div className="space-y-3">
-          {!result && !loading && (
+          {locked && (
+            <div className="flex flex-col items-center gap-2.5 py-4 px-2 text-center rounded-md bg-muted/20 border border-border/40">
+              <Lock className="h-5 w-5 text-muted-foreground/50" />
+              <p className="text-xs text-muted-foreground">
+                Plan Intelligence is available on <span className="text-foreground font-medium">Pro</span> and <span className="text-foreground font-medium">Business</span> plans.
+              </p>
+              {isTrialing && (
+                <p className="text-[11px] text-muted-foreground/70">
+                  Your {effectivePlan} trial does not include this feature.
+                </p>
+              )}
+              <Button
+                size="sm"
+                variant="outline"
+                className="text-xs"
+                onClick={() => window.location.href = '/pricing'}
+              >
+                Upgrade to unlock
+              </Button>
+            </div>
+          )}
+
+          {!locked && !result && !loading && (
             <div className="space-y-2">
               <p className="text-xs text-muted-foreground">
                 Capture the current page and let Metricore estimate rooms, openings, and trade quantities from the plan image.
@@ -108,14 +133,14 @@ export function AIPlanAnalysisPanel({
             </div>
           )}
 
-          {loading && (
+          {!locked && loading && (
             <div className="flex flex-col items-center gap-2 py-4">
               <Loader2 className="h-6 w-6 text-amber-500 animate-spin" />
               <p className="text-xs text-muted-foreground">Analysing plan…</p>
             </div>
           )}
 
-          {error && (
+          {!locked && error && (
             <div className="space-y-2">
               <p className="text-xs text-red-400">{error}</p>
               <Button size="sm" variant="outline" onClick={reset} className="w-full">
@@ -124,7 +149,7 @@ export function AIPlanAnalysisPanel({
             </div>
           )}
 
-          {result && (
+          {!locked && result && (
             <div className="space-y-3">
               {/* Summary row */}
               <div className="grid grid-cols-3 gap-2 text-center">

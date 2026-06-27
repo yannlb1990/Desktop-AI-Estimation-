@@ -1,14 +1,14 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" fill="none">
-  <!-- Dark navy background -->
-  <rect width="32" height="32" rx="6" fill="#0f172a"/>
-  <!-- Wavy m mark in white -->
+  <!-- Dark warm brown background -->
+  <rect width="32" height="32" rx="6" fill="#1F150C"/>
+  <!-- Wavy m mark in cream -->
   <path
     d="M 4,26 L 4,17 C 4,6 12,6 12,17 C 12,28 20,28 20,17 C 20,6 28,6 28,17 L 28,26"
-    stroke="white"
+    stroke="#E1DCC9"
     stroke-width="5"
     stroke-linecap="round"
     stroke-linejoin="round"
   />
-  <!-- Blue dot -->
-  <circle cx="29.5" cy="27.5" r="2.5" fill="#1e4db7"/>
+  <!-- Brown dot -->
+  <circle cx="29.5" cy="27.5" r="2.5" fill="#412D15"/>
 </svg>

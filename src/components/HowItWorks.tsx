@@ -50,9 +50,9 @@ function Counter({ to, suffix = "" }: { to: number; suffix?: string }) {
 function UploadVisual() {
   return (
     <div className="relative w-full h-52 flex items-center justify-center">
-      <div className="w-64 h-40 rounded-2xl border-2 border-dashed border-cyan-400/25 bg-cyan-400/[0.03] flex flex-col items-center justify-center gap-3 relative">
+      <div className="w-64 h-40 rounded-2xl border-2 border-dashed border-[#E1DCC9]/20 bg-[#E1DCC9]/[0.04] flex flex-col items-center justify-center gap-3 relative">
         <div
-          className="absolute -top-6 left-1/2 -translate-x-1/2 flex items-center gap-2 bg-[#111e30] border border-white/10 rounded-xl px-4 py-2.5 shadow-lg"
+          className="absolute -top-6 left-1/2 -translate-x-1/2 flex items-center gap-2 bg-card/80 border border-white/10 rounded-xl px-4 py-2.5 shadow-lg"
           style={{ animation: "hiw-float 2s ease-in-out infinite alternate" }}
         >
           <div className="w-8 h-10 rounded bg-red-500/20 border border-red-400/30 flex items-center justify-center shrink-0">
@@ -63,7 +63,7 @@ function UploadVisual() {
             <div className="text-[9px] text-white/30 mt-1">2.4 MB · Architectural Plans</div>
           </div>
         </div>
-        <Upload className="h-6 w-6 text-cyan-400/40" />
+        <Upload className="h-6 w-6 text-[#E1DCC9]/40" />
         <span className="text-[11px] font-mono text-white/25">Drop any PDF, DXF or image</span>
       </div>
       <div className="absolute bottom-2 right-6 text-[9px] font-mono text-emerald-400/80 bg-emerald-400/10 border border-emerald-400/20 px-2.5 py-1 rounded-full">
@@ -85,8 +85,8 @@ function UploadVisual() {
 function MeasureVisual() {
   return (
     <div className="relative w-full h-56 flex items-center justify-center">
-      <div className="w-full max-w-sm h-52 rounded-xl overflow-hidden border border-white/8 bg-[#0f1c2e] relative">
-        <div className="flex items-center gap-1.5 px-2.5 py-1.5 bg-[#0a1522] border-b border-white/6">
+      <div className="w-full max-w-sm h-52 rounded-xl overflow-hidden border border-white/8 bg-card relative">
+        <div className="flex items-center gap-1.5 px-2.5 py-1.5 bg-background border-b border-white/6">
           <span className="text-[9px] font-mono text-white/25 flex-1 truncate">Ground_Floor_DA-01.pdf · Page 1</span>
           <span className="text-[8px] font-mono text-emerald-400/70 bg-emerald-400/10 px-1.5 py-0.5 rounded">1:100</span>
         </div>
@@ -101,25 +101,25 @@ function MeasureVisual() {
           <line x1="140" y1="12" x2="140" y2="167" stroke="#c8d8e8" strokeWidth="1.2" />
           <line x1="140" y1="95" x2="300" y2="95" stroke="#c8d8e8" strokeWidth="1.2" />
           <line x1="220" y1="12" x2="220" y2="167" stroke="#c8d8e8" strokeWidth="1.2" />
-          <polygon points="20,12 140,12 140,167 20,167" fill="rgba(34,211,238,0.10)" stroke="#22d3ee" strokeWidth="1.4" />
-          <circle cx="20" cy="12" r="2.5" fill="#22d3ee" />
-          <circle cx="140" cy="12" r="2.5" fill="#22d3ee" />
-          <circle cx="140" cy="167" r="2.5" fill="#22d3ee" />
-          <circle cx="20" cy="167" r="2.5" fill="#22d3ee" />
-          <rect x="45" y="79" width="66" height="18" rx="4" fill="rgba(34,211,238,0.22)" stroke="#22d3ee" strokeWidth="0.8" />
-          <text x="78" y="91" textAnchor="middle" fontSize="9.5" fontFamily="monospace" fill="#22d3ee" fontWeight="bold">44.6 m²</text>
+          <polygon points="20,12 140,12 140,167 20,167" fill="rgba(225,220,201,0.10)" stroke="#E1DCC9" strokeWidth="1.4" />
+          <circle cx="20" cy="12" r="2.5" fill="#E1DCC9" />
+          <circle cx="140" cy="12" r="2.5" fill="#E1DCC9" />
+          <circle cx="140" cy="167" r="2.5" fill="#E1DCC9" />
+          <circle cx="20" cy="167" r="2.5" fill="#E1DCC9" />
+          <rect x="45" y="79" width="66" height="18" rx="4" fill="rgba(225,220,201,0.22)" stroke="#E1DCC9" strokeWidth="0.8" />
+          <text x="78" y="91" textAnchor="middle" fontSize="9.5" fontFamily="monospace" fill="#E1DCC9" fontWeight="bold">44.6 m²</text>
           <text x="80" y="50" textAnchor="middle" fontSize="7" fill="rgba(200,216,232,0.3)" fontFamily="system-ui">LIVING / DINING</text>
           <text x="178" y="50" textAnchor="middle" fontSize="6.5" fill="rgba(200,216,232,0.25)" fontFamily="system-ui">KITCHEN</text>
           <text x="257" y="50" textAnchor="middle" fontSize="6.5" fill="rgba(200,216,232,0.25)" fontFamily="system-ui">MASTER</text>
           <text x="178" y="130" textAnchor="middle" fontSize="6.5" fill="rgba(200,216,232,0.25)" fontFamily="system-ui">BED 2</text>
           <text x="257" y="130" textAnchor="middle" fontSize="6.5" fill="rgba(200,216,232,0.25)" fontFamily="system-ui">WC / ENS</text>
-          <circle cx="140" cy="167" r="5" fill="none" stroke="#22d3ee" strokeWidth="0.8" opacity="0.5">
+          <circle cx="140" cy="167" r="5" fill="none" stroke="#E1DCC9" strokeWidth="0.8" opacity="0.5">
             <animate attributeName="r" values="4;8;4" dur="2s" repeatCount="indefinite" />
             <animate attributeName="opacity" values="0.5;0.1;0.5" dur="2s" repeatCount="indefinite" />
           </circle>
-          <circle cx="140" cy="167" r="2" fill="#22d3ee" />
+          <circle cx="140" cy="167" r="2" fill="#E1DCC9" />
         </svg>
-        <div className="absolute bottom-1.5 left-2 right-2 flex items-center justify-between px-2 py-1 bg-[#0a1522]/90 border border-white/6 rounded text-[8px] font-mono">
+        <div className="absolute bottom-1.5 left-2 right-2 flex items-center justify-between px-2 py-1 bg-background/90 border border-white/6 rounded text-[8px] font-mono">
           <span className="text-cyan-400">Polygon · 4 pts · 44.6 m²</span>
           <span className="text-white/20">3 rooms remaining</span>
         </div>
@@ -130,7 +130,7 @@ function MeasureVisual() {
 
 function ExportVisual() {
   const docs = [
-    { label: "Tender PDF",      color: "#22d3ee", bg: "rgba(34,211,238,0.08)",  border: "rgba(34,211,238,0.20)" },
+    { label: "Tender PDF",      color: "#E1DCC9", bg: "rgba(225,220,201,0.08)",  border: "rgba(225,220,201,0.20)" },
     { label: "BOQ / Costs",     color: "#818cf8", bg: "rgba(129,140,248,0.08)", border: "rgba(129,140,248,0.20)" },
     { label: "Gantt Schedule",  color: "#34d399", bg: "rgba(52,211,153,0.08)",  border: "rgba(52,211,153,0.20)" },
     { label: "Supplier Quotes", color: "#fb923c", bg: "rgba(251,146,60,0.08)",  border: "rgba(251,146,60,0.20)" },
@@ -191,7 +191,7 @@ const steps = [
 
 const HowItWorks = () => {
   return (
-    <section id="how-it-works" className="bg-[#09111f] py-20 md:py-28">
+    <section id="how-it-works" className="bg-background py-20 md:py-28">
       <div className="container mx-auto px-6 lg:px-12">
 
         <motion.div
@@ -202,8 +202,8 @@ const HowItWorks = () => {
           className="max-w-2xl mb-16 md:mb-20"
         >
           <div className="flex items-center gap-3 mb-6">
-            <div className="h-px w-8 bg-cyan-400/50" />
-            <span className="text-xs font-mono text-cyan-400/60 uppercase tracking-widest">How it works</span>
+            <div className="h-px w-8 bg-[#E1DCC9]/50" />
+            <span className="text-xs font-mono text-[#E1DCC9]/60 uppercase tracking-widest">How it works</span>
           </div>
           <h2 className="font-display text-4xl sm:text-5xl font-bold text-white leading-tight">
             Upload. Measure. Export.
@@ -223,11 +223,11 @@ const HowItWorks = () => {
             >
               <div className="flex items-center gap-4">
                 <div className="relative shrink-0">
-                  <div className="w-14 h-14 rounded-2xl bg-[#111e30] border border-white/8 flex items-center justify-center">
+                  <div className="w-14 h-14 rounded-2xl bg-card/80 border border-white/8 flex items-center justify-center">
                     <step.icon className="h-6 w-6 text-cyan-400" />
                   </div>
-                  <div className="absolute -top-2 -right-2 w-5 h-5 rounded-full bg-cyan-400 flex items-center justify-center">
-                    <span className="text-[9px] font-bold text-[#09111f]">{i + 1}</span>
+                  <div className="absolute -top-2 -right-2 w-5 h-5 rounded-full bg-[#E1DCC9] flex items-center justify-center">
+                    <span className="text-[9px] font-bold text-black">{i + 1}</span>
                   </div>
                 </div>
                 <div>
@@ -240,7 +240,7 @@ const HowItWorks = () => {
 
               <div className="space-y-3">
                 <p className="text-white/50 text-sm leading-relaxed">{step.body}</p>
-                <div className="inline-flex items-center gap-2 text-[10px] font-mono text-cyan-400/60 bg-cyan-400/5 border border-cyan-400/15 rounded-full px-3 py-1">
+                <div className="inline-flex items-center gap-2 text-[10px] font-mono text-[#E1DCC9]/60 bg-[#E1DCC9]/5 border border-[#E1DCC9]/12 rounded-full px-3 py-1">
                   {step.detail}
                 </div>
               </div>
@@ -278,7 +278,7 @@ const HowItWorks = () => {
           <div className="sm:ml-auto">
             <button
               onClick={() => window.location.href = "/project/new"}
-              className="inline-flex items-center px-7 py-3 rounded-full bg-cyan-400 text-[#09111f] font-bold hover:bg-cyan-300 transition-colors"
+              className="inline-flex items-center px-7 py-3 rounded-full bg-cyan-400 text-[#09111f] font-bold hover:bg-[#d4cfb5] transition-colors"
             >
               Start your first takeoff
             </button>

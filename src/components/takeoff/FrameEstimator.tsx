@@ -723,10 +723,10 @@ export function FrameEstimator({
     <div className="border border-border/60 rounded-lg overflow-hidden bg-card">
 
       {/* ── Header ─────────────────────────────────────────────────────────── */}
-      <div className="flex items-center gap-2 px-3 py-2.5 border-b border-border/40 bg-muted/10">
+      <div className="border-b border-border/40 bg-muted/10">
         <button
           onClick={() => setOpen(p => !p)}
-          className="flex items-center gap-2 flex-1 min-w-0 text-left"
+          className="flex items-center gap-2 w-full px-3 py-2 text-left"
         >
           {open
             ? <ChevronDown className="h-4 w-4 text-muted-foreground shrink-0" />
@@ -740,15 +740,16 @@ export function FrameEstimator({
             </Badge>
           )}
         </button>
-
-        <SegmentedControl
-          value={mode}
-          onChange={setMode}
-          options={[
-            { label: 'Auto', value: 'auto' as const, icon: <Zap className="h-3 w-3" /> },
-            { label: 'Manual', value: 'manual' as const, icon: <Pencil className="h-3 w-3" /> },
-          ]}
-        />
+        <div className="px-3 pb-2">
+          <SegmentedControl
+            value={mode}
+            onChange={setMode}
+            options={[
+              { label: 'Auto', value: 'auto' as const, icon: <Zap className="h-3 w-3" /> },
+              { label: 'Manual', value: 'manual' as const, icon: <Pencil className="h-3 w-3" /> },
+            ]}
+          />
+        </div>
       </div>
 
       {open && (

@@ -10,14 +10,14 @@ import { FileSearch, BadgeDollarSign, FileOutput } from "lucide-react";
 
 /* ─── Takeoff Canvas Mockup ─────────────────────────────────────────────── */
 const TakeoffPreview = () => (
-  <div className="rounded-xl overflow-hidden border border-white/8 bg-[#0d1829] shadow-[0_20px_60px_rgba(0,0,0,0.5)]">
-    <div className="flex items-center gap-2 px-3 py-2 bg-[#111e30] border-b border-white/8">
+  <div className="rounded-xl overflow-hidden border border-white/8 bg-card shadow-[0_20px_60px_rgba(0,0,0,0.5)]">
+    <div className="flex items-center gap-2 px-3 py-2 bg-card/80 border-b border-white/8">
       <div className="flex gap-1"><div className="w-2.5 h-2.5 rounded-full bg-[#ff5f57]" /><div className="w-2.5 h-2.5 rounded-full bg-[#febc2e]" /><div className="w-2.5 h-2.5 rounded-full bg-[#28c840]" /></div>
       <span className="text-[10px] text-white/30 font-mono ml-2 flex-1 truncate">Ground_Floor_DA-01.pdf</span>
       <span className="text-[9px] font-mono text-emerald-400/80 bg-emerald-400/10 border border-emerald-400/20 px-1.5 py-0.5 rounded">✓ 1:100</span>
     </div>
     <div className="flex">
-      <div className="w-32 shrink-0 bg-[#0a1522] border-r border-white/6 p-2 space-y-1">
+      <div className="w-32 shrink-0 bg-background border-r border-white/6 p-2 space-y-1">
         <div className="text-[9px] font-mono text-white/30 uppercase tracking-widest px-1 mb-2">Measurements</div>
         {[
           { label: "Living Rm", val: "44.6 m²", active: true },
@@ -29,7 +29,7 @@ const TakeoffPreview = () => (
           <div key={r.label} className="flex items-center gap-1.5 px-1 py-0.5">
             <div className={`w-1.5 h-1.5 rounded-full shrink-0 ${r.active ? "bg-cyan-400" : "bg-cyan-400/25"}`} />
             <span className="text-[9px] text-white/40 flex-1 truncate">{r.label}</span>
-            <span className={`text-[9px] font-mono ${r.active ? "text-cyan-400" : "text-cyan-400/40"}`}>{r.val}</span>
+            <span className={`text-[9px] font-mono ${r.active ? "text-cyan-400" : "text-[#E1DCC9]/40"}`}>{r.val}</span>
           </div>
         ))}
         <div className="border-t border-white/6 mt-2 pt-2 px-1 flex justify-between">
@@ -37,7 +37,7 @@ const TakeoffPreview = () => (
           <span className="text-[9px] font-mono text-cyan-400 font-bold">92.7 m²</span>
         </div>
       </div>
-      <div className="flex-1 bg-[#0f1c2e] relative">
+      <div className="flex-1 bg-card relative">
         <svg viewBox="0 0 280 200" className="w-full h-full" style={{ display: "block" }}>
           <defs>
             <pattern id="ft-grid" width="15" height="15" patternUnits="userSpaceOnUse">
@@ -49,23 +49,23 @@ const TakeoffPreview = () => (
           <line x1="110" y1="12" x2="110" y2="184" stroke="#c8d8e8" strokeWidth="1.2" />
           <line x1="110" y1="100" x2="260" y2="100" stroke="#c8d8e8" strokeWidth="1.2" />
           <line x1="190" y1="12" x2="190" y2="184" stroke="#c8d8e8" strokeWidth="1.2" />
-          <polygon points="20,12 110,12 110,184 20,184" fill="rgba(34,211,238,0.08)" stroke="#22d3ee" strokeWidth="1.2" />
-          <circle cx="20" cy="12" r="2" fill="#22d3ee" /><circle cx="110" cy="12" r="2" fill="#22d3ee" />
-          <circle cx="110" cy="184" r="2" fill="#22d3ee" /><circle cx="20" cy="184" r="2" fill="#22d3ee" />
-          <rect x="35" y="89" width="56" height="16" rx="3" fill="rgba(34,211,238,0.2)" stroke="#22d3ee" strokeWidth="0.8" />
-          <text x="63" y="100" textAnchor="middle" fontSize="9" fontFamily="monospace" fill="#22d3ee" fontWeight="bold">44.6 m²</text>
+          <polygon points="20,12 110,12 110,184 20,184" fill="rgba(225,220,201,0.08)" stroke="#E1DCC9" strokeWidth="1.2" />
+          <circle cx="20" cy="12" r="2" fill="#E1DCC9" /><circle cx="110" cy="12" r="2" fill="#E1DCC9" />
+          <circle cx="110" cy="184" r="2" fill="#E1DCC9" /><circle cx="20" cy="184" r="2" fill="#E1DCC9" />
+          <rect x="35" y="89" width="56" height="16" rx="3" fill="rgba(225,220,201,0.2)" stroke="#E1DCC9" strokeWidth="0.8" />
+          <text x="63" y="100" textAnchor="middle" fontSize="9" fontFamily="monospace" fill="#E1DCC9" fontWeight="bold">44.6 m²</text>
           <text x="65" y="58" textAnchor="middle" fontSize="6.5" fill="rgba(200,216,232,0.35)" fontFamily="system-ui">LIVING / DINING</text>
           <text x="148" y="56" textAnchor="middle" fontSize="6" fill="rgba(200,216,232,0.3)" fontFamily="system-ui">KITCHEN</text>
           <text x="222" y="56" textAnchor="middle" fontSize="6" fill="rgba(200,216,232,0.3)" fontFamily="system-ui">MASTER</text>
           <text x="148" y="148" textAnchor="middle" fontSize="6" fill="rgba(200,216,232,0.3)" fontFamily="system-ui">BED 2</text>
           <text x="222" y="148" textAnchor="middle" fontSize="6" fill="rgba(200,216,232,0.3)" fontFamily="system-ui">ENSUITE</text>
-          <circle cx="110" cy="184" r="5" fill="none" stroke="#22d3ee" strokeWidth="0.8" opacity="0.5">
+          <circle cx="110" cy="184" r="5" fill="none" stroke="#E1DCC9" strokeWidth="0.8" opacity="0.5">
             <animate attributeName="r" values="4;7;4" dur="2s" repeatCount="indefinite" />
             <animate attributeName="opacity" values="0.5;0.15;0.5" dur="2s" repeatCount="indefinite" />
           </circle>
-          <circle cx="110" cy="184" r="2" fill="#22d3ee" />
+          <circle cx="110" cy="184" r="2" fill="#E1DCC9" />
         </svg>
-        <div className="absolute bottom-1.5 left-2 right-2 flex items-center justify-between px-2 py-1 bg-[#0a1522]/90 border border-white/6 rounded text-[9px] font-mono">
+        <div className="absolute bottom-1.5 left-2 right-2 flex items-center justify-between px-2 py-1 bg-background/90 border border-white/6 rounded text-[9px] font-mono">
           <span className="text-cyan-400">Polygon · 4 pts · 44.6 m²</span>
           <span className="text-white/25">Page 1 / 3</span>
         </div>
@@ -76,9 +76,9 @@ const TakeoffPreview = () => (
 
 /* ─── Cost Breakdown Mockup ──────────────────────────────────────────────── */
 const CostBreakdownPreview = () => (
-  <div className="rounded-xl overflow-hidden border border-white/8 bg-[#0d1829] shadow-[0_20px_60px_rgba(0,0,0,0.5)]">
-    <div className="flex items-center gap-2 px-3 py-2.5 bg-[#111e30] border-b border-white/8">
-      <BadgeDollarSign className="h-3.5 w-3.5 text-cyan-400/70" />
+  <div className="rounded-xl overflow-hidden border border-white/8 bg-card shadow-[0_20px_60px_rgba(0,0,0,0.5)]">
+    <div className="flex items-center gap-2 px-3 py-2.5 bg-card/80 border-b border-white/8">
+      <BadgeDollarSign className="h-3.5 w-3.5 text-[#E1DCC9]/70" />
       <span className="text-[10px] text-white/40 font-mono">Trade Breakdown — 42 Riverside Ave</span>
       <span className="ml-auto text-[9px] font-mono text-emerald-400/80 bg-emerald-400/10 border border-emerald-400/20 px-1.5 py-0.5 rounded">✓ QLD Rates 2024</span>
     </div>
@@ -104,7 +104,7 @@ const CostBreakdownPreview = () => (
         </div>
       ))}
       <div className="mt-3 space-y-1.5">
-        <div className="flex items-center justify-between px-3 py-2 rounded-lg bg-blue-500/20 border border-blue-500/30">
+        <div className="flex items-center justify-between px-3 py-2 rounded-lg bg-[#E1DCC9]/8 border border-[#E1DCC9]/15">
           <span className="text-[10px] font-mono text-white font-semibold uppercase tracking-wide">Base Estimate</span>
           <span className="text-[12px] font-bold text-white font-mono">$65,416</span>
         </div>
@@ -112,7 +112,7 @@ const CostBreakdownPreview = () => (
           <span className="text-[10px] font-mono text-white font-semibold uppercase tracking-wide">Margin (15%)</span>
           <span className="text-[12px] font-bold text-white font-mono">+$9,812</span>
         </div>
-        <div className="flex items-center justify-between px-3 py-2.5 rounded-lg bg-cyan-400/10 border border-cyan-400/20">
+        <div className="flex items-center justify-between px-3 py-2.5 rounded-lg bg-[#E1DCC9]/10 border border-[#E1DCC9]/15">
           <span className="text-[11px] font-bold text-white font-mono uppercase tracking-wide">Total inc. GST</span>
           <span className="text-[14px] font-bold text-cyan-400 font-mono">$75,228</span>
         </div>
@@ -123,9 +123,9 @@ const CostBreakdownPreview = () => (
 
 /* ─── Tender Mockup ──────────────────────────────────────────────────────── */
 const TenderPreview = () => (
-  <div className="rounded-xl overflow-hidden border border-white/8 bg-[#0d1829] shadow-[0_20px_60px_rgba(0,0,0,0.5)]">
-    <div className="flex items-center gap-2 px-3 py-2.5 bg-[#111e30] border-b border-white/8">
-      <FileOutput className="h-3.5 w-3.5 text-cyan-400/70" />
+  <div className="rounded-xl overflow-hidden border border-white/8 bg-card shadow-[0_20px_60px_rgba(0,0,0,0.5)]">
+    <div className="flex items-center gap-2 px-3 py-2.5 bg-card/80 border-b border-white/8">
+      <FileOutput className="h-3.5 w-3.5 text-[#E1DCC9]/70" />
       <span className="text-[10px] text-white/40 font-mono">Tender_42_Riverside_Ave.pdf</span>
       <div className="ml-auto flex gap-2">
         <span className="text-[9px] font-mono text-white/30 px-1.5 py-0.5 rounded border border-white/10">PDF</span>
@@ -136,7 +136,7 @@ const TenderPreview = () => (
       <div className="flex items-start justify-between mb-3 pb-2 border-b border-gray-200">
         <div>
           <div className="flex items-center gap-1.5 mb-1">
-            <div className="w-4 h-4 rounded bg-[#09111f] flex items-center justify-center">
+            <div className="w-4 h-4 rounded bg-background flex items-center justify-center">
               <span className="text-cyan-400 text-[8px] font-bold">M</span>
             </div>
             <span className="text-[9px] font-bold text-gray-700 uppercase tracking-widest">BUILD.CO</span>
@@ -234,7 +234,7 @@ const Features = () => {
   const FeatureIcon = feature.icon;
 
   return (
-    <section id="features" className="bg-[#09111f]">
+    <section id="features" className="bg-background">
       {/* Scroll track — 300 vh gives each of 3 steps one full viewport of travel */}
       <div ref={containerRef} style={{ height: "300vh" }} className="relative">
         <div className="sticky top-0 h-screen flex flex-col overflow-hidden">
@@ -243,7 +243,7 @@ const Features = () => {
           <div className="container mx-auto px-6 lg:px-12 pt-14 pb-6 shrink-0">
             <div className="flex items-center gap-3 mb-4">
               <div className="h-px w-8 bg-cyan-400/50" />
-              <span className="text-xs font-mono text-cyan-400/60 uppercase tracking-widest">The workflow</span>
+              <span className="text-xs font-mono text-[#E1DCC9]/60 uppercase tracking-widest">The workflow</span>
             </div>
             <h2 className="font-display text-4xl sm:text-5xl font-bold text-white leading-tight">
               Three steps.
@@ -266,7 +266,7 @@ const Features = () => {
                   className="space-y-6"
                 >
                   <div className="flex items-center gap-4">
-                    <div className="w-10 h-10 rounded-xl bg-cyan-400/10 border border-cyan-400/20 flex items-center justify-center flex-shrink-0">
+                    <div className="w-10 h-10 rounded-xl bg-[#E1DCC9]/10 border border-[#E1DCC9]/15 flex items-center justify-center flex-shrink-0">
                       <FeatureIcon className="h-5 w-5 text-cyan-400" />
                     </div>
                     <span className="font-mono text-sm text-white/30 tracking-widest">

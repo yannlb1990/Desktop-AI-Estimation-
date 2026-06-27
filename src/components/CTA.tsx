@@ -6,10 +6,10 @@ const CTA = () => {
   const words2 = ["Get", "home", "for", "dinner."];
 
   return (
-    <section className="relative py-32 md:py-40 bg-[#09111f] overflow-hidden">
+    <section className="relative py-32 md:py-40 bg-background overflow-hidden">
 
       <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-        <div className="w-[700px] h-[400px] bg-cyan-500/5 blur-[120px] rounded-full" />
+        <div className="w-[700px] h-[400px] bg-[#E1DCC9]/4 blur-[120px] rounded-full" />
       </div>
 
       <div className="container mx-auto px-6 lg:px-12 relative z-10 text-center">
@@ -21,8 +21,8 @@ const CTA = () => {
           transition={{ duration: 0.5 }}
           className="inline-flex items-center gap-2.5 mb-10"
         >
-          <div className="w-1.5 h-1.5 rounded-full bg-cyan-400 animate-pulse" />
-          <span className="text-xs font-mono text-cyan-400/60 uppercase tracking-widest">
+          <div className="w-1.5 h-1.5 rounded-full bg-[#E1DCC9] animate-pulse" />
+          <span className="text-xs font-mono text-[#E1DCC9]/60 uppercase tracking-widest">
             Start today
           </span>
         </motion.div>
@@ -80,7 +80,7 @@ const CTA = () => {
             whileHover={{ scale: 1.04 }}
             whileTap={{ scale: 0.97 }}
             onClick={() => window.location.href = isSignedIn() ? "/dashboard" : "/auth?plan=pro&mode=signup"}
-            className="inline-flex items-center px-9 py-5 rounded-full bg-cyan-400 text-[#09111f] font-bold text-base hover:bg-cyan-300 transition-colors shadow-[0_0_50px_rgba(34,211,238,0.25)] hover:shadow-[0_0_60px_rgba(34,211,238,0.35)]"
+            className="inline-flex items-center px-9 py-5 rounded-full bg-cyan-400 text-black font-bold text-base hover:bg-[#d4cfb5] transition-colors shadow-none hover:shadow-none"
           >
             Start free for 14 days
           </motion.button>

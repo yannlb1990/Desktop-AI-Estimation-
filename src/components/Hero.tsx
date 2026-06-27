@@ -58,8 +58,8 @@ const fadeIn = {
 
 /* ─── Card 1: Floor Plan (front) ─────────────────────────────────────────── */
 const FloorPlanCard = () => (
-  <div className="w-full rounded-2xl overflow-hidden border border-white/10 shadow-[0_32px_80px_rgba(0,0,0,0.65)] bg-[#0d1829]">
-    <div className="flex items-center gap-2 px-4 py-2.5 bg-[#111e30] border-b border-white/8">
+  <div className="w-full rounded-2xl overflow-hidden border border-white/10 shadow-[0_32px_80px_rgba(0,0,0,0.65)] bg-card">
+    <div className="flex items-center gap-2 px-4 py-2.5 bg-card/80 border-b border-white/8">
       <div className="flex gap-1.5">
         <div className="w-2.5 h-2.5 rounded-full bg-[#ff5f57]" />
         <div className="w-2.5 h-2.5 rounded-full bg-[#febc2e]" />
@@ -70,7 +70,7 @@ const FloorPlanCard = () => (
         ✓ Calibrated 1:100
       </div>
     </div>
-    <div className="bg-[#0f1c2e] relative">
+    <div className="bg-card relative">
       <svg viewBox="0 0 480 300" className="w-full" style={{ display: "block" }}>
         <defs>
           <pattern id="h-grid" width="20" height="20" patternUnits="userSpaceOnUse">
@@ -81,10 +81,10 @@ const FloorPlanCard = () => (
             <path d="M 100 0 L 0 0 0 100" fill="none" stroke="#1a3050" strokeWidth="0.8" />
           </pattern>
           <marker id="h-end" markerWidth="5" markerHeight="5" refX="4" refY="2.5" orient="auto">
-            <path d="M 0 1 L 4 2.5 L 0 4 Z" fill="#22d3ee" />
+            <path d="M 0 1 L 4 2.5 L 0 4 Z" fill="#E1DCC9" />
           </marker>
           <marker id="h-start" markerWidth="5" markerHeight="5" refX="1" refY="2.5" orient="auto">
-            <path d="M 5 1 L 1 2.5 L 5 4 Z" fill="#22d3ee" />
+            <path d="M 5 1 L 1 2.5 L 5 4 Z" fill="#E1DCC9" />
           </marker>
         </defs>
         <rect width="480" height="300" fill="url(#h-grid-major)" />
@@ -97,27 +97,27 @@ const FloorPlanCard = () => (
         <text x="382" y="94"  textAnchor="middle" fontSize="8" fill="rgba(200,216,232,0.4)" fontFamily="system-ui">MASTER</text>
         <text x="255" y="224" textAnchor="middle" fontSize="8" fill="rgba(200,216,232,0.4)" fontFamily="system-ui">BED 2</text>
         <text x="382" y="224" textAnchor="middle" fontSize="8" fill="rgba(200,216,232,0.4)" fontFamily="system-ui">ENSUITE</text>
-        <polygon points="50,28 185,28 185,276 50,276" fill="rgba(34,211,238,0.07)" stroke="#22d3ee" strokeWidth="1.5" />
-        <circle cx="50"  cy="28"  r="2.5" fill="#22d3ee" />
-        <circle cx="185" cy="28"  r="2.5" fill="#22d3ee" />
-        <circle cx="185" cy="276" r="2.5" fill="#22d3ee" />
-        <circle cx="50"  cy="276" r="2.5" fill="#22d3ee" />
-        <rect x="80" y="143" width="74" height="20" rx="4" fill="rgba(34,211,238,0.18)" stroke="#22d3ee" strokeWidth="1" />
-        <text x="117" y="157" textAnchor="middle" fontSize="11" fontFamily="monospace" fill="#22d3ee" fontWeight="bold">44.6 m²</text>
-        <line x1="50" y1="16" x2="440" y2="16" stroke="#22d3ee" strokeWidth="0.8" markerStart="url(#h-start)" markerEnd="url(#h-end)" />
-        <rect x="202" y="7" width="56" height="12" rx="2" fill="#0f1c2e" />
-        <text x="230" y="16" textAnchor="middle" fontSize="8" fontFamily="monospace" fill="#22d3ee">13.2 m</text>
-        <line x1="36" y1="28" x2="36" y2="276" stroke="#22d3ee" strokeWidth="0.8" markerStart="url(#h-start)" markerEnd="url(#h-end)" />
-        <rect x="12" y="142" width="38" height="12" rx="2" fill="#0f1c2e" />
-        <text x="31" y="151" textAnchor="middle" fontSize="8" fontFamily="monospace" fill="#22d3ee" transform="rotate(-90 31 151)">9.6 m</text>
-        <circle cx="185" cy="276" r="5" fill="none" stroke="#22d3ee" strokeWidth="1" opacity="0.6">
+        <polygon points="50,28 185,28 185,276 50,276" fill="rgba(225,220,201,0.06)" stroke="#E1DCC9" strokeWidth="1.5" />
+        <circle cx="50"  cy="28"  r="2.5" fill="#E1DCC9" />
+        <circle cx="185" cy="28"  r="2.5" fill="#E1DCC9" />
+        <circle cx="185" cy="276" r="2.5" fill="#E1DCC9" />
+        <circle cx="50"  cy="276" r="2.5" fill="#E1DCC9" />
+        <rect x="80" y="143" width="74" height="20" rx="4" fill="rgba(225,220,201,0.14)" stroke="#E1DCC9" strokeWidth="1" />
+        <text x="117" y="157" textAnchor="middle" fontSize="11" fontFamily="monospace" fill="#E1DCC9" fontWeight="bold">44.6 m²</text>
+        <line x1="50" y1="16" x2="440" y2="16" stroke="#E1DCC9" strokeWidth="0.8" markerStart="url(#h-start)" markerEnd="url(#h-end)" />
+        <rect x="202" y="7" width="56" height="12" rx="2" fill="#1F150C" />
+        <text x="230" y="16" textAnchor="middle" fontSize="8" fontFamily="monospace" fill="#E1DCC9">13.2 m</text>
+        <line x1="36" y1="28" x2="36" y2="276" stroke="#E1DCC9" strokeWidth="0.8" markerStart="url(#h-start)" markerEnd="url(#h-end)" />
+        <rect x="12" y="142" width="38" height="12" rx="2" fill="#1F150C" />
+        <text x="31" y="151" textAnchor="middle" fontSize="8" fontFamily="monospace" fill="#E1DCC9" transform="rotate(-90 31 151)">9.6 m</text>
+        <circle cx="185" cy="276" r="5" fill="none" stroke="#E1DCC9" strokeWidth="1" opacity="0.6">
           <animate attributeName="r" values="4;8;4" dur="2s" repeatCount="indefinite" />
           <animate attributeName="opacity" values="0.6;0.1;0.6" dur="2s" repeatCount="indefinite" />
         </circle>
-        <circle cx="185" cy="276" r="2" fill="#22d3ee" />
+        <circle cx="185" cy="276" r="2" fill="#E1DCC9" />
       </svg>
-      <div className="absolute bottom-2 left-2 right-2 flex items-center justify-between px-2.5 py-1.5 bg-[#0a1522]/90 border border-white/8 rounded text-[10px] font-mono backdrop-blur-sm">
-        <span className="text-cyan-400">Polygon · 4 pts · 44.6 m²</span>
+      <div className="absolute bottom-2 left-2 right-2 flex items-center justify-between px-2.5 py-1.5 bg-background/90 border border-white/8 rounded text-[10px] font-mono backdrop-blur-sm">
+        <span className="text-[#E1DCC9]">Polygon · 4 pts · 44.6 m²</span>
         <span className="text-white/25">Page 1 / 3</span>
       </div>
     </div>
@@ -126,10 +126,10 @@ const FloorPlanCard = () => (
 
 /* ─── Card 2: Cost Breakdown (middle-left) ────────────────────────────────── */
 const CostCard = () => (
-  <div className="w-full h-full rounded-2xl overflow-hidden border border-white/10 shadow-[0_24px_60px_rgba(0,0,0,0.55)] bg-[#0c1825]">
+  <div className="w-full h-full rounded-2xl overflow-hidden border border-white/10 shadow-[0_24px_60px_rgba(0,0,0,0.55)] bg-card">
     <div className="px-4 py-3 border-b border-white/8 flex items-center justify-between">
       <span className="text-[11px] font-semibold text-white/80">Cost Summary</span>
-      <span className="text-[9px] font-mono text-cyan-400/60 bg-cyan-400/8 border border-cyan-400/15 rounded px-1.5 py-0.5">26 trades</span>
+      <span className="text-[9px] font-mono text-[#E1DCC9]/60 bg-cyan-400/8 border border-[#E1DCC9]/15 rounded px-1.5 py-0.5">26 trades</span>
     </div>
     <div className="p-4 space-y-3">
       {[
@@ -149,7 +149,7 @@ const CostCard = () => (
               className="h-full rounded-full"
               style={{
                 width: `${Math.min(r.pct, 100)}%`,
-                background: "linear-gradient(90deg, rgba(34,211,238,0.25), rgba(34,211,238,0.55))",
+                background: "linear-gradient(90deg, rgba(225,220,201,0.25), rgba(225,220,201,0.55))",
               }}
             />
           </div>
@@ -160,7 +160,7 @@ const CostCard = () => (
           <div className="text-[8px] font-mono text-white/25 uppercase tracking-widest mb-0.5">TOTAL INC. MARGIN</div>
           <div className="text-[9px] font-mono text-white/40">$65,416 + 15%</div>
         </div>
-        <span className="font-bold font-mono text-cyan-400" style={{ fontSize: "1.15rem" }}>$75,228</span>
+        <span className="font-bold font-mono text-[#E1DCC9]" style={{ fontSize: "1.15rem" }}>$75,228</span>
       </div>
     </div>
   </div>
@@ -169,7 +169,7 @@ const CostCard = () => (
 /* ─── Card 3: Tender PDF (back-right) ────────────────────────────────────── */
 const TenderCard = () => (
   <div className="w-full h-full rounded-2xl overflow-hidden shadow-[0_24px_60px_rgba(0,0,0,0.55)] bg-white">
-    <div className="bg-[#09111f] px-4 py-2.5 flex items-center justify-between">
+    <div className="bg-background px-4 py-2.5 flex items-center justify-between">
       <div className="flex items-center gap-2">
         <div className="w-5 h-5 rounded bg-cyan-400 flex items-center justify-center shrink-0">
           <span className="text-[8px] font-bold text-[#09111f]">M</span>
@@ -296,7 +296,7 @@ const StackedCards = () => {
       </motion.div>
 
       {/* Ambient glow under the stack */}
-      <div className="absolute -bottom-10 left-16 right-16 h-16 bg-cyan-500/8 blur-2xl pointer-events-none" />
+      <div className="absolute -bottom-10 left-16 right-16 h-16 bg-[#E1DCC9]/5 blur-2xl pointer-events-none" />
     </div>
   );
 };
@@ -322,11 +322,11 @@ const Hero = () => {
       ref={heroRef}
       onMouseMove={handleMouseMove}
       onMouseLeave={() => { mouseX.set(-1000); mouseY.set(-1000); }}
-      className="relative min-h-screen flex items-center overflow-hidden pt-20 bg-[#09111f]"
+      className="relative min-h-screen flex items-center overflow-hidden pt-20 bg-background"
     >
       {/* Cursor-tracking glow */}
       <motion.div
-        className="pointer-events-none absolute z-0 w-[500px] h-[500px] rounded-full bg-cyan-400/5 blur-[120px]"
+        className="pointer-events-none absolute z-0 w-[500px] h-[500px] rounded-full bg-[#E1DCC9]/5 blur-[120px]"
         style={{ x: glowX, y: glowY, translateX: "-50%", translateY: "-50%" }}
       />
 
@@ -336,14 +336,14 @@ const Hero = () => {
           className="absolute inset-0 opacity-[0.022]"
           style={{
             backgroundImage: `
-              linear-gradient(rgba(34,211,238,1) 1px, transparent 1px),
-              linear-gradient(90deg, rgba(34,211,238,1) 1px, transparent 1px)
+              linear-gradient(rgba(225,220,201,0.1) 1px, transparent 1px),
+              linear-gradient(90deg, rgba(225,220,201,0.1) 1px, transparent 1px)
             `,
             backgroundSize: "60px 60px",
           }}
         />
-        <div className="absolute -top-40 -left-40 w-[800px] h-[800px] bg-cyan-500/4 rounded-full blur-[160px]" />
-        <div className="absolute -bottom-20 right-0 w-[400px] h-[400px] bg-amber-500/3 rounded-full blur-[120px]" />
+        <div className="absolute -top-40 -left-40 w-[800px] h-[800px] bg-[#E1DCC9]/3 rounded-full blur-[160px]" />
+        <div className="absolute -bottom-20 right-0 w-[400px] h-[400px] bg-[#412D15]/10 rounded-full blur-[120px]" />
       </div>
 
       <div className="container mx-auto px-6 lg:px-12 py-16 relative z-10 w-full">
@@ -354,7 +354,7 @@ const Hero = () => {
 
             <motion.div variants={fadeIn} className="flex items-center gap-3">
               <div className="w-2 h-2 rounded-full bg-cyan-400 animate-pulse" />
-              <span className="text-xs font-mono text-cyan-400/70 uppercase tracking-widest">
+              <span className="text-xs font-mono text-[#E1DCC9]/70 uppercase tracking-widest">
                 Construction projects · Trades · Builders
               </span>
             </motion.div>
@@ -364,7 +364,7 @@ const Hero = () => {
                 <motion.h1
                   key={word}
                   variants={fadeUp}
-                  className={`font-display font-bold leading-[0.88] tracking-tight ${i === 1 ? "text-cyan-400" : "text-white"}`}
+                  className={`font-display font-bold leading-[0.88] tracking-tight ${i === 1 ? "text-[#E1DCC9]" : "text-white"}`}
                   style={{ fontSize: "clamp(4rem, 8.5vw, 7.5rem)" }}
                 >
                   <ScrambleText text={word} delay={300 + i * 180} />
@@ -381,7 +381,7 @@ const Hero = () => {
                 whileHover={{ scale: 1.04 }}
                 whileTap={{ scale: 0.97 }}
                 onClick={() => window.location.href = isSignedIn() ? "/dashboard" : "/auth?mode=signup"}
-                className="inline-flex items-center gap-2.5 bg-cyan-400 text-[#09111f] hover:bg-cyan-300 font-bold text-base px-8 py-4 rounded-full transition-colors shadow-[0_0_40px_rgba(34,211,238,0.2)]"
+                className="inline-flex items-center gap-2.5 bg-[#E1DCC9] text-black hover:bg-[#d4cfb5] font-bold text-base px-8 py-4 rounded-full transition-colors shadow-[0_0_40px_rgba(225,220,201,0.2)]"
               >
                 Start free for 14 days
                 <ArrowRight className="h-4 w-4" />
@@ -398,7 +398,7 @@ const Hero = () => {
               <div className="flex items-center gap-2.5">
                 <div className="flex -space-x-2">
                   {["BC", "DT", "JM"].map((i) => (
-                    <div key={i} className="w-7 h-7 rounded-full bg-cyan-400/15 border border-cyan-400/30 flex items-center justify-center text-[10px] font-bold text-cyan-300">
+                    <div key={i} className="w-7 h-7 rounded-full bg-[#E1DCC9]/15 border border-[#E1DCC9]/20 flex items-center justify-center text-[10px] font-bold text-[#E1DCC9]/80">
                       {i}
                     </div>
                   ))}

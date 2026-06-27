@@ -38,7 +38,7 @@ export const TRIAL_DAYS = 14;
 const STORAGE_KEY = 'estimate_subscription';
 
 // ── Feature caps ──────────────────────────────────────────────────────────────
-interface PlanCaps {
+export interface PlanCaps {
   maxProjects: number;
   boqExport: boolean;
   sowExport: boolean;
@@ -47,6 +47,7 @@ interface PlanCaps {
   materialsLibrary: boolean;
   teamSeats: number;
   takeoffPdfReport: boolean;
+  planAnalysis: boolean;
 }
 
 export const PLAN_CAPS: Record<PlanId, PlanCaps> = {
@@ -59,6 +60,7 @@ export const PLAN_CAPS: Record<PlanId, PlanCaps> = {
     materialsLibrary: false,
     teamSeats: 1,
     takeoffPdfReport: false,
+    planAnalysis: false,
   },
   pro: {
     maxProjects: Infinity,
@@ -69,6 +71,7 @@ export const PLAN_CAPS: Record<PlanId, PlanCaps> = {
     materialsLibrary: true,
     teamSeats: 1,
     takeoffPdfReport: true,
+    planAnalysis: true,
   },
   business: {
     maxProjects: Infinity,
@@ -79,6 +82,7 @@ export const PLAN_CAPS: Record<PlanId, PlanCaps> = {
     materialsLibrary: true,
     teamSeats: 5,
     takeoffPdfReport: true,
+    planAnalysis: true,
   },
 };
 
@@ -221,10 +225,15 @@ export function getSubscriptionStatus(): SubscriptionStatus {
   let effectivePlan: PlanId = sub.selectedPlan;
   if (isTrialExpired) effectivePlan = 'starter';
 
-  const caps: PlanCaps =
+  const baseCaps: PlanCaps =
     isTrialing ? (PLAN_CAPS[sub.selectedPlan] ?? TRIAL_CAPS)
     : isTrialExpired ? PLAN_CAPS.starter
     : PLAN_CAPS[sub.activePlan as PlanId] ?? PLAN_CAPS.starter;
+
+  // Plan Intelligence costs real API tokens — block all trial and starter users
+  const caps: PlanCaps = (isTrialing || baseCaps === PLAN_CAPS.starter)
+    ? { ...baseCaps, planAnalysis: false }
+    : baseCaps;
 
   return {
     subscription: sub,
