@@ -1389,14 +1389,14 @@ export const PDFTakeoff = ({ projectId, estimateId, onAddCostItems }: PDFTakeoff
                   <div className={isTakeoffFullscreen ? "flex-1 overflow-hidden relative" : "absolute inset-0"}>
                     {/* Calibration status badge (fullscreen only) */}
                     {isTakeoffFullscreen && (
-                      <div className={`absolute bottom-3 left-3 z-20 flex items-center gap-1.5 px-2 py-1 rounded text-[10px] font-mono backdrop-blur-sm pointer-events-none ${
+                      <div className={`absolute bottom-3 left-3 z-20 flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[10px] font-mono backdrop-blur-sm pointer-events-none ${
                         state.isCalibrated
-                          ? 'bg-slate-900/70 text-green-400 border border-green-800/40'
-                          : 'bg-slate-900/70 text-amber-400 border border-amber-800/40'
+                          ? 'bg-slate-900/80 text-green-400 border border-green-700/50'
+                          : 'bg-slate-900/80 text-amber-400 border border-amber-700/50'
                       }`}>
-                        {state.isCalibrated
-                          ? `Calibrated · Page ${state.currentPageIndex + 1}${state.pdfFile.pageCount > 1 ? ` / ${state.pdfFile.pageCount}` : ''}`
-                          : `Not calibrated · Page ${state.currentPageIndex + 1}${state.pdfFile.pageCount > 1 ? ` / ${state.pdfFile.pageCount}` : ''}`
+                        {state.isCalibrated && state.currentScale
+                          ? `Scale ✓ [${state.currentScale.scaleMethod === 'manual' ? 'CAL' : 'AUTO'}] · Pg ${state.currentPageIndex + 1}${state.pdfFile.pageCount > 1 ? `/${state.pdfFile.pageCount}` : ''}`
+                          : `⚠ No scale · Pg ${state.currentPageIndex + 1}${state.pdfFile.pageCount > 1 ? `/${state.pdfFile.pageCount}` : ''} · click ruler to calibrate`
                         }
                       </div>
                     )}
@@ -1404,7 +1404,7 @@ export const PDFTakeoff = ({ projectId, estimateId, onAddCostItems }: PDFTakeoff
                     {isTakeoffFullscreen && (focusMode || !fsContextOpen) && modMode === 'door' && (
                       <div className="absolute top-3 left-3 z-20 flex items-center gap-1.5 px-2 py-1.5 bg-slate-800/95 border border-violet-700/60 rounded-lg backdrop-blur-sm shadow-lg">
                         <span className="text-[10px] font-semibold text-violet-400 uppercase tracking-widest mr-1 shrink-0">Door</span>
-                        {(['Internal','Entry','Cavity Slider','Bi-fold','French','Garage','Fire Door'] as const).map((id) => (
+                        {(['Internal','Entry','Cavity Slider','Bi-fold','French','Fire Door'] as const).map((id) => (
                           <button key={id} onClick={() => setDoorSubtype(id)} className={`h-6 px-2 rounded text-xs font-medium transition-colors ${doorSubtype === id ? 'bg-violet-600 text-white' : 'bg-slate-700 text-slate-300 hover:bg-slate-600'}`}>{id}</button>
                         ))}
                       </div>
@@ -1654,28 +1654,6 @@ export const PDFTakeoff = ({ projectId, estimateId, onAddCostItems }: PDFTakeoff
                   />
                 </Card>
 
-                {/* Frame Estimator — appears when wall-line measurements exist */}
-                <FrameEstimator
-                  measurements={filteredMeasurements}
-                  isCalibrated={state.isCalibrated}
-                  unitsPerMetre={state.currentScale?.unitsPerMetre ?? null}
-                  onAddCostItems={(items) => items.forEach(item => dispatch({ type: 'ADD_COST_ITEM', payload: item }))}
-                  pdfUrl={state.pdfFile?.url ?? undefined}
-                  pageIndex={state.currentPageIndex}
-                  projectId={projectId}
-                  onWallDetected={(m) => dispatch({ type: 'ADD_MEASUREMENT', payload: { ...m, planId: state.pdfFile?.planId } })}
-                  onActiveSectionChange={(sectionId) => setActiveFrameSectionId(sectionId)}
-                  onUpdateMeasurement={(id, updates) => dispatch({ type: 'UPDATE_MEASUREMENT', payload: { id, updates } })}
-                />
-
-                {/* AI Plan Analyser */}
-                <AIPlanAnalysisPanel
-                  canvasElementRef={canvasRef}
-                  projectState="QLD"
-                  isCalibrated={state.isCalibrated}
-                  onAddCostItems={(items) => items.forEach(item => dispatch({ type: 'ADD_COST_ITEM', payload: item as any }))}
-                />
-
                 <Card className="p-4">
                   <div className="space-y-3 max-h-[400px] overflow-y-auto">
                     {filteredMeasurements.length === 0 ? (
@@ -1881,6 +1859,28 @@ export const PDFTakeoff = ({ projectId, estimateId, onAddCostItems }: PDFTakeoff
                     </div>
                   )}
                 </Card>
+
+                {/* Frame Estimator — appears when wall-line measurements exist */}
+                <FrameEstimator
+                  measurements={filteredMeasurements}
+                  isCalibrated={state.isCalibrated}
+                  unitsPerMetre={state.currentScale?.unitsPerMetre ?? null}
+                  onAddCostItems={(items) => items.forEach(item => dispatch({ type: 'ADD_COST_ITEM', payload: item }))}
+                  pdfUrl={state.pdfFile?.url ?? undefined}
+                  pageIndex={state.currentPageIndex}
+                  projectId={projectId}
+                  onWallDetected={(m) => dispatch({ type: 'ADD_MEASUREMENT', payload: { ...m, planId: state.pdfFile?.planId } })}
+                  onActiveSectionChange={(sectionId) => setActiveFrameSectionId(sectionId)}
+                  onUpdateMeasurement={(id, updates) => dispatch({ type: 'UPDATE_MEASUREMENT', payload: { id, updates } })}
+                />
+
+                {/* AI Plan Analyser */}
+                <AIPlanAnalysisPanel
+                  canvasElementRef={canvasRef}
+                  projectState="QLD"
+                  isCalibrated={state.isCalibrated}
+                  onAddCostItems={(items) => items.forEach(item => dispatch({ type: 'ADD_COST_ITEM', payload: item as any }))}
+                />
               </div>
             </div>
           )}

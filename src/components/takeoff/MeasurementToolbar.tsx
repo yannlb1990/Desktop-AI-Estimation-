@@ -108,7 +108,6 @@ const DOOR_TYPES = [
   { id: 'Cavity Slider', label: 'Cavity Slider' },
   { id: 'Bi-fold',       label: 'Bi-fold' },
   { id: 'French',        label: 'French' },
-  { id: 'Garage',        label: 'Garage' },
   { id: 'Fire Door',     label: 'Fire Door' },
 ] as const;
 
@@ -271,6 +270,27 @@ export const MeasurementToolbar = ({
                   <option value={2000}>2m</option>
                 </select>
               </div>
+            </>
+          )}
+
+          {activeTool && (
+            <>
+              <div className="flex-1 shrink-0 min-w-0" />
+              <Separator orientation="vertical" className="h-6 mx-1.5 shrink-0" />
+              <span className="text-[11px] font-semibold text-cyan-400/90 bg-cyan-950/50 border border-cyan-800/40 px-2.5 py-0.5 rounded shrink-0 select-none whitespace-nowrap">
+                {activeTool === 'select' ? 'Select' :
+                 activeTool === 'pan' ? 'Pan' :
+                 activeTool === 'eraser' ? 'Eraser' :
+                 activeTool === 'line' ? 'Line' :
+                 activeTool === 'rectangle' ? 'Rectangle' :
+                 activeTool === 'polygon' ? 'Polygon' :
+                 activeTool === 'circle' ? 'Circle' :
+                 activeTool === 'count' ? 'Count' :
+                 activeTool === 'wall-line' ? 'Wall Line' :
+                 activeTool === 'arc-wall' ? 'Arc Wall' :
+                 activeTool === 'offset' ? 'Ref. Line' :
+                 activeTool === 'text' ? 'Text' : activeTool}
+              </span>
             </>
           )}
         </div>
