@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { Download, ZoomIn, ZoomOut, RotateCw, RotateCcw, Maximize2, Minimize2, ChevronLeft, ChevronRight, ChevronUp, ChevronDown, Trash2, FileText, SlidersHorizontal, Combine, Ruler, X, CheckCircle, EyeOff } from 'lucide-react';
+import { Download, ZoomIn, ZoomOut, RotateCw, RotateCcw, Maximize2, Minimize2, ChevronLeft, ChevronRight, ChevronUp, ChevronDown, Trash2, FileText, SlidersHorizontal, Combine, Ruler, X, CheckCircle, EyeOff, Lock } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { PDFUploadManager } from './PDFUploadManager';
@@ -1576,8 +1576,8 @@ export const PDFTakeoff = ({ projectId, estimateId, onAddCostItems }: PDFTakeoff
                       }}
                       disabled={!filteredMeasurements.length}
                     >
-                      <Download className="h-4 w-4 mr-2" />
-                      CSV
+                      {sub.caps.boqExport ? <Download className="h-4 w-4 mr-2" /> : <Lock className="h-3.5 w-3.5 mr-1.5 text-amber-400" />}
+                      CSV{!sub.caps.boqExport && <span className="ml-1 text-[10px] text-amber-400 font-semibold">PRO</span>}
                     </Button>
                     <Button
                       variant="outline"
@@ -1608,8 +1608,8 @@ export const PDFTakeoff = ({ projectId, estimateId, onAddCostItems }: PDFTakeoff
                       }}
                       disabled={!filteredMeasurements.length}
                     >
-                      <Download className="h-4 w-4 mr-2" />
-                      PDF
+                      {sub.caps.takeoffPdfReport ? <Download className="h-4 w-4 mr-2" /> : <Lock className="h-3.5 w-3.5 mr-1.5 text-amber-400" />}
+                      PDF{!sub.caps.takeoffPdfReport && <span className="ml-1 text-[10px] text-amber-400 font-semibold">PRO</span>}
                     </Button>
                     <Button
                       variant="outline"
@@ -1620,6 +1620,7 @@ export const PDFTakeoff = ({ projectId, estimateId, onAddCostItems }: PDFTakeoff
                         const fabricCanvas = canvasRef.current;
                         const dataUrl = fabricCanvas?.toDataURL('image/png') ?? '';
                         generateAnnotatedTakeoffPdf({
+
                           projectName: state.pdfFile?.name?.replace(/\.pdf$/i, '') || 'Takeoff',
                           planName: state.pdfFile?.name,
                           measurements: filteredMeasurements,
@@ -1630,8 +1631,8 @@ export const PDFTakeoff = ({ projectId, estimateId, onAddCostItems }: PDFTakeoff
                       }}
                       disabled={!filteredMeasurements.length}
                     >
-                      <Download className="h-4 w-4 mr-2" />
-                      Annotated
+                      {sub.caps.takeoffPdfReport ? <Download className="h-4 w-4 mr-2" /> : <Lock className="h-3.5 w-3.5 mr-1.5 text-amber-400" />}
+                      Annotated{!sub.caps.takeoffPdfReport && <span className="ml-1 text-[10px] text-amber-400 font-semibold">PRO</span>}
                     </Button>
                   </div>
 
@@ -1914,8 +1915,8 @@ export const PDFTakeoff = ({ projectId, estimateId, onAddCostItems }: PDFTakeoff
                 disabled={state.costItems.length === 0}
                 className="gap-2"
               >
-                <FileText className="h-4 w-4" />
-                Generate SOW PDF
+                {sub.caps.sowExport ? <FileText className="h-4 w-4" /> : <Lock className="h-3.5 w-3.5 text-amber-400" />}
+                Generate SOW PDF{!sub.caps.sowExport && <span className="ml-1 text-[10px] text-amber-400 font-semibold">PRO</span>}
               </Button>
             </div>
             <CostEstimator
