@@ -1,22 +1,60 @@
-import React, { useState } from 'react';
-import { ScanLine, Loader2, ChevronDown, ChevronRight, Plus, Lock } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { ScanLine, Loader2, ChevronDown, ChevronRight, Plus, Lock, Clock } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { useAIPlanAnalysis, AnalysisTrade } from '@/hooks/useAIPlanAnalysis';
+import { useAIPlanAnalysis, AnalysisTrade, AnalysisResult } from '@/hooks/useAIPlanAnalysis';
 import { CostItem } from '@/lib/takeoff/types';
 import { getSubscriptionStatus } from '@/lib/subscription';
 
 interface AIPlanAnalysisPanelProps {
   canvasElementRef: React.RefObject<HTMLCanvasElement | null>;
+  projectId?: string;
   projectState?: string;
   onAddCostItems?: (items: Partial<CostItem>[]) => void;
   isCalibrated?: boolean;
 }
 
+interface CachedAnalysis {
+  result: AnalysisResult;
+  timestamp: number;
+}
+
+function cacheKey(projectId: string) {
+  return `planAnalysis_${projectId}`;
+}
+
+function loadCached(projectId: string): CachedAnalysis | null {
+  try {
+    const raw = localStorage.getItem(cacheKey(projectId));
+    return raw ? (JSON.parse(raw) as CachedAnalysis) : null;
+  } catch {
+    return null;
+  }
+}
+
+function saveCache(projectId: string, result: AnalysisResult) {
+  try {
+    localStorage.setItem(cacheKey(projectId), JSON.stringify({ result, timestamp: Date.now() }));
+  } catch { /* storage full — ignore */ }
+}
+
+function clearCache(projectId: string) {
+  localStorage.removeItem(cacheKey(projectId));
+}
+
+function timeAgo(ts: number): string {
+  const mins = Math.floor((Date.now() - ts) / 60000);
+  if (mins < 1) return 'just now';
+  if (mins < 60) return `${mins}m ago`;
+  const hrs = Math.floor(mins / 60);
+  if (hrs < 24) return `${hrs}h ago`;
+  return `${Math.floor(hrs / 24)}d ago`;
+}
+
 function confidenceBadge(confidence: number) {
   if (confidence >= 0.8) {
-    return <Badge className="text-[10px] px-1.5 py-0.5 bg-[#412D15]/40 text-[#E1DCC9]/80 border border-[#E1DCC9]/20">High</Badge>;
+    return <Badge className="text-[10px] px-1.5 py-0.5 bg-[#E1DCC9]/10 text-[#E1DCC9] border border-[#E1DCC9]/25">High</Badge>;
   }
   if (confidence >= 0.6) {
     return <Badge className="text-[10px] px-1.5 py-0.5 bg-amber-900/40 text-amber-400 border border-amber-700/50">Mid</Badge>;
@@ -26,23 +64,52 @@ function confidenceBadge(confidence: number) {
 
 export function AIPlanAnalysisPanel({
   canvasElementRef,
+  projectId,
   projectState,
   onAddCostItems,
   isCalibrated,
 }: AIPlanAnalysisPanelProps) {
-  const { analyse, loading, result, error, reset } = useAIPlanAnalysis();
+  const { analyse, loading, result, error, reset, setResult } = useAIPlanAnalysis();
   const [expanded, setExpanded] = useState(true);
   const [roomsOpen, setRoomsOpen] = useState(false);
+  const [cachedAt, setCachedAt] = useState<number | null>(null);
   const { caps, isTrialing, effectivePlan } = getSubscriptionStatus();
   const locked = !caps.planAnalysis;
 
+  // Load from cache on mount
+  useEffect(() => {
+    if (!projectId || locked) return;
+    const cached = loadCached(projectId);
+    if (cached) {
+      setResult(cached.result);
+      setCachedAt(cached.timestamp);
+    }
+  }, [projectId, locked]);
+
+  // Save to cache whenever result changes
+  useEffect(() => {
+    if (!projectId || !result || cachedAt !== null) return;
+    saveCache(projectId, result);
+    setCachedAt(Date.now());
+  }, [result, projectId]);
+
   const handleAnalyse = async () => {
     const canvas = canvasElementRef.current;
-    if (!canvas) {
-      return;
-    }
+    if (!canvas) return;
+    if (projectId) clearCache(projectId);
+    setCachedAt(null);
     const imageBase64 = canvas.toDataURL('image/png').replace(/^data:image\/png;base64,/, '');
-    await analyse(imageBase64, { state: projectState ?? 'QLD', projectType: 'residential' });
+    const newResult = await analyse(imageBase64, { state: projectState ?? 'QLD', projectType: 'residential' });
+    if (newResult && projectId) {
+      saveCache(projectId, newResult);
+      setCachedAt(Date.now());
+    }
+  };
+
+  const handleReanalyse = () => {
+    if (projectId) clearCache(projectId);
+    setCachedAt(null);
+    reset();
   };
 
   const pushTrade = (trade: AnalysisTrade) => {
@@ -80,11 +147,19 @@ export function AIPlanAnalysisPanel({
         onClick={() => setExpanded((v) => !v)}
       >
         <div className="flex items-center gap-2">
-          <ScanLine className="h-4 w-4 text-amber-500" />
+          <ScanLine className="h-4 w-4 text-foreground/60" />
           <span className="font-semibold text-sm">Plan Intelligence</span>
           <Badge className="text-[10px] px-1.5 py-0.5 bg-amber-900/40 text-amber-300 border border-amber-700/50">Beta</Badge>
         </div>
-        {expanded ? <ChevronDown className="h-4 w-4 text-muted-foreground" /> : <ChevronRight className="h-4 w-4 text-muted-foreground" />}
+        <div className="flex items-center gap-2">
+          {cachedAt && (
+            <span className="text-[10px] text-muted-foreground flex items-center gap-1">
+              <Clock className="h-2.5 w-2.5" />
+              {timeAgo(cachedAt)}
+            </span>
+          )}
+          {expanded ? <ChevronDown className="h-4 w-4 text-muted-foreground" /> : <ChevronRight className="h-4 w-4 text-muted-foreground" />}
+        </div>
       </button>
 
       {expanded && (
@@ -135,7 +210,7 @@ export function AIPlanAnalysisPanel({
 
           {!locked && loading && (
             <div className="flex flex-col items-center gap-2 py-4">
-              <Loader2 className="h-6 w-6 text-amber-500 animate-spin" />
+              <Loader2 className="h-6 w-6 text-foreground/50 animate-spin" />
               <p className="text-xs text-muted-foreground">Analysing plan…</p>
             </div>
           )}
@@ -143,7 +218,7 @@ export function AIPlanAnalysisPanel({
           {!locked && error && (
             <div className="space-y-2">
               <p className="text-xs text-red-400">{error}</p>
-              <Button size="sm" variant="outline" onClick={reset} className="w-full">
+              <Button size="sm" variant="outline" onClick={handleReanalyse} className="w-full">
                 Try Again
               </Button>
             </div>
@@ -238,8 +313,8 @@ export function AIPlanAnalysisPanel({
                 </div>
               )}
 
-              <Button size="sm" variant="ghost" className="w-full text-xs text-muted-foreground" onClick={reset}>
-                Re-analyse
+              <Button size="sm" variant="ghost" className="w-full text-xs text-muted-foreground" onClick={handleReanalyse}>
+                Clear & Re-analyse
               </Button>
             </div>
           )}

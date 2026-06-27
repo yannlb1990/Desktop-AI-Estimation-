@@ -359,7 +359,7 @@ Please respond to approve or reject this variation.`;
         <Button
           size="sm"
           onClick={openCreateDialog}
-          className="gap-1 bg-[#412D15] hover:bg-[#412D15]/90"
+          className="gap-1 bg-primary hover:bg-primary/90 text-primary-foreground"
         >
           <Plus className="w-3.5 h-3.5" />
           New Variation
@@ -836,7 +836,7 @@ Please respond to approve or reject this variation.`;
             >
               Cancel
             </Button>
-            <Button onClick={handleSaveDialog} className="bg-[#412D15] hover:bg-[#412D15]/90">
+            <Button onClick={handleSaveDialog} className="bg-primary hover:bg-primary/90 text-primary-foreground">
               {editingVariation ? "Update" : "Save as Draft"}
             </Button>
           </DialogFooter>

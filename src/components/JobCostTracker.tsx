@@ -250,7 +250,7 @@ export default function JobCostTracker({ projectId }: JobCostTrackerProps) {
       {/* Header */}
       <div className="flex items-center justify-between">
         <h2 className="text-lg font-semibold text-white">Job Cost Tracker</h2>
-        <Button size="sm" onClick={() => setShowForm(!showForm)} className="gap-1 bg-[#412D15] hover:bg-[#412D15]/90">
+        <Button size="sm" onClick={() => setShowForm(!showForm)} className="gap-1 bg-primary hover:bg-primary/90 text-primary-foreground">
           <Plus className="w-3.5 h-3.5" /> Add Cost
         </Button>
       </div>
@@ -377,7 +377,7 @@ export default function JobCostTracker({ projectId }: JobCostTrackerProps) {
                 </div>
               </div>
               <div className="flex gap-2">
-                <Button size="sm" onClick={handleAddCost} className="bg-[#412D15] hover:bg-[#412D15]/90">Add Cost</Button>
+                <Button size="sm" onClick={handleAddCost} className="bg-primary hover:bg-primary/90 text-primary-foreground">Add Cost</Button>
                 <Button size="sm" variant="ghost" onClick={() => setShowForm(false)} className="text-muted-foreground hover:text-foreground">Cancel</Button>
               </div>
             </CardContent>
@@ -433,7 +433,7 @@ export default function JobCostTracker({ projectId }: JobCostTrackerProps) {
                       />
                     </div>
                   </div>
-                  <Button size="sm" onClick={handleAddMonitor} className="bg-[#412D15] hover:bg-[#412D15]/90">Add</Button>
+                  <Button size="sm" onClick={handleAddMonitor} className="bg-primary hover:bg-primary/90 text-primary-foreground">Add</Button>
                   <Button size="sm" variant="ghost" onClick={() => setShowMonitorForm(false)} className="text-muted-foreground">Cancel</Button>
                 </div>
               )}
@@ -606,7 +606,7 @@ export default function JobCostTracker({ projectId }: JobCostTrackerProps) {
                               />
                             </div>
                           </div>
-                          <Button size="sm" onClick={handleAddMonitor} className="bg-[#412D15] hover:bg-[#412D15]/90">Add</Button>
+                          <Button size="sm" onClick={handleAddMonitor} className="bg-primary hover:bg-primary/90 text-primary-foreground">Add</Button>
                           <Button size="sm" variant="ghost" onClick={() => setShowMonitorForm(false)} className="text-muted-foreground">Cancel</Button>
                         </div>
                       </td>

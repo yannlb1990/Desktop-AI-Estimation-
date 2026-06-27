@@ -1434,7 +1434,7 @@ export function PDFAnalysisViewer({
           <div className={`absolute bottom-4 left-1/2 -translate-x-1/2 z-30 flex items-center gap-3 px-4 py-2 rounded-full shadow-2xl border text-sm font-medium backdrop-blur-sm ${
             measurementMode === 'calibrate' ? 'bg-amber-600/90 border-amber-400 text-white' :
             measurementMode === 'distance' ? 'bg-muted/70/90 border-foreground/25 text-white' :
-            measurementMode === 'area' ? 'bg-[#412D15]/70/90 border-[#E1DCC9]/25 text-white' :
+            measurementMode === 'area' ? 'bg-primary/20 border-[#E1DCC9]/25 text-white' :
             'bg-gray-800/90 border-gray-600 text-gray-200'
           }`}>
             {measurementMode === 'calibrate' && <><Ruler className="h-4 w-4" />{calibrationPoints.length === 0 ? 'Click first point' : calibrationPoints.length === 1 ? 'Click second point' : 'Enter distance'}</>}

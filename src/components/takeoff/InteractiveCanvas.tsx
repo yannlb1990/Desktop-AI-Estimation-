@@ -4641,7 +4641,7 @@ export const InteractiveCanvas = ({
         <div className="absolute top-3 left-1/2 transform -translate-x-1/2 flex gap-2 z-10">
           <Button
             onClick={() => setTimeout(() => handleDoubleClick(), 0)}
-            className="bg-[#412D15]/70 hover:bg-[#412D15]/80 text-white shadow-lg"
+            className="bg-primary hover:bg-primary/90 text-primary-foreground shadow-lg"
             size="sm"
           >
             <Check className="h-4 w-4 mr-1" />

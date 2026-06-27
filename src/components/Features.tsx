@@ -41,24 +41,24 @@ const TakeoffPreview = () => (
         <svg viewBox="0 0 280 200" className="w-full h-full" style={{ display: "block" }}>
           <defs>
             <pattern id="ft-grid" width="15" height="15" patternUnits="userSpaceOnUse">
-              <path d="M 15 0 L 0 0 0 15" fill="none" stroke="#1a3050" strokeWidth="0.5" />
+              <path d="M 15 0 L 0 0 0 15" fill="none" stroke="rgba(225,220,201,0.06)" strokeWidth="0.5" />
             </pattern>
           </defs>
           <rect width="280" height="200" fill="url(#ft-grid)" />
-          <rect x="20" y="12" width="240" height="172" fill="#152030" stroke="#c8d8e8" strokeWidth="2" />
-          <line x1="110" y1="12" x2="110" y2="184" stroke="#c8d8e8" strokeWidth="1.2" />
-          <line x1="110" y1="100" x2="260" y2="100" stroke="#c8d8e8" strokeWidth="1.2" />
-          <line x1="190" y1="12" x2="190" y2="184" stroke="#c8d8e8" strokeWidth="1.2" />
+          <rect x="20" y="12" width="240" height="172" fill="#1F150C" stroke="rgba(225,220,201,0.2)" strokeWidth="2" />
+          <line x1="110" y1="12" x2="110" y2="184" stroke="rgba(225,220,201,0.2)" strokeWidth="1.2" />
+          <line x1="110" y1="100" x2="260" y2="100" stroke="rgba(225,220,201,0.2)" strokeWidth="1.2" />
+          <line x1="190" y1="12" x2="190" y2="184" stroke="rgba(225,220,201,0.2)" strokeWidth="1.2" />
           <polygon points="20,12 110,12 110,184 20,184" fill="rgba(225,220,201,0.08)" stroke="#E1DCC9" strokeWidth="1.2" />
           <circle cx="20" cy="12" r="2" fill="#E1DCC9" /><circle cx="110" cy="12" r="2" fill="#E1DCC9" />
           <circle cx="110" cy="184" r="2" fill="#E1DCC9" /><circle cx="20" cy="184" r="2" fill="#E1DCC9" />
           <rect x="35" y="89" width="56" height="16" rx="3" fill="rgba(225,220,201,0.2)" stroke="#E1DCC9" strokeWidth="0.8" />
           <text x="63" y="100" textAnchor="middle" fontSize="9" fontFamily="monospace" fill="#E1DCC9" fontWeight="bold">44.6 m²</text>
           <text x="65" y="58" textAnchor="middle" fontSize="6.5" fill="rgba(200,216,232,0.35)" fontFamily="system-ui">LIVING / DINING</text>
-          <text x="148" y="56" textAnchor="middle" fontSize="6" fill="rgba(200,216,232,0.3)" fontFamily="system-ui">KITCHEN</text>
-          <text x="222" y="56" textAnchor="middle" fontSize="6" fill="rgba(200,216,232,0.3)" fontFamily="system-ui">MASTER</text>
-          <text x="148" y="148" textAnchor="middle" fontSize="6" fill="rgba(200,216,232,0.3)" fontFamily="system-ui">BED 2</text>
-          <text x="222" y="148" textAnchor="middle" fontSize="6" fill="rgba(200,216,232,0.3)" fontFamily="system-ui">ENSUITE</text>
+          <text x="148" y="56" textAnchor="middle" fontSize="6" fill="rgba(225,220,201,0.25)" fontFamily="system-ui">KITCHEN</text>
+          <text x="222" y="56" textAnchor="middle" fontSize="6" fill="rgba(225,220,201,0.25)" fontFamily="system-ui">MASTER</text>
+          <text x="148" y="148" textAnchor="middle" fontSize="6" fill="rgba(225,220,201,0.25)" fontFamily="system-ui">BED 2</text>
+          <text x="222" y="148" textAnchor="middle" fontSize="6" fill="rgba(225,220,201,0.25)" fontFamily="system-ui">ENSUITE</text>
           <circle cx="110" cy="184" r="5" fill="none" stroke="#E1DCC9" strokeWidth="0.8" opacity="0.5">
             <animate attributeName="r" values="4;7;4" dur="2s" repeatCount="indefinite" />
             <animate attributeName="opacity" values="0.5;0.15;0.5" dur="2s" repeatCount="indefinite" />

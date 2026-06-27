@@ -281,13 +281,7 @@ const Pricing = () => {
                   {isSelected && <Check className="h-3 w-3 text-white" strokeWidth={3} />}
                 </div>
 
-                <div className={`w-10 h-10 rounded-xl flex items-center justify-center mb-4 ${
-                  isSelected ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground'
-                }`}>
-                  {plan.icon}
-                </div>
-
-                <h3 className="font-display text-xl font-bold mb-1">{PLAN_NAMES[plan.id]}</h3>
+                <h3 className="font-display text-3xl font-bold mb-1">{PLAN_NAMES[plan.id]}</h3>
                 <p className="text-sm text-muted-foreground mb-4">{plan.tagline}</p>
 
                 <div className="flex items-baseline gap-1 mb-1">

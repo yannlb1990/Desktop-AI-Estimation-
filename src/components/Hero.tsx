@@ -74,11 +74,11 @@ const FloorPlanCard = () => (
       <svg viewBox="0 0 480 300" className="w-full" style={{ display: "block" }}>
         <defs>
           <pattern id="h-grid" width="20" height="20" patternUnits="userSpaceOnUse">
-            <path d="M 20 0 L 0 0 0 20" fill="none" stroke="#1a3050" strokeWidth="0.4" />
+            <path d="M 20 0 L 0 0 0 20" fill="none" stroke="rgba(225,220,201,0.06)" strokeWidth="0.4" />
           </pattern>
           <pattern id="h-grid-major" width="100" height="100" patternUnits="userSpaceOnUse">
             <rect width="100" height="100" fill="url(#h-grid)" />
-            <path d="M 100 0 L 0 0 0 100" fill="none" stroke="#1a3050" strokeWidth="0.8" />
+            <path d="M 100 0 L 0 0 0 100" fill="none" stroke="rgba(225,220,201,0.06)" strokeWidth="0.8" />
           </pattern>
           <marker id="h-end" markerWidth="5" markerHeight="5" refX="4" refY="2.5" orient="auto">
             <path d="M 0 1 L 4 2.5 L 0 4 Z" fill="#E1DCC9" />
@@ -88,15 +88,15 @@ const FloorPlanCard = () => (
           </marker>
         </defs>
         <rect width="480" height="300" fill="url(#h-grid-major)" />
-        <rect x="50" y="28" width="390" height="248" fill="#152030" stroke="#c8d8e8" strokeWidth="2" />
-        <line x1="185" y1="28" x2="185" y2="276" stroke="#c8d8e8" strokeWidth="1.5" />
-        <line x1="185" y1="155" x2="440" y2="155" stroke="#c8d8e8" strokeWidth="1.5" />
-        <line x1="325" y1="28" x2="325" y2="276" stroke="#c8d8e8" strokeWidth="1.5" />
-        <text x="117" y="158" textAnchor="middle" fontSize="8" fill="rgba(200,216,232,0.4)" fontFamily="system-ui" letterSpacing="0.5">LIVING</text>
-        <text x="255" y="94"  textAnchor="middle" fontSize="8" fill="rgba(200,216,232,0.4)" fontFamily="system-ui">KITCHEN</text>
-        <text x="382" y="94"  textAnchor="middle" fontSize="8" fill="rgba(200,216,232,0.4)" fontFamily="system-ui">MASTER</text>
-        <text x="255" y="224" textAnchor="middle" fontSize="8" fill="rgba(200,216,232,0.4)" fontFamily="system-ui">BED 2</text>
-        <text x="382" y="224" textAnchor="middle" fontSize="8" fill="rgba(200,216,232,0.4)" fontFamily="system-ui">ENSUITE</text>
+        <rect x="50" y="28" width="390" height="248" fill="#1F150C" stroke="rgba(225,220,201,0.2)" strokeWidth="2" />
+        <line x1="185" y1="28" x2="185" y2="276" stroke="rgba(225,220,201,0.2)" strokeWidth="1.5" />
+        <line x1="185" y1="155" x2="440" y2="155" stroke="rgba(225,220,201,0.2)" strokeWidth="1.5" />
+        <line x1="325" y1="28" x2="325" y2="276" stroke="rgba(225,220,201,0.2)" strokeWidth="1.5" />
+        <text x="117" y="158" textAnchor="middle" fontSize="8" fill="rgba(225,220,201,0.3)" fontFamily="system-ui" letterSpacing="0.5">LIVING</text>
+        <text x="255" y="94"  textAnchor="middle" fontSize="8" fill="rgba(225,220,201,0.3)" fontFamily="system-ui">KITCHEN</text>
+        <text x="382" y="94"  textAnchor="middle" fontSize="8" fill="rgba(225,220,201,0.3)" fontFamily="system-ui">MASTER</text>
+        <text x="255" y="224" textAnchor="middle" fontSize="8" fill="rgba(225,220,201,0.3)" fontFamily="system-ui">BED 2</text>
+        <text x="382" y="224" textAnchor="middle" fontSize="8" fill="rgba(225,220,201,0.3)" fontFamily="system-ui">ENSUITE</text>
         <polygon points="50,28 185,28 185,276 50,276" fill="rgba(225,220,201,0.06)" stroke="#E1DCC9" strokeWidth="1.5" />
         <circle cx="50"  cy="28"  r="2.5" fill="#E1DCC9" />
         <circle cx="185" cy="28"  r="2.5" fill="#E1DCC9" />

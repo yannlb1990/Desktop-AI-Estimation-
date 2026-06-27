@@ -304,7 +304,7 @@ export const SubcontractorComparison = ({ projectId, onUsePrice }: Subcontractor
                                   <Button
                                     size="sm"
                                     variant={i === 0 ? "default" : "outline"}
-                                    className={`h-7 text-xs ${i === 0 ? "bg-[#412D15]/70 hover:bg-[#412D15]/80 text-white" : ""}`}
+                                    className={`h-7 text-xs ${i === 0 ? "bg-primary hover:bg-primary/90 text-primary-foreground" : ""}`}
                                     onClick={() => handleUsePrice(q)}
                                   >
                                     Use this

@@ -1030,7 +1030,7 @@ export default function GanttSchedule({ projectId }: GanttScheduleProps) {
 
             <div className="w-px h-5 bg-muted/60 mx-0.5" />
 
-            <Button size="sm" onClick={handleAddTask} className="gap-1 bg-[#412D15] hover:bg-[#412D15]/90 text-white">
+            <Button size="sm" onClick={handleAddTask} className="gap-1 bg-primary hover:bg-primary/90 text-primary-foreground">
               <Plus className="w-3.5 h-3.5" /> Add Task
             </Button>
           </div>

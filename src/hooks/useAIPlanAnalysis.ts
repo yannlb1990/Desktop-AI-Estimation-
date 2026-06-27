@@ -26,7 +26,7 @@ export function useAIPlanAnalysis() {
   const [result, setResult] = useState<AnalysisResult | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  const analyse = async (imageBase64: string, projectContext?: object) => {
+  const analyse = async (imageBase64: string, projectContext?: object): Promise<AnalysisResult | null> => {
     setLoading(true);
     setError(null);
     setResult(null);
@@ -44,8 +44,10 @@ export function useAIPlanAnalysis() {
       }
       const parsed: AnalysisResult = JSON.parse(match[0]);
       setResult(parsed);
+      return parsed;
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : String(e));
+      return null;
     } finally {
       setLoading(false);
     }
@@ -56,5 +58,5 @@ export function useAIPlanAnalysis() {
     setError(null);
   };
 
-  return { analyse, loading, result, error, reset };
+  return { analyse, loading, result, error, reset, setResult };
 }

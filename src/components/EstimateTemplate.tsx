@@ -1942,8 +1942,7 @@ export const EstimateTemplate = ({ projectId, estimateId }: EstimateTemplateProp
 
       {/* Comprehensive Totals Summary Table */}
       <Card className="p-6 bg-gradient-to-br from-primary/10 via-secondary/10 to-accent/10">
-        <h3 className="font-display text-2xl font-bold mb-6 flex items-center gap-2">
-          <DollarSign className="h-6 w-6 text-primary" />
+        <h3 className="font-display text-2xl font-bold mb-6">
           Project Cost Summary
         </h3>
         

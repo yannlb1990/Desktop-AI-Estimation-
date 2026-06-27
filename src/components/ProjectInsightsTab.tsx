@@ -369,7 +369,6 @@ export const ProjectInsightsTab = ({ projectId }: ProjectInsightsTabProps) => {
         <Card>
           <CardHeader>
             <div className="flex items-center gap-2">
-              <DollarSign className="h-5 w-5 text-primary" />
               <CardTitle>Waste Cost Exposure</CardTitle>
             </div>
             <CardDescription>
@@ -384,8 +383,8 @@ export const ProjectInsightsTab = ({ projectId }: ProjectInsightsTabProps) => {
                 <YAxis type="category" dataKey="label" width={150} tick={{ fontSize: 10 }} />
                 <Tooltip formatter={(v: number) => au$(v)} />
                 <Legend />
-                <Bar dataKey="matWaste" name="Material Waste" stackId="a" fill="#93c5fd" />
-                <Bar dataKey="labWaste" name="Labour Waste" stackId="a" fill="#6ee7b7" radius={[0, 4, 4, 0]} />
+                <Bar dataKey="matWaste" name="Material Waste" stackId="a" fill="#412D15" />
+                <Bar dataKey="labWaste" name="Labour Waste" stackId="a" fill="#E1DCC9" radius={[0, 4, 4, 0]} />
               </BarChart>
             </ResponsiveContainer>
           </CardContent>

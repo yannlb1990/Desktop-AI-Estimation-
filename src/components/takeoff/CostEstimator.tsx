@@ -883,7 +883,7 @@ export const CostEstimator = ({
     csv += `Fixings,$${totals.fixingsCost.toFixed(2)}\n`;
     csv += `Consumables,$${totals.consumablesTotal.toFixed(2)}\n`;
     csv += `Subtotal,$${totals.subtotal.toFixed(2)}\n`;
-    csv += `Margin (${marginPercent}%),$${totals.margin.toFixed(2)}\n`;
+    csv += `Markup (${marginPercent}%),$${totals.margin.toFixed(2)}\n`;
     csv += `GST (10%),$${totals.gst.toFixed(2)}\n`;
     csv += `GRAND TOTAL,$${totals.grandTotal.toFixed(2)}\n`;
 
@@ -947,13 +947,14 @@ export const CostEstimator = ({
           </span>
         </div>
       )}
-      {/* Header Controls */}
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="flex items-center gap-3">
+      {/* Pricing Configuration */}
+      <Card className="p-4">
+        <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3">Pricing Configuration</p>
+        <div className="flex flex-wrap items-end gap-3">
           <div>
-            <Label className="text-sm text-muted-foreground">State</Label>
+            <Label className="text-xs text-muted-foreground">State</Label>
             <Select value={selectedState} onValueChange={(v: State) => setSelectedState(v)}>
-              <SelectTrigger className="w-24 h-9">
+              <SelectTrigger className="w-24 h-8 mt-1">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -963,56 +964,30 @@ export const CostEstimator = ({
               </SelectContent>
             </Select>
           </div>
-
           <div>
-            <Label className="text-sm text-muted-foreground">Margin %</Label>
-            <Input
-              type="number"
-              value={marginPercent}
-              onChange={(e) => setMarginPercent(Number(e.target.value))}
-              className="w-20 h-9"
-              min={0}
-              max={100}
-            />
+            <Label className="text-xs text-muted-foreground">Markup</Label>
+            <Input type="number" value={marginPercent} onChange={(e) => setMarginPercent(Number(e.target.value))} className="w-20 h-8 mt-1" min={0} max={100} />
           </div>
-
           <div>
-            <Label className="text-sm text-muted-foreground">Mat Waste %</Label>
-            <Input
-              type="number"
-              value={defaultMatWaste}
-              onChange={(e) => setDefaultMatWaste(Number(e.target.value) || 0)}
-              className="w-20 h-9"
-              min={0}
-              max={100}
-              title="Default material waste % applied to new items"
-            />
+            <Label className="text-xs text-muted-foreground">Mat. Waste</Label>
+            <Input type="number" value={defaultMatWaste} onChange={(e) => setDefaultMatWaste(Number(e.target.value) || 0)} className="w-20 h-8 mt-1" min={0} max={100} title="Default material waste % for new items" />
           </div>
-
           <div>
-            <Label className="text-sm text-muted-foreground">Lab Waste %</Label>
-            <Input
-              type="number"
-              value={defaultLabWaste}
-              onChange={(e) => setDefaultLabWaste(Number(e.target.value) || 0)}
-              className="w-20 h-9"
-              min={0}
-              max={100}
-              title="Default labour waste % applied to new items"
-            />
+            <Label className="text-xs text-muted-foreground">Lab. Waste</Label>
+            <Input type="number" value={defaultLabWaste} onChange={(e) => setDefaultLabWaste(Number(e.target.value) || 0)} className="w-20 h-8 mt-1" min={0} max={100} title="Default labour waste % for new items" />
           </div>
-
-          <div className="flex items-center gap-2">
-            <Label className="text-sm text-muted-foreground">GST</Label>
-            <input
-              type="checkbox"
-              checked={gstEnabled}
-              onChange={(e) => setGstEnabled(e.target.checked)}
-              className="h-4 w-4"
-            />
+          <div className="flex items-center gap-2 pb-0.5">
+            <Label className="text-xs text-muted-foreground">GST</Label>
+            <input type="checkbox" checked={gstEnabled} onChange={(e) => setGstEnabled(e.target.checked)} className="h-4 w-4" />
+          </div>
+          <div className="ml-auto flex items-end gap-2 pb-0.5 text-xs text-muted-foreground">
+            <span>Your {marginPercent}% markup = <strong className="text-foreground">{realMargin.toFixed(1)}%</strong> real margin on revenue</span>
           </div>
         </div>
+      </Card>
 
+      {/* Action Buttons */}
+      <div className="flex flex-wrap items-center gap-3">
         <div className="flex gap-2">
           <Button variant="outline" size="sm" onClick={() => { if (!sub.caps.boqExport) { setUpgradeOpen(true); return; } exportToCSV(); }}>
             <FileDown className="h-4 w-4 mr-1" />
@@ -1753,7 +1728,7 @@ export const CostEstimator = ({
             <div className="text-sm font-bold">${totals.subtotal.toFixed(2)}</div>
           </div>
           <div className="p-2 bg-muted/20 dark:bg-card/50 rounded">
-            <div className="text-xs text-foreground/80">Margin ({marginPercent}%)</div>
+            <div className="text-xs text-foreground/80">Markup ({marginPercent}%)</div>
             <div className="text-sm font-bold text-foreground/90">${totals.margin.toFixed(2)}</div>
           </div>
           <div className="p-2 bg-muted rounded">
@@ -1767,20 +1742,16 @@ export const CostEstimator = ({
         </div>
       </Card>
 
-      {/* Margin vs Markup Calculator */}
+      {/* Profit Calculator */}
       <Card className="p-4">
-        <div className="flex items-center gap-2 mb-3">
-          <Percent className="h-4 w-4 text-amber-600" />
-          <span className="text-sm font-semibold">Margin vs Markup</span>
-          <span className="text-xs text-muted-foreground ml-1">— your {marginPercent}% markup earns only {realMargin.toFixed(1)}¢ per dollar, not {marginPercent}¢</span>
-        </div>
+        <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-4">Profit Calculator</p>
         <div className="grid grid-cols-2 gap-6">
           {/* Left: actual margin breakdown */}
           <div className="space-y-2">
-            <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Current Markup Applied</p>
+            <p className="text-xs font-medium text-muted-foreground">Current Markup Breakdown</p>
             <div className="grid grid-cols-2 gap-2">
               <div className="p-2 bg-muted rounded text-center">
-                <div className="text-xs text-muted-foreground">Cost (subtotal)</div>
+                <div className="text-xs text-muted-foreground">Cost</div>
                 <div className="text-sm font-bold font-mono">${totals.subtotal.toFixed(2)}</div>
               </div>
               <div className="p-2 bg-muted/10 dark:bg-background/70 rounded text-center">
@@ -1791,18 +1762,18 @@ export const CostEstimator = ({
                 <div className="text-xs text-muted-foreground">Revenue (ex-GST)</div>
                 <div className="text-sm font-bold font-mono">${(totals.subtotal + totals.margin).toFixed(2)}</div>
               </div>
-              <div className={cn("p-2 rounded text-center", realMargin < 15 ? "bg-red-100 dark:bg-red-950/30" : "bg-amber-100 dark:bg-amber-950/30")}>
-                <div className={cn("text-xs font-medium", realMargin < 15 ? "text-red-700" : "text-amber-700")}>Real Margin</div>
-                <div className={cn("text-xl font-bold font-mono", realMargin < 15 ? "text-red-800" : "text-amber-800")}>{realMargin.toFixed(1)}%</div>
+              <div className={cn("p-2 rounded text-center", realMargin < 15 ? "bg-red-950/30 border border-red-800/30" : "bg-amber-950/30 border border-amber-800/30")}>
+                <div className={cn("text-xs font-medium", realMargin < 15 ? "text-red-400" : "text-amber-400")}>Real Margin</div>
+                <div className={cn("text-xl font-bold font-mono", realMargin < 15 ? "text-red-300" : "text-amber-300")}>{realMargin.toFixed(1)}%</div>
               </div>
             </div>
             <p className="text-[11px] text-muted-foreground leading-snug">
-              Adding {marginPercent}% on top of your costs gives a real profit margin of {realMargin.toFixed(1)}% on revenue — not {marginPercent}%.
+              A {marginPercent}% markup on costs returns {realMargin.toFixed(1)}% profit on revenue.
             </p>
           </div>
           {/* Right: target margin reverse calculator */}
           <div className="space-y-2">
-            <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Target Margin Calculator</p>
+            <p className="text-xs font-medium text-muted-foreground">Reverse Calculator — set your target</p>
             <div className="flex items-center gap-2">
               <Label className="text-xs whitespace-nowrap">I want</Label>
               <Input
