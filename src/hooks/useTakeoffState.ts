@@ -424,7 +424,7 @@ function takeoffReducer(state: TakeoffState, action: TakeoffAction): TakeoffStat
 
     case 'CALCULATE_ESTIMATE': {
       const materialsCost = state.costItems.reduce((sum, item) => sum + item.subtotal, 0);
-      const laborCost = state.costItems.reduce((sum, item) => sum + (item.laborHours || 0) * (item.hourlyRate ?? 75), 0);
+      const laborCost = state.costItems.reduce((sum, item) => sum + (item.labourHours || 0) * (item.hourlyRate ?? 75), 0);
       const subtotal = materialsCost + laborCost;
       const markupAmount = subtotal * 0.15;
       return {

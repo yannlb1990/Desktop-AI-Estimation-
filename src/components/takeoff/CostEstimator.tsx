@@ -90,7 +90,7 @@ const SYSTEM_TEMPLATES: Array<{ id: string; name: string; description: string; i
       { id: 'sc-4', category: 'General', name: 'Mineral Fibre Tiles 600×600', description: '15mm mineral fibre acoustic ceiling tiles', unit: 'M2', unitCost: 28.00, quantity: 0, linkedMeasurements: [], wasteFactor: 1.10, subtotal: 0, trade: 'Joinery', materialWastePercent: 10, labourWastePercent: 10 },
       { id: 'sc-5', category: 'General', name: 'Perimeter Angle / L-Bead', description: 'Wall angle perimeter fixing, 25×25mm galvanised', unit: 'LM', unitCost: 2.20, quantity: 0, linkedMeasurements: [], wasteFactor: 1.05, subtotal: 0, trade: 'Joinery', materialWastePercent: 5, labourWastePercent: 10 },
       { id: 'sc-6', category: 'General', name: 'Hanger Wire + Toggle Bolts', description: 'Galv wire hangers @ 1200mm grid, toggle-bolt fixed to soffit', unit: 'count', unitCost: 4.50, quantity: 0, linkedMeasurements: [], wasteFactor: 1.0, subtotal: 0, trade: 'Joinery', materialWastePercent: 0, labourWastePercent: 10 },
-      { id: 'sc-7', category: 'General', name: 'Labour — Suspended Ceiling Install', description: 'Installation @ 2.5 m²/hr — enter area as qty, set hours = qty ÷ 2.5', unit: 'M2', unitCost: 0, quantity: 0, linkedMeasurements: [], wasteFactor: 1.0, subtotal: 0, trade: 'Joinery', laborHours: 0, hourlyRate: 65, materialWastePercent: 0, labourWastePercent: 10 },
+      { id: 'sc-7', category: 'General', name: 'Labour — Suspended Ceiling Install', description: 'Installation @ 2.5 m²/hr — enter area as qty, set hours = qty ÷ 2.5', unit: 'M2', unitCost: 0, quantity: 0, linkedMeasurements: [], wasteFactor: 1.0, subtotal: 0, trade: 'Joinery', labourHours: 0, hourlyRate: 65, materialWastePercent: 0, labourWastePercent: 10 },
     ],
   },
 ];
@@ -553,7 +553,7 @@ export const CostEstimator = ({
         quantity: item.quantity,
         unit: item.unit,
         unit_price: item.unitCost,
-        labour_hours: item.laborHours ?? 0,
+        labour_hours: item.labourHours ?? 0,
         labour_rate: item.hourlyRate ?? 65,
         material_wastage_pct: item.materialWastePercent ?? 5,
         labour_wastage_pct: item.labourWastePercent ?? 10,
@@ -674,7 +674,7 @@ export const CostEstimator = ({
     const matWaste = item.materialWastePercent ?? 5;
     const labWaste = item.labourWastePercent ?? 10;
     const hourlyRate = item.hourlyRate ?? 65;
-    const hours = item.laborHours ?? 0;
+    const hours = item.labourHours ?? 0;
 
     const materialTotal = item.quantity * item.unitCost * (1 + matWaste / 100);
     const labourTotal = hours * hourlyRate * (1 + labWaste / 100);
@@ -764,7 +764,7 @@ export const CostEstimator = ({
       area: measurement.area,
       measurementType: measurement.measurementType,
       drawingNumber: measurement.drawingNumber || `Page ${measurement.pageIndex + 1}`,
-      laborHours: measurement.labourHours,
+      labourHours: measurement.labourHours,
       materialWastePercent: defaultMatWaste,
       labourWastePercent: defaultLabWaste,
       hourlyRate: getEffectiveRate(sowTrade, selectedState),
@@ -867,7 +867,7 @@ export const CostEstimator = ({
 
     costItems.forEach(item => {
       const { materialTotal, labourTotal, lineTotal } = calculateLineTotals(item);
-      csv += `"${item.category}","${item.trade || ''}","${item.name}","${item.material || item.customMaterial || ''}","${item.area || ''}",${item.quantity.toFixed(2)},${item.unit},${item.unitCost.toFixed(2)},${item.materialWastePercent ?? 5},${item.laborHours || 0},${item.hourlyRate ?? 65},${item.labourWastePercent ?? 10},${item.markupPercent ?? 0},${materialTotal.toFixed(2)},${labourTotal.toFixed(2)},${lineTotal.toFixed(2)}\n`;
+      csv += `"${item.category}","${item.trade || ''}","${item.name}","${item.material || item.customMaterial || ''}","${item.area || ''}",${item.quantity.toFixed(2)},${item.unit},${item.unitCost.toFixed(2)},${item.materialWastePercent ?? 5},${item.labourHours || 0},${item.hourlyRate ?? 65},${item.labourWastePercent ?? 10},${item.markupPercent ?? 0},${materialTotal.toFixed(2)},${labourTotal.toFixed(2)},${lineTotal.toFixed(2)}\n`;
     });
 
     csv += `\nCONSUMABLES\n`;
@@ -1204,7 +1204,7 @@ export const CostEstimator = ({
                   const { materialTotal, labourTotal, lineSubtotal, lineTotal } = calculateLineTotals(item);
                   const isExpanded = expandedItems.has(item.id);
                   const suggestions = getSuggestedMaterials(item);
-                  const needsPrice = item.unitCost === 0 && (item.laborHours ?? 0) === 0;
+                  const needsPrice = item.unitCost === 0 && (item.labourHours ?? 0) === 0;
 
                   return (
                     <React.Fragment key={item.id}>
@@ -1350,8 +1350,8 @@ export const CostEstimator = ({
                         <TableCell className="px-1 w-16">
                           <Input
                             type="number"
-                            value={item.laborHours || ''}
-                            onChange={(e) => onUpdateCostItem(item.id, { laborHours: Number(e.target.value) })}
+                            value={item.labourHours || ''}
+                            onChange={(e) => onUpdateCostItem(item.id, { labourHours: Number(e.target.value) })}
                             className="h-8 text-xs text-right font-mono border-border px-2 w-full"
                             placeholder="0"
                           />

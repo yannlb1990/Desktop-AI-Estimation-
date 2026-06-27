@@ -663,11 +663,11 @@ export const PDFTakeoff = ({ projectId, estimateId, onAddCostItems }: PDFTakeoff
           quantity: framingQty,
           linkedMeasurements: [measurement.id],
           wasteFactor: 1.1,
-          subtotal: 0,
+          subtotal: getFramingRate(projectState) * framingQty * 1.1,
           area: measurement.area,
           measurementType: measurement.measurementType,
           drawingNumber: measurement.drawingNumber || `Page ${measurement.pageIndex + 1}`,
-          laborHours: measurement.labourHours,
+          labourHours: measurement.labourHours,
           trade: trade,
           material: framingLabels[measurement.framingSystem],
         };
@@ -697,7 +697,7 @@ export const PDFTakeoff = ({ projectId, estimateId, onAddCostItems }: PDFTakeoff
           quantity: quantity, // Same m² as framing
           linkedMeasurements: [measurement.id],
           wasteFactor: 1.1,
-          subtotal: 0,
+          subtotal: getLiningRate(measurement.liningType, projectState) * quantity * 1.1,
           area: measurement.area,
           measurementType: measurement.measurementType,
           drawingNumber: measurement.drawingNumber || `Page ${measurement.pageIndex + 1}`,
@@ -734,7 +734,7 @@ export const PDFTakeoff = ({ projectId, estimateId, onAddCostItems }: PDFTakeoff
           quantity: quantity, // Same m² as framing
           linkedMeasurements: [measurement.id],
           wasteFactor: 1.05,
-          subtotal: 0,
+          subtotal: getInsulationRate(projectState) * quantity * 1.05,
           area: measurement.area,
           measurementType: measurement.measurementType,
           drawingNumber: measurement.drawingNumber || `Page ${measurement.pageIndex + 1}`,
@@ -788,11 +788,11 @@ export const PDFTakeoff = ({ projectId, estimateId, onAddCostItems }: PDFTakeoff
             quantity: quantity,
             linkedMeasurements: [measurement.id],
             wasteFactor: 1.0,
-            subtotal: 0,
+            subtotal: getMeasurementTypeRate(measurement.measurementType, unit, !!measurement.isConcreteFloor, projectState) * quantity,
             area: measurement.area,
             measurementType: measurement.measurementType,
             drawingNumber: measurement.drawingNumber || `Page ${measurement.pageIndex + 1}`,
-            laborHours: measurement.labourHours,
+            labourHours: measurement.labourHours,
             trade: autoTrade,
             material: material || undefined,
           };
@@ -853,7 +853,7 @@ export const PDFTakeoff = ({ projectId, estimateId, onAddCostItems }: PDFTakeoff
           quantity: framingM2,
           linkedMeasurements: [m.id],
           wasteFactor: 1.1,
-          subtotal: 0,
+          subtotal: getFramingRate(projectState) * framingM2 * 1.1,
           area: m.area,
           measurementType: 'Wall',
           drawingNumber,
@@ -876,7 +876,7 @@ export const PDFTakeoff = ({ projectId, estimateId, onAddCostItems }: PDFTakeoff
           quantity: framingM2 * (m.liningFaces || 1),
           linkedMeasurements: [m.id],
           wasteFactor: 1.1,
-          subtotal: 0,
+          subtotal: getLiningRate(m.liningType, projectState) * framingM2 * (m.liningFaces || 1) * 1.1,
           area: m.area,
           measurementType: 'Wall',
           drawingNumber,
@@ -900,7 +900,7 @@ export const PDFTakeoff = ({ projectId, estimateId, onAddCostItems }: PDFTakeoff
           quantity: framingM2,
           linkedMeasurements: [m.id],
           wasteFactor: 1.05,
-          subtotal: 0,
+          subtotal: getInsulationRate(projectState) * framingM2 * 1.05,
           area: m.area,
           measurementType: 'Wall',
           drawingNumber,
@@ -1354,10 +1354,10 @@ export const PDFTakeoff = ({ projectId, estimateId, onAddCostItems }: PDFTakeoff
                             >
                               {Array.from({ length: state.pdfFile.pageCount }, (_, idx) => idx + 1).map(p => {
                                 const scaleForPage = state.scales[p - 1];
-                                const dot = scaleForPage ? (scaleForPage.scaleMethod === 'manual' ? '🟢' : '🟡') : '🔴';
+                                const calibLabel = scaleForPage ? (scaleForPage.scaleMethod === 'manual' ? '[CAL]' : '[AUTO]') : '[UNCAL]';
                                 return (
                                   <option key={p} value={p} className="bg-gray-800">
-                                    {dot} Page {p} / {state.pdfFile!.pageCount}
+                                    {calibLabel} Page {p} / {state.pdfFile!.pageCount}
                                   </option>
                                 );
                               })}
@@ -1617,12 +1617,15 @@ export const PDFTakeoff = ({ projectId, estimateId, onAddCostItems }: PDFTakeoff
                       size="sm"
                       onClick={() => {
                         if (!sub.caps.takeoffPdfReport) { setUpgradeModal({ open: true, feature: 'Annotated PDF Export' }); return; }
-                        const dataUrl = canvasRef.current?.toDataURL('image/png') ?? '';
+                        const fabricCanvas = canvasRef.current;
+                        const dataUrl = fabricCanvas?.toDataURL('image/png') ?? '';
                         generateAnnotatedTakeoffPdf({
                           projectName: state.pdfFile?.name?.replace(/\.pdf$/i, '') || 'Takeoff',
                           planName: state.pdfFile?.name,
                           measurements: filteredMeasurements,
                           canvasDataUrl: dataUrl,
+                          canvasWidth: fabricCanvas?.getWidth?.() ?? (fabricCanvas as any)?.width,
+                          canvasHeight: fabricCanvas?.getHeight?.() ?? (fabricCanvas as any)?.height,
                         });
                       }}
                       disabled={!filteredMeasurements.length}

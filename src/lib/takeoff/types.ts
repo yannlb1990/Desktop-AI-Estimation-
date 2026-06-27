@@ -179,7 +179,7 @@ export interface CostItem {
   unitCost: number;
   quantity: number;
   linkedMeasurements: string[];
-  laborHours?: number;
+  labourHours?: number;
   wasteFactor: number;
   supplierCode?: string;
   notes?: string;

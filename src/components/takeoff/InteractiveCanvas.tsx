@@ -2371,14 +2371,15 @@ export const InteractiveCanvas = ({
               cx += (livePts[i].x + livePts[j].x) * cross;
               cy += (livePts[i].y + livePts[j].y) * cross;
             }
-            area = Math.abs(area) / 2;
-            const A6 = Math.abs(area) * 6 || 1;
-            cx = Math.abs(cx) / A6;
-            cy = Math.abs(cy) / A6;
+            const signedArea = area / 2;
+            const absArea = Math.abs(signedArea);
+            const A6 = signedArea * 6 || 1;
+            cx = cx / A6;
+            cy = cy / A6;
 
             const upmPoly = unitsPerMetreRef.current;
-            const areaM2 = upmPoly && upmPoly > 0 ? area / (upmPoly * upmPoly) : null;
-            const areaText = areaM2 !== null ? `${areaM2.toFixed(2)} m²` : `${area.toFixed(0)} px²`;
+            const areaM2 = upmPoly && upmPoly > 0 ? absArea / (upmPoly * upmPoly) : null;
+            const areaText = areaM2 !== null ? `${areaM2.toFixed(2)} m²` : `${absArea.toFixed(0)} px²`;
 
             const labelX = tpx(cx), labelY = tpy(cy);
             const fSize = Math.max(11, Math.min(16, 13 * dpr));
@@ -2716,8 +2717,9 @@ export const InteractiveCanvas = ({
 
       } else if (target.type === 'circle') {
         // For circles, calculate from radius
-        const centerX = target.left + target.radius * target.scaleX;
-        const centerY = target.top + target.radius * target.scaleY;
+        const _circCenter = target.getCenterPoint();
+        const centerX = _circCenter.x;
+        const centerY = _circCenter.y;
         const radius = target.radius * Math.max(target.scaleX, target.scaleY);
 
         const startPoint: WorldPoint = { x: centerX, y: centerY };
@@ -2952,13 +2954,13 @@ export const InteractiveCanvas = ({
 
       } else if (target.type === 'circle') {
         const radius = target.radius * Math.max(target.scaleX, target.scaleY);
-        const centerX = target.left + target.radius * target.scaleX;
-        const centerY = target.top + target.radius * target.scaleY;
+        const center = target.getCenterPoint();
+        const centerX = center.x;
+        const centerY = center.y;
         const sp: WorldPoint = { x: centerX, y: centerY };
         const ep: WorldPoint = { x: centerX + radius, y: centerY };
         const result = calculateCircleAreaWorld(sp, ep, effectiveUnits);
         text = isCalibrated ? `${result.realValue.toFixed(2)} m²` : `${result.worldValue.toFixed(0)} px²`;
-        const center = target.getCenterPoint();
         worldX = center.x;
         worldY = center.y;
 

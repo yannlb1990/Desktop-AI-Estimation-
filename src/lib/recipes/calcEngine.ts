@@ -47,9 +47,9 @@ function calcComponentQty(
  * - materialWastePercent = 0 and labourWastePercent = 0 on ALL output items
  *   because waste is already baked into qty by this function.
  *   EstimateTemplate must NOT apply it again.
- * - Labour components (item_type = 'labour') → laborHours = qty, unitCost = 0
+ * - Labour components (item_type = 'labour') → labourHours = qty, unitCost = 0
  *   so they land in the Labour column of EstimateTemplate totals.
- * - Material components → unitCost = rate, laborHours = 0
+ * - Material components → unitCost = rate, labourHours = 0
  *   so they land in the Materials column.
  * - Optional components are included by default; caller may filter them out.
  */
@@ -103,7 +103,7 @@ export function explodeAssembly(
       labourWastePercent:   0,
 
       // Labour components land in the Labour column of EstimateTemplate
-      laborHours:  isLabour ? qty : 0,
+      labourHours:  isLabour ? qty : 0,
       hourlyRate:  isLabour ? rate : 0,
 
       notes: noteText,

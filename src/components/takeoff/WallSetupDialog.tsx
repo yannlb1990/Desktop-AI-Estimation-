@@ -73,6 +73,39 @@ export const WALL_SPECS: WallSpec[] = [
     insulationType: 'r25_batts',
     liningFaces: 1,
   },
+  {
+    id: 'partition_70',
+    label: '70mm Partition',
+    description: '70mm timber · PB both faces · no batts',
+    framingSystem: 'timber_90_mgp10',
+    hasLining: true,
+    liningType: 'pb_10',
+    hasInsulation: false,
+    insulationType: '',
+    liningFaces: 2,
+  },
+  {
+    id: 'acoustic',
+    label: 'Acoustic Wall',
+    description: '90mm timber · PB both faces · acoustic batts',
+    framingSystem: 'timber_90_mgp10',
+    hasLining: true,
+    liningType: 'pb_13',
+    hasInsulation: true,
+    insulationType: 'acoustic',
+    liningFaces: 2,
+  },
+  {
+    id: 'fire_rated',
+    label: 'Fire-Rated Wall',
+    description: '90mm steel · 2× FC board each face · fire-rated batts',
+    framingSystem: 'steel_92',
+    hasLining: true,
+    liningType: 'fc_9',
+    hasInsulation: true,
+    insulationType: 'acoustic',
+    liningFaces: 2,
+  },
 ];
 
 const LINING_LABELS: Record<string, string> = {
@@ -87,6 +120,7 @@ const INSULATION_LABELS: Record<string, string> = {
   r25_batts: 'R2.5 Batts',
   r3_batts: 'R3.0 Batts',
   r4_batts: 'R4.0 Batts',
+  acoustic: 'Acoustic Batts',
 };
 
 const FRAMING_LABELS: Record<string, string> = {

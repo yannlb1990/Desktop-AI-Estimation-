@@ -14,6 +14,8 @@ export interface AnnotatedTakeoffOptions {
   planName?: string;
   measurements: Measurement[];
   canvasDataUrl: string; // PNG data URL from fabric.js canvas
+  canvasWidth?: number;  // actual pixel width of the canvas element
+  canvasHeight?: number; // actual pixel height of the canvas element
 }
 
 const BRAND = '#1e40af';
@@ -372,7 +374,7 @@ function addMeasurementTables(
 // ── Annotated takeoff PDF ─────────────────────────────────────────────────────
 
 export function generateAnnotatedTakeoffPdf(options: AnnotatedTakeoffOptions): void {
-  const { projectName, planName, measurements, canvasDataUrl } = options;
+  const { projectName, planName, measurements, canvasDataUrl, canvasWidth, canvasHeight } = options;
 
   // A3 landscape for the plan page
   const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a3' });
@@ -415,9 +417,10 @@ export function generateAnnotatedTakeoffPdf(options: AnnotatedTakeoffOptions): v
   // Use imgAreaW/imgAreaH as max bounds.
   const img = new Image();
   img.src = canvasDataUrl;
-  // Natural size may not be available synchronously, so we default to full area width
-  const natW = img.naturalWidth || 1920;
-  const natH = img.naturalHeight || 1080;
+  // Use caller-supplied canvas dimensions first, then naturalWidth (available synchronously
+  // for data URLs in most browsers), then fall back to the PDF area dimensions.
+  const natW = img.naturalWidth || canvasWidth || imgAreaW;
+  const natH = img.naturalHeight || canvasHeight || imgAreaH;
   const scale = Math.min(imgAreaW / natW, imgAreaH / natH);
   const dispW = natW * scale;
   const dispH = natH * scale;

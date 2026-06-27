@@ -473,7 +473,7 @@ export default function GanttSchedule({ projectId }: GanttScheduleProps) {
 
   const handlePrint = () => {
     const brand = getBrand();
-    const html = buildPrintHTML(groupedTasks, projectName, brand, viewMode, columns, COL_W, rangeStart, totalDays, todayPct);
+    const html = buildPrintHTML(groupedTasks, projectName, brand, viewMode, columns, COL_W, rangeStart, totalDays, workDays ? displayTodayPct : todayPct);
     const win = window.open("", "_blank", "width=1400,height=900");
     if (!win) return;
     win.document.write(html);
@@ -543,8 +543,9 @@ export default function GanttSchedule({ projectId }: GanttScheduleProps) {
     });
 
     // ── Today line (vertical across full height) ───────────────────────────
-    if (todayPct >= 0 && todayPct <= 100) {
-      const todayX = timelineX + (todayPct / 100) * RIGHT_W;
+    const pdfTodayPct = workDays ? displayTodayPct : todayPct;
+    if (pdfTodayPct >= 0 && pdfTodayPct <= 100) {
+      const todayX = timelineX + (pdfTodayPct / 100) * RIGHT_W;
       doc.setDrawColor(239, 68, 68); doc.setLineWidth(0.5);
       doc.line(todayX, HEADER_Y, todayX, PH - MB);
       doc.setFontSize(5.5); doc.setTextColor(239, 68, 68);
@@ -570,8 +571,8 @@ export default function GanttSchedule({ projectId }: GanttScheduleProps) {
           doc.setFontSize(6.5); doc.setFont("helvetica", "bold"); doc.setTextColor(100, 116, 139);
           doc.text(format(month, "MMM yy"), x + 1.5, curY + HDR_H - 2);
         });
-        if (todayPct >= 0 && todayPct <= 100) {
-          const todayX = timelineX + (todayPct / 100) * RIGHT_W;
+        if (pdfTodayPct >= 0 && pdfTodayPct <= 100) {
+          const todayX = timelineX + (pdfTodayPct / 100) * RIGHT_W;
           doc.setDrawColor(239, 68, 68); doc.setLineWidth(0.5);
           doc.line(todayX, curY, todayX, PH - MB);
         }

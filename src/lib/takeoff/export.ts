@@ -82,7 +82,7 @@ export function exportToBOQCsv(opts: BOQExportOptions): string {
     items.forEach((item, lineIdx) => {
       const matWaste = item.materialWastePercent ?? 5;
       const labWaste = item.labourWastePercent ?? 10;
-      const hrs = item.laborHours ?? 0;
+      const hrs = item.labourHours ?? 0;
       const rate = item.hourlyRate ?? 65;
 
       const matTotal = item.quantity * item.unitCost * (1 + matWaste / 100);
@@ -90,7 +90,7 @@ export function exportToBOQCsv(opts: BOQExportOptions): string {
       const subTotal = item.subtotal > 0 ? item.subtotal : matTotal + labTotal;
 
       // Detect if item is effectively a subcontractor lump sum (no breakdown)
-      const isSub = item.laborHours === undefined && item.unitCost > 0;
+      const isSub = item.labourHours === undefined && item.unitCost > 0;
       const labStr  = isSub ? '' : $$(labTotal);
       const matStr  = isSub ? '' : $$(matTotal);
       const subStr  = isSub ? $$(subTotal) : '';
