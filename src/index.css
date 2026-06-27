@@ -5,7 +5,7 @@
 /* Design system — all colors in HSL.
    Palette source: colorhunt.co/palette/0000001f150c412d15e1dcc9
    #000000 deep black · #1F150C dark warm brown · #412D15 medium brown · #E1DCC9 warm cream
-   Derived CTA accent: warm amber/copper hsl(36,68%,48%) ≈ #C47A1E
+   CTA: #E1DCC9 cream on black (Option A — no derived accent color)
 */
 
 @layer base {
@@ -43,12 +43,12 @@
 
     --gradient-primary: linear-gradient(135deg, hsl(30 42% 8%) 0%, hsl(33 51% 17%) 100%);
     --gradient-hero: linear-gradient(180deg, hsl(30 42% 8%) 0%, hsl(33 45% 16%) 100%);
-    --gradient-accent: linear-gradient(90deg, hsl(36 68% 48%) 0%, hsl(36 58% 40%) 100%);
+    --gradient-accent: linear-gradient(90deg, hsl(33 51% 17%) 0%, hsl(33 42% 25%) 100%);
 
     --shadow-sm: 0 2px 8px hsl(30 40% 10% / 0.08);
     --shadow-md: 0 4px 16px hsl(30 40% 10% / 0.12);
     --shadow-lg: 0 8px 32px hsl(30 40% 10% / 0.16);
-    --shadow-glow: 0 0 40px hsl(36 68% 48% / 0.22);
+    --shadow-glow: 0 0 40px hsl(48 28% 84% / 0.10);
 
     --transition-smooth: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   }
@@ -67,9 +67,9 @@
     --popover: 30 38% 9%;
     --popover-foreground: 46 26% 84%;
 
-    /* Primary — warm amber/copper, derived from palette */
-    --primary: 36 68% 48%;             /* ~#C47A1E rich amber */
-    --primary-foreground: 30 44% 5%;   /* dark brown on amber */
+    /* Primary — cream (#E1DCC9) on black, Option A */
+    --primary: 48 28% 84%;             /* #E1DCC9 warm cream */
+    --primary-foreground: 0 0% 0%;     /* pure black text on cream */
 
     /* Secondary — between #1F150C and #412D15 */
     --secondary: 32 42% 13%;           /* ~#2B1C0B */
@@ -89,18 +89,18 @@
     /* Borders — warm brown lines, clearly visible on dark */
     --border: 33 40% 20%;              /* ~#412010 slightly brighter than #412D15 */
     --input: 33 40% 20%;
-    --ring: 36 68% 48%;               /* same amber as primary */
+    --ring: 48 28% 84%;               /* cream focus ring */
 
-    /* Gradients */
-    --gradient-primary: linear-gradient(135deg, hsl(30 44% 4%) 0%, hsl(33 51% 17%) 100%);
-    --gradient-hero: linear-gradient(180deg, hsl(30 44% 4%) 0%, hsl(30 40% 8%) 100%);
-    --gradient-accent: linear-gradient(90deg, hsl(36 68% 48%) 0%, hsl(36 58% 40%) 100%);
+    /* Gradients — pure palette browns, no amber */
+    --gradient-primary: linear-gradient(135deg, hsl(0 0% 0%) 0%, hsl(33 51% 17%) 100%);
+    --gradient-hero: linear-gradient(180deg, hsl(0 0% 0%) 0%, hsl(30 40% 8%) 100%);
+    --gradient-accent: linear-gradient(90deg, hsl(33 51% 17%) 0%, hsl(28 44% 9%) 100%);
 
     /* Shadows */
     --shadow-sm: 0 2px 8px hsl(0 0% 0% / 0.50);
     --shadow-md: 0 4px 20px hsl(0 0% 0% / 0.65);
     --shadow-lg: 0 8px 40px hsl(0 0% 0% / 0.78);
-    --shadow-glow: 0 0 40px hsl(36 68% 48% / 0.28);
+    --shadow-glow: 0 0 40px hsl(48 28% 84% / 0.05);
 
     --transition-smooth: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   }
@@ -149,7 +149,7 @@
     border-radius: 3px;
   }
   ::-webkit-scrollbar-thumb:hover {
-    background: hsl(36 68% 48% / 0.5);
+    background: hsl(48 28% 84% / 0.3);
   }
 }
 

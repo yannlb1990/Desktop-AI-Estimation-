@@ -98,7 +98,7 @@ export function AIPlanAnalysisPanel({
               )}
               <Button
                 size="sm"
-                className="w-full gap-2 bg-amber-700 hover:bg-amber-600 text-white"
+                className="w-full gap-2 bg-primary text-primary-foreground hover:bg-primary/90"
                 onClick={handleAnalyse}
                 disabled={loading}
               >

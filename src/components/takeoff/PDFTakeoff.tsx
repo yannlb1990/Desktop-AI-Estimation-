@@ -929,17 +929,17 @@ export const PDFTakeoff = ({ projectId, estimateId, onAddCostItems }: PDFTakeoff
   // Calibration popover — floats above canvas, always visible during manual calibration
   const calibrationBar = state.calibrationMode === 'manual' && calibInstructVisible ? (
     <div className="absolute top-3 left-1/2 -translate-x-1/2 z-40 flex flex-col gap-2
-                    bg-gray-900/97 border border-amber-600/60 rounded-xl px-4 py-3
+                    bg-gray-900/97 border border-foreground/20 rounded-xl px-4 py-3
                     shadow-2xl backdrop-blur-sm select-none pointer-events-auto min-w-[320px]">
       {/* Step indicator */}
       <div className="flex items-center gap-2">
-        <Ruler className="h-3.5 w-3.5 text-amber-400 shrink-0" />
-        <span className="text-[10px] font-semibold text-amber-400 uppercase tracking-widest">
+        <Ruler className="h-3.5 w-3.5 text-foreground/70 shrink-0" />
+        <span className="text-[10px] font-semibold text-foreground/70 uppercase tracking-widest">
           Calibrate Scale
         </span>
         <div className="flex gap-1 ml-auto">
-          <span className={`h-1.5 w-6 rounded-full transition-colors ${!manualCalibrationPoints ? 'bg-amber-500' : 'bg-amber-900'}`} />
-          <span className={`h-1.5 w-6 rounded-full transition-colors ${manualCalibrationPoints ? 'bg-amber-500' : 'bg-amber-900/40'}`} />
+          <span className={`h-1.5 w-6 rounded-full transition-colors ${!manualCalibrationPoints ? 'bg-foreground' : 'bg-foreground/20'}`} />
+          <span className={`h-1.5 w-6 rounded-full transition-colors ${manualCalibrationPoints ? 'bg-foreground' : 'bg-foreground/10'}`} />
         </div>
         <button
           onClick={handleCalibrationCancel}
@@ -953,7 +953,7 @@ export const PDFTakeoff = ({ projectId, estimateId, onAddCostItems }: PDFTakeoff
       {!manualCalibrationPoints ? (
         /* Step 1 — draw line */
         <div className="flex items-start gap-2">
-          <div className="flex-shrink-0 w-5 h-5 rounded-full bg-amber-600 text-white text-[10px] font-bold flex items-center justify-center mt-0.5">1</div>
+          <div className="flex-shrink-0 w-5 h-5 rounded-full bg-foreground text-background text-[10px] font-bold flex items-center justify-center mt-0.5">1</div>
           <div>
             <p className="text-sm text-gray-200 leading-snug">Click two points on a known dimension</p>
             <p className="text-[11px] text-gray-500 mt-0.5">e.g. a door width, room length, or grid line</p>
@@ -962,7 +962,7 @@ export const PDFTakeoff = ({ projectId, estimateId, onAddCostItems }: PDFTakeoff
       ) : (
         /* Step 2 — enter distance */
         <div className="flex items-start gap-2">
-          <div className="flex-shrink-0 w-5 h-5 rounded-full bg-amber-600 text-white text-[10px] font-bold flex items-center justify-center mt-0.5">2</div>
+          <div className="flex-shrink-0 w-5 h-5 rounded-full bg-foreground text-background text-[10px] font-bold flex items-center justify-center mt-0.5">2</div>
           <div className="flex-1 space-y-2">
             <div>
               <p className="text-sm text-gray-200 leading-snug">Enter the real-world distance</p>
@@ -981,7 +981,7 @@ export const PDFTakeoff = ({ projectId, estimateId, onAddCostItems }: PDFTakeoff
                 value={manualDistance}
                 onChange={e => setManualDistance(e.target.value)}
                 onKeyDown={e => { if (e.key === 'Enter') applyManualCalibration(); if (e.key === 'Escape') handleCalibrationCancel(); }}
-                className="w-24 h-7 text-sm bg-gray-800 border border-gray-600 rounded px-2 text-gray-100 focus:outline-none focus:border-amber-500"
+                className="w-24 h-7 text-sm bg-gray-800 border border-gray-600 rounded px-2 text-gray-100 focus:outline-none focus:border-foreground/50"
                 min="0"
                 step="0.01"
               />
@@ -999,7 +999,7 @@ export const PDFTakeoff = ({ projectId, estimateId, onAddCostItems }: PDFTakeoff
               <button
                 onClick={applyManualCalibration}
                 disabled={!manualDistance || parseFloat(manualDistance) <= 0}
-                className="px-3 h-7 bg-amber-700 hover:bg-amber-600 disabled:opacity-40 disabled:cursor-not-allowed text-white rounded text-xs font-medium transition-colors"
+                className="px-3 h-7 bg-foreground hover:bg-foreground/90 disabled:opacity-40 disabled:cursor-not-allowed text-background rounded text-xs font-medium transition-colors"
               >
                 Apply ↵
               </button>
@@ -1222,7 +1222,7 @@ export const PDFTakeoff = ({ projectId, estimateId, onAddCostItems }: PDFTakeoff
                       </Button>
                     </div>
                   ) : (
-                    <Button variant="outline" size="sm" className="h-8 gap-1.5 border-amber-500 text-amber-500 hover:bg-amber-50 dark:hover:bg-amber-950/20" onClick={() => dispatch({ type: 'SET_CALIBRATION_MODE', payload: 'manual' })}>
+                    <Button variant="outline" size="sm" className="h-8 gap-1.5 border-foreground/40 text-foreground hover:bg-foreground/10" onClick={() => dispatch({ type: 'SET_CALIBRATION_MODE', payload: 'manual' })}>
                       <Ruler className="h-3.5 w-3.5" />
                       Set Scale
                     </Button>
@@ -1413,7 +1413,7 @@ export const PDFTakeoff = ({ projectId, estimateId, onAddCostItems }: PDFTakeoff
                       <div className="absolute top-3 left-3 z-20 flex items-center gap-1.5 px-2 py-1.5 bg-slate-800/95 border border-amber-700/60 rounded-lg backdrop-blur-sm shadow-lg">
                         <span className="text-[10px] font-semibold text-amber-400 uppercase tracking-widest mr-1 shrink-0">Window</span>
                         {(['Awning','Casement','Sliding','Fixed','Louvre','Skylight'] as const).map((id) => (
-                          <button key={id} onClick={() => setWindowSubtype(id)} className={`h-6 px-2 rounded text-xs font-medium transition-colors ${windowSubtype === id ? 'bg-amber-600 text-white' : 'bg-slate-700 text-slate-300 hover:bg-slate-600'}`}>{id}</button>
+                          <button key={id} onClick={() => setWindowSubtype(id)} className={`h-6 px-2 rounded text-xs font-medium transition-colors ${windowSubtype === id ? 'bg-foreground text-background' : 'bg-slate-700 text-slate-300 hover:bg-slate-600'}`}>{id}</button>
                         ))}
                       </div>
                     )}
@@ -1421,7 +1421,7 @@ export const PDFTakeoff = ({ projectId, estimateId, onAddCostItems }: PDFTakeoff
                       <div className="absolute top-3 left-3 z-20 flex items-center gap-1.5 px-2 py-1.5 bg-slate-800/95 border border-amber-700/60 rounded-lg backdrop-blur-sm shadow-lg">
                         <span className="text-[10px] font-semibold text-amber-400 uppercase tracking-widest mr-1 shrink-0">Wall</span>
                         {[64, 70, 90, 92, 110, 150].map(mm => (
-                          <button key={mm} onClick={() => setWallThicknessMm(mm)} className={`h-6 px-2 rounded text-xs font-mono transition-colors ${wallThicknessMm === mm ? 'bg-amber-600 text-white' : 'bg-slate-700 text-slate-300 hover:bg-slate-600'}`}>{mm}</button>
+                          <button key={mm} onClick={() => setWallThicknessMm(mm)} className={`h-6 px-2 rounded text-xs font-mono transition-colors ${wallThicknessMm === mm ? 'bg-foreground text-background' : 'bg-slate-700 text-slate-300 hover:bg-slate-600'}`}>{mm}</button>
                         ))}
                       </div>
                     )}

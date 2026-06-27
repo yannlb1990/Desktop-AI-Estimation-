@@ -80,7 +80,7 @@ const Navigation = () => {
                 <Button
                   size="sm"
                   onClick={() => navigate("/auth?plan=pro&mode=signup")}
-                  className="bg-amber-600 text-white hover:bg-amber-500 rounded-full font-bold"
+                  className="bg-primary text-primary-foreground hover:bg-primary/90 rounded-full font-bold"
                 >
                   Start Free Trial
                 </Button>
@@ -133,7 +133,7 @@ const Navigation = () => {
                   </Button>
                   <Button
                     size="sm"
-                    className="flex-1 bg-amber-600 text-white hover:bg-amber-500 rounded-full font-bold"
+                    className="flex-1 bg-primary text-primary-foreground hover:bg-primary/90 rounded-full font-bold"
                     onClick={() => navigate("/auth?plan=pro&mode=signup")}
                   >
                     Start Free Trial

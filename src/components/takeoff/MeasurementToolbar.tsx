@@ -277,7 +277,7 @@ export const MeasurementToolbar = ({
             <>
               <div className="flex-1 shrink-0 min-w-0" />
               <Separator orientation="vertical" className="h-6 mx-1.5 shrink-0" />
-              <span className="text-[11px] font-semibold text-amber-300/90 bg-amber-950/50 border border-amber-800/40 px-2.5 py-0.5 rounded shrink-0 select-none whitespace-nowrap">
+              <span className="text-[11px] font-semibold text-foreground/70 bg-muted border border-border px-2.5 py-0.5 rounded shrink-0 select-none whitespace-nowrap">
                 {activeTool === 'select' ? 'Select' :
                  activeTool === 'pan' ? 'Pan' :
                  activeTool === 'eraser' ? 'Eraser' :
@@ -302,7 +302,7 @@ export const MeasurementToolbar = ({
             {/* Fill type cards */}
             {onWallHatchTypeChange && (
               <div className="flex-1 min-w-0">
-                <p className="text-[10px] font-semibold text-amber-400/80 uppercase tracking-widest mb-1.5">
+                <p className="text-[10px] font-semibold text-foreground/50 uppercase tracking-widest mb-1.5">
                   Wall Fill
                 </p>
                 <div className="flex gap-1.5 flex-wrap">
@@ -339,7 +339,7 @@ export const MeasurementToolbar = ({
             {/* Thickness */}
             {onWallThicknessChange && (
               <div className="shrink-0">
-                <p className="text-[10px] font-semibold text-amber-400/80 uppercase tracking-widest mb-1.5">
+                <p className="text-[10px] font-semibold text-foreground/50 uppercase tracking-widest mb-1.5">
                   Thickness
                 </p>
                 <div className="flex gap-1 flex-wrap">
@@ -350,7 +350,7 @@ export const MeasurementToolbar = ({
                       className={cn(
                         'h-7 px-2 rounded text-xs font-mono transition-colors',
                         wallThicknessMm === mm
-                          ? 'bg-amber-600 text-white'
+                          ? 'bg-primary text-primary-foreground'
                           : 'bg-slate-700/60 text-slate-300 hover:bg-slate-600'
                       )}
                     >
@@ -385,7 +385,7 @@ export const MeasurementToolbar = ({
               <>
                 <div className="w-px bg-amber-900/30 self-stretch shrink-0" />
                 <div className="shrink-0">
-                  <p className="text-[10px] font-semibold text-amber-400/80 uppercase tracking-widest mb-1.5">
+                  <p className="text-[10px] font-semibold text-foreground/50 uppercase tracking-widest mb-1.5">
                     Face
                   </p>
                   <div className="flex flex-col gap-1">
@@ -401,7 +401,7 @@ export const MeasurementToolbar = ({
                         className={cn(
                           'h-7 px-3 rounded text-xs font-medium transition-colors text-left whitespace-nowrap',
                           wallHatchSide === id
-                            ? 'bg-cyan-700 text-white'
+                            ? 'bg-primary text-primary-foreground'
                             : 'bg-slate-700/60 text-slate-300 hover:bg-slate-600'
                         )}
                       >
@@ -418,7 +418,7 @@ export const MeasurementToolbar = ({
               <>
                 <div className="w-px bg-amber-900/30 self-stretch shrink-0" />
                 <div className="shrink-0">
-                  <p className="text-[10px] font-semibold text-amber-400/80 uppercase tracking-widest mb-1.5">
+                  <p className="text-[10px] font-semibold text-foreground/50 uppercase tracking-widest mb-1.5">
                     Type
                   </p>
                   <div className="flex flex-col gap-1">
@@ -427,7 +427,7 @@ export const MeasurementToolbar = ({
                       className={cn(
                         'h-7 px-3 rounded text-xs font-medium transition-colors',
                         wallClassification === 'external'
-                          ? 'bg-amber-600 text-white'
+                          ? 'bg-primary text-primary-foreground'
                           : 'bg-slate-700/60 text-slate-300 hover:bg-slate-600'
                       )}
                     >
@@ -509,11 +509,11 @@ export const MeasurementToolbar = ({
 
         {/* ── Row 2c: Window subtype (when marking window) ───────────────── */}
         {(contextPanelOpen ?? true) && modMode === 'window' && onWindowSubtypeChange && (
-          <div className="flex items-center gap-3 px-3 py-2 bg-slate-800/70 border border-cyan-900/40 rounded-lg">
-            <p className="text-[10px] font-semibold text-cyan-400/80 uppercase tracking-widest shrink-0">
+          <div className="flex items-center gap-3 px-3 py-2 bg-slate-800/70 border border-border rounded-lg">
+            <p className="text-[10px] font-semibold text-foreground/60 uppercase tracking-widest shrink-0">
               Window Type
             </p>
-            <div className="w-px bg-cyan-900/30 self-stretch shrink-0" />
+            <div className="w-px bg-border/30 self-stretch shrink-0" />
             <div className="flex gap-1.5 flex-wrap">
               {WINDOW_TYPES.map(({ id, label }) => (
                 <button
@@ -522,7 +522,7 @@ export const MeasurementToolbar = ({
                   className={cn(
                     'h-7 px-3 rounded text-xs font-medium transition-colors',
                     windowSubtype === id
-                      ? 'bg-cyan-600 text-white'
+                      ? 'bg-primary text-primary-foreground'
                       : 'bg-slate-700/60 text-slate-300 hover:bg-slate-600'
                   )}
                 >
