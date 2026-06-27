@@ -22,10 +22,10 @@ const TYPE_COLORS: Record<MaterialType, string> = {
   Connector:   'bg-orange-100 text-orange-700',
   Framing:     'bg-amber-100 text-amber-700',
   Lining:      'bg-yellow-100 text-yellow-700',
-  Finish:      'bg-green-100 text-green-700',
+  Finish:      'bg-muted/20 text-[#E1DCC9]/60',
   Hardware:    'bg-teal-100 text-teal-700',
-  Plumbing:    'bg-blue-100 text-blue-700',
-  Electrical:  'bg-purple-100 text-purple-700',
+  Plumbing:    'bg-muted/20 text-foreground/80',
+  Electrical:  'bg-muted/15 text-muted-foreground',
   Other:       'bg-gray-100 text-gray-600',
 };
 

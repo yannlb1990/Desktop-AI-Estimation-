@@ -117,7 +117,7 @@ export const MaterialSubstitutionDialog = ({
                       </p>
                       {alt.savings !== 0 && (
                         <p className={`text-sm font-semibold mt-1 ${
-                          alt.savings > 0 ? 'text-green-600' : 'text-red-600'
+                          alt.savings > 0 ? 'text-[#E1DCC9]/70' : 'text-red-600'
                         }`}>
                           {alt.savings > 0 ? 'Save' : 'Extra'} ${Math.abs(alt.savings).toFixed(2)}/{alt.unit}
                           <span className="text-xs ml-1">({Math.abs(Number(alt.savingsPercent))}%)</span>

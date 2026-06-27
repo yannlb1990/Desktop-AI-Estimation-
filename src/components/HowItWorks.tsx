@@ -66,7 +66,7 @@ function UploadVisual() {
         <Upload className="h-6 w-6 text-[#E1DCC9]/40" />
         <span className="text-[11px] font-mono text-white/25">Drop any PDF, DXF or image</span>
       </div>
-      <div className="absolute bottom-2 right-6 text-[9px] font-mono text-emerald-400/80 bg-emerald-400/10 border border-emerald-400/20 px-2.5 py-1 rounded-full">
+      <div className="absolute bottom-2 right-6 text-[9px] font-mono text-[#E1DCC9]/70 bg-[#E1DCC9]/8 border border-[#E1DCC9]/20 px-2.5 py-1 rounded-full">
         ✓ Plan loaded · 3 pages
       </div>
       <div className="absolute bottom-2 left-6 text-[9px] font-mono text-white/20 bg-white/4 border border-white/8 px-2.5 py-1 rounded-full">
@@ -88,7 +88,7 @@ function MeasureVisual() {
       <div className="w-full max-w-sm h-52 rounded-xl overflow-hidden border border-white/8 bg-card relative">
         <div className="flex items-center gap-1.5 px-2.5 py-1.5 bg-background border-b border-white/6">
           <span className="text-[9px] font-mono text-white/25 flex-1 truncate">Ground_Floor_DA-01.pdf · Page 1</span>
-          <span className="text-[8px] font-mono text-emerald-400/70 bg-emerald-400/10 px-1.5 py-0.5 rounded">1:100</span>
+          <span className="text-[8px] font-mono text-[#E1DCC9]/70/70 bg-[#E1DCC9]/8 px-1.5 py-0.5 rounded">1:100</span>
         </div>
         <svg viewBox="0 0 320 175" className="w-full h-full" style={{ display: "block" }}>
           <defs>
@@ -120,7 +120,7 @@ function MeasureVisual() {
           <circle cx="140" cy="167" r="2" fill="#E1DCC9" />
         </svg>
         <div className="absolute bottom-1.5 left-2 right-2 flex items-center justify-between px-2 py-1 bg-background/90 border border-white/6 rounded text-[8px] font-mono">
-          <span className="text-cyan-400">Polygon · 4 pts · 44.6 m²</span>
+          <span className="text-[#E1DCC9]">Polygon · 4 pts · 44.6 m²</span>
           <span className="text-white/20">3 rooms remaining</span>
         </div>
       </div>
@@ -224,7 +224,7 @@ const HowItWorks = () => {
               <div className="flex items-center gap-4">
                 <div className="relative shrink-0">
                   <div className="w-14 h-14 rounded-2xl bg-card/80 border border-white/8 flex items-center justify-center">
-                    <step.icon className="h-6 w-6 text-cyan-400" />
+                    <step.icon className="h-6 w-6 text-[#E1DCC9]" />
                   </div>
                   <div className="absolute -top-2 -right-2 w-5 h-5 rounded-full bg-[#E1DCC9] flex items-center justify-center">
                     <span className="text-[9px] font-bold text-black">{i + 1}</span>
@@ -278,7 +278,7 @@ const HowItWorks = () => {
           <div className="sm:ml-auto">
             <button
               onClick={() => window.location.href = "/project/new"}
-              className="inline-flex items-center px-7 py-3 rounded-full bg-cyan-400 text-[#09111f] font-bold hover:bg-[#d4cfb5] transition-colors"
+              className="inline-flex items-center px-7 py-3 rounded-full bg-primary text-[#000000] font-bold hover:bg-[#d4cfb5] transition-colors"
             >
               Start your first takeoff
             </button>

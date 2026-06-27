@@ -35,11 +35,11 @@ import { TourTip } from "@/components/TourTip";
 
 // ── Template icon + colour mapping (by template id) ───────────────────────────
 const TEMPLATE_STYLES: Record<string, { Icon: React.ElementType; bg: string; text: string }> = {
-  'new-build':         { Icon: Home,           bg: 'bg-blue-400/10',   text: 'text-blue-400' },
+  'new-build':         { Icon: Home,           bg: 'bg-muted/15',   text: 'text-foreground/60' },
   'bathroom-reno':     { Icon: Droplets,        bg: 'bg-teal-400/10',   text: 'text-teal-400' },
   'kitchen-reno':      { Icon: Utensils,        bg: 'bg-amber-400/10',  text: 'text-amber-400' },
-  'deck-outdoor':      { Icon: TreePine,        bg: 'bg-green-400/10',  text: 'text-green-400' },
-  'commercial-fitout': { Icon: Building2,       bg: 'bg-purple-400/10', text: 'text-purple-400' },
+  'deck-outdoor':      { Icon: TreePine,        bg: 'bg-[#E1DCC9]/8',  text: 'text-[#E1DCC9]/80' },
+  'commercial-fitout': { Icon: Building2,       bg: 'bg-muted/20', text: 'text-muted-foreground' },
 };
 const CUSTOM_STYLE = { Icon: LayoutTemplate, bg: 'bg-primary/10', text: 'text-primary' };
 
@@ -1005,7 +1005,7 @@ export const EstimateTemplate = ({ projectId, estimateId }: EstimateTemplateProp
                     variant="ghost"
                     size="icon"
                     onClick={() => saveEdit(item.id)}
-                    className="text-green-600 h-8 w-8"
+                    className="text-[#E1DCC9]/70 h-8 w-8"
                   >
                     <Save className="h-4 w-4" />
                   </Button>
@@ -1427,9 +1427,9 @@ export const EstimateTemplate = ({ projectId, estimateId }: EstimateTemplateProp
                     <div className="text-xs text-muted-foreground">Cost base</div>
                     <div className="text-sm font-bold font-mono">${totals.preMargin.toFixed(2)}</div>
                   </div>
-                  <div className="p-2 bg-blue-50 dark:bg-blue-950/30 rounded text-center">
-                    <div className="text-xs text-blue-700">Markup ({config.marginPct}%)</div>
-                    <div className="text-sm font-bold text-blue-800 font-mono">${totals.margin.toFixed(2)}</div>
+                  <div className="p-2 bg-muted/10 dark:bg-background/70 rounded text-center">
+                    <div className="text-xs text-foreground/80">Markup ({config.marginPct}%)</div>
+                    <div className="text-sm font-bold text-foreground/90 font-mono">${totals.margin.toFixed(2)}</div>
                   </div>
                   <div className="p-2 bg-muted rounded text-center">
                     <div className="text-xs text-muted-foreground">Revenue (ex-GST)</div>
@@ -1458,17 +1458,17 @@ export const EstimateTemplate = ({ projectId, estimateId }: EstimateTemplateProp
                   <label className="text-xs whitespace-nowrap">% real margin</label>
                 </div>
                 <div className="grid grid-cols-2 gap-2">
-                  <div className="p-2 bg-green-100 dark:bg-green-950/30 rounded text-center">
-                    <div className="text-xs text-green-700 font-medium">Required Markup</div>
-                    <div className="text-xl font-bold text-green-800 font-mono">{reqMarkup.toFixed(1)}%</div>
+                  <div className="p-2 bg-muted/20 dark:bg-card/50 rounded text-center">
+                    <div className="text-xs text-[#E1DCC9]/60 font-medium">Required Markup</div>
+                    <div className="text-xl font-bold text-foreground/80 font-mono">{reqMarkup.toFixed(1)}%</div>
                   </div>
-                  <div className="p-2 bg-green-50 dark:bg-green-950/20 rounded text-center">
+                  <div className="p-2 bg-muted/10 dark:bg-card/40 rounded text-center">
                     <div className="text-xs text-muted-foreground">Net Profit $</div>
                     <div className="text-sm font-bold font-mono">${(totals.preMargin * reqMarkup / 100).toFixed(2)}</div>
                   </div>
                 </div>
                 <button
-                  className="w-full h-8 text-xs rounded-md border border-green-400 text-green-700 hover:bg-green-50 dark:hover:bg-green-950/30 transition-colors"
+                  className="w-full h-8 text-xs rounded-md border border-[#E1DCC9]/25 text-[#E1DCC9]/60 hover:bg-muted/10 dark:hover:bg-card/50 transition-colors"
                   onClick={() => setConfig({ ...config, marginPct: parseFloat(reqMarkup.toFixed(1)) })}
                 >
                   Apply {reqMarkup.toFixed(1)}% markup to estimate

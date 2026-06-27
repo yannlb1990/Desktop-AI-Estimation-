@@ -33,26 +33,26 @@ interface PlanIntelligencePanelProps {
 const NOTE_STYLES: Record<NoteType, { bg: string; border: string; icon: React.ReactNode; label: string }> = {
   critical:      { bg: 'bg-red-50',    border: 'border-red-300',    icon: <AlertCircle className="h-3.5 w-3.5 text-red-600 shrink-0 mt-0.5" />,     label: 'CRITICAL' },
   warning:       { bg: 'bg-amber-50',  border: 'border-amber-300',  icon: <AlertTriangle className="h-3.5 w-3.5 text-amber-600 shrink-0 mt-0.5" />, label: 'WARNING' },
-  specification: { bg: 'bg-blue-50',   border: 'border-blue-300',   icon: <Wrench className="h-3.5 w-3.5 text-blue-600 shrink-0 mt-0.5" />,         label: 'SPEC' },
-  verify:        { bg: 'bg-purple-50', border: 'border-purple-300', icon: <CheckCircle2 className="h-3.5 w-3.5 text-purple-600 shrink-0 mt-0.5" />,  label: 'VERIFY' },
+  specification: { bg: 'bg-muted/10',   border: 'border-border/40',   icon: <Wrench className="h-3.5 w-3.5 text-foreground/70 shrink-0 mt-0.5" />,         label: 'SPEC' },
+  verify:        { bg: 'bg-muted/10', border: 'border-border/40', icon: <CheckCircle2 className="h-3.5 w-3.5 text-muted-foreground shrink-0 mt-0.5" />,  label: 'VERIFY' },
   general:       { bg: 'bg-gray-50',   border: 'border-gray-200',   icon: <Info className="h-3.5 w-3.5 text-gray-500 shrink-0 mt-0.5" />,            label: 'NOTE' },
 };
 
 const SPEC_COLORS: Record<SpecCategory, string> = {
   Timber:        'bg-amber-100 text-amber-800',
   Concrete:      'bg-gray-200 text-gray-800',
-  Steel:         'bg-blue-100 text-blue-800',
+  Steel:         'bg-muted/20 text-foreground/90',
   Masonry:       'bg-orange-100 text-orange-800',
-  Insulation:    'bg-green-100 text-green-800',
-  Glazing:       'bg-cyan-100 text-cyan-800',
-  Waterproofing: 'bg-indigo-100 text-indigo-800',
+  Insulation:    'bg-muted/20 text-foreground/80',
+  Glazing:       'bg-muted/15 text-[#E1DCC9]/90',
+  Waterproofing: 'bg-muted/15 text-muted-foreground',
   Fixings:       'bg-yellow-100 text-yellow-800',
   Roofing:       'bg-red-100 text-red-800',
   Fire:          'bg-red-200 text-red-900',
   Energy:        'bg-lime-100 text-lime-800',
   Acoustic:      'bg-violet-100 text-violet-800',
   Plumbing:      'bg-teal-100 text-teal-800',
-  Electrical:    'bg-purple-100 text-purple-800',
+  Electrical:    'bg-muted/15 text-muted-foreground',
   Other:         'bg-gray-100 text-gray-700',
 };
 

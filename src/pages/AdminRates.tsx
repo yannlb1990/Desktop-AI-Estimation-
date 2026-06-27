@@ -210,7 +210,7 @@ const AdminRates = () => {
                   return (
                     <tr
                       key={rate.id}
-                      className={`border-b hover:bg-muted/30 transition-colors ${overridden ? 'bg-blue-50/50 dark:bg-blue-950/20' : ''}`}
+                      className={`border-b hover:bg-muted/30 transition-colors ${overridden ? 'bg-muted/10 dark:bg-background/60' : ''}`}
                     >
                       <td className="px-3 py-2 text-muted-foreground">{rate.trade}</td>
                       <td className="px-3 py-2">
@@ -221,7 +221,7 @@ const AdminRates = () => {
                       <td className="px-3 py-2 font-mono">
                         ${baseValue.toFixed(2)}
                         {overridden && (
-                          <div className="text-xs text-blue-600 dark:text-blue-400">
+                          <div className="text-xs text-foreground/70 dark:text-foreground/60">
                             → ${currentValue.toFixed(2)}
                           </div>
                         )}

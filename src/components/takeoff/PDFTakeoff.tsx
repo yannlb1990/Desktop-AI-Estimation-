@@ -1090,7 +1090,7 @@ export const PDFTakeoff = ({ projectId, estimateId, onAddCostItems }: PDFTakeoff
             const actual = parseFloat(verifyActualInput);
             const diff = Math.round((actual / verifyMeasurement.realValue - 1) * 100);
             return actual > 0 ? (
-              <p className={`text-xs font-medium ${Math.abs(diff) < 2 ? 'text-green-500' : 'text-amber-400'}`}>
+              <p className={`text-xs font-medium ${Math.abs(diff) < 2 ? 'text-[#E1DCC9]/80' : 'text-amber-400'}`}>
                 {Math.abs(diff) < 1 ? '✓ Scale looks correct' : `Scale will be corrected by ${diff > 0 ? '+' : ''}${diff}%`}
               </p>
             ) : null;
@@ -1210,7 +1210,7 @@ export const PDFTakeoff = ({ projectId, estimateId, onAddCostItems }: PDFTakeoff
                   {/* Scale */}
                   {state.isCalibrated ? (
                     <div className="flex items-center gap-1">
-                      <span className="text-xs font-medium text-green-600 dark:text-green-400 flex items-center gap-1">
+                      <span className="text-xs font-medium text-[#E1DCC9]/70 dark:text-[#E1DCC9]/80 flex items-center gap-1">
                         <CheckCircle className="h-3.5 w-3.5" />
                         {state.currentScale?.scaleFactor ? `1:${state.currentScale.scaleFactor}` : 'Calibrated'}
                       </span>
@@ -1300,7 +1300,7 @@ export const PDFTakeoff = ({ projectId, estimateId, onAddCostItems }: PDFTakeoff
                 <div
                   ref={canvasContainerRef}
                   className={isTakeoffFullscreen
-                    ? "fixed inset-0 z-[9999] bg-[#0f172a] text-white flex flex-col"
+                    ? "fixed inset-0 z-[9999] bg-[#000000] text-white flex flex-col"
                     : "h-[calc(100vh-260px)] min-h-[500px] relative"
                   }
                 >
@@ -1326,14 +1326,14 @@ export const PDFTakeoff = ({ projectId, estimateId, onAddCostItems }: PDFTakeoff
                         <div className="flex items-center gap-1 border-l border-gray-600 pl-2 ml-1">
                           {state.isCalibrated ? (
                             <>
-                              <span className="text-xs font-medium text-green-400 flex items-center gap-1">
+                              <span className="text-xs font-medium text-[#E1DCC9]/80 flex items-center gap-1">
                                 <CheckCircle className="h-3.5 w-3.5" />
                                 {state.currentScale?.scaleFactor ? `1:${state.currentScale.scaleFactor}` : 'Calibrated'}
                               </span>
-                              <Button variant="ghost" size="icon" className="h-7 w-7 text-gray-400 hover:text-white hover:bg-gray-700" onClick={() => dispatch({ type: 'SET_CALIBRATION_MODE', payload: 'manual' })} title="Re-calibrate">
+                              <Button variant="ghost" size="icon" className="h-7 w-7 text-gray-400 hover:text-foreground hover:bg-gray-700" onClick={() => dispatch({ type: 'SET_CALIBRATION_MODE', payload: 'manual' })} title="Re-calibrate">
                                 <Ruler className="h-3.5 w-3.5" />
                               </Button>
-                              <Button variant="ghost" size="icon" className="h-7 w-7 text-gray-400 hover:text-white hover:bg-gray-700" onClick={handleResetScale} title="Reset scale">
+                              <Button variant="ghost" size="icon" className="h-7 w-7 text-gray-400 hover:text-foreground hover:bg-gray-700" onClick={handleResetScale} title="Reset scale">
                                 <RotateCcw className="h-3 w-3" />
                               </Button>
                             </>
@@ -1366,10 +1366,10 @@ export const PDFTakeoff = ({ projectId, estimateId, onAddCostItems }: PDFTakeoff
                           </div>
                         )}
                         <div className="ml-auto flex items-center gap-1">
-                          <Button size="sm" variant="ghost" onClick={() => setFsContextOpen(v => !v)} className="h-8 text-gray-400 hover:text-white hover:bg-gray-700" title={fsContextOpen ? 'Collapse tool options' : 'Expand tool options'}>
+                          <Button size="sm" variant="ghost" onClick={() => setFsContextOpen(v => !v)} className="h-8 text-gray-400 hover:text-foreground hover:bg-gray-700" title={fsContextOpen ? 'Collapse tool options' : 'Expand tool options'}>
                             {fsContextOpen ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
                           </Button>
-                          <Button size="sm" variant="ghost" onClick={() => setFocusMode(true)} className="h-8 text-gray-400 hover:text-white hover:bg-gray-700" title="Focus mode — hides toolbar (Esc to restore)">
+                          <Button size="sm" variant="ghost" onClick={() => setFocusMode(true)} className="h-8 text-gray-400 hover:text-foreground hover:bg-gray-700" title="Focus mode — hides toolbar (Esc to restore)">
                             <EyeOff className="h-4 w-4" />
                           </Button>
                           <Button size="sm" variant="ghost" onClick={() => canvasExportRef.current?.export()} className="h-8 gap-1.5 text-gray-200 hover:bg-gray-700" title="Export page with markup as PNG">
@@ -1391,7 +1391,7 @@ export const PDFTakeoff = ({ projectId, estimateId, onAddCostItems }: PDFTakeoff
                     {isTakeoffFullscreen && (
                       <div className={`absolute bottom-3 left-3 z-20 flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[10px] font-mono backdrop-blur-sm pointer-events-none ${
                         state.isCalibrated
-                          ? 'bg-slate-900/80 text-green-400 border border-green-700/50'
+                          ? 'bg-slate-900/80 text-[#E1DCC9]/80 border border-[#E1DCC9]/20'
                           : 'bg-slate-900/80 text-amber-400 border border-amber-700/50'
                       }`}>
                         {state.isCalibrated && state.currentScale
@@ -1402,26 +1402,26 @@ export const PDFTakeoff = ({ projectId, estimateId, onAddCostItems }: PDFTakeoff
                     )}
                     {/* Floating context pickers (fullscreen, focus/collapsed mode) */}
                     {isTakeoffFullscreen && (focusMode || !fsContextOpen) && modMode === 'door' && (
-                      <div className="absolute top-3 left-3 z-20 flex items-center gap-1.5 px-2 py-1.5 bg-slate-800/95 border border-violet-700/60 rounded-lg backdrop-blur-sm shadow-lg">
+                      <div className="absolute top-3 left-3 z-20 flex items-center gap-1.5 px-2 py-1.5 bg-card/90/95 border border-violet-700/60 rounded-lg backdrop-blur-sm shadow-lg">
                         <span className="text-[10px] font-semibold text-violet-400 uppercase tracking-widest mr-1 shrink-0">Door</span>
                         {(['Internal','Entry','Cavity Slider','Bi-fold','French','Fire Door'] as const).map((id) => (
-                          <button key={id} onClick={() => setDoorSubtype(id)} className={`h-6 px-2 rounded text-xs font-medium transition-colors ${doorSubtype === id ? 'bg-violet-600 text-white' : 'bg-slate-700 text-slate-300 hover:bg-slate-600'}`}>{id}</button>
+                          <button key={id} onClick={() => setDoorSubtype(id)} className={`h-6 px-2 rounded text-xs font-medium transition-colors ${doorSubtype === id ? 'bg-violet-600 text-white' : 'bg-muted/60 text-foreground/60 hover:bg-slate-600'}`}>{id}</button>
                         ))}
                       </div>
                     )}
                     {isTakeoffFullscreen && (focusMode || !fsContextOpen) && modMode === 'window' && (
-                      <div className="absolute top-3 left-3 z-20 flex items-center gap-1.5 px-2 py-1.5 bg-slate-800/95 border border-amber-700/60 rounded-lg backdrop-blur-sm shadow-lg">
+                      <div className="absolute top-3 left-3 z-20 flex items-center gap-1.5 px-2 py-1.5 bg-card/90/95 border border-amber-700/60 rounded-lg backdrop-blur-sm shadow-lg">
                         <span className="text-[10px] font-semibold text-amber-400 uppercase tracking-widest mr-1 shrink-0">Window</span>
                         {(['Awning','Casement','Sliding','Fixed','Louvre','Skylight'] as const).map((id) => (
-                          <button key={id} onClick={() => setWindowSubtype(id)} className={`h-6 px-2 rounded text-xs font-medium transition-colors ${windowSubtype === id ? 'bg-foreground text-background' : 'bg-slate-700 text-slate-300 hover:bg-slate-600'}`}>{id}</button>
+                          <button key={id} onClick={() => setWindowSubtype(id)} className={`h-6 px-2 rounded text-xs font-medium transition-colors ${windowSubtype === id ? 'bg-foreground text-background' : 'bg-muted/60 text-foreground/60 hover:bg-slate-600'}`}>{id}</button>
                         ))}
                       </div>
                     )}
                     {isTakeoffFullscreen && (focusMode || !fsContextOpen) && (modMode === null || modMode === 'wall') && (state.activeTool === 'wall-line' || state.activeTool === 'arc-wall') && (
-                      <div className="absolute top-3 left-3 z-20 flex items-center gap-1.5 px-2 py-1.5 bg-slate-800/95 border border-amber-700/60 rounded-lg backdrop-blur-sm shadow-lg">
+                      <div className="absolute top-3 left-3 z-20 flex items-center gap-1.5 px-2 py-1.5 bg-card/90/95 border border-amber-700/60 rounded-lg backdrop-blur-sm shadow-lg">
                         <span className="text-[10px] font-semibold text-amber-400 uppercase tracking-widest mr-1 shrink-0">Wall</span>
                         {[64, 70, 90, 92, 110, 150].map(mm => (
-                          <button key={mm} onClick={() => setWallThicknessMm(mm)} className={`h-6 px-2 rounded text-xs font-mono transition-colors ${wallThicknessMm === mm ? 'bg-foreground text-background' : 'bg-slate-700 text-slate-300 hover:bg-slate-600'}`}>{mm}</button>
+                          <button key={mm} onClick={() => setWallThicknessMm(mm)} className={`h-6 px-2 rounded text-xs font-mono transition-colors ${wallThicknessMm === mm ? 'bg-foreground text-background' : 'bg-muted/60 text-foreground/60 hover:bg-slate-600'}`}>{mm}</button>
                         ))}
                       </div>
                     )}
@@ -1707,7 +1707,7 @@ export const PDFTakeoff = ({ projectId, estimateId, onAddCostItems }: PDFTakeoff
                                   </button>
                                 )}
                                 {m.addedToEstimate && (
-                                  <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 text-[10px] font-medium">
+                                  <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full bg-muted/20 dark:bg-card/50 text-[#E1DCC9]/60 dark:text-[#E1DCC9]/80 text-[10px] font-medium">
                                     ✓ In estimate
                                   </span>
                                 )}
@@ -2000,7 +2000,7 @@ export const PDFTakeoff = ({ projectId, estimateId, onAddCostItems }: PDFTakeoff
               </button>
             </div>
             {m.addedToEstimate ? (
-              <p className="text-[11px] text-green-600 dark:text-green-400 mb-2 font-medium">✓ Already in estimate. Add again or update:</p>
+              <p className="text-[11px] text-[#E1DCC9]/70 dark:text-[#E1DCC9]/80 mb-2 font-medium">✓ Already in estimate. Add again or update:</p>
             ) : (
               <p className="text-[11px] text-muted-foreground mb-2">Add to estimate as:</p>
             )}

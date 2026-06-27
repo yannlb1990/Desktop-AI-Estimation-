@@ -199,7 +199,7 @@ const Pricing = () => {
 
         {/* ── Signed-in status banners ── */}
         {alreadyPaid && (
-          <div className="mb-8 bg-green-500/10 border border-green-500/30 rounded-xl px-5 py-4 text-center text-sm text-green-700 dark:text-green-400">
+          <div className="mb-8 bg-muted/100/10 border border-[#E1DCC9]/20 rounded-xl px-5 py-4 text-center text-sm text-[#E1DCC9]/60 dark:text-[#E1DCC9]/80">
             You have an active <strong>{PLAN_NAMES[subscription!.activePlan as PlanId]}</strong> subscription. To change your plan, please contact support.
           </div>
         )}
@@ -244,7 +244,7 @@ const Pricing = () => {
               }`}
             >
               Annual
-              <span className="bg-green-500/15 text-green-600 text-xs rounded-full px-2 py-0.5 font-semibold">
+              <span className="bg-muted/100/15 text-[#E1DCC9]/70 text-xs rounded-full px-2 py-0.5 font-semibold">
                 Save 20%
               </span>
             </button>
@@ -296,7 +296,7 @@ const Pricing = () => {
                 </div>
 
                 {billing === 'annual' ? (
-                  <p className="text-xs text-green-500">Save ${saving(plan.id)}/year</p>
+                  <p className="text-xs text-[#E1DCC9]/80">Save ${saving(plan.id)}/year</p>
                 ) : (
                   <p className="text-xs text-muted-foreground">
                     ${PLAN_PRICES[plan.id].annual}/mo if billed annually
@@ -321,8 +321,8 @@ const Pricing = () => {
                 <Button
                   className={`w-full ${
                     isSelected
-                      ? 'bg-cyan-400 text-[#09111f] hover:bg-cyan-300 rounded-full font-bold'
-                      : 'bg-muted text-foreground hover:bg-cyan-400 hover:text-[#09111f] hover:rounded-full font-bold'
+                      ? 'bg-primary text-[#000000] hover:bg-primary/80 rounded-full font-bold'
+                      : 'bg-muted text-foreground hover:bg-primary hover:text-[#000000] hover:rounded-full font-bold'
                   }`}
                   disabled={checkingOut || alreadyPaid}
                   onClick={(e) => { e.stopPropagation(); handleCTA(plan.id); }}
@@ -353,7 +353,7 @@ const Pricing = () => {
               <div className="flex items-center gap-2 mb-1">
                 <Badge className="bg-primary text-primary-foreground">{PLAN_NAMES[selected]}</Badge>
                 {billing === 'annual' && (
-                  <Badge variant="outline" className="text-green-600 border-green-500/30">Annual · save ${saving(selected)}/yr</Badge>
+                  <Badge variant="outline" className="text-[#E1DCC9]/70 border-[#E1DCC9]/20">Annual · save ${saving(selected)}/yr</Badge>
                 )}
               </div>
               <h2 className="font-display text-2xl font-bold mb-1">
@@ -366,7 +366,7 @@ const Pricing = () => {
             <div className="flex flex-col items-stretch md:items-end gap-2 shrink-0">
               <Button
                 size="lg"
-                className="bg-cyan-400 text-[#09111f] hover:bg-cyan-300 rounded-full font-bold px-8"
+                className="bg-primary text-[#000000] hover:bg-primary/80 rounded-full font-bold px-8"
                 disabled={checkingOut || alreadyPaid}
                 onClick={() => handleCTA(selected)}
               >
@@ -435,7 +435,7 @@ const Pricing = () => {
                       <div key={plan.id} className={`px-4 py-3.5 flex items-center justify-center ${isSelPlan ? 'bg-primary/5' : ''}`}>
                         {typeof val === 'boolean' ? (
                           val
-                            ? <Check className="h-4 w-4 text-green-500" />
+                            ? <Check className="h-4 w-4 text-[#E1DCC9]/80" />
                             : <X className="h-4 w-4 text-muted-foreground/30" />
                         ) : (
                           <span className={`text-sm font-medium text-center ${isSelPlan ? 'text-primary' : 'text-foreground'}`}>

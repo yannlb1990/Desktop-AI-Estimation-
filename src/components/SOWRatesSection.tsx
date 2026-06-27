@@ -123,7 +123,7 @@ export const SOWRatesSection = ({ selectedState: propState }: Props) => {
           <TooltipTrigger asChild>
             <Button
               variant="ghost" size="sm"
-              className="h-6 px-2 text-xs font-mono bg-blue-100 text-blue-800 hover:bg-blue-200"
+              className="h-6 px-2 text-xs font-mono bg-muted/20 text-foreground/90 hover:bg-muted/30"
               onClick={() => primaryRef?.url && window.open(primaryRef.url, "_blank")}
             >
               <BookOpen className="h-3 w-3 mr-1" />
@@ -142,7 +142,7 @@ export const SOWRatesSection = ({ selectedState: propState }: Props) => {
                   ))}
                 </div>
               )}
-              <p className="text-xs text-blue-600 flex items-center gap-1">
+              <p className="text-xs text-foreground/70 flex items-center gap-1">
                 <ExternalLink className="h-3 w-3" /> Click to view NCC reference
               </p>
             </div>

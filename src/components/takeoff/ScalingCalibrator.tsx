@@ -36,21 +36,21 @@ export const ScalingCalibrator = ({
       </div>
 
       {isCalibrated && currentScale ? (
-        <div className="bg-green-50 dark:bg-green-950/50 border border-green-200 dark:border-green-800 p-3 rounded-lg space-y-1.5">
+        <div className="bg-muted/10 dark:bg-card/50 border border-border/35 dark:border-border/45 p-3 rounded-lg space-y-1.5">
           <div className="flex items-center gap-2">
-            <CheckCircle className="h-4 w-4 text-green-500 shrink-0" />
-            <p className="text-sm font-medium text-green-800 dark:text-green-200">
+            <CheckCircle className="h-4 w-4 text-[#E1DCC9]/80 shrink-0" />
+            <p className="text-sm font-medium text-foreground/80 dark:text-foreground/80">
               {currentScale.scaleFactor ? `1:${currentScale.scaleFactor}` : 'Manual'} — active
             </p>
           </div>
-          <p className="text-xs text-green-700 dark:text-green-300 pl-6">
+          <p className="text-xs text-[#E1DCC9]/60 dark:text-[#E1DCC9]/70 pl-6">
             {currentScale.unitsPerMetre.toFixed(2)} PDF units / metre
           </p>
           {onStartVerify && currentScale.scaleMethod === 'preset' && (
             <Button
               size="sm"
               variant="outline"
-              className="w-full h-7 text-xs mt-1 border-green-600 text-green-700 dark:text-green-300 hover:bg-green-100 dark:hover:bg-green-900"
+              className="w-full h-7 text-xs mt-1 border-[#E1DCC9]/35 text-[#E1DCC9]/60 dark:text-[#E1DCC9]/70 hover:bg-muted/20 dark:hover:bg-card"
               onClick={onStartVerify}
             >
               <Ruler className="h-3 w-3 mr-1.5" />

@@ -59,13 +59,13 @@ export function QuoteAnalyzerPanel({
 
   // Confidence score color
   const getScoreColor = (score: number) => {
-    if (score >= 80) return 'text-green-600';
+    if (score >= 80) return 'text-[#E1DCC9]/70';
     if (score >= 60) return 'text-amber-600';
     return 'text-red-600';
   };
 
   const getScoreBg = (score: number) => {
-    if (score >= 80) return 'bg-green-100';
+    if (score >= 80) return 'bg-muted/20';
     if (score >= 60) return 'bg-amber-100';
     return 'bg-red-100';
   };
@@ -73,7 +73,7 @@ export function QuoteAnalyzerPanel({
   // Risk level colors
   const getRiskColor = (level: 'low' | 'medium' | 'high') => {
     const colors = {
-      low: 'bg-green-100 text-green-800',
+      low: 'bg-muted/20 text-foreground/80',
       medium: 'bg-amber-100 text-amber-800',
       high: 'bg-red-100 text-red-800',
     };
@@ -220,7 +220,7 @@ export function QuoteAnalyzerPanel({
                 className={`p-2 rounded border ${
                   analysis.margin.marginPercent >= analysis.margin.industryBenchmark.low &&
                   analysis.margin.marginPercent <= analysis.margin.industryBenchmark.high
-                    ? 'border-green-300 bg-green-50'
+                    ? 'border-[#E1DCC9]/20 bg-muted/10'
                     : 'border-gray-200'
                 }`}
               >
@@ -273,7 +273,7 @@ export function QuoteAnalyzerPanel({
                       ? 'bg-red-50 border border-red-200'
                       : risk.severity === 'medium'
                       ? 'bg-amber-50 border border-amber-200'
-                      : 'bg-blue-50 border border-blue-200'
+                      : 'bg-muted/10 border border-border/40'
                   }`}
                 >
                   <AlertTriangle
@@ -282,7 +282,7 @@ export function QuoteAnalyzerPanel({
                         ? 'text-red-600'
                         : risk.severity === 'medium'
                         ? 'text-amber-600'
-                        : 'text-blue-600'
+                        : 'text-foreground/70'
                     }`}
                   />
                   <div className="flex-1">
@@ -294,7 +294,7 @@ export function QuoteAnalyzerPanel({
               ))}
             </div>
           ) : (
-            <div className="flex items-center gap-2 text-green-600">
+            <div className="flex items-center gap-2 text-[#E1DCC9]/70">
               <CheckCircle2 className="h-5 w-5" />
               <span>No significant risks identified</span>
             </div>

@@ -66,7 +66,7 @@ const FloorPlanCard = () => (
         <div className="w-2.5 h-2.5 rounded-full bg-[#28c840]" />
       </div>
       <span className="ml-2 text-[10px] text-white/30 font-mono">Ground_Floor_DA-01.pdf</span>
-      <div className="ml-auto text-[9px] font-mono text-emerald-400/80 bg-emerald-400/10 border border-emerald-400/20 px-1.5 py-0.5 rounded">
+      <div className="ml-auto text-[9px] font-mono text-[#E1DCC9]/70 bg-[#E1DCC9]/8 border border-[#E1DCC9]/20 px-1.5 py-0.5 rounded">
         ✓ Calibrated 1:100
       </div>
     </div>
@@ -129,7 +129,7 @@ const CostCard = () => (
   <div className="w-full h-full rounded-2xl overflow-hidden border border-white/10 shadow-[0_24px_60px_rgba(0,0,0,0.55)] bg-card">
     <div className="px-4 py-3 border-b border-white/8 flex items-center justify-between">
       <span className="text-[11px] font-semibold text-white/80">Cost Summary</span>
-      <span className="text-[9px] font-mono text-[#E1DCC9]/60 bg-cyan-400/8 border border-[#E1DCC9]/15 rounded px-1.5 py-0.5">26 trades</span>
+      <span className="text-[9px] font-mono text-[#E1DCC9]/60 bg-primary/15 border border-[#E1DCC9]/15 rounded px-1.5 py-0.5">26 trades</span>
     </div>
     <div className="p-4 space-y-3">
       {[
@@ -171,8 +171,8 @@ const TenderCard = () => (
   <div className="w-full h-full rounded-2xl overflow-hidden shadow-[0_24px_60px_rgba(0,0,0,0.55)] bg-white">
     <div className="bg-background px-4 py-2.5 flex items-center justify-between">
       <div className="flex items-center gap-2">
-        <div className="w-5 h-5 rounded bg-cyan-400 flex items-center justify-center shrink-0">
-          <span className="text-[8px] font-bold text-[#09111f]">M</span>
+        <div className="w-5 h-5 rounded bg-primary flex items-center justify-center shrink-0">
+          <span className="text-[8px] font-bold text-[#000000]">M</span>
         </div>
         <span className="text-[11px] font-bold text-white">Metricore</span>
       </div>
@@ -210,9 +210,9 @@ const TenderCard = () => (
         <span className="font-bold font-mono text-sm text-gray-800">$75,228</span>
       </div>
       <div className="mt-3 flex justify-center">
-        <div className="inline-flex items-center gap-1.5 bg-emerald-50 border border-emerald-200 rounded-full px-3 py-1">
-          <div className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
-          <span className="text-[9px] font-mono text-emerald-700 font-medium">Ready to send</span>
+        <div className="inline-flex items-center gap-1.5 bg-muted/10 border border-[#E1DCC9]/20 rounded-full px-3 py-1">
+          <div className="w-1.5 h-1.5 rounded-full bg-muted/100" />
+          <span className="text-[9px] font-mono text-[#E1DCC9]/60 font-medium">Ready to send</span>
         </div>
       </div>
     </div>
@@ -353,7 +353,7 @@ const Hero = () => {
           <motion.div variants={stagger} initial="hidden" animate="show" className="space-y-8">
 
             <motion.div variants={fadeIn} className="flex items-center gap-3">
-              <div className="w-2 h-2 rounded-full bg-cyan-400 animate-pulse" />
+              <div className="w-2 h-2 rounded-full bg-primary animate-pulse" />
               <span className="text-xs font-mono text-[#E1DCC9]/70 uppercase tracking-widest">
                 Construction projects · Trades · Builders
               </span>
@@ -387,7 +387,7 @@ const Hero = () => {
                 <ArrowRight className="h-4 w-4" />
               </motion.button>
               <button
-                className="text-white/50 hover:text-white/80 text-sm font-mono transition-colors flex items-center gap-2"
+                className="text-white/50 hover:text-foreground/80 text-sm font-mono transition-colors flex items-center gap-2"
                 onClick={() => document.getElementById("how-it-works")?.scrollIntoView({ behavior: "smooth" })}
               >
                 See how it works <ArrowRight className="h-3.5 w-3.5" />

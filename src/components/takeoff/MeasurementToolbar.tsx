@@ -160,9 +160,9 @@ export const MeasurementToolbar = ({
 
   const measurementTools = [
     { id: 'line' as const, icon: Minus, label: 'Line (L)', color: 'bg-red-500' },
-    { id: 'rectangle' as const, icon: Square, label: 'Rectangle (R)', color: 'bg-green-500' },
-    { id: 'polygon' as const, icon: Pentagon, label: 'Polygon (P)', color: 'bg-blue-500' },
-    { id: 'circle' as const, icon: Circle, label: 'Circle (C)', color: 'bg-purple-500' },
+    { id: 'rectangle' as const, icon: Square, label: 'Rectangle (R)', color: 'bg-muted/100' },
+    { id: 'polygon' as const, icon: Pentagon, label: 'Polygon (P)', color: 'bg-muted/100' },
+    { id: 'circle' as const, icon: Circle, label: 'Circle (C)', color: 'bg-muted/100' },
     { id: 'count' as const, icon: Hash, label: 'Count (N)', color: 'bg-orange-500' },
     { id: 'wall-line' as const, icon: Columns3, label: 'Wall Line (T)', color: 'bg-amber-700' },
     { id: 'arc-wall' as const, icon: Spline, label: 'Arc Wall (A) — 3 clicks: start → end → curve', color: 'bg-orange-500' },
@@ -172,7 +172,7 @@ export const MeasurementToolbar = ({
 
   const modTools: Array<{ id: ModId; icon: React.ComponentType<{ className?: string }>; label: string; color: string; ring: string }> = [
     { id: 'door', icon: DoorOpen, label: 'Add Door (D)', color: 'bg-violet-500', ring: 'ring-violet-500' },
-    { id: 'window', icon: AppWindow, label: 'Add Window (Q)', color: 'bg-cyan-500', ring: 'ring-cyan-500' },
+    { id: 'window', icon: AppWindow, label: 'Add Window (Q)', color: 'bg-primary', ring: 'ring-cyan-500' },
     { id: 'custom', icon: PenLine, label: 'Custom line (draw freely, prompt to add to estimate)', color: 'bg-slate-400', ring: 'ring-slate-400' },
   ];
 
@@ -297,7 +297,7 @@ export const MeasurementToolbar = ({
 
         {/* ── Row 2: Wall configuration (only when wall tool active) ─────── */}
         {(contextPanelOpen ?? true) && isWallTool && (
-          <div className="flex items-start gap-3 px-3 py-2.5 bg-slate-800/70 border border-amber-900/40 rounded-lg">
+          <div className="flex items-start gap-3 px-3 py-2.5 bg-card/90/70 border border-amber-900/40 rounded-lg">
 
             {/* Fill type cards */}
             {onWallHatchTypeChange && (
@@ -317,14 +317,14 @@ export const MeasurementToolbar = ({
                           'flex flex-col items-center gap-1 rounded-md px-2 py-1.5 transition-all w-[72px] text-center',
                           active
                             ? 'bg-amber-900/50 ring-1 ring-amber-400/70'
-                            : 'bg-slate-700/40 hover:bg-slate-700/70'
+                            : 'bg-muted/60/40 hover:bg-muted/60/70'
                         )}
                       >
                         <div
                           className={cn('w-full h-5 rounded-sm', previewClass)}
                           style={preview ? { background: preview } : undefined}
                         />
-                        <span className={cn('text-[10px] leading-tight font-medium', active ? 'text-amber-300' : 'text-slate-300')}>
+                        <span className={cn('text-[10px] leading-tight font-medium', active ? 'text-amber-300' : 'text-foreground/60')}>
                           {label}
                         </span>
                       </button>
@@ -351,7 +351,7 @@ export const MeasurementToolbar = ({
                         'h-7 px-2 rounded text-xs font-mono transition-colors',
                         wallThicknessMm === mm
                           ? 'bg-primary text-primary-foreground'
-                          : 'bg-slate-700/60 text-slate-300 hover:bg-slate-600'
+                          : 'bg-muted/60/60 text-foreground/60 hover:bg-slate-600'
                       )}
                     >
                       {mm}
@@ -374,7 +374,7 @@ export const MeasurementToolbar = ({
                       const v = parseInt(customInput, 10);
                       if (!isNaN(v) && v >= 10) { onWallThicknessChange(v); setCustomInput(''); }
                     }}
-                    className="h-7 w-14 text-xs border border-slate-600 rounded px-1.5 bg-slate-800 text-slate-200 placeholder-slate-500 focus:outline-none focus:border-amber-500"
+                    className="h-7 w-14 text-xs border border-slate-600 rounded px-1.5 bg-card/90 text-slate-200 placeholder-slate-500 focus:outline-none focus:border-amber-500"
                   />
                 </div>
               </div>
@@ -402,7 +402,7 @@ export const MeasurementToolbar = ({
                           'h-7 px-3 rounded text-xs font-medium transition-colors text-left whitespace-nowrap',
                           wallHatchSide === id
                             ? 'bg-primary text-primary-foreground'
-                            : 'bg-slate-700/60 text-slate-300 hover:bg-slate-600'
+                            : 'bg-muted/60/60 text-foreground/60 hover:bg-slate-600'
                         )}
                       >
                         {label}
@@ -428,7 +428,7 @@ export const MeasurementToolbar = ({
                         'h-7 px-3 rounded text-xs font-medium transition-colors',
                         wallClassification === 'external'
                           ? 'bg-primary text-primary-foreground'
-                          : 'bg-slate-700/60 text-slate-300 hover:bg-slate-600'
+                          : 'bg-muted/60/60 text-foreground/60 hover:bg-slate-600'
                       )}
                     >
                       External
@@ -439,7 +439,7 @@ export const MeasurementToolbar = ({
                         'h-7 px-3 rounded text-xs font-medium transition-colors',
                         wallClassification === 'internal'
                           ? 'bg-sky-600 text-white'
-                          : 'bg-slate-700/60 text-slate-300 hover:bg-slate-600'
+                          : 'bg-muted/60/60 text-foreground/60 hover:bg-slate-600'
                       )}
                     >
                       Internal
@@ -454,7 +454,7 @@ export const MeasurementToolbar = ({
 
         {/* ── Row 2a: Count category (when count tool active) ────────────── */}
         {(contextPanelOpen ?? true) && activeTool === 'count' && onCountNameChange && (
-          <div className="flex items-center gap-3 px-3 py-2 bg-slate-800/70 border border-orange-900/40 rounded-lg">
+          <div className="flex items-center gap-3 px-3 py-2 bg-card/90/70 border border-orange-900/40 rounded-lg">
             <p className="text-[10px] font-semibold text-orange-400/80 uppercase tracking-widest shrink-0">
               Count
             </p>
@@ -483,7 +483,7 @@ export const MeasurementToolbar = ({
 
         {/* ── Row 2b: Door subtype (when marking door) ──────────────────── */}
         {(contextPanelOpen ?? true) && modMode === 'door' && onDoorSubtypeChange && (
-          <div className="flex items-center gap-3 px-3 py-2 bg-slate-800/70 border border-violet-900/40 rounded-lg">
+          <div className="flex items-center gap-3 px-3 py-2 bg-card/90/70 border border-violet-900/40 rounded-lg">
             <p className="text-[10px] font-semibold text-violet-400/80 uppercase tracking-widest shrink-0">
               Door Type
             </p>
@@ -497,7 +497,7 @@ export const MeasurementToolbar = ({
                     'h-7 px-3 rounded text-xs font-medium transition-colors',
                     doorSubtype === id
                       ? 'bg-violet-600 text-white'
-                      : 'bg-slate-700/60 text-slate-300 hover:bg-slate-600'
+                      : 'bg-muted/60/60 text-foreground/60 hover:bg-slate-600'
                   )}
                 >
                   {label}
@@ -509,7 +509,7 @@ export const MeasurementToolbar = ({
 
         {/* ── Row 2c: Window subtype (when marking window) ───────────────── */}
         {(contextPanelOpen ?? true) && modMode === 'window' && onWindowSubtypeChange && (
-          <div className="flex items-center gap-3 px-3 py-2 bg-slate-800/70 border border-border rounded-lg">
+          <div className="flex items-center gap-3 px-3 py-2 bg-card/90/70 border border-border rounded-lg">
             <p className="text-[10px] font-semibold text-foreground/60 uppercase tracking-widest shrink-0">
               Window Type
             </p>
@@ -523,7 +523,7 @@ export const MeasurementToolbar = ({
                     'h-7 px-3 rounded text-xs font-medium transition-colors',
                     windowSubtype === id
                       ? 'bg-primary text-primary-foreground'
-                      : 'bg-slate-700/60 text-slate-300 hover:bg-slate-600'
+                      : 'bg-muted/60/60 text-foreground/60 hover:bg-slate-600'
                   )}
                 >
                   {label}

@@ -70,9 +70,9 @@ export const SupplierBenchmark = () => {
 
   const getPriceLevelColor = (level: string) => {
     switch (level) {
-      case 'budget': return 'bg-green-100 text-green-800';
-      case 'mid-range': return 'bg-blue-100 text-blue-800';
-      case 'premium': return 'bg-purple-100 text-purple-800';
+      case 'budget': return 'bg-muted/20 text-foreground/80';
+      case 'mid-range': return 'bg-muted/20 text-foreground/90';
+      case 'premium': return 'bg-muted/15 text-muted-foreground';
       default: return 'bg-gray-100 text-gray-800';
     }
   };
@@ -247,7 +247,7 @@ export const SupplierBenchmark = () => {
                   <div className="flex items-center justify-between mb-4">
                     <h3 className="font-semibold">{product}</h3>
                     <div className="flex gap-4 text-sm">
-                      <span className="text-green-600">
+                      <span className="text-[#E1DCC9]/70">
                         <TrendingDown className="h-4 w-4 inline mr-1" />
                         ${min.toFixed(2)}
                       </span>
@@ -278,20 +278,20 @@ export const SupplierBenchmark = () => {
                         const isCheapest = idx === 0;
 
                         return (
-                          <TableRow key={supplier} className={isCheapest ? "bg-green-50" : ""}>
+                          <TableRow key={supplier} className={isCheapest ? "bg-muted/10" : ""}>
                             <TableCell className="font-medium">
                               {supplier}
                               {isCheapest && (
-                                <Badge className="ml-2 bg-green-600">Best Price</Badge>
+                                <Badge className="ml-2 bg-[#412D15]/70">Best Price</Badge>
                               )}
                             </TableCell>
                             <TableCell className="text-right font-mono">
                               ${price.toFixed(2)}
                             </TableCell>
-                            <TableCell className={`text-right font-mono ${vsAvg < 0 ? 'text-green-600' : vsAvg > 0 ? 'text-red-600' : ''}`}>
+                            <TableCell className={`text-right font-mono ${vsAvg < 0 ? 'text-[#E1DCC9]/70' : vsAvg > 0 ? 'text-red-600' : ''}`}>
                               {vsAvg > 0 ? '+' : ''}{vsAvg.toFixed(1)}%
                             </TableCell>
-                            <TableCell className="text-right font-mono text-green-600">
+                            <TableCell className="text-right font-mono text-[#E1DCC9]/70">
                               ${savings.toFixed(2)}
                             </TableCell>
                           </TableRow>

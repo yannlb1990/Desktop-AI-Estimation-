@@ -181,7 +181,7 @@ export const AIExtractionPanel: React.FC<AIExtractionPanelProps> = ({
           <h3 className="font-semibold">AI Extraction</h3>
         </div>
         {apiAvailable === true && (
-          <Badge variant="outline" className="text-green-600">
+          <Badge variant="outline" className="text-[#E1DCC9]/70">
             <CheckCircle2 className="h-3 w-3 mr-1" />
             API Ready
           </Badge>
@@ -430,7 +430,7 @@ export const AIExtractionPanel: React.FC<AIExtractionPanelProps> = ({
                         <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Windows ({windows.length})</p>
                         <div className="flex flex-wrap gap-1">
                           {windows.map((w, i) => (
-                            <div key={i} className="text-xs border rounded px-1.5 py-0.5 bg-blue-50 dark:bg-blue-950/20">
+                            <div key={i} className="text-xs border rounded px-1.5 py-0.5 bg-muted/10 dark:bg-background/60">
                               <span className="font-mono font-medium">{w.ref}</span>
                               {w.width_mm && <span className="text-muted-foreground ml-1">{w.width_mm}×{w.height_mm}</span>}
                               {w.opening_type && <span className="text-muted-foreground block leading-tight">{w.opening_type}</span>}

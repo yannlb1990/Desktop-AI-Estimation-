@@ -485,8 +485,8 @@ const Settings = () => {
   const statusBadge = () => {
     if (isPastDue) return <Badge variant="destructive">Payment Failed</Badge>;
     if (isTrialExpired) return <Badge variant="destructive">Trial Expired</Badge>;
-    if (isTrialing) return <Badge className="bg-blue-500 text-white">Trial Active</Badge>;
-    if (isPaidPlan) return <Badge className="bg-green-500 text-white">Active</Badge>;
+    if (isTrialing) return <Badge className="bg-muted/100 text-white">Trial Active</Badge>;
+    if (isPaidPlan) return <Badge className="bg-muted/100 text-white">Active</Badge>;
     return <Badge variant="outline">Unknown</Badge>;
   };
 
@@ -1257,13 +1257,13 @@ const Settings = () => {
                     {activeMembers.map(m => (
                       <div key={m.id} className="flex items-center justify-between p-3 rounded-lg border border-border">
                         <div className="flex items-center gap-3">
-                          <div className="w-8 h-8 rounded-full bg-green-500/20 flex items-center justify-center text-xs font-bold text-green-600">
+                          <div className="w-8 h-8 rounded-full bg-muted/100/20 flex items-center justify-center text-xs font-bold text-[#E1DCC9]/70">
                             {m.email[0].toUpperCase()}
                           </div>
                           <div>
                             <div className="text-sm font-medium">{m.email}</div>
                             <div className="text-xs text-muted-foreground flex items-center gap-1">
-                              <CheckCircle className="h-3 w-3 text-green-500" />
+                              <CheckCircle className="h-3 w-3 text-[#E1DCC9]/80" />
                               Joined {new Date(m.joined_at).toLocaleDateString("en-AU")}
                             </div>
                           </div>

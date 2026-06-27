@@ -52,11 +52,11 @@ function computeItemPrice(item: any): number {
 const COST_TYPES: CostType[] = ["invoice", "labour", "material", "subcontract", "other"];
 
 const typeColors: Record<CostType, string> = {
-  invoice: "bg-blue-500/20 text-blue-300 border-blue-500/30",
+  invoice: "bg-muted/100/20 text-foreground/70 border-border/40",
   labour: "bg-orange-500/20 text-orange-300 border-orange-500/30",
-  material: "bg-green-500/20 text-green-300 border-green-500/30",
-  subcontract: "bg-purple-500/20 text-purple-300 border-purple-500/30",
-  other: "bg-slate-500/20 text-slate-300 border-slate-500/30",
+  material: "bg-muted/100/20 text-[#E1DCC9]/70 border-[#E1DCC9]/20",
+  subcontract: "bg-muted/20 text-muted-foreground border-border/30",
+  other: "bg-slate-500/20 text-foreground/60 border-border/30",
 };
 
 const BUDGET_LS_KEY = (pid: string) => `job_cost_budgets_${pid}`;
@@ -250,18 +250,18 @@ export default function JobCostTracker({ projectId }: JobCostTrackerProps) {
       {/* Header */}
       <div className="flex items-center justify-between">
         <h2 className="text-lg font-semibold text-white">Job Cost Tracker</h2>
-        <Button size="sm" onClick={() => setShowForm(!showForm)} className="gap-1 bg-cyan-600 hover:bg-cyan-700">
+        <Button size="sm" onClick={() => setShowForm(!showForm)} className="gap-1 bg-[#412D15] hover:bg-[#412D15]/90">
           <Plus className="w-3.5 h-3.5" /> Add Cost
         </Button>
       </div>
 
       {/* Summary cards */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <Card className="bg-slate-800 border-slate-700">
+        <Card className="bg-card/90 border-border/50">
           <CardContent className="pt-4 pb-4">
             <div className="flex items-start justify-between">
               <div>
-                <p className="text-xs text-slate-400 mb-1">Total Budget</p>
+                <p className="text-xs text-muted-foreground mb-1">Total Budget</p>
                 <p className="text-xl font-bold text-white">{aud(effectiveBudgetTotal)}</p>
               </div>
               <DollarSign className="w-5 h-5 text-slate-500 mt-0.5" />
@@ -269,46 +269,46 @@ export default function JobCostTracker({ projectId }: JobCostTrackerProps) {
           </CardContent>
         </Card>
 
-        <Card className="bg-slate-800 border-slate-700">
+        <Card className="bg-card/90 border-border/50">
           <CardContent className="pt-4 pb-4">
             <div className="flex items-start justify-between">
               <div>
-                <p className="text-xs text-slate-400 mb-1">Actual to Date</p>
+                <p className="text-xs text-muted-foreground mb-1">Actual to Date</p>
                 <p className="text-xl font-bold text-white">{aud(actualTotal)}</p>
               </div>
-              <DollarSign className="w-5 h-5 text-cyan-500 mt-0.5" />
+              <DollarSign className="w-5 h-5 text-[#E1DCC9] mt-0.5" />
             </div>
           </CardContent>
         </Card>
 
-        <Card className={`border ${variance >= 0 ? "bg-green-900/20 border-green-700/40" : "bg-red-900/20 border-red-700/40"}`}>
+        <Card className={`border ${variance >= 0 ? "bg-card/40 border-[#E1DCC9]/20" : "bg-red-900/20 border-red-700/40"}`}>
           <CardContent className="pt-4 pb-4">
             <div className="flex items-start justify-between">
               <div>
-                <p className="text-xs text-slate-400 mb-1">Variance</p>
-                <p className={`text-xl font-bold ${variance >= 0 ? "text-green-400" : "text-red-400"}`}>
+                <p className="text-xs text-muted-foreground mb-1">Variance</p>
+                <p className={`text-xl font-bold ${variance >= 0 ? "text-[#E1DCC9]/80" : "text-red-400"}`}>
                   {variance >= 0 ? "+" : ""}{aud(variance)}
                 </p>
               </div>
               {variance >= 0
-                ? <TrendingDown className="w-5 h-5 text-green-500 mt-0.5" />
+                ? <TrendingDown className="w-5 h-5 text-[#E1DCC9]/80 mt-0.5" />
                 : <TrendingUp className="w-5 h-5 text-red-500 mt-0.5" />}
             </div>
           </CardContent>
         </Card>
 
-        <Card className="bg-slate-800 border-slate-700">
+        <Card className="bg-card/90 border-border/50">
           <CardContent className="pt-4 pb-4">
             <div className="flex items-start justify-between">
               <div>
-                <p className="text-xs text-slate-400 mb-1">% Spent</p>
+                <p className="text-xs text-muted-foreground mb-1">% Spent</p>
                 <p className="text-xl font-bold text-white">{pctComplete.toFixed(1)}%</p>
               </div>
               <Percent className="w-5 h-5 text-slate-500 mt-0.5" />
             </div>
-            <div className="mt-2 h-1.5 bg-slate-700 rounded-full overflow-hidden">
+            <div className="mt-2 h-1.5 bg-muted/60 rounded-full overflow-hidden">
               <div
-                className={`h-full rounded-full transition-all ${pctComplete >= 100 ? "bg-red-500" : pctComplete >= 80 ? "bg-amber-500" : "bg-cyan-500"}`}
+                className={`h-full rounded-full transition-all ${pctComplete >= 100 ? "bg-red-500" : pctComplete >= 80 ? "bg-amber-500" : "bg-primary"}`}
                 style={{ width: `${Math.min(100, pctComplete)}%` }}
               />
             </div>
@@ -319,66 +319,66 @@ export default function JobCostTracker({ projectId }: JobCostTrackerProps) {
       {/* Add cost form */}
       {showForm && (
         <div ref={formRef}>
-          <Card className="bg-slate-800 border-slate-700">
+          <Card className="bg-card/90 border-border/50">
             <CardHeader className="pb-3">
               <CardTitle className="text-sm text-white">New Cost Entry</CardTitle>
             </CardHeader>
             <CardContent>
               <div className="grid grid-cols-2 md:grid-cols-3 gap-3 mb-3">
                 <div>
-                  <Label className="text-xs text-slate-400 mb-1 block">Date</Label>
+                  <Label className="text-xs text-muted-foreground mb-1 block">Date</Label>
                   <Input type="date" value={formDate} onChange={e => setFormDate(e.target.value)}
-                    className="h-8 text-sm bg-slate-700 border-slate-600 text-white" />
+                    className="h-8 text-sm bg-muted/60 border-slate-600 text-white" />
                 </div>
                 <div>
-                  <Label className="text-xs text-slate-400 mb-1 block">Trade *</Label>
+                  <Label className="text-xs text-muted-foreground mb-1 block">Trade *</Label>
                   <Select value={formTrade} onValueChange={setFormTrade}>
-                    <SelectTrigger className="h-8 text-sm bg-slate-700 border-slate-600 text-white">
+                    <SelectTrigger className="h-8 text-sm bg-muted/60 border-slate-600 text-white">
                       <SelectValue placeholder="Select trade…" />
                     </SelectTrigger>
-                    <SelectContent className="bg-slate-800 border-slate-600">
+                    <SelectContent className="bg-card/90 border-slate-600">
                       {allTradesForDropdown.map(t => (
-                        <SelectItem key={t} value={t} className="text-white hover:bg-slate-700">{t}</SelectItem>
+                        <SelectItem key={t} value={t} className="text-white hover:bg-muted/60">{t}</SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
                 </div>
                 <div>
-                  <Label className="text-xs text-slate-400 mb-1 block">Type</Label>
+                  <Label className="text-xs text-muted-foreground mb-1 block">Type</Label>
                   <Select value={formType} onValueChange={v => setFormType(v as CostType)}>
-                    <SelectTrigger className="h-8 text-sm bg-slate-700 border-slate-600 text-white">
+                    <SelectTrigger className="h-8 text-sm bg-muted/60 border-slate-600 text-white">
                       <SelectValue placeholder="Select type…" />
                     </SelectTrigger>
-                    <SelectContent className="bg-slate-800 border-slate-600">
+                    <SelectContent className="bg-card/90 border-slate-600">
                       {COST_TYPES.map(t => (
-                        <SelectItem key={t} value={t} className="text-white hover:bg-slate-700 capitalize">{t}</SelectItem>
+                        <SelectItem key={t} value={t} className="text-white hover:bg-muted/60 capitalize">{t}</SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
                 </div>
                 <div>
-                  <Label className="text-xs text-slate-400 mb-1 block">Supplier</Label>
+                  <Label className="text-xs text-muted-foreground mb-1 block">Supplier</Label>
                   <Input value={formSupplier} onChange={e => setFormSupplier(e.target.value)}
-                    placeholder="Supplier name…" className="h-8 text-sm bg-slate-700 border-slate-600 text-white" />
+                    placeholder="Supplier name…" className="h-8 text-sm bg-muted/60 border-slate-600 text-white" />
                 </div>
                 <div>
-                  <Label className="text-xs text-slate-400 mb-1 block">Description *</Label>
+                  <Label className="text-xs text-muted-foreground mb-1 block">Description *</Label>
                   <Input value={formDescription} onChange={e => setFormDescription(e.target.value)}
-                    placeholder="Description…" className="h-8 text-sm bg-slate-700 border-slate-600 text-white" />
+                    placeholder="Description…" className="h-8 text-sm bg-muted/60 border-slate-600 text-white" />
                 </div>
                 <div>
-                  <Label className="text-xs text-slate-400 mb-1 block">Amount *</Label>
+                  <Label className="text-xs text-muted-foreground mb-1 block">Amount *</Label>
                   <div className="relative">
-                    <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400 text-sm">$</span>
+                    <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground text-sm">$</span>
                     <Input type="number" min={0} step={0.01} value={formAmount}
                       onChange={e => setFormAmount(e.target.value)} placeholder="0.00"
-                      className="h-8 text-sm bg-slate-700 border-slate-600 text-white pl-6" />
+                      className="h-8 text-sm bg-muted/60 border-slate-600 text-white pl-6" />
                   </div>
                 </div>
               </div>
               <div className="flex gap-2">
-                <Button size="sm" onClick={handleAddCost} className="bg-cyan-600 hover:bg-cyan-700">Add Cost</Button>
-                <Button size="sm" variant="ghost" onClick={() => setShowForm(false)} className="text-slate-400 hover:text-white">Cancel</Button>
+                <Button size="sm" onClick={handleAddCost} className="bg-[#412D15] hover:bg-[#412D15]/90">Add Cost</Button>
+                <Button size="sm" variant="ghost" onClick={() => setShowForm(false)} className="text-muted-foreground hover:text-foreground">Cancel</Button>
               </div>
             </CardContent>
           </Card>
@@ -386,7 +386,7 @@ export default function JobCostTracker({ projectId }: JobCostTrackerProps) {
       )}
 
       {/* Trade Budget Control */}
-      <Card className="bg-slate-800 border-slate-700">
+      <Card className="bg-card/90 border-border/50">
         <CardHeader className="pb-0 pt-4 px-4">
           <div className="flex items-center justify-between">
             <CardTitle className="text-sm text-white">Trade Budget Control</CardTitle>
@@ -399,42 +399,42 @@ export default function JobCostTracker({ projectId }: JobCostTrackerProps) {
               {!showMonitorForm ? (
                 <div className="text-center">
                   <DollarSign className="w-8 h-8 text-slate-600 mx-auto mb-2" />
-                  <p className="text-slate-400 text-sm font-medium">No trades monitored yet</p>
+                  <p className="text-muted-foreground text-sm font-medium">No trades monitored yet</p>
                   <p className="text-slate-500 text-xs mt-1 mb-4">Add a trade budget to start tracking costs vs budget</p>
                   <Button size="sm" variant="outline" onClick={() => { setShowMonitorForm(true); setMonitorTrade(availableTrades[0] || ""); }}
-                    className="border-slate-600 text-slate-300 hover:text-white">
+                    className="border-slate-600 text-foreground/60 hover:text-foreground">
                     <Plus className="w-3.5 h-3.5 mr-1" /> Monitor first trade
                   </Button>
                 </div>
               ) : (
                 <div className="flex gap-3 items-end flex-wrap">
                   <div>
-                    <Label className="text-xs text-slate-400 mb-1 block">Trade</Label>
+                    <Label className="text-xs text-muted-foreground mb-1 block">Trade</Label>
                     <Select value={monitorTrade} onValueChange={setMonitorTrade}>
-                      <SelectTrigger className="h-8 text-sm bg-slate-700 border-slate-600 text-white w-52">
+                      <SelectTrigger className="h-8 text-sm bg-muted/60 border-slate-600 text-white w-52">
                         <SelectValue placeholder="Select trade…" />
                       </SelectTrigger>
-                      <SelectContent className="bg-slate-800 border-slate-600">
+                      <SelectContent className="bg-card/90 border-slate-600">
                         {availableTrades.map(t => (
-                          <SelectItem key={t} value={t} className="text-white hover:bg-slate-700">{t}</SelectItem>
+                          <SelectItem key={t} value={t} className="text-white hover:bg-muted/60">{t}</SelectItem>
                         ))}
                       </SelectContent>
                     </Select>
                   </div>
                   <div>
-                    <Label className="text-xs text-slate-400 mb-1 block">Budget (optional)</Label>
+                    <Label className="text-xs text-muted-foreground mb-1 block">Budget (optional)</Label>
                     <div className="relative">
-                      <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400 text-sm">$</span>
+                      <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground text-sm">$</span>
                       <Input
                         type="number" min={0} value={monitorBudget}
                         onChange={e => setMonitorBudget(e.target.value)}
-                        placeholder="0" className="h-8 text-sm bg-slate-700 border-slate-600 text-white pl-6 w-36"
+                        placeholder="0" className="h-8 text-sm bg-muted/60 border-slate-600 text-white pl-6 w-36"
                         onKeyDown={e => e.key === "Enter" && handleAddMonitor()}
                       />
                     </div>
                   </div>
-                  <Button size="sm" onClick={handleAddMonitor} className="bg-cyan-600 hover:bg-cyan-700">Add</Button>
-                  <Button size="sm" variant="ghost" onClick={() => setShowMonitorForm(false)} className="text-slate-400">Cancel</Button>
+                  <Button size="sm" onClick={handleAddMonitor} className="bg-[#412D15] hover:bg-[#412D15]/90">Add</Button>
+                  <Button size="sm" variant="ghost" onClick={() => setShowMonitorForm(false)} className="text-muted-foreground">Cancel</Button>
                 </div>
               )}
             </div>
@@ -442,18 +442,18 @@ export default function JobCostTracker({ projectId }: JobCostTrackerProps) {
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
-                  <tr className="border-b border-slate-700">
-                    <th className="text-left px-4 py-2.5 text-xs font-semibold text-slate-400 uppercase tracking-wide">Trade</th>
-                    <th className="text-right px-4 py-2.5 text-xs font-semibold text-slate-400 uppercase tracking-wide">Budget</th>
-                    <th className="text-right px-4 py-2.5 text-xs font-semibold text-slate-400 uppercase tracking-wide">Spent</th>
-                    <th className="text-right px-4 py-2.5 text-xs font-semibold text-slate-400 uppercase tracking-wide">Remaining</th>
-                    <th className="px-4 py-2.5 text-xs font-semibold text-slate-400 uppercase tracking-wide w-36">Progress</th>
+                  <tr className="border-b border-border/50">
+                    <th className="text-left px-4 py-2.5 text-xs font-semibold text-muted-foreground uppercase tracking-wide">Trade</th>
+                    <th className="text-right px-4 py-2.5 text-xs font-semibold text-muted-foreground uppercase tracking-wide">Budget</th>
+                    <th className="text-right px-4 py-2.5 text-xs font-semibold text-muted-foreground uppercase tracking-wide">Spent</th>
+                    <th className="text-right px-4 py-2.5 text-xs font-semibold text-muted-foreground uppercase tracking-wide">Remaining</th>
+                    <th className="px-4 py-2.5 text-xs font-semibold text-muted-foreground uppercase tracking-wide w-36">Progress</th>
                     <th className="px-2 py-2.5 w-24" />
                   </tr>
                 </thead>
                 <tbody>
                   {tradeBreakdown.map(row => (
-                    <tr key={row.trade} className="group border-b border-slate-700/50 hover:bg-slate-700/20 transition-colors">
+                    <tr key={row.trade} className="group border-b border-border/50/50 hover:bg-muted/60/20 transition-colors">
 
                       {/* Trade name */}
                       <td className="px-4 py-3 text-white font-medium">{row.trade}</td>
@@ -466,7 +466,7 @@ export default function JobCostTracker({ projectId }: JobCostTrackerProps) {
                             type="number"
                             min={0}
                             step={100}
-                            className="w-28 text-right bg-slate-700 border border-cyan-500 rounded px-2 py-1 text-sm text-white focus:outline-none"
+                            className="w-28 text-right bg-muted/60 border border-foreground/25 rounded px-2 py-1 text-sm text-white focus:outline-none"
                             value={editingValue}
                             onChange={e => setEditingValue(e.target.value)}
                             onBlur={commitBudget}
@@ -479,7 +479,7 @@ export default function JobCostTracker({ projectId }: JobCostTrackerProps) {
                         ) : (
                           <button
                             onClick={() => { setEditingTrade(row.trade); setEditingValue(String(row.budget)); }}
-                            className="group/btn flex items-center gap-1.5 ml-auto text-slate-300 hover:text-white transition-colors"
+                            className="group/btn flex items-center gap-1.5 ml-auto text-foreground/60 hover:text-foreground transition-colors"
                             title="Click to set budget"
                           >
                             {row.budget > 0
@@ -491,16 +491,16 @@ export default function JobCostTracker({ projectId }: JobCostTrackerProps) {
                       </td>
 
                       {/* Spent */}
-                      <td className="px-4 py-3 text-right font-mono text-slate-300">{aud(row.spent)}</td>
+                      <td className="px-4 py-3 text-right font-mono text-foreground/60">{aud(row.spent)}</td>
 
                       {/* Remaining + saving/over label */}
                       <td className="px-4 py-3 text-right">
                         {row.budget > 0 ? (
                           <div>
-                            <span className={`font-mono font-semibold ${row.remaining < 0 ? "text-red-400" : "text-green-400"}`}>
+                            <span className={`font-mono font-semibold ${row.remaining < 0 ? "text-red-400" : "text-[#E1DCC9]/80"}`}>
                               {aud(Math.abs(row.remaining))}
                             </span>
-                            <div className={`text-xs mt-0.5 ${row.remaining >= 0 ? "text-green-500/70" : "text-red-500/70"}`}>
+                            <div className={`text-xs mt-0.5 ${row.remaining >= 0 ? "text-[#E1DCC9]/80/70" : "text-red-500/70"}`}>
                               {row.remaining >= 0 ? "saving" : "over budget"}
                             </div>
                           </div>
@@ -516,9 +516,9 @@ export default function JobCostTracker({ projectId }: JobCostTrackerProps) {
                         {row.budget > 0 ? (
                           <div className="space-y-1">
                             <span className="text-xs text-slate-500">{row.pctUsed.toFixed(0)}%</span>
-                            <div className="h-1.5 bg-slate-700 rounded-full overflow-hidden">
+                            <div className="h-1.5 bg-muted/60 rounded-full overflow-hidden">
                               <div
-                                className={`h-full rounded-full transition-all ${row.pctUsed >= 100 ? "bg-red-500" : row.pctUsed >= 80 ? "bg-amber-500" : "bg-cyan-500"}`}
+                                className={`h-full rounded-full transition-all ${row.pctUsed >= 100 ? "bg-red-500" : row.pctUsed >= 80 ? "bg-amber-500" : "bg-primary"}`}
                                 style={{ width: `${Math.min(100, row.pctUsed)}%` }}
                               />
                             </div>
@@ -532,7 +532,7 @@ export default function JobCostTracker({ projectId }: JobCostTrackerProps) {
                       <td className="px-2 py-3">
                         <button
                           onClick={() => openFormForTrade(row.trade)}
-                          className="opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-1 text-xs text-cyan-400 hover:text-cyan-300 whitespace-nowrap"
+                          className="opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-1 text-xs text-[#E1DCC9] hover:text-[#E1DCC9]/80 whitespace-nowrap"
                         >
                           <Plus className="w-3 h-3" /> Log cost
                         </button>
@@ -549,8 +549,8 @@ export default function JobCostTracker({ projectId }: JobCostTrackerProps) {
                     <td className="px-4 py-3 text-right">
                       {totalSavings > 0 && (
                         <div>
-                          <span className="font-mono font-bold text-green-400">{aud(totalSavings)}</span>
-                          <div className="text-xs text-green-500/70 mt-0.5">total savings</div>
+                          <span className="font-mono font-bold text-[#E1DCC9]/80">{aud(totalSavings)}</span>
+                          <div className="text-xs text-[#E1DCC9]/80/70 mt-0.5">total savings</div>
                         </div>
                       )}
                       {variance < 0 && (
@@ -563,10 +563,10 @@ export default function JobCostTracker({ projectId }: JobCostTrackerProps) {
                     <td className="px-4 py-3">
                       {effectiveBudgetTotal > 0 && (
                         <div className="space-y-1">
-                          <span className="text-xs text-slate-400">{pctComplete.toFixed(0)}%</span>
-                          <div className="h-1.5 bg-slate-700 rounded-full overflow-hidden">
+                          <span className="text-xs text-muted-foreground">{pctComplete.toFixed(0)}%</span>
+                          <div className="h-1.5 bg-muted/60 rounded-full overflow-hidden">
                             <div
-                              className={`h-full rounded-full ${pctComplete >= 100 ? "bg-red-500" : pctComplete >= 80 ? "bg-amber-500" : "bg-cyan-500"}`}
+                              className={`h-full rounded-full ${pctComplete >= 100 ? "bg-red-500" : pctComplete >= 80 ? "bg-amber-500" : "bg-primary"}`}
                               style={{ width: `${Math.min(100, pctComplete)}%` }}
                             />
                           </div>
@@ -578,45 +578,45 @@ export default function JobCostTracker({ projectId }: JobCostTrackerProps) {
 
                   {/* Monitor trade inline form */}
                   {showMonitorForm ? (
-                    <tr className="border-t border-slate-700 bg-slate-800/60">
+                    <tr className="border-t border-border/50 bg-card/90/60">
                       <td colSpan={6} className="px-4 py-3">
                         <div className="flex gap-3 items-end flex-wrap">
                           <div>
-                            <Label className="text-xs text-slate-400 mb-1 block">Trade</Label>
+                            <Label className="text-xs text-muted-foreground mb-1 block">Trade</Label>
                             <Select value={monitorTrade} onValueChange={setMonitorTrade}>
-                              <SelectTrigger className="h-8 text-sm bg-slate-700 border-slate-600 text-white w-52">
+                              <SelectTrigger className="h-8 text-sm bg-muted/60 border-slate-600 text-white w-52">
                                 <SelectValue placeholder="Select trade…" />
                               </SelectTrigger>
-                              <SelectContent className="bg-slate-800 border-slate-600">
+                              <SelectContent className="bg-card/90 border-slate-600">
                                 {availableTrades.map(t => (
-                                  <SelectItem key={t} value={t} className="text-white hover:bg-slate-700">{t}</SelectItem>
+                                  <SelectItem key={t} value={t} className="text-white hover:bg-muted/60">{t}</SelectItem>
                                 ))}
                               </SelectContent>
                             </Select>
                           </div>
                           <div>
-                            <Label className="text-xs text-slate-400 mb-1 block">Budget (optional)</Label>
+                            <Label className="text-xs text-muted-foreground mb-1 block">Budget (optional)</Label>
                             <div className="relative">
-                              <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400 text-sm">$</span>
+                              <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground text-sm">$</span>
                               <Input
                                 type="number" min={0} value={monitorBudget}
                                 onChange={e => setMonitorBudget(e.target.value)}
-                                placeholder="0" className="h-8 text-sm bg-slate-700 border-slate-600 text-white pl-6 w-36"
+                                placeholder="0" className="h-8 text-sm bg-muted/60 border-slate-600 text-white pl-6 w-36"
                                 onKeyDown={e => e.key === "Enter" && handleAddMonitor()}
                               />
                             </div>
                           </div>
-                          <Button size="sm" onClick={handleAddMonitor} className="bg-cyan-600 hover:bg-cyan-700">Add</Button>
-                          <Button size="sm" variant="ghost" onClick={() => setShowMonitorForm(false)} className="text-slate-400">Cancel</Button>
+                          <Button size="sm" onClick={handleAddMonitor} className="bg-[#412D15] hover:bg-[#412D15]/90">Add</Button>
+                          <Button size="sm" variant="ghost" onClick={() => setShowMonitorForm(false)} className="text-muted-foreground">Cancel</Button>
                         </div>
                       </td>
                     </tr>
                   ) : availableTrades.length > 0 ? (
-                    <tr className="border-t border-slate-700/40">
+                    <tr className="border-t border-border/50/40">
                       <td colSpan={6} className="px-4 py-2.5">
                         <button
                           onClick={() => { setShowMonitorForm(true); setMonitorTrade(availableTrades[0]); }}
-                          className="flex items-center gap-1.5 text-xs text-slate-500 hover:text-cyan-400 transition-colors"
+                          className="flex items-center gap-1.5 text-xs text-slate-500 hover:text-[#E1DCC9] transition-colors"
                         >
                           <Plus className="w-3.5 h-3.5" /> Monitor another trade
                         </button>
@@ -631,7 +631,7 @@ export default function JobCostTracker({ projectId }: JobCostTrackerProps) {
       </Card>
 
       {/* Cost log */}
-      <Card className="bg-slate-800 border-slate-700">
+      <Card className="bg-card/90 border-border/50">
         <CardHeader className="pb-3">
           <CardTitle className="text-sm text-white">Cost Log</CardTitle>
         </CardHeader>
@@ -639,32 +639,32 @@ export default function JobCostTracker({ projectId }: JobCostTrackerProps) {
           {entries.length === 0 ? (
             <div className="px-4 py-8 text-center">
               <DollarSign className="w-8 h-8 text-slate-600 mx-auto mb-2" />
-              <p className="text-slate-400 text-sm">No cost entries yet.</p>
+              <p className="text-muted-foreground text-sm">No cost entries yet.</p>
               <p className="text-slate-500 text-xs mt-1">Click "Add Cost" to record your first actual cost.</p>
             </div>
           ) : (
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
-                  <tr className="border-b border-slate-700">
-                    <th className="text-left px-4 py-2.5 text-xs font-semibold text-slate-400 uppercase tracking-wide">Date</th>
-                    <th className="text-left px-4 py-2.5 text-xs font-semibold text-slate-400 uppercase tracking-wide">Trade</th>
-                    <th className="text-left px-4 py-2.5 text-xs font-semibold text-slate-400 uppercase tracking-wide">Description</th>
-                    <th className="text-left px-4 py-2.5 text-xs font-semibold text-slate-400 uppercase tracking-wide">Supplier</th>
-                    <th className="text-left px-4 py-2.5 text-xs font-semibold text-slate-400 uppercase tracking-wide">Type</th>
-                    <th className="text-right px-4 py-2.5 text-xs font-semibold text-slate-400 uppercase tracking-wide">Amount</th>
+                  <tr className="border-b border-border/50">
+                    <th className="text-left px-4 py-2.5 text-xs font-semibold text-muted-foreground uppercase tracking-wide">Date</th>
+                    <th className="text-left px-4 py-2.5 text-xs font-semibold text-muted-foreground uppercase tracking-wide">Trade</th>
+                    <th className="text-left px-4 py-2.5 text-xs font-semibold text-muted-foreground uppercase tracking-wide">Description</th>
+                    <th className="text-left px-4 py-2.5 text-xs font-semibold text-muted-foreground uppercase tracking-wide">Supplier</th>
+                    <th className="text-left px-4 py-2.5 text-xs font-semibold text-muted-foreground uppercase tracking-wide">Type</th>
+                    <th className="text-right px-4 py-2.5 text-xs font-semibold text-muted-foreground uppercase tracking-wide">Amount</th>
                     <th className="px-4 py-2.5" />
                   </tr>
                 </thead>
                 <tbody>
                   {entries.map(entry => (
-                    <tr key={entry.id} className="border-b border-slate-700/50 hover:bg-slate-700/20">
-                      <td className="px-4 py-2.5 text-slate-300 whitespace-nowrap">
+                    <tr key={entry.id} className="border-b border-border/50/50 hover:bg-muted/60/20">
+                      <td className="px-4 py-2.5 text-foreground/60 whitespace-nowrap">
                         {format(parseISO(entry.date), "dd MMM yyyy")}
                       </td>
                       <td className="px-4 py-2.5 text-white">{entry.trade}</td>
-                      <td className="px-4 py-2.5 text-slate-300 max-w-[200px] truncate">{entry.description}</td>
-                      <td className="px-4 py-2.5 text-slate-400">{entry.supplier || "—"}</td>
+                      <td className="px-4 py-2.5 text-foreground/60 max-w-[200px] truncate">{entry.description}</td>
+                      <td className="px-4 py-2.5 text-muted-foreground">{entry.supplier || "—"}</td>
                       <td className="px-4 py-2.5">
                         <span className={`inline-block px-1.5 py-0.5 rounded text-xs font-medium border capitalize ${typeColors[entry.type]}`}>
                           {entry.type}

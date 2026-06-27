@@ -16,7 +16,7 @@ interface AIPlanAnalysisPanelProps {
 
 function confidenceBadge(confidence: number) {
   if (confidence >= 0.8) {
-    return <Badge className="text-[10px] px-1.5 py-0.5 bg-green-900/40 text-green-400 border border-green-700/50">High</Badge>;
+    return <Badge className="text-[10px] px-1.5 py-0.5 bg-[#412D15]/40 text-[#E1DCC9]/80 border border-[#E1DCC9]/20">High</Badge>;
   }
   if (confidence >= 0.6) {
     return <Badge className="text-[10px] px-1.5 py-0.5 bg-amber-900/40 text-amber-400 border border-amber-700/50">Mid</Badge>;

@@ -109,7 +109,7 @@ export function CalculationBreakdownDialog({ item, trigger }: CalculationBreakdo
             {/* Quantity Section */}
             <div>
               <h4 className="font-medium flex items-center gap-2 mb-3">
-                <FileText className="h-4 w-4 text-blue-600" />
+                <FileText className="h-4 w-4 text-foreground/70" />
                 1. Quantity Determination
               </h4>
               <Card className="p-4">
@@ -149,7 +149,7 @@ export function CalculationBreakdownDialog({ item, trigger }: CalculationBreakdo
             {/* Material Lookup Section */}
             <div>
               <h4 className="font-medium flex items-center gap-2 mb-3">
-                <Package className="h-4 w-4 text-green-600" />
+                <Package className="h-4 w-4 text-[#E1DCC9]/70" />
                 2. Material Rate Lookup
               </h4>
               <Card className="p-4">
@@ -157,7 +157,7 @@ export function CalculationBreakdownDialog({ item, trigger }: CalculationBreakdo
                   <div>
                     <div className="flex items-center gap-2">
                       {materialLookup?.found ? (
-                        <CheckCircle className="h-4 w-4 text-green-600" />
+                        <CheckCircle className="h-4 w-4 text-[#E1DCC9]/70" />
                       ) : (
                         <AlertTriangle className="h-4 w-4 text-amber-500" />
                       )}
@@ -213,7 +213,7 @@ export function CalculationBreakdownDialog({ item, trigger }: CalculationBreakdo
             {/* Labour Section */}
             <div>
               <h4 className="font-medium flex items-center gap-2 mb-3">
-                <Clock className="h-4 w-4 text-purple-600" />
+                <Clock className="h-4 w-4 text-muted-foreground" />
                 3. Labour Calculation
               </h4>
               <Card className="p-4">
@@ -241,7 +241,7 @@ export function CalculationBreakdownDialog({ item, trigger }: CalculationBreakdo
             {/* Final Calculation */}
             <div>
               <h4 className="font-medium flex items-center gap-2 mb-3">
-                <DollarSign className="h-4 w-4 text-emerald-600" />
+                <DollarSign className="h-4 w-4 text-[#E1DCC9]/60" />
                 4. Final Calculation
               </h4>
               <Card className="p-4">
@@ -286,7 +286,7 @@ export function CalculationBreakdownDialog({ item, trigger }: CalculationBreakdo
                 </div>
                 <div className="text-right">
                   <span className={`text-2xl font-bold ${
-                    item.confidence >= 0.8 ? 'text-green-600' :
+                    item.confidence >= 0.8 ? 'text-[#E1DCC9]/70' :
                     item.confidence >= 0.6 ? 'text-amber-600' : 'text-red-600'
                   }`}>
                     {Math.round(item.confidence * 100)}%

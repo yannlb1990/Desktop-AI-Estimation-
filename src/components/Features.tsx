@@ -14,7 +14,7 @@ const TakeoffPreview = () => (
     <div className="flex items-center gap-2 px-3 py-2 bg-card/80 border-b border-white/8">
       <div className="flex gap-1"><div className="w-2.5 h-2.5 rounded-full bg-[#ff5f57]" /><div className="w-2.5 h-2.5 rounded-full bg-[#febc2e]" /><div className="w-2.5 h-2.5 rounded-full bg-[#28c840]" /></div>
       <span className="text-[10px] text-white/30 font-mono ml-2 flex-1 truncate">Ground_Floor_DA-01.pdf</span>
-      <span className="text-[9px] font-mono text-emerald-400/80 bg-emerald-400/10 border border-emerald-400/20 px-1.5 py-0.5 rounded">✓ 1:100</span>
+      <span className="text-[9px] font-mono text-[#E1DCC9]/70 bg-[#E1DCC9]/8 border border-[#E1DCC9]/20 px-1.5 py-0.5 rounded">✓ 1:100</span>
     </div>
     <div className="flex">
       <div className="w-32 shrink-0 bg-background border-r border-white/6 p-2 space-y-1">
@@ -27,14 +27,14 @@ const TakeoffPreview = () => (
           { label: "Ensuite", val: "5.9 m²", active: false },
         ].map((r) => (
           <div key={r.label} className="flex items-center gap-1.5 px-1 py-0.5">
-            <div className={`w-1.5 h-1.5 rounded-full shrink-0 ${r.active ? "bg-cyan-400" : "bg-cyan-400/25"}`} />
+            <div className={`w-1.5 h-1.5 rounded-full shrink-0 ${r.active ? "bg-primary" : "bg-primary/15"}`} />
             <span className="text-[9px] text-white/40 flex-1 truncate">{r.label}</span>
-            <span className={`text-[9px] font-mono ${r.active ? "text-cyan-400" : "text-[#E1DCC9]/40"}`}>{r.val}</span>
+            <span className={`text-[9px] font-mono ${r.active ? "text-[#E1DCC9]" : "text-[#E1DCC9]/40"}`}>{r.val}</span>
           </div>
         ))}
         <div className="border-t border-white/6 mt-2 pt-2 px-1 flex justify-between">
           <span className="text-[9px] text-white/30 font-mono">TOTAL</span>
-          <span className="text-[9px] font-mono text-cyan-400 font-bold">92.7 m²</span>
+          <span className="text-[9px] font-mono text-[#E1DCC9] font-bold">92.7 m²</span>
         </div>
       </div>
       <div className="flex-1 bg-card relative">
@@ -66,7 +66,7 @@ const TakeoffPreview = () => (
           <circle cx="110" cy="184" r="2" fill="#E1DCC9" />
         </svg>
         <div className="absolute bottom-1.5 left-2 right-2 flex items-center justify-between px-2 py-1 bg-background/90 border border-white/6 rounded text-[9px] font-mono">
-          <span className="text-cyan-400">Polygon · 4 pts · 44.6 m²</span>
+          <span className="text-[#E1DCC9]">Polygon · 4 pts · 44.6 m²</span>
           <span className="text-white/25">Page 1 / 3</span>
         </div>
       </div>
@@ -80,7 +80,7 @@ const CostBreakdownPreview = () => (
     <div className="flex items-center gap-2 px-3 py-2.5 bg-card/80 border-b border-white/8">
       <BadgeDollarSign className="h-3.5 w-3.5 text-[#E1DCC9]/70" />
       <span className="text-[10px] text-white/40 font-mono">Trade Breakdown — 42 Riverside Ave</span>
-      <span className="ml-auto text-[9px] font-mono text-emerald-400/80 bg-emerald-400/10 border border-emerald-400/20 px-1.5 py-0.5 rounded">✓ QLD Rates 2024</span>
+      <span className="ml-auto text-[9px] font-mono text-[#E1DCC9]/70 bg-[#E1DCC9]/8 border border-[#E1DCC9]/20 px-1.5 py-0.5 rounded">✓ QLD Rates 2024</span>
     </div>
     <div className="p-4 space-y-0.5">
       <div className="grid grid-cols-[1fr_56px_52px_60px] gap-2 pb-2 border-b border-white/6 mb-1">
@@ -114,7 +114,7 @@ const CostBreakdownPreview = () => (
         </div>
         <div className="flex items-center justify-between px-3 py-2.5 rounded-lg bg-[#E1DCC9]/10 border border-[#E1DCC9]/15">
           <span className="text-[11px] font-bold text-white font-mono uppercase tracking-wide">Total inc. GST</span>
-          <span className="text-[14px] font-bold text-cyan-400 font-mono">$75,228</span>
+          <span className="text-[14px] font-bold text-[#E1DCC9] font-mono">$75,228</span>
         </div>
       </div>
     </div>
@@ -137,7 +137,7 @@ const TenderPreview = () => (
         <div>
           <div className="flex items-center gap-1.5 mb-1">
             <div className="w-4 h-4 rounded bg-background flex items-center justify-center">
-              <span className="text-cyan-400 text-[8px] font-bold">M</span>
+              <span className="text-[#E1DCC9] text-[8px] font-bold">M</span>
             </div>
             <span className="text-[9px] font-bold text-gray-700 uppercase tracking-widest">BUILD.CO</span>
           </div>
@@ -242,7 +242,7 @@ const Features = () => {
           {/* Header — always visible while pinned */}
           <div className="container mx-auto px-6 lg:px-12 pt-14 pb-6 shrink-0">
             <div className="flex items-center gap-3 mb-4">
-              <div className="h-px w-8 bg-cyan-400/50" />
+              <div className="h-px w-8 bg-primary/15" />
               <span className="text-xs font-mono text-[#E1DCC9]/60 uppercase tracking-widest">The workflow</span>
             </div>
             <h2 className="font-display text-4xl sm:text-5xl font-bold text-white leading-tight">
@@ -267,7 +267,7 @@ const Features = () => {
                 >
                   <div className="flex items-center gap-4">
                     <div className="w-10 h-10 rounded-xl bg-[#E1DCC9]/10 border border-[#E1DCC9]/15 flex items-center justify-center flex-shrink-0">
-                      <FeatureIcon className="h-5 w-5 text-cyan-400" />
+                      <FeatureIcon className="h-5 w-5 text-[#E1DCC9]" />
                     </div>
                     <span className="font-mono text-sm text-white/30 tracking-widest">
                       STEP {feature.num}
@@ -313,13 +313,13 @@ const Features = () => {
                 <div key={i} className="flex-1 flex flex-col gap-1.5">
                   <div className="h-0.5 bg-white/8 rounded-full relative overflow-hidden">
                     <motion.div
-                      className="absolute inset-y-0 left-0 bg-cyan-400 rounded-full"
+                      className="absolute inset-y-0 left-0 bg-primary rounded-full"
                       style={{ width: progressWidths[i] }}
                     />
                   </div>
                   <span
                     className={`text-[9px] font-mono uppercase tracking-widest transition-colors duration-300 ${
-                      i === active ? "text-cyan-400" : "text-white/20"
+                      i === active ? "text-[#E1DCC9]" : "text-white/20"
                     }`}
                   >
                     {f.title.split(" ").slice(0, 3).join(" ")}

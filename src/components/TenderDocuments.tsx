@@ -131,7 +131,7 @@ export const TenderDocuments = ({ projectId }: TenderDocumentsProps) => {
 
   const getFileIcon = (fileType: string) => {
     if (fileType === 'application/pdf') return <FileText className="h-4 w-4 text-red-500" />;
-    if (fileType.startsWith('image/')) return <File className="h-4 w-4 text-blue-500" />;
+    if (fileType.startsWith('image/')) return <File className="h-4 w-4 text-foreground/70" />;
     return <File className="h-4 w-4 text-gray-500" />;
   };
 

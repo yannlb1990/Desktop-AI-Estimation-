@@ -28,8 +28,8 @@ const steps = [
     icon: FileText,
     label: "Send your tender",
     desc: "PDF or Excel, one click",
-    color: "text-green-400",
-    bg: "bg-green-400/10",
+    color: "text-[#E1DCC9]/80",
+    bg: "bg-[#E1DCC9]/8",
   },
 ];
 

@@ -217,7 +217,7 @@ export function ProgressClaimGenerator({ projectName, siteAddress = '', clientNa
               {/* Value claimed preview */}
               <div className="col-span-12 flex items-center justify-end gap-1.5 pt-0.5">
                 <span className="text-[10px] text-muted-foreground">Claimed this stage:</span>
-                <span className="text-xs font-semibold text-cyan-400">
+                <span className="text-xs font-semibold text-[#E1DCC9]">
                   ${fmt(stage.value * (stage.percentComplete / 100))}
                 </span>
               </div>
@@ -227,9 +227,9 @@ export function ProgressClaimGenerator({ projectName, siteAddress = '', clientNa
       </Card>
 
       {/* Live summary */}
-      <Card className="border-blue-500/30 bg-blue-950/20">
+      <Card className="border-border/40 bg-background/60">
         <CardHeader className="pb-3">
-          <CardTitle className="text-sm font-semibold text-blue-300 flex items-center gap-2">
+          <CardTitle className="text-sm font-semibold text-foreground/70 flex items-center gap-2">
             <DollarSign className="h-4 w-4" />
             Payment Summary
           </CardTitle>
@@ -250,9 +250,9 @@ export function ProgressClaimGenerator({ projectName, siteAddress = '', clientNa
                 </span>
               </div>
             ))}
-            <div className="flex justify-between items-center border-t-2 border-blue-500/40 pt-3 mt-1">
-              <span className="font-bold text-base text-blue-200">TOTAL DUE THIS CLAIM</span>
-              <span className="font-bold text-base text-cyan-400">${fmt(summary.totalDue)}</span>
+            <div className="flex justify-between items-center border-t-2 border-border/40 pt-3 mt-1">
+              <span className="font-bold text-base text-foreground/80">TOTAL DUE THIS CLAIM</span>
+              <span className="font-bold text-base text-[#E1DCC9]">${fmt(summary.totalDue)}</span>
             </div>
           </div>
         </CardContent>
@@ -262,7 +262,7 @@ export function ProgressClaimGenerator({ projectName, siteAddress = '', clientNa
       <div className="flex justify-end">
         <Button
           onClick={handleGenerate}
-          className="gap-2 bg-blue-600 hover:bg-blue-700"
+          className="gap-2 bg-muted/70 hover:bg-muted/80"
           disabled={stages.length === 0}
         >
           <FileDown className="h-4 w-4" />

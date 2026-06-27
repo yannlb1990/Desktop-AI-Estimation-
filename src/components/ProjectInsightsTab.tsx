@@ -239,8 +239,8 @@ export const ProjectInsightsTab = ({ projectId }: ProjectInsightsTabProps) => {
     );
   }
 
-  const scoreColor = health.score >= 85 ? "text-green-600" : health.score >= 70 ? "text-amber-500" : "text-red-500";
-  const scoreRing = health.score >= 85 ? "border-green-500" : health.score >= 70 ? "border-amber-400" : "border-red-400";
+  const scoreColor = health.score >= 85 ? "text-[#E1DCC9]/70" : health.score >= 70 ? "text-amber-500" : "text-red-500";
+  const scoreRing = health.score >= 85 ? "border-[#E1DCC9]/30" : health.score >= 70 ? "border-amber-400" : "border-red-400";
 
   return (
     <div className="space-y-6">
@@ -267,7 +267,7 @@ export const ProjectInsightsTab = ({ projectId }: ProjectInsightsTabProps) => {
             </div>
             <div className="flex-1 space-y-2">
               {health.issues.length === 0 ? (
-                <div className="flex items-center gap-2 text-green-600">
+                <div className="flex items-center gap-2 text-[#E1DCC9]/70">
                   <CheckCircle2 className="h-5 w-5" />
                   <span className="font-medium">No issues found. Estimate looks complete.</span>
                 </div>
@@ -275,7 +275,7 @@ export const ProjectInsightsTab = ({ projectId }: ProjectInsightsTabProps) => {
                 <div key={i} className={`flex items-start gap-2 p-2.5 rounded-lg text-sm ${
                   issue.severity === "high" ? "bg-red-50 border border-red-100 text-red-800" :
                   issue.severity === "medium" ? "bg-amber-50 border border-amber-100 text-amber-800" :
-                  "bg-blue-50 border border-blue-100 text-blue-800"
+                  "bg-muted/10 border border-border/30 text-foreground/90"
                 }`}>
                   {issue.severity === "high" ? <XCircle className="h-4 w-4 flex-shrink-0 mt-0.5" /> :
                    issue.severity === "medium" ? <AlertTriangle className="h-4 w-4 flex-shrink-0 mt-0.5" /> :
@@ -358,7 +358,7 @@ export const ProjectInsightsTab = ({ projectId }: ProjectInsightsTabProps) => {
             <div className="flex gap-4 mt-3 text-xs text-muted-foreground">
               <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-sm bg-red-500 inline-block" /> Below 15%</span>
               <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-sm bg-amber-400 inline-block" /> 15–20%</span>
-              <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-sm bg-green-500 inline-block" /> Above 20%</span>
+              <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-sm bg-muted/100 inline-block" /> Above 20%</span>
             </div>
           </CardContent>
         </Card>
@@ -481,7 +481,7 @@ export const ProjectInsightsTab = ({ projectId }: ProjectInsightsTabProps) => {
         </CardHeader>
         <CardContent>
           {riskFlags.length === 0 ? (
-            <div className="flex items-center gap-2 text-green-600 py-2">
+            <div className="flex items-center gap-2 text-[#E1DCC9]/70 py-2">
               <CheckCircle2 className="h-5 w-5" />
               <span className="font-medium">All clear. No pricing risks found.</span>
             </div>

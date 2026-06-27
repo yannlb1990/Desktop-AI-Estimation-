@@ -109,7 +109,7 @@ const STATUS_CONFIG: Record<
     label: "Pending Approval",
     className: "bg-amber-600/80 text-amber-100 border border-amber-500/50",
   },
-  approved: { label: "Approved", className: "bg-green-600/80 text-green-100" },
+  approved: { label: "Approved", className: "bg-[#412D15]/70 text-foreground/90" },
   rejected: { label: "Rejected", className: "bg-red-600/80 text-red-100" },
   disputed: {
     label: "Disputed",
@@ -359,7 +359,7 @@ Please respond to approve or reject this variation.`;
         <Button
           size="sm"
           onClick={openCreateDialog}
-          className="gap-1 bg-cyan-600 hover:bg-cyan-700"
+          className="gap-1 bg-[#412D15] hover:bg-[#412D15]/90"
         >
           <Plus className="w-3.5 h-3.5" />
           New Variation
@@ -368,21 +368,21 @@ Please respond to approve or reject this variation.`;
 
       {/* Summary cards */}
       <div className="grid grid-cols-3 gap-4">
-        <Card className="bg-slate-800 border-slate-700">
+        <Card className="bg-card/90 border-border/50">
           <CardContent className="pt-4 pb-4">
-            <p className="text-xs text-slate-400 mb-1">Total Variations</p>
+            <p className="text-xs text-muted-foreground mb-1">Total Variations</p>
             <p className="text-2xl font-bold text-white">{variations.length}</p>
           </CardContent>
         </Card>
-        <Card className="bg-green-900/20 border-green-700/40">
+        <Card className="bg-card/40 border-[#E1DCC9]/20">
           <CardContent className="pt-4 pb-4">
-            <p className="text-xs text-slate-400 mb-1">Approved Value</p>
-            <p className="text-2xl font-bold text-green-400">{aud(approvedValue)}</p>
+            <p className="text-xs text-muted-foreground mb-1">Approved Value</p>
+            <p className="text-2xl font-bold text-[#E1DCC9]/80">{aud(approvedValue)}</p>
           </CardContent>
         </Card>
         <Card className="bg-amber-900/20 border-amber-700/40">
           <CardContent className="pt-4 pb-4">
-            <p className="text-xs text-slate-400 mb-1">Pending Value</p>
+            <p className="text-xs text-muted-foreground mb-1">Pending Value</p>
             <p className="text-2xl font-bold text-amber-400">{aud(pendingValue)}</p>
           </CardContent>
         </Card>
@@ -390,9 +390,9 @@ Please respond to approve or reject this variation.`;
 
       {/* Empty state */}
       {variations.length === 0 && (
-        <div className="text-center py-12 border border-dashed border-slate-700 rounded-lg">
+        <div className="text-center py-12 border border-dashed border-border/50 rounded-lg">
           <ClipboardCheck className="w-10 h-10 text-slate-600 mx-auto mb-3" />
-          <p className="text-slate-400 font-medium">No variations yet</p>
+          <p className="text-muted-foreground font-medium">No variations yet</p>
           <p className="text-slate-500 text-sm mt-1">
             Click "New Variation" to create a change order.
           </p>
@@ -405,7 +405,7 @@ Please respond to approve or reject this variation.`;
         const isExpanded = expandedIds.has(v.id);
 
         return (
-          <Card key={v.id} className="bg-slate-800 border-slate-700">
+          <Card key={v.id} className="bg-card/90 border-border/50">
             <CardHeader className="pb-3">
               <div className="flex items-start justify-between gap-3">
                 <div className="flex-1 min-w-0">
@@ -421,7 +421,7 @@ Please respond to approve or reject this variation.`;
                     </span>
                   </div>
                   {v.description && (
-                    <p className="text-sm text-slate-400 mt-0.5 line-clamp-2">
+                    <p className="text-sm text-muted-foreground mt-0.5 line-clamp-2">
                       {v.description}
                     </p>
                   )}
@@ -441,7 +441,7 @@ Please respond to approve or reject this variation.`;
               {/* Items toggle */}
               <button
                 onClick={() => toggleExpand(v.id)}
-                className="flex items-center gap-1.5 text-xs text-slate-400 hover:text-slate-200 mb-3 transition-colors"
+                className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-slate-200 mb-3 transition-colors"
               >
                 {isExpanded ? (
                   <ChevronUp className="w-3.5 h-3.5" />
@@ -455,36 +455,36 @@ Please respond to approve or reject this variation.`;
                 <div className="overflow-x-auto mb-3">
                   <table className="w-full text-xs mb-2">
                     <thead>
-                      <tr className="border-b border-slate-700">
-                        <th className="text-left pb-1.5 text-slate-400 font-semibold">Description</th>
-                        <th className="text-right pb-1.5 text-slate-400 font-semibold">Qty</th>
-                        <th className="text-right pb-1.5 text-slate-400 font-semibold">Unit</th>
-                        <th className="text-right pb-1.5 text-slate-400 font-semibold">Rate</th>
-                        <th className="text-right pb-1.5 text-slate-400 font-semibold">Amount</th>
+                      <tr className="border-b border-border/50">
+                        <th className="text-left pb-1.5 text-muted-foreground font-semibold">Description</th>
+                        <th className="text-right pb-1.5 text-muted-foreground font-semibold">Qty</th>
+                        <th className="text-right pb-1.5 text-muted-foreground font-semibold">Unit</th>
+                        <th className="text-right pb-1.5 text-muted-foreground font-semibold">Rate</th>
+                        <th className="text-right pb-1.5 text-muted-foreground font-semibold">Amount</th>
                       </tr>
                     </thead>
                     <tbody>
                       {v.items.map((item) => (
-                        <tr key={item.id} className="border-b border-slate-700/40">
-                          <td className="py-1.5 text-slate-300">{item.description}</td>
-                          <td className="py-1.5 text-right text-slate-300">{item.qty}</td>
-                          <td className="py-1.5 text-right text-slate-400">{item.unit}</td>
-                          <td className="py-1.5 text-right text-slate-300">{aud(item.rate)}</td>
+                        <tr key={item.id} className="border-b border-border/50/40">
+                          <td className="py-1.5 text-foreground/60">{item.description}</td>
+                          <td className="py-1.5 text-right text-foreground/60">{item.qty}</td>
+                          <td className="py-1.5 text-right text-muted-foreground">{item.unit}</td>
+                          <td className="py-1.5 text-right text-foreground/60">{aud(item.rate)}</td>
                           <td className="py-1.5 text-right text-white font-medium">{aud(item.amount)}</td>
                         </tr>
                       ))}
                     </tbody>
                     <tfoot>
                       <tr className="border-t border-slate-600">
-                        <td colSpan={4} className="pt-1.5 text-slate-400 font-semibold">Total (ex GST)</td>
+                        <td colSpan={4} className="pt-1.5 text-muted-foreground font-semibold">Total (ex GST)</td>
                         <td className="pt-1.5 text-right text-white font-bold">{aud(v.totalAmount)}</td>
                       </tr>
                       <tr>
-                        <td colSpan={4} className="py-0.5 text-slate-400">GST (10%)</td>
-                        <td className="py-0.5 text-right text-slate-300">{aud(v.totalAmount * 0.1)}</td>
+                        <td colSpan={4} className="py-0.5 text-muted-foreground">GST (10%)</td>
+                        <td className="py-0.5 text-right text-foreground/60">{aud(v.totalAmount * 0.1)}</td>
                       </tr>
                       <tr>
-                        <td colSpan={4} className="pb-1.5 text-slate-400 font-semibold">Total (inc GST)</td>
+                        <td colSpan={4} className="pb-1.5 text-muted-foreground font-semibold">Total (inc GST)</td>
                         <td className="pb-1.5 text-right text-white font-bold">{aud(v.totalAmount * 1.1)}</td>
                       </tr>
                     </tfoot>
@@ -493,7 +493,7 @@ Please respond to approve or reject this variation.`;
               )}
 
               {v.notes && isExpanded && (
-                <p className="text-xs text-slate-400 mb-3 italic">Notes: {v.notes}</p>
+                <p className="text-xs text-muted-foreground mb-3 italic">Notes: {v.notes}</p>
               )}
 
               {/* Action buttons */}
@@ -513,7 +513,7 @@ Please respond to approve or reject this variation.`;
                       size="sm"
                       variant="ghost"
                       onClick={() => openEditDialog(v)}
-                      className="h-7 text-xs gap-1 text-slate-400 hover:text-white"
+                      className="h-7 text-xs gap-1 text-muted-foreground hover:text-foreground"
                     >
                       <Edit2 className="w-3 h-3" />
                       Edit
@@ -540,7 +540,7 @@ Please respond to approve or reject this variation.`;
                           approvedAt: new Date().toISOString(),
                         })
                       }
-                      className="h-7 text-xs gap-1 border-green-600/50 text-green-300 hover:bg-green-900/30"
+                      className="h-7 text-xs gap-1 border-[#E1DCC9]/20 text-[#E1DCC9]/70 hover:bg-card/80/30"
                     >
                       <CheckCircle className="w-3 h-3" />
                       Mark Approved
@@ -572,7 +572,7 @@ Please respond to approve or reject this variation.`;
 
                 {v.status === "approved" && (
                   <>
-                    <span className="inline-flex items-center gap-1 text-xs text-green-400 font-medium">
+                    <span className="inline-flex items-center gap-1 text-xs text-[#E1DCC9]/80 font-medium">
                       <CheckCircle className="w-3.5 h-3.5" />
                       Approved{v.approvedAt ? ` ${format(parseISO(v.approvedAt), "dd MMM yyyy")}` : ""}
                     </span>
@@ -580,7 +580,7 @@ Please respond to approve or reject this variation.`;
                       size="sm"
                       variant="ghost"
                       onClick={() => updateStatus(v.id, "draft")}
-                      className="h-7 text-xs gap-1 text-slate-400 hover:text-white ml-2"
+                      className="h-7 text-xs gap-1 text-muted-foreground hover:text-foreground ml-2"
                     >
                       <RotateCcw className="w-3 h-3" />
                       Revert to Draft
@@ -598,7 +598,7 @@ Please respond to approve or reject this variation.`;
                       size="sm"
                       variant="ghost"
                       onClick={() => updateStatus(v.id, "draft")}
-                      className="h-7 text-xs gap-1 text-slate-400 hover:text-white ml-2"
+                      className="h-7 text-xs gap-1 text-muted-foreground hover:text-foreground ml-2"
                     >
                       <RotateCcw className="w-3 h-3" />
                       Revert to Draft
@@ -620,7 +620,7 @@ Please respond to approve or reject this variation.`;
                           approvedAt: new Date().toISOString(),
                         })
                       }
-                      className="h-7 text-xs gap-1 border-green-600/50 text-green-300 hover:bg-green-900/30 ml-2"
+                      className="h-7 text-xs gap-1 border-[#E1DCC9]/20 text-[#E1DCC9]/70 hover:bg-card/80/30 ml-2"
                     >
                       <CheckCircle className="w-3 h-3" />
                       Mark Approved
@@ -648,7 +648,7 @@ Please respond to approve or reject this variation.`;
 
       {/* Create / Edit Dialog */}
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-        <DialogContent className="bg-slate-900 border-slate-700 text-white max-w-2xl max-h-[90vh] overflow-y-auto">
+        <DialogContent className="bg-slate-900 border-border/50 text-white max-w-2xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="text-white">
               {editingVariation ? `Edit ${padVO(editingVariation.number)}` : "New Variation"}
@@ -657,25 +657,25 @@ Please respond to approve or reject this variation.`;
 
           <div className="flex flex-col gap-4">
             <div>
-              <Label className="text-xs text-slate-400 mb-1 block">Title *</Label>
+              <Label className="text-xs text-muted-foreground mb-1 block">Title *</Label>
               <Input
                 value={formTitle}
                 onChange={(e) => setFormTitle(e.target.value)}
                 placeholder="e.g. Additional retaining wall"
-                className="bg-slate-800 border-slate-600 text-white"
+                className="bg-card/90 border-slate-600 text-white"
               />
             </div>
 
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <Label className="text-xs text-slate-400 mb-1 block">Reason</Label>
+                <Label className="text-xs text-muted-foreground mb-1 block">Reason</Label>
                 <Select value={formReason} onValueChange={setFormReason}>
-                  <SelectTrigger className="bg-slate-800 border-slate-600 text-white">
+                  <SelectTrigger className="bg-card/90 border-slate-600 text-white">
                     <SelectValue />
                   </SelectTrigger>
-                  <SelectContent className="bg-slate-800 border-slate-600">
+                  <SelectContent className="bg-card/90 border-slate-600">
                     {REASONS.map((r) => (
-                      <SelectItem key={r} value={r} className="text-white hover:bg-slate-700">
+                      <SelectItem key={r} value={r} className="text-white hover:bg-muted/60">
                         {r}
                       </SelectItem>
                     ))}
@@ -685,25 +685,25 @@ Please respond to approve or reject this variation.`;
             </div>
 
             <div>
-              <Label className="text-xs text-slate-400 mb-1 block">Description</Label>
+              <Label className="text-xs text-muted-foreground mb-1 block">Description</Label>
               <Textarea
                 value={formDescription}
                 onChange={(e) => setFormDescription(e.target.value)}
                 placeholder="Describe the scope of this variation…"
                 rows={3}
-                className="bg-slate-800 border-slate-600 text-white resize-none"
+                className="bg-card/90 border-slate-600 text-white resize-none"
               />
             </div>
 
             {/* Line items */}
             <div>
               <div className="flex items-center justify-between mb-2">
-                <Label className="text-xs text-slate-400">Line Items</Label>
+                <Label className="text-xs text-muted-foreground">Line Items</Label>
                 <Button
                   size="sm"
                   variant="ghost"
                   onClick={addItemRow}
-                  className="h-6 text-xs gap-1 text-cyan-400 hover:text-cyan-300"
+                  className="h-6 text-xs gap-1 text-[#E1DCC9] hover:text-[#E1DCC9]/80"
                 >
                   <Plus className="w-3 h-3" />
                   Add Row
@@ -712,24 +712,24 @@ Please respond to approve or reject this variation.`;
               <div className="overflow-x-auto">
                 <table className="w-full text-xs">
                   <thead>
-                    <tr className="border-b border-slate-700">
-                      <th className="text-left pb-1.5 text-slate-400 font-semibold min-w-[150px]">Description</th>
-                      <th className="text-right pb-1.5 text-slate-400 font-semibold w-16">Qty</th>
-                      <th className="text-right pb-1.5 text-slate-400 font-semibold w-16">Unit</th>
-                      <th className="text-right pb-1.5 text-slate-400 font-semibold w-20">Rate</th>
-                      <th className="text-right pb-1.5 text-slate-400 font-semibold w-20">Amount</th>
+                    <tr className="border-b border-border/50">
+                      <th className="text-left pb-1.5 text-muted-foreground font-semibold min-w-[150px]">Description</th>
+                      <th className="text-right pb-1.5 text-muted-foreground font-semibold w-16">Qty</th>
+                      <th className="text-right pb-1.5 text-muted-foreground font-semibold w-16">Unit</th>
+                      <th className="text-right pb-1.5 text-muted-foreground font-semibold w-20">Rate</th>
+                      <th className="text-right pb-1.5 text-muted-foreground font-semibold w-20">Amount</th>
                       <th className="w-8" />
                     </tr>
                   </thead>
                   <tbody>
                     {formItems.map((item, index) => (
-                      <tr key={item.id} className="border-b border-slate-700/40">
+                      <tr key={item.id} className="border-b border-border/50/40">
                         <td className="py-1">
                           <Input
                             value={item.description}
                             onChange={(e) => updateItem(index, "description", e.target.value)}
                             placeholder="Description…"
-                            className="h-7 text-xs bg-slate-700 border-slate-600 text-white"
+                            className="h-7 text-xs bg-muted/60 border-slate-600 text-white"
                           />
                         </td>
                         <td className="py-1 pl-1">
@@ -739,7 +739,7 @@ Please respond to approve or reject this variation.`;
                             step={0.01}
                             value={item.qty}
                             onChange={(e) => updateItem(index, "qty", parseFloat(e.target.value) || 0)}
-                            className="h-7 text-xs bg-slate-700 border-slate-600 text-white text-right"
+                            className="h-7 text-xs bg-muted/60 border-slate-600 text-white text-right"
                           />
                         </td>
                         <td className="py-1 pl-1">
@@ -747,12 +747,12 @@ Please respond to approve or reject this variation.`;
                             value={item.unit}
                             onValueChange={(v) => updateItem(index, "unit", v)}
                           >
-                            <SelectTrigger className="h-7 text-xs bg-slate-700 border-slate-600 text-white">
+                            <SelectTrigger className="h-7 text-xs bg-muted/60 border-slate-600 text-white">
                               <SelectValue />
                             </SelectTrigger>
-                            <SelectContent className="bg-slate-800 border-slate-600">
+                            <SelectContent className="bg-card/90 border-slate-600">
                               {UNITS.map((u) => (
-                                <SelectItem key={u} value={u} className="text-white hover:bg-slate-700 text-xs">
+                                <SelectItem key={u} value={u} className="text-white hover:bg-muted/60 text-xs">
                                   {u}
                                 </SelectItem>
                               ))}
@@ -766,10 +766,10 @@ Please respond to approve or reject this variation.`;
                             step={0.01}
                             value={item.rate}
                             onChange={(e) => updateItem(index, "rate", parseFloat(e.target.value) || 0)}
-                            className="h-7 text-xs bg-slate-700 border-slate-600 text-white text-right"
+                            className="h-7 text-xs bg-muted/60 border-slate-600 text-white text-right"
                           />
                         </td>
-                        <td className="py-1 pl-1 text-right text-slate-300 font-medium whitespace-nowrap">
+                        <td className="py-1 pl-1 text-right text-foreground/60 font-medium whitespace-nowrap">
                           {aud(item.qty * item.rate)}
                         </td>
                         <td className="py-1 pl-1">
@@ -787,7 +787,7 @@ Please respond to approve or reject this variation.`;
                   </tbody>
                   <tfoot>
                     <tr className="border-t border-slate-600">
-                      <td colSpan={4} className="pt-2 text-slate-400 font-semibold text-right pr-2">
+                      <td colSpan={4} className="pt-2 text-muted-foreground font-semibold text-right pr-2">
                         Total (ex GST)
                       </td>
                       <td className="pt-2 text-right text-white font-bold whitespace-nowrap">
@@ -796,14 +796,14 @@ Please respond to approve or reject this variation.`;
                       <td />
                     </tr>
                     <tr>
-                      <td colSpan={4} className="py-0.5 text-slate-400 text-right pr-2">GST (10%)</td>
-                      <td className="py-0.5 text-right text-slate-300 whitespace-nowrap">
+                      <td colSpan={4} className="py-0.5 text-muted-foreground text-right pr-2">GST (10%)</td>
+                      <td className="py-0.5 text-right text-foreground/60 whitespace-nowrap">
                         {aud(totalFromItems(formItems) * 0.1)}
                       </td>
                       <td />
                     </tr>
                     <tr>
-                      <td colSpan={4} className="pb-2 text-slate-400 font-semibold text-right pr-2">
+                      <td colSpan={4} className="pb-2 text-muted-foreground font-semibold text-right pr-2">
                         Total (inc GST)
                       </td>
                       <td className="pb-2 text-right text-white font-bold whitespace-nowrap">
@@ -817,13 +817,13 @@ Please respond to approve or reject this variation.`;
             </div>
 
             <div>
-              <Label className="text-xs text-slate-400 mb-1 block">Notes</Label>
+              <Label className="text-xs text-muted-foreground mb-1 block">Notes</Label>
               <Textarea
                 value={formNotes}
                 onChange={(e) => setFormNotes(e.target.value)}
                 placeholder="Internal notes…"
                 rows={2}
-                className="bg-slate-800 border-slate-600 text-white resize-none"
+                className="bg-card/90 border-slate-600 text-white resize-none"
               />
             </div>
           </div>
@@ -832,11 +832,11 @@ Please respond to approve or reject this variation.`;
             <Button
               variant="ghost"
               onClick={() => setDialogOpen(false)}
-              className="text-slate-400 hover:text-white"
+              className="text-muted-foreground hover:text-foreground"
             >
               Cancel
             </Button>
-            <Button onClick={handleSaveDialog} className="bg-cyan-600 hover:bg-cyan-700">
+            <Button onClick={handleSaveDialog} className="bg-[#412D15] hover:bg-[#412D15]/90">
               {editingVariation ? "Update" : "Save as Draft"}
             </Button>
           </DialogFooter>

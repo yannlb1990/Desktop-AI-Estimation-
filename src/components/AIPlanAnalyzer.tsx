@@ -169,7 +169,7 @@ const CONSTRUCTION_TYPE_LABELS: Record<string, string> = {
 };
 
 const CONFIDENCE_COLORS = {
-  high: 'bg-green-500',
+  high: 'bg-muted/100',
   medium: 'bg-yellow-500',
   low: 'bg-red-500',
 };
@@ -652,7 +652,7 @@ export function AIPlanAnalyzer({
         className={`
           ${!selectedItems.has(item.id) ? 'opacity-50 bg-gray-50 dark:bg-gray-900' : ''}
           ${item.isEdited ? 'bg-yellow-50 dark:bg-yellow-950/30' : ''}
-          ${isEditing ? 'bg-blue-50 dark:bg-blue-950/30 ring-2 ring-blue-500' : ''}
+          ${isEditing ? 'bg-muted/10 dark:bg-background/70 ring-2 ring-blue-500' : ''}
           hover:bg-muted/50
         `}
       >
@@ -854,7 +854,7 @@ export function AIPlanAnalyzer({
             {/* Page Link */}
             {item.primarySource && (
               <button
-                className="text-[10px] text-blue-600 hover:text-blue-800 hover:underline"
+                className="text-[10px] text-foreground/70 hover:text-foreground/90 hover:underline"
                 onClick={() => {
                   navigateViewer(item.primarySource!.pageNumber);
                   setHighlightedItemId(item.id);
@@ -868,7 +868,7 @@ export function AIPlanAnalyzer({
             <Tooltip>
               <TooltipTrigger asChild>
                 <span className={`text-[10px] font-semibold cursor-help tabular-nums ${
-                  item.confidence >= 0.8 ? 'text-green-600' :
+                  item.confidence >= 0.8 ? 'text-[#E1DCC9]/70' :
                   item.confidence >= 0.5 ? 'text-amber-500' : 'text-red-500'
                 }`}>
                   {Math.round(item.confidence * 100)}%
@@ -896,7 +896,7 @@ export function AIPlanAnalyzer({
                 <Button
                   variant="ghost"
                   size="sm"
-                  className="h-7 w-7 p-0 text-green-600 hover:text-green-700 hover:bg-green-100"
+                  className="h-7 w-7 p-0 text-[#E1DCC9]/70 hover:text-[#E1DCC9]/60 hover:bg-muted/20"
                   onClick={saveRowEdit}
                   title="Save changes"
                 >
@@ -917,7 +917,7 @@ export function AIPlanAnalyzer({
                 <Button
                   variant="ghost"
                   size="sm"
-                  className="h-7 w-7 p-0 text-blue-600 hover:text-blue-700 hover:bg-blue-100"
+                  className="h-7 w-7 p-0 text-foreground/70 hover:text-foreground/80 hover:bg-muted/20"
                   onClick={() => startEditingRow(item.id)}
                   title="Edit item"
                 >
@@ -941,7 +941,7 @@ export function AIPlanAnalyzer({
                       className={`h-7 w-7 p-0 ${
                         item.materialLookup && !item.materialLookup.found
                           ? 'text-amber-500 hover:text-amber-700 hover:bg-amber-100'
-                          : 'text-purple-500 hover:text-purple-700 hover:bg-purple-100'
+                          : 'text-muted-foreground hover:text-muted-foreground hover:bg-muted/15'
                       }`}
                       title="View calculation breakdown"
                     >
@@ -1176,18 +1176,18 @@ export function AIPlanAnalyzer({
 
       {/* Commercial Detection Warning */}
       {analysis.commercialDetection?.isCommercial && (
-        <Card className="p-4 border-blue-500 bg-blue-50 dark:bg-blue-950">
+        <Card className="p-4 border-foreground/20 bg-muted/10 dark:bg-background">
           <div className="flex items-start gap-3">
-            <Building2 className="h-5 w-5 text-blue-600 mt-0.5 shrink-0" />
+            <Building2 className="h-5 w-5 text-foreground/70 mt-0.5 shrink-0" />
             <div className="space-y-1">
-              <p className="font-medium text-blue-800 dark:text-blue-200">
+              <p className="font-medium text-foreground/90 dark:text-foreground/80">
                 Commercial Project Detected — Auto-Estimation Skipped
               </p>
-              <p className="text-sm text-blue-700 dark:text-blue-300">
+              <p className="text-sm text-foreground/80 dark:text-foreground/70">
                 {analysis.commercialDetection.message}
               </p>
               {analysis.commercialDetection.detectedKeywords.length > 0 && (
-                <p className="text-xs text-blue-600 dark:text-blue-400">
+                <p className="text-xs text-foreground/70 dark:text-foreground/60">
                   Detected indicators:{' '}
                   <span className="font-semibold">
                     {analysis.commercialDetection.detectedKeywords.slice(0, 8).join(', ')}
@@ -1195,7 +1195,7 @@ export function AIPlanAnalyzer({
                   </span>
                 </p>
               )}
-              <p className="text-sm text-blue-700 dark:text-blue-300">
+              <p className="text-sm text-foreground/80 dark:text-foreground/70">
                 Residential rate schedules do not apply to commercial construction. Please use a commercial estimating platform or engage a quantity surveyor for an accurate assessment.
               </p>
             </div>
@@ -1274,8 +1274,8 @@ export function AIPlanAnalyzer({
             {/* Doors & Windows */}
             <Card className="p-4">
               <div className="flex items-center gap-3">
-                <div className="p-2 rounded-lg bg-blue-500/10">
-                  <DoorOpen className="h-5 w-5 text-blue-500" />
+                <div className="p-2 rounded-lg bg-muted/100/10">
+                  <DoorOpen className="h-5 w-5 text-foreground/70" />
                 </div>
                 <div>
                   <p className="text-sm text-muted-foreground">Doors / Windows</p>
@@ -1546,12 +1546,12 @@ export function AIPlanAnalyzer({
             </div>
 
             {/* Calculation Methodology */}
-            <Card className="p-4 mt-6 bg-blue-50 dark:bg-blue-950 border-blue-200">
+            <Card className="p-4 mt-6 bg-muted/10 dark:bg-background border-border/40">
               <h4 className="font-medium mb-3 flex items-center gap-2">
-                <Calculator className="h-4 w-4 text-blue-600" />
+                <Calculator className="h-4 w-4 text-foreground/70" />
                 How Estimates Are Calculated
               </h4>
-              <div className="text-sm space-y-2 text-blue-800 dark:text-blue-200">
+              <div className="text-sm space-y-2 text-foreground/90 dark:text-foreground/80">
                 <p><strong>Material costs:</strong> Based on Rawlinsons Australian Construction Handbook 2024 rates</p>
                 <p><strong>Labour costs:</strong> Hourly rate x productivity rate (hours per unit)</p>
                 <p><strong>Quantities:</strong> Inferred = typical residential assumptions when not detected in PDF</p>
@@ -1778,7 +1778,7 @@ export function AIPlanAnalyzer({
                                           <Badge
                                             key={i}
                                             variant="outline"
-                                            className="text-[10px] py-0 font-mono text-blue-600 cursor-help"
+                                            className="text-[10px] py-0 font-mono text-foreground/70 cursor-help"
                                             title={sched ? `${sched.description}${sched.size ? ' · ' + sched.size : ''}${sched.material ? ' · ' + sched.material : ''}` : ref}
                                           >
                                             {ref}
@@ -1803,7 +1803,7 @@ export function AIPlanAnalyzer({
                                     <Badge key={i} variant="secondary" className="text-[10px] py-0 font-mono">{f}</Badge>
                                   ))}
                                   {insFound.slice(0, 3).map((r, i) => (
-                                    <Badge key={`r-${i}`} variant="secondary" className="text-[10px] py-0 font-mono text-green-700">{r}</Badge>
+                                    <Badge key={`r-${i}`} variant="secondary" className="text-[10px] py-0 font-mono text-[#E1DCC9]/60">{r}</Badge>
                                   ))}
                                 </div>
                               </div>
@@ -1820,7 +1820,7 @@ export function AIPlanAnalyzer({
                                     <Badge
                                       key={i}
                                       variant="secondary"
-                                      className={`text-[10px] py-0 ${tag === 'EXT' ? 'text-amber-700' : tag === 'FLR' ? 'text-purple-700' : tag === 'WIN' ? 'text-blue-700' : tag === 'SITE' ? 'text-orange-700' : ''}`}
+                                      className={`text-[10px] py-0 ${tag === 'EXT' ? 'text-amber-700' : tag === 'FLR' ? 'text-muted-foreground' : tag === 'WIN' ? 'text-foreground/80' : tag === 'SITE' ? 'text-orange-700' : ''}`}
                                     >
                                       {label}
                                     </Badge>
@@ -1857,7 +1857,7 @@ export function AIPlanAnalyzer({
                                       <span className="font-medium text-foreground/70">{m.category}:</span>{' '}
                                       {m.selection}
                                       {m.colour && <span className="ml-1 italic">({m.colour})</span>}
-                                      {m.manufacturer && <span className="ml-1 text-blue-600">[{m.manufacturer}]</span>}
+                                      {m.manufacturer && <span className="ml-1 text-foreground/70">[{m.manufacturer}]</span>}
                                     </p>
                                   ))}
                                 </div>
@@ -2137,21 +2137,21 @@ export function AIPlanAnalyzer({
                       {items.map((item, i) => (
                         <button
                           key={i}
-                          className="w-full flex items-start gap-2 text-left rounded px-1.5 py-1 hover:bg-blue-50 hover:border-blue-200 border border-transparent transition-colors group cursor-pointer"
+                          className="w-full flex items-start gap-2 text-left rounded px-1.5 py-1 hover:bg-muted/10 hover:border-border/40 border border-transparent transition-colors group cursor-pointer"
                           onClick={() => { navigateViewer(item.pageIndex + 1); }}
                           title={`View on page ${item.pageIndex + 1}`}
                         >
-                          <div className="w-2 h-2 rounded-full bg-primary/60 mt-1.5 shrink-0 group-hover:bg-blue-500 transition-colors" />
+                          <div className="w-2 h-2 rounded-full bg-primary/60 mt-1.5 shrink-0 group-hover:bg-muted/100 transition-colors" />
                           <div className="text-sm leading-snug min-w-0 flex-1">
                             <span className="text-foreground">{item.selection}</span>
                             {item.colour && (
                               <span className="ml-1 text-xs text-muted-foreground italic">({item.colour})</span>
                             )}
                             {item.manufacturer && (
-                              <span className="ml-1 text-xs text-blue-600 font-medium">{item.manufacturer}</span>
+                              <span className="ml-1 text-xs text-foreground/70 font-medium">{item.manufacturer}</span>
                             )}
                           </div>
-                          <span className="shrink-0 text-[10px] text-blue-400 font-medium group-hover:text-blue-600 transition-colors ml-1 mt-0.5 whitespace-nowrap">
+                          <span className="shrink-0 text-[10px] text-foreground/60 font-medium group-hover:text-foreground/70 transition-colors ml-1 mt-0.5 whitespace-nowrap">
                             p.{item.pageIndex + 1}
                           </span>
                         </button>
@@ -2181,7 +2181,7 @@ export function AIPlanAnalyzer({
               <div className="flex items-center gap-2">
                 <Button
                   onClick={() => setAddItemDialogOpen(true)}
-                  className="bg-green-600 hover:bg-green-700"
+                  className="bg-[#412D15]/70 hover:bg-[#412D15]/80"
                 >
                   <Plus className="h-4 w-4 mr-2" />
                   Add Line Item
@@ -2251,8 +2251,8 @@ export function AIPlanAnalyzer({
           </Card>
 
           {/* Overheads and Margin Controls */}
-          <Card className="p-4 border-blue-200 bg-blue-50/50 dark:border-blue-800 dark:bg-blue-950/30">
-            <h4 className="font-semibold mb-3 text-blue-900 dark:text-blue-100">Overheads & Margin</h4>
+          <Card className="p-4 border-border/40 bg-muted/10 dark:border-border/50 dark:bg-background/70">
+            <h4 className="font-semibold mb-3 text-foreground dark:text-foreground/90">Overheads & Margin</h4>
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
               <div>
                 <label className="text-xs text-muted-foreground">Site Overheads %</label>
@@ -2359,7 +2359,7 @@ export function AIPlanAnalyzer({
                           )}
                         </div>
                         <div className="flex items-center gap-4">
-                          <span className="font-mono text-sm font-semibold text-green-700 dark:text-green-400">
+                          <span className="font-mono text-sm font-semibold text-[#E1DCC9]/60 dark:text-[#E1DCC9]/80">
                             ${group.subtotal.toLocaleString()}
                           </span>
                         </div>
@@ -2454,7 +2454,7 @@ export function AIPlanAnalyzer({
                   <span className="text-muted-foreground">
                     Cost per m² ({analysis.summary.totalFloorArea.toFixed(0)}m² floor area)
                   </span>
-                  <span className="font-mono font-bold text-blue-600">
+                  <span className="font-mono font-bold text-foreground/70">
                     ${Math.round(totals.total / analysis.summary.totalFloorArea).toLocaleString()}/m²
                   </span>
                 </div>
@@ -2580,7 +2580,7 @@ export function AIPlanAnalyzer({
             <Button
               onClick={addNewItem}
               disabled={!newItem.description || newItem.quantity <= 0}
-              className="bg-green-600 hover:bg-green-700"
+              className="bg-[#412D15]/70 hover:bg-[#412D15]/80"
             >
               <Plus className="h-4 w-4 mr-2" />
               Add Item
@@ -2594,7 +2594,7 @@ export function AIPlanAnalyzer({
         <DialogContent className="max-w-md">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
-              <Save className="h-5 w-5 text-blue-600" />
+              <Save className="h-5 w-5 text-foreground/70" />
               Save Project
             </DialogTitle>
             <DialogDescription>
@@ -2627,7 +2627,7 @@ export function AIPlanAnalyzer({
             <Button variant="outline" onClick={() => setShowSaveDialog(false)}>
               Cancel
             </Button>
-            <Button onClick={saveProject} className="bg-blue-600 hover:bg-blue-700">
+            <Button onClick={saveProject} className="bg-muted/70 hover:bg-muted/80">
               <Save className="h-4 w-4 mr-2" />
               Save Project
             </Button>
@@ -2640,7 +2640,7 @@ export function AIPlanAnalyzer({
         <DialogContent className="max-w-lg">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
-              <FolderOpen className="h-5 w-5 text-green-600" />
+              <FolderOpen className="h-5 w-5 text-[#E1DCC9]/70" />
               Load Project
             </DialogTitle>
             <DialogDescription>

@@ -80,7 +80,7 @@ const CTA = () => {
             whileHover={{ scale: 1.04 }}
             whileTap={{ scale: 0.97 }}
             onClick={() => window.location.href = isSignedIn() ? "/dashboard" : "/auth?plan=pro&mode=signup"}
-            className="inline-flex items-center px-9 py-5 rounded-full bg-cyan-400 text-black font-bold text-base hover:bg-[#d4cfb5] transition-colors shadow-none hover:shadow-none"
+            className="inline-flex items-center px-9 py-5 rounded-full bg-primary text-black font-bold text-base hover:bg-[#d4cfb5] transition-colors shadow-none hover:shadow-none"
           >
             Start free for 14 days
           </motion.button>

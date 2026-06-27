@@ -80,7 +80,7 @@ export function MaterialPickerDialog({ open, onOpenChange, onSelect }: MaterialP
                           <span className="text-xs text-muted-foreground flex items-center gap-0.5">
                             {m.supplierType === 'overseas'
                               ? <Globe className="h-2.5 w-2.5 text-amber-500" />
-                              : <MapPin className="h-2.5 w-2.5 text-green-500" />}
+                              : <MapPin className="h-2.5 w-2.5 text-[#E1DCC9]/80" />}
                             {m.supplierName}
                           </span>
                         )}

@@ -242,7 +242,7 @@ export const SubcontractorComparison = ({ projectId, onUsePrice }: Subcontractor
                   </div>
                   <div className="flex items-center gap-3 text-sm">
                     <span className="text-muted-foreground">Lowest:</span>
-                    <span className="font-mono font-bold text-green-500">{fmtAUD(lowest.amount)}</span>
+                    <span className="font-mono font-bold text-[#E1DCC9]/80">{fmtAUD(lowest.amount)}</span>
                     <span className="text-muted-foreground text-xs">— {lowest.company}</span>
                   </div>
                 </button>
@@ -262,10 +262,10 @@ export const SubcontractorComparison = ({ projectId, onUsePrice }: Subcontractor
                       </TableHeader>
                       <TableBody>
                         {tradeQuotes.map((q, i) => (
-                          <TableRow key={q.id} className={i === 0 ? "bg-green-500/5" : ""}>
+                          <TableRow key={q.id} className={i === 0 ? "bg-muted/100/5" : ""}>
                             <TableCell>
                               <div className="flex items-center gap-2">
-                                {i === 0 && <CheckCircle2 className="h-3.5 w-3.5 text-green-500 shrink-0" />}
+                                {i === 0 && <CheckCircle2 className="h-3.5 w-3.5 text-[#E1DCC9]/80 shrink-0" />}
                                 <span className="font-medium text-sm">{q.company}</span>
                               </div>
                             </TableCell>
@@ -279,7 +279,7 @@ export const SubcontractorComparison = ({ projectId, onUsePrice }: Subcontractor
                               )}
                             </TableCell>
                             <TableCell className="text-right">
-                              <span className={`font-mono font-bold text-sm ${i === 0 ? "text-green-500" : ""}`}>
+                              <span className={`font-mono font-bold text-sm ${i === 0 ? "text-[#E1DCC9]/80" : ""}`}>
                                 {fmtAUD(q.amount)}
                               </span>
                               {i > 0 && (
@@ -297,14 +297,14 @@ export const SubcontractorComparison = ({ projectId, onUsePrice }: Subcontractor
                             <TableCell>
                               <div className="flex items-center gap-1">
                                 {q.usedInEstimate ? (
-                                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-medium bg-green-500/15 text-green-400 border border-green-500/30">
+                                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-medium bg-muted/100/15 text-[#E1DCC9]/80 border border-[#E1DCC9]/20">
                                     <CheckCircle2 className="h-3 w-3" /> In estimate
                                   </span>
                                 ) : (
                                   <Button
                                     size="sm"
                                     variant={i === 0 ? "default" : "outline"}
-                                    className={`h-7 text-xs ${i === 0 ? "bg-green-600 hover:bg-green-700 text-white" : ""}`}
+                                    className={`h-7 text-xs ${i === 0 ? "bg-[#412D15]/70 hover:bg-[#412D15]/80 text-white" : ""}`}
                                     onClick={() => handleUsePrice(q)}
                                   >
                                     Use this

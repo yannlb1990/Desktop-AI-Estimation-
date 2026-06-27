@@ -305,7 +305,7 @@ const ProjectDetail = () => {
                 <span className="hidden sm:flex items-center gap-1 text-xs text-muted-foreground ml-2">
                   {syncState === 'saving'
                     ? <><Loader2 className="h-3 w-3 animate-spin" />Saving…</>
-                    : <><Check className="h-3 w-3 text-green-500" />Saved</>
+                    : <><Check className="h-3 w-3 text-[#E1DCC9]/80" />Saved</>
                   }
                 </span>
               )}
@@ -376,9 +376,9 @@ const ProjectDetail = () => {
                 <TourTip text="Track the quote status: Draft (in progress), Sent (submitted to client), Won or Lost. This feeds your win rate on the dashboard." position="bottom">
                   <Select value={project.quoteStatus || "draft"} onValueChange={handleQuoteStatusChange}>
                     <SelectTrigger className={`h-7 w-auto text-xs px-2.5 border rounded-full ${
-                      project.quoteStatus === "won" ? "border-green-400/50 bg-green-500/10 text-green-400" :
+                      project.quoteStatus === "won" ? "border-[#E1DCC9]/20 bg-muted/100/10 text-[#E1DCC9]/80" :
                       project.quoteStatus === "lost" ? "border-red-400/50 bg-red-500/10 text-red-400" :
-                      project.quoteStatus === "sent" ? "border-purple-400/50 bg-purple-500/10 text-purple-400" :
+                      project.quoteStatus === "sent" ? "border-border/35 bg-muted/20 text-muted-foreground" :
                       "border-border bg-muted text-muted-foreground"
                     }`}>
                       <SelectValue />

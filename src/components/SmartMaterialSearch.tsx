@@ -144,7 +144,7 @@ export const SmartMaterialSearch = () => {
                         <span className="text-xs text-muted-foreground">•</span>
                         <span className="font-mono text-lg font-bold text-accent">{result.priceRange}</span>
                         <span className={`text-xs px-2 py-0.5 rounded-full ${
-                          result.benchmark === 'low' ? 'bg-green-500/20 text-green-700 dark:text-green-400' :
+                          result.benchmark === 'low' ? 'bg-muted/100/20 text-[#E1DCC9]/60 dark:text-[#E1DCC9]/80' :
                           result.benchmark === 'high' ? 'bg-red-500/20 text-red-700 dark:text-red-400' :
                           'bg-yellow-500/20 text-yellow-700 dark:text-yellow-400'
                         }`}>

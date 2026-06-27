@@ -39,12 +39,12 @@ export const NCCSearchBar = () => {
 
   const getCategoryColor = (category: string) => {
     const colors: Record<string, string> = {
-      'Structure': 'bg-blue-100 text-blue-800',
+      'Structure': 'bg-muted/20 text-foreground/90',
       'Fire Safety': 'bg-red-100 text-red-800',
-      'Access & Egress': 'bg-green-100 text-green-800',
-      'Health & Amenity': 'bg-purple-100 text-purple-800',
+      'Access & Egress': 'bg-muted/20 text-foreground/80',
+      'Health & Amenity': 'bg-muted/15 text-muted-foreground',
       'Energy Efficiency': 'bg-amber-100 text-amber-800',
-      'Plumbing': 'bg-cyan-100 text-cyan-800',
+      'Plumbing': 'bg-muted/15 text-[#E1DCC9]/90',
       'Electrical': 'bg-yellow-100 text-yellow-800',
       'Governing Requirements': 'bg-gray-100 text-gray-800',
     };
@@ -155,14 +155,14 @@ export const NCCSearchBar = () => {
 
                   {/* Estimation Details - Key info for estimators */}
                   {ref.estimationNotes && (
-                    <div className="bg-blue-50 dark:bg-blue-950 p-3 rounded-md">
+                    <div className="bg-muted/10 dark:bg-background p-3 rounded-md">
                       <div className="flex items-start gap-2">
-                        <Info className="h-4 w-4 text-blue-600 mt-0.5 shrink-0" />
+                        <Info className="h-4 w-4 text-foreground/70 mt-0.5 shrink-0" />
                         <div>
-                          <h5 className="font-semibold text-sm text-blue-800 dark:text-blue-200 mb-1">
+                          <h5 className="font-semibold text-sm text-foreground/90 dark:text-foreground/80 mb-1">
                             Estimation Notes
                           </h5>
-                          <p className="text-sm text-blue-700 dark:text-blue-300 whitespace-pre-line">
+                          <p className="text-sm text-foreground/80 dark:text-foreground/70 whitespace-pre-line">
                             {ref.estimationNotes}
                           </p>
                         </div>

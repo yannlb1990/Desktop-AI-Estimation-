@@ -28,7 +28,7 @@ type QuoteStatus = 'draft' | 'sent' | 'won' | 'lost';
 const QUOTE_STATUS_CONFIG: Record<QuoteStatus, { label: string; color: string; bg: string; icon: React.ReactNode }> = {
   draft:  { label: 'Draft',  color: 'text-muted-foreground', bg: 'bg-muted/60 border-border',         icon: <FileText className="h-3 w-3" /> },
   sent:   { label: 'Sent',   color: 'text-orange-400',       bg: 'bg-orange-400/10 border-orange-400/30', icon: <Send className="h-3 w-3" /> },
-  won:    { label: 'Won',    color: 'text-green-400',        bg: 'bg-green-400/10 border-green-400/30',  icon: <Trophy className="h-3 w-3" /> },
+  won:    { label: 'Won',    color: 'text-[#E1DCC9]/80',        bg: 'bg-[#E1DCC9]/8 border-[#E1DCC9]/20',  icon: <Trophy className="h-3 w-3" /> },
   lost:   { label: 'Lost',   color: 'text-red-400',          bg: 'bg-red-400/10 border-red-400/30',      icon: <XCircle className="h-3 w-3" /> },
 };
 
@@ -64,7 +64,7 @@ const fmtDate = (d: string | undefined) => {
 const STAGE_CONFIG: Record<Stage, { color: string; dot: string; bg: string }> = {
   'Takeoff':      { color: 'text-amber-400',  dot: 'bg-amber-400',  bg: 'bg-amber-400/10 border-amber-400/30' },
   'Estimating':   { color: 'text-amber-400',  dot: 'bg-amber-400',  bg: 'bg-amber-400/10 border-amber-400/30' },
-  'Tender Ready': { color: 'text-green-400',  dot: 'bg-green-400',  bg: 'bg-green-400/10 border-green-400/30' },
+  'Tender Ready': { color: 'text-[#E1DCC9]/80',  dot: 'bg-[#E1DCC9]/15',  bg: 'bg-[#E1DCC9]/8 border-[#E1DCC9]/20' },
   'Sent':         { color: 'text-orange-400', dot: 'bg-orange-400', bg: 'bg-orange-400/10 border-orange-400/30' },
 };
 
@@ -381,9 +381,9 @@ const Dashboard = () => {
               ))
             : [
                 { label: 'Active Projects', value: String(projects.length),               sub: 'all projects',                                                                                icon: <FileText className="h-4 w-4" />,   accent: 'text-primary' },
-                { label: 'Pipeline Value',  value: fmtCurrency(pipelineValue),            sub: 'across all estimates',                                                                        icon: <DollarSign className="h-4 w-4" />, accent: 'text-green-400' },
+                { label: 'Pipeline Value',  value: fmtCurrency(pipelineValue),            sub: 'across all estimates',                                                                        icon: <DollarSign className="h-4 w-4" />, accent: 'text-[#E1DCC9]/80' },
                 { label: 'Target Margin',   value: targetMargin ? `${targetMargin}%` : '—', sub: 'set in Settings',                                                                          icon: <TrendingUp className="h-4 w-4" />, accent: 'text-amber-400' },
-                { label: 'Win Rate',        value: winRate !== null ? `${winRate}%` : '—', sub: winRate !== null ? `${wonProjects.length} won · ${lostProjects.length} lost` : 'mark quotes as Won/Lost', icon: <BarChart3 className="h-4 w-4" />,  accent: 'text-green-400' },
+                { label: 'Win Rate',        value: winRate !== null ? `${winRate}%` : '—', sub: winRate !== null ? `${wonProjects.length} won · ${lostProjects.length} lost` : 'mark quotes as Won/Lost', icon: <BarChart3 className="h-4 w-4" />,  accent: 'text-[#E1DCC9]/80' },
               ].map(({ label, value, sub, icon, accent }) => (
                 <Card key={label} className="p-3 sm:p-5 bg-background">
                   <div className="flex items-center justify-between mb-3">
@@ -564,7 +564,7 @@ const Dashboard = () => {
                             <div className="flex items-center gap-3 mt-1.5">
                               <div className="flex items-center gap-1">
                                 {completion.steps.map((step, i) => (
-                                  <div key={step.key} title={step.label} className={`w-2 h-2 rounded-full transition-colors ${step.done ? i === completion.score - 1 && !allDone ? 'bg-amber-400' : allDone ? 'bg-green-500' : 'bg-primary/60' : 'bg-muted-foreground/20'}`} />
+                                  <div key={step.key} title={step.label} className={`w-2 h-2 rounded-full transition-colors ${step.done ? i === completion.score - 1 && !allDone ? 'bg-amber-400' : allDone ? 'bg-muted/100' : 'bg-primary/60' : 'bg-muted-foreground/20'}`} />
                                 ))}
                               </div>
                               {value > 0 && <span className="font-mono text-sm font-semibold text-primary">{fmtCurrency(value)}</span>}
@@ -598,13 +598,13 @@ const Dashboard = () => {
                                     ? i === completion.score - 1 && !allDone
                                       ? 'bg-amber-400'
                                       : allDone
-                                      ? 'bg-green-500'
+                                      ? 'bg-muted/100'
                                       : 'bg-primary/60'
                                     : 'bg-muted-foreground/20'
                                 }`}
                               />
                             ))}
-                            <span className={`text-xs ml-1 ${allDone ? 'text-green-500' : 'text-muted-foreground/60'}`}>
+                            <span className={`text-xs ml-1 ${allDone ? 'text-[#E1DCC9]/80' : 'text-muted-foreground/60'}`}>
                               {allDone ? '✓ Complete' : <span>→ {completion.nextAction}</span>}
                             </span>
                           </div>
@@ -688,7 +688,7 @@ const Dashboard = () => {
               tour: 'Live Australian construction cost benchmarks. Compare your rates against current market data.',
             },
             {
-              icon: <Package className="h-5 w-5 text-green-400" />,
+              icon: <Package className="h-5 w-5 text-[#E1DCC9]/80" />,
               title: 'Materials Library',
               desc: 'Supplier catalogue & pricing',
               action: () => navigate('/materials'),

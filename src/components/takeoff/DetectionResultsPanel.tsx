@@ -116,7 +116,7 @@ export const DetectionResultsPanel: React.FC<DetectionResultsPanelProps> = ({
   const hasServices     = result && Object.values(result.symbols).some(v => v > 0);
 
   const confColor = (c: number) =>
-    c >= 0.9 ? 'text-green-600' : c >= 0.7 ? 'text-amber-600' : 'text-muted-foreground';
+    c >= 0.9 ? 'text-[#E1DCC9]/70' : c >= 0.7 ? 'text-amber-600' : 'text-muted-foreground';
 
   return (
     <>
@@ -128,7 +128,7 @@ export const DetectionResultsPanel: React.FC<DetectionResultsPanelProps> = ({
             <h3 className="font-semibold text-sm">Opening Detection</h3>
           </div>
           {result && (
-            <Badge variant="outline" className="text-xs text-green-600 border-green-300">
+            <Badge variant="outline" className="text-xs text-[#E1DCC9]/70 border-[#E1DCC9]/20">
               <CheckCircle2 className="h-3 w-3 mr-1" />Scanned
             </Badge>
           )}
@@ -171,16 +171,16 @@ export const DetectionResultsPanel: React.FC<DetectionResultsPanelProps> = ({
             <div className="grid grid-cols-2 gap-2">
               {/* Windows chip */}
               <button
-                className="flex items-center justify-between p-3 rounded-lg border bg-blue-50 border-blue-200 hover:bg-blue-100 active:scale-95 transition-all text-left"
+                className="flex items-center justify-between p-3 rounded-lg border bg-muted/10 border-border/40 hover:bg-muted/20 active:scale-95 transition-all text-left"
                 onClick={() => setActiveSheet('windows')}
               >
                 <div className="flex items-center gap-1.5">
-                  <Square className="h-4 w-4 text-blue-600" />
-                  <span className="text-sm font-medium text-blue-900">Windows</span>
+                  <Square className="h-4 w-4 text-foreground/70" />
+                  <span className="text-sm font-medium text-foreground">Windows</span>
                 </div>
                 <div className="flex items-center gap-1">
-                  <span className="text-xl font-bold text-blue-700">{windows.length}</span>
-                  <ChevronRight className="h-3.5 w-3.5 text-blue-400" />
+                  <span className="text-xl font-bold text-foreground/80">{windows.length}</span>
+                  <ChevronRight className="h-3.5 w-3.5 text-foreground/60" />
                 </div>
               </button>
 
@@ -222,11 +222,11 @@ export const DetectionResultsPanel: React.FC<DetectionResultsPanelProps> = ({
                 </p>
                 <div className="grid grid-cols-2 gap-1.5">
                   {result.symbols.GPO > 0 && (
-                    <div className="flex items-center justify-between px-2 py-1.5 rounded-md bg-purple-50 border border-purple-100 text-xs">
-                      <span className="flex items-center gap-1 text-purple-800">
+                    <div className="flex items-center justify-between px-2 py-1.5 rounded-md bg-muted/10 border border-border/25 text-xs">
+                      <span className="flex items-center gap-1 text-muted-foreground">
                         <Zap className="h-3 w-3" />GPO
                       </span>
-                      <span className="font-bold text-purple-700">{result.symbols.GPO}</span>
+                      <span className="font-bold text-muted-foreground">{result.symbols.GPO}</span>
                     </div>
                   )}
                   {result.symbols.lights > 0 && (
@@ -254,27 +254,27 @@ export const DetectionResultsPanel: React.FC<DetectionResultsPanelProps> = ({
                     </div>
                   )}
                   {result.symbols.toilets > 0 && (
-                    <div className="flex items-center justify-between px-2 py-1.5 rounded-md bg-cyan-50 border border-cyan-100 text-xs">
-                      <span className="flex items-center gap-1 text-cyan-800">
+                    <div className="flex items-center justify-between px-2 py-1.5 rounded-md bg-muted/10 border border-border/30 text-xs">
+                      <span className="flex items-center gap-1 text-[#E1DCC9]/90">
                         <Droplets className="h-3 w-3" />WC
                       </span>
-                      <span className="font-bold text-cyan-700">{result.symbols.toilets}</span>
+                      <span className="font-bold text-[#E1DCC9]/80">{result.symbols.toilets}</span>
                     </div>
                   )}
                   {result.symbols.basins > 0 && (
-                    <div className="flex items-center justify-between px-2 py-1.5 rounded-md bg-cyan-50 border border-cyan-100 text-xs">
-                      <span className="flex items-center gap-1 text-cyan-800">
+                    <div className="flex items-center justify-between px-2 py-1.5 rounded-md bg-muted/10 border border-border/30 text-xs">
+                      <span className="flex items-center gap-1 text-[#E1DCC9]/90">
                         <Droplets className="h-3 w-3" />Basin
                       </span>
-                      <span className="font-bold text-cyan-700">{result.symbols.basins}</span>
+                      <span className="font-bold text-[#E1DCC9]/80">{result.symbols.basins}</span>
                     </div>
                   )}
                   {result.symbols.showers > 0 && (
-                    <div className="flex items-center justify-between px-2 py-1.5 rounded-md bg-cyan-50 border border-cyan-100 text-xs">
-                      <span className="flex items-center gap-1 text-cyan-800">
+                    <div className="flex items-center justify-between px-2 py-1.5 rounded-md bg-muted/10 border border-border/30 text-xs">
+                      <span className="flex items-center gap-1 text-[#E1DCC9]/90">
                         <Droplets className="h-3 w-3" />Shower
                       </span>
-                      <span className="font-bold text-cyan-700">{result.symbols.showers}</span>
+                      <span className="font-bold text-[#E1DCC9]/80">{result.symbols.showers}</span>
                     </div>
                   )}
                 </div>
@@ -290,7 +290,7 @@ export const DetectionResultsPanel: React.FC<DetectionResultsPanelProps> = ({
           <SheetHeader className="shrink-0">
             <SheetTitle className="flex items-center gap-2 text-lg">
               {activeSheet === 'windows' ? (
-                <><Square className="h-5 w-5 text-blue-600" />{windows.length} Windows Detected</>
+                <><Square className="h-5 w-5 text-foreground/70" />{windows.length} Windows Detected</>
               ) : (
                 <><DoorOpen className="h-5 w-5 text-amber-600" />{doors.length} Doors Detected</>
               )}

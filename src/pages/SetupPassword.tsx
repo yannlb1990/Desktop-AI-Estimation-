@@ -180,8 +180,8 @@ const SetupPassword = () => {
           </div>
 
           <div className="text-center">
-            <div className="w-14 h-14 bg-green-50 dark:bg-green-950/30 rounded-full flex items-center justify-center mx-auto mb-3">
-              <CheckCircle2 className="h-7 w-7 text-green-600" />
+            <div className="w-14 h-14 bg-muted/10 dark:bg-card/50 rounded-full flex items-center justify-center mx-auto mb-3">
+              <CheckCircle2 className="h-7 w-7 text-[#E1DCC9]/70" />
             </div>
             <h1 className="font-display text-2xl font-bold mb-1">
               {userName ? `Welcome, ${userName.split(" ")[0]}!` : "Welcome!"}

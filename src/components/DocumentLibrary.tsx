@@ -131,7 +131,7 @@ function printSavedQuote(q: SavedQuoteSnapshot) {
     tr{break-inside:avoid}
   }
 </style></head><body>
-<div class="no-print" style="text-align:center;padding:12px 16px;background:#0f172a;color:#fff;display:flex;align-items:center;justify-content:center;gap:12px">
+<div class="no-print" style="text-align:center;padding:12px 16px;background:#000000;color:#fff;display:flex;align-items:center;justify-content:center;gap:12px">
   <span style="font-size:13px;color:#94a3b8">Quote ${q.quoteNumber} · ${q.projectName}</span>
   <button onclick="window.print()" style="padding:7px 20px;background:#3b82f6;color:#fff;border:none;border-radius:6px;cursor:pointer;font-size:13px;font-weight:600">Print / Save PDF</button>
   <button onclick="window.close()" style="padding:7px 14px;background:#334155;color:#fff;border:none;border-radius:6px;cursor:pointer;font-size:13px">Close</button>
@@ -371,8 +371,8 @@ export const DocumentLibrary = ({ projectId, projectName, clientName = "", siteA
       {/* Header stats */}
       <div className="grid grid-cols-3 gap-4">
         <Card className="p-4 flex items-center gap-3">
-          <div className="p-2 rounded-lg bg-blue-500/10">
-            <FileText className="h-5 w-5 text-blue-500" />
+          <div className="p-2 rounded-lg bg-muted/100/10">
+            <FileText className="h-5 w-5 text-foreground/70" />
           </div>
           <div>
             <div className="text-2xl font-bold">{savedQuotes.length}</div>
@@ -380,8 +380,8 @@ export const DocumentLibrary = ({ projectId, projectName, clientName = "", siteA
           </div>
         </Card>
         <Card className="p-4 flex items-center gap-3">
-          <div className="p-2 rounded-lg bg-emerald-500/10">
-            <DollarSign className="h-5 w-5 text-emerald-500" />
+          <div className="p-2 rounded-lg bg-[#E1DCC9]/8">
+            <DollarSign className="h-5 w-5 text-[#E1DCC9]/70" />
           </div>
           <div>
             <div className="text-2xl font-bold font-mono">{savedQuotes.length > 0 ? au$(totalQuoteValue / savedQuotes.length) : "—"}</div>
@@ -444,8 +444,8 @@ export const DocumentLibrary = ({ projectId, projectName, clientName = "", siteA
               <Card key={q.id} className="p-4">
                 <div className="flex items-start justify-between gap-4">
                   <div className="flex items-start gap-3 flex-1 min-w-0">
-                    <div className="p-2 rounded-lg bg-blue-500/10 flex-shrink-0 mt-0.5">
-                      <FileText className="h-5 w-5 text-blue-500" />
+                    <div className="p-2 rounded-lg bg-muted/100/10 flex-shrink-0 mt-0.5">
+                      <FileText className="h-5 w-5 text-foreground/70" />
                     </div>
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 flex-wrap">

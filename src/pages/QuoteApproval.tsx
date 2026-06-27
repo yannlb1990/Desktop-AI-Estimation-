@@ -88,11 +88,11 @@ export default function QuoteApproval() {
 
   if (notFound) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-[#0f172a] text-white p-6">
+      <div className="min-h-screen flex items-center justify-center bg-[#000000] text-white p-6">
         <div className="text-center space-y-4 max-w-md">
           <AlertTriangle className="h-12 w-12 text-amber-400 mx-auto" />
           <h1 className="text-2xl font-bold">Link not found</h1>
-          <p className="text-slate-400">This quote link has expired or is invalid. Please contact the estimator for a new link.</p>
+          <p className="text-muted-foreground">This quote link has expired or is invalid. Please contact the estimator for a new link.</p>
         </div>
       </div>
     );
@@ -100,11 +100,11 @@ export default function QuoteApproval() {
 
   if (expired) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-[#0f172a] text-white p-6">
+      <div className="min-h-screen flex items-center justify-center bg-[#000000] text-white p-6">
         <div className="text-center space-y-4 max-w-md">
           <Clock className="h-12 w-12 text-amber-400 mx-auto" />
           <h1 className="text-2xl font-bold">Quote link expired</h1>
-          <p className="text-slate-400">This quote link has expired (links are valid for 30 days). Please contact the estimator for a fresh link.</p>
+          <p className="text-muted-foreground">This quote link has expired (links are valid for 30 days). Please contact the estimator for a fresh link.</p>
         </div>
       </div>
     );
@@ -112,19 +112,19 @@ export default function QuoteApproval() {
 
   if (!quote) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-[#0f172a]">
-        <div className="h-8 w-8 rounded-full border-2 border-cyan-500 border-t-transparent animate-spin" />
+      <div className="min-h-screen flex items-center justify-center bg-[#000000]">
+        <div className="h-8 w-8 rounded-full border-2 border-foreground/25 border-t-transparent animate-spin" />
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-[#0f172a] text-white">
+    <div className="min-h-screen bg-[#000000] text-white">
       {/* Brand header */}
       <div className="bg-[#0a1628] border-b border-slate-800">
         <div className="max-w-4xl mx-auto px-6 py-4 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <Building2 className="h-6 w-6 text-cyan-400" />
+            <Building2 className="h-6 w-6 text-[#E1DCC9]" />
             <span className="font-bold text-lg tracking-tight">Metricore</span>
           </div>
           <div className="text-xs text-slate-500">Quote Reference · {token?.slice(0, 8).toUpperCase()}</div>
@@ -133,20 +133,20 @@ export default function QuoteApproval() {
 
       <div className="max-w-4xl mx-auto px-6 py-10 space-y-8">
         {/* Project header */}
-        <div className="bg-slate-800/50 border border-slate-700 rounded-xl p-6 space-y-4">
+        <div className="bg-card/90/50 border border-border/50 rounded-xl p-6 space-y-4">
           <div className="flex items-start justify-between gap-4 flex-wrap">
             <div>
               <h1 className="text-2xl font-bold text-white">{quote.projectName}</h1>
-              <p className="text-slate-400 text-sm mt-1">Estimate prepared by Metricore</p>
+              <p className="text-muted-foreground text-sm mt-1">Estimate prepared by Metricore</p>
             </div>
             <Badge
               variant="outline"
               className={
                 quote.status === 'approved'
-                  ? 'border-green-500 text-green-400 bg-green-500/10 text-sm px-3 py-1'
+                  ? 'border-[#E1DCC9]/30 text-[#E1DCC9]/80 bg-muted/100/10 text-sm px-3 py-1'
                   : quote.status === 'changes_requested'
                   ? 'border-amber-500 text-amber-400 bg-amber-500/10 text-sm px-3 py-1'
-                  : 'border-slate-500 text-slate-400 bg-slate-500/10 text-sm px-3 py-1'
+                  : 'border-slate-500 text-muted-foreground bg-slate-500/10 text-sm px-3 py-1'
               }
             >
               {quote.status === 'approved' ? '✓ Approved' : quote.status === 'changes_requested' ? '⚠ Changes Requested' : 'Awaiting Approval'}
@@ -155,22 +155,22 @@ export default function QuoteApproval() {
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
             {quote.clientName && (
-              <div className="flex items-center gap-2 text-slate-300">
+              <div className="flex items-center gap-2 text-foreground/60">
                 <User className="h-4 w-4 text-slate-500 shrink-0" />
                 <span>{quote.clientName}</span>
               </div>
             )}
             {quote.siteAddress && (
-              <div className="flex items-center gap-2 text-slate-300">
+              <div className="flex items-center gap-2 text-foreground/60">
                 <MapPin className="h-4 w-4 text-slate-500 shrink-0" />
                 <span>{quote.siteAddress}</span>
               </div>
             )}
-            <div className="flex items-center gap-2 text-slate-300">
+            <div className="flex items-center gap-2 text-foreground/60">
               <Clock className="h-4 w-4 text-slate-500 shrink-0" />
               <span>Issued {new Date(quote.generatedAt).toLocaleDateString('en-AU', { day: 'numeric', month: 'long', year: 'numeric' })}</span>
             </div>
-            <div className="flex items-center gap-2 text-slate-300">
+            <div className="flex items-center gap-2 text-foreground/60">
               <Clock className="h-4 w-4 text-slate-500 shrink-0" />
               <span>Valid until {new Date(quote.expiresAt).toLocaleDateString('en-AU', { day: 'numeric', month: 'long', year: 'numeric' })}</span>
             </div>
@@ -178,12 +178,12 @@ export default function QuoteApproval() {
         </div>
 
         {/* Grand total banner */}
-        <div className="bg-cyan-500/10 border border-cyan-500/30 rounded-xl p-6 flex items-center justify-between">
+        <div className="bg-primary/10 border border-foreground/20 rounded-xl p-6 flex items-center justify-between">
           <div>
-            <p className="text-slate-400 text-sm">Total Estimate (excl. GST)</p>
-            <p className="text-4xl font-bold text-cyan-400 mt-1">{fmtCurrency(quote.grandTotal)}</p>
+            <p className="text-muted-foreground text-sm">Total Estimate (excl. GST)</p>
+            <p className="text-4xl font-bold text-[#E1DCC9] mt-1">{fmtCurrency(quote.grandTotal)}</p>
           </div>
-          <DollarSign className="h-12 w-12 text-cyan-400/30" />
+          <DollarSign className="h-12 w-12 text-[#E1DCC9]/70" />
         </div>
 
         {/* Line items by category */}
@@ -193,26 +193,26 @@ export default function QuoteApproval() {
             {grouped.map(([category, items]) => {
               const catTotal = items.reduce((s, i) => s + (i.total ?? 0), 0);
               return (
-                <div key={category} className="bg-slate-800/40 border border-slate-700 rounded-lg overflow-hidden">
-                  <div className="flex items-center justify-between px-4 py-2.5 bg-slate-800/60">
+                <div key={category} className="bg-card/90/40 border border-border/50 rounded-lg overflow-hidden">
+                  <div className="flex items-center justify-between px-4 py-2.5 bg-card/90/60">
                     <span className="text-sm font-semibold text-slate-200">{category}</span>
-                    <span className="text-sm font-mono text-cyan-400">{fmtCurrency(catTotal)}</span>
+                    <span className="text-sm font-mono text-[#E1DCC9]">{fmtCurrency(catTotal)}</span>
                   </div>
                   <table className="w-full text-sm">
                     <thead>
-                      <tr className="border-b border-slate-700">
-                        <th className="text-left px-4 py-2 text-slate-400 font-normal">Item</th>
-                        <th className="text-right px-4 py-2 text-slate-400 font-normal w-20">Qty</th>
-                        <th className="text-right px-4 py-2 text-slate-400 font-normal w-20">Unit</th>
-                        <th className="text-right px-4 py-2 text-slate-400 font-normal w-28">Total</th>
+                      <tr className="border-b border-border/50">
+                        <th className="text-left px-4 py-2 text-muted-foreground font-normal">Item</th>
+                        <th className="text-right px-4 py-2 text-muted-foreground font-normal w-20">Qty</th>
+                        <th className="text-right px-4 py-2 text-muted-foreground font-normal w-20">Unit</th>
+                        <th className="text-right px-4 py-2 text-muted-foreground font-normal w-28">Total</th>
                       </tr>
                     </thead>
                     <tbody>
                       {items.map((item, i) => (
-                        <tr key={item.id ?? i} className="border-b border-slate-700/50 last:border-0">
+                        <tr key={item.id ?? i} className="border-b border-border/50/50 last:border-0">
                           <td className="px-4 py-2 text-slate-200">{item.name ?? item.description ?? '—'}</td>
-                          <td className="px-4 py-2 text-right text-slate-300 tabular-nums">{item.quantity}</td>
-                          <td className="px-4 py-2 text-right text-slate-400">{item.unit}</td>
+                          <td className="px-4 py-2 text-right text-foreground/60 tabular-nums">{item.quantity}</td>
+                          <td className="px-4 py-2 text-right text-muted-foreground">{item.unit}</td>
                           <td className="px-4 py-2 text-right text-slate-200 tabular-nums font-mono">{fmtCurrency(item.total ?? 0)}</td>
                         </tr>
                       ))}
@@ -224,18 +224,18 @@ export default function QuoteApproval() {
 
             <div className="flex justify-end">
               <div className="text-right space-y-1">
-                <div className="flex gap-8 text-sm text-slate-400">
+                <div className="flex gap-8 text-sm text-muted-foreground">
                   <span>Subtotal (excl. GST)</span>
                   <span className="font-mono tabular-nums text-slate-200">{fmtCurrency(quote.grandTotal)}</span>
                 </div>
-                <div className="flex gap-8 text-sm text-slate-400">
+                <div className="flex gap-8 text-sm text-muted-foreground">
                   <span>GST (10%)</span>
                   <span className="font-mono tabular-nums text-slate-200">{fmtCurrency(quote.grandTotal * 0.1)}</span>
                 </div>
                 <Separator className="bg-slate-600 my-2" />
                 <div className="flex gap-8 font-bold text-lg">
                   <span className="text-slate-200">Total (incl. GST)</span>
-                  <span className="font-mono tabular-nums text-cyan-400">{fmtCurrency(quote.grandTotal * 1.1)}</span>
+                  <span className="font-mono tabular-nums text-[#E1DCC9]">{fmtCurrency(quote.grandTotal * 1.1)}</span>
                 </div>
               </div>
             </div>
@@ -243,17 +243,17 @@ export default function QuoteApproval() {
         )}
 
         {/* Approval section */}
-        <div className="bg-slate-800/50 border border-slate-700 rounded-xl p-6 space-y-5">
+        <div className="bg-card/90/50 border border-border/50 rounded-xl p-6 space-y-5">
           <div className="flex items-center gap-2">
-            <ClipboardCheck className="h-5 w-5 text-cyan-400" />
+            <ClipboardCheck className="h-5 w-5 text-[#E1DCC9]" />
             <h2 className="text-lg font-semibold">Digital Approval</h2>
           </div>
 
           {submitted === 'approved' ? (
             <div className="flex flex-col items-center gap-3 py-8 text-center">
-              <CheckCircle2 className="h-14 w-14 text-green-400" />
-              <h3 className="text-xl font-bold text-green-400">Quote Approved</h3>
-              <p className="text-slate-400">
+              <CheckCircle2 className="h-14 w-14 text-[#E1DCC9]/80" />
+              <h3 className="text-xl font-bold text-[#E1DCC9]/80">Quote Approved</h3>
+              <p className="text-muted-foreground">
                 Approved by <span className="text-slate-200">{quote.approvedByName}</span> on{' '}
                 {quote.approvedAt ? new Date(quote.approvedAt).toLocaleDateString('en-AU', { day: 'numeric', month: 'long', year: 'numeric' }) : '—'}
               </p>
@@ -263,9 +263,9 @@ export default function QuoteApproval() {
             <div className="flex flex-col items-center gap-3 py-8 text-center">
               <AlertTriangle className="h-14 w-14 text-amber-400" />
               <h3 className="text-xl font-bold text-amber-400">Changes Requested</h3>
-              <p className="text-slate-400">Your feedback has been sent to the estimator.</p>
+              <p className="text-muted-foreground">Your feedback has been sent to the estimator.</p>
               {quote.changeComments && (
-                <div className="bg-slate-700/50 rounded-lg p-4 text-sm text-slate-300 text-left max-w-md">
+                <div className="bg-muted/60/50 rounded-lg p-4 text-sm text-foreground/60 text-left max-w-md">
                   <p className="font-medium text-slate-200 mb-1">Your comments:</p>
                   <p>{quote.changeComments}</p>
                 </div>
@@ -273,33 +273,33 @@ export default function QuoteApproval() {
             </div>
           ) : (
             <>
-              <p className="text-slate-400 text-sm">
+              <p className="text-muted-foreground text-sm">
                 By approving, you confirm acceptance of the estimate total of{' '}
                 <span className="text-white font-semibold">{fmtCurrency(quote.grandTotal * 1.1)} incl. GST</span> and authorise the estimator to proceed.
               </p>
               <div className="space-y-3">
                 <div>
-                  <label className="text-sm text-slate-400 mb-1 block">Your full name *</label>
+                  <label className="text-sm text-muted-foreground mb-1 block">Your full name *</label>
                   <Input
                     placeholder="e.g. John Smith"
                     value={clientNameInput}
                     onChange={e => setClientNameInput(e.target.value)}
-                    className="bg-slate-700 border-slate-600 text-white placeholder:text-slate-500"
+                    className="bg-muted/60 border-slate-600 text-white placeholder:text-slate-500"
                   />
                 </div>
                 <div>
-                  <label className="text-sm text-slate-400 mb-1 block">Comments (optional)</label>
+                  <label className="text-sm text-muted-foreground mb-1 block">Comments (optional)</label>
                   <Textarea
                     placeholder="Any notes or conditions for your approval, or changes you'd like to request…"
                     value={comments}
                     onChange={e => setComments(e.target.value)}
                     rows={3}
-                    className="bg-slate-700 border-slate-600 text-white placeholder:text-slate-500 resize-none"
+                    className="bg-muted/60 border-slate-600 text-white placeholder:text-slate-500 resize-none"
                   />
                 </div>
                 <div className="flex gap-3 pt-2">
                   <Button
-                    className="flex-1 bg-green-600 hover:bg-green-500 text-white font-semibold h-11"
+                    className="flex-1 bg-[#412D15]/70 hover:bg-muted/100 text-white font-semibold h-11"
                     disabled={!clientNameInput.trim()}
                     onClick={() => respond('approved')}
                   >

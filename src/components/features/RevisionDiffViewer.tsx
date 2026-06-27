@@ -138,7 +138,7 @@ export function RevisionDiffViewer({
   // Change type styling
   const getChangeTypeStyle = (type: 'added' | 'removed' | 'modified') => {
     const styles = {
-      added: { bg: 'bg-green-50', border: 'border-green-200', text: 'text-green-700', icon: Plus },
+      added: { bg: 'bg-muted/10', border: 'border-border/35', text: 'text-[#E1DCC9]/60', icon: Plus },
       removed: { bg: 'bg-red-50', border: 'border-red-200', text: 'text-red-700', icon: Minus },
       modified: { bg: 'bg-amber-50', border: 'border-amber-200', text: 'text-amber-700', icon: Edit3 },
     };
@@ -207,15 +207,15 @@ export function RevisionDiffViewer({
           {/* Summary Stats */}
           {diff && (
             <div className="grid grid-cols-4 gap-4 mt-4">
-              <div className="bg-green-50 p-3 rounded-lg">
-                <div className="flex items-center gap-2 text-green-700">
+              <div className="bg-muted/10 p-3 rounded-lg">
+                <div className="flex items-center gap-2 text-[#E1DCC9]/60">
                   <Plus className="h-4 w-4" />
                   <span className="text-sm font-medium">Added</span>
                 </div>
-                <div className="text-lg font-semibold text-green-800">
+                <div className="text-lg font-semibold text-foreground/80">
                   {diff.summary.addedItems} items
                 </div>
-                <div className="text-sm text-green-600">
+                <div className="text-sm text-[#E1DCC9]/70">
                   +{formatCurrency(diff.summary.totalAdded)}
                 </div>
               </div>
@@ -247,8 +247,8 @@ export function RevisionDiffViewer({
                 </div>
               </div>
 
-              <div className={`p-3 rounded-lg ${diff.summary.netValueChange >= 0 ? 'bg-blue-50' : 'bg-purple-50'}`}>
-                <div className={`flex items-center gap-2 ${diff.summary.netValueChange >= 0 ? 'text-blue-700' : 'text-purple-700'}`}>
+              <div className={`p-3 rounded-lg ${diff.summary.netValueChange >= 0 ? 'bg-muted/10' : 'bg-muted/10'}`}>
+                <div className={`flex items-center gap-2 ${diff.summary.netValueChange >= 0 ? 'text-foreground/80' : 'text-muted-foreground'}`}>
                   {diff.summary.netValueChange >= 0 ? (
                     <TrendingUp className="h-4 w-4" />
                   ) : (
@@ -256,11 +256,11 @@ export function RevisionDiffViewer({
                   )}
                   <span className="text-sm font-medium">Net Change</span>
                 </div>
-                <div className={`text-lg font-semibold ${diff.summary.netValueChange >= 0 ? 'text-blue-800' : 'text-purple-800'}`}>
+                <div className={`text-lg font-semibold ${diff.summary.netValueChange >= 0 ? 'text-foreground/90' : 'text-muted-foreground'}`}>
                   {diff.summary.netValueChange >= 0 ? '+' : ''}
                   {formatCurrency(diff.summary.netValueChange)}
                 </div>
-                <div className={`text-sm ${diff.summary.netValueChange >= 0 ? 'text-blue-600' : 'text-purple-600'}`}>
+                <div className={`text-sm ${diff.summary.netValueChange >= 0 ? 'text-foreground/70' : 'text-muted-foreground'}`}>
                   {diff.summary.percentChange >= 0 ? '+' : ''}
                   {diff.summary.percentChange.toFixed(1)}%
                 </div>
@@ -381,7 +381,7 @@ export function RevisionDiffViewer({
                     </div>
                     <div>
                       <span className="text-muted-foreground">Total Additions:</span>
-                      <span className="font-medium text-green-600 ml-2">
+                      <span className="font-medium text-[#E1DCC9]/70 ml-2">
                         +{formatCurrency(cumulativeChanges.totalAdditions)}
                       </span>
                     </div>
@@ -393,7 +393,7 @@ export function RevisionDiffViewer({
                     </div>
                     <div>
                       <span className="text-muted-foreground">Net Change:</span>
-                      <span className={`font-medium ml-2 ${cumulativeChanges.netChange >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                      <span className={`font-medium ml-2 ${cumulativeChanges.netChange >= 0 ? 'text-[#E1DCC9]/70' : 'text-red-600'}`}>
                         {cumulativeChanges.netChange >= 0 ? '+' : ''}
                         {formatCurrency(cumulativeChanges.netChange)}
                       </span>
@@ -432,7 +432,7 @@ export function RevisionDiffViewer({
 
                           {entry.diff && (
                             <div className="flex items-center gap-4 text-xs">
-                              <span className="text-green-600">
+                              <span className="text-[#E1DCC9]/70">
                                 +{entry.diff.summary.addedItems} added
                               </span>
                               <span className="text-red-600">
@@ -441,7 +441,7 @@ export function RevisionDiffViewer({
                               <span className="text-amber-600">
                                 ~{entry.diff.summary.modifiedItems} modified
                               </span>
-                              <span className={entry.diff.summary.netValueChange >= 0 ? 'text-blue-600' : 'text-purple-600'}>
+                              <span className={entry.diff.summary.netValueChange >= 0 ? 'text-foreground/70' : 'text-muted-foreground'}>
                                 {entry.diff.summary.netValueChange >= 0 ? '+' : ''}
                                 {formatCurrency(entry.diff.summary.netValueChange)}
                               </span>

@@ -27,12 +27,12 @@ type SupplierKey = "bunnings" | "mitre10" | "blackwoods" | "reece" | "tradelink"
 
 const SUPPLIERS: Record<SupplierKey, { name: string; cls: string }> = {
   bunnings:     { name: "Bunnings",       cls: "bg-red-100 text-red-700 border-red-200 dark:bg-red-950/50 dark:text-red-300 dark:border-red-800" },
-  mitre10:      { name: "Mitre 10",       cls: "bg-green-100 text-green-700 border-green-200 dark:bg-green-950/50 dark:text-green-300 dark:border-green-800" },
-  blackwoods:   { name: "Blackwoods",     cls: "bg-blue-100 text-blue-700 border-blue-200 dark:bg-blue-950/50 dark:text-blue-300 dark:border-blue-800" },
+  mitre10:      { name: "Mitre 10",       cls: "bg-muted/20 text-[#E1DCC9]/60 border-border/35 dark:bg-card/50 dark:text-[#E1DCC9]/70 dark:border-border/45" },
+  blackwoods:   { name: "Blackwoods",     cls: "bg-muted/20 text-foreground/80 border-border/40 dark:bg-background/50 dark:text-foreground/70 dark:border-border/50" },
   reece:        { name: "Reece",          cls: "bg-orange-100 text-orange-700 border-orange-200 dark:bg-orange-950/50 dark:text-orange-300 dark:border-orange-800" },
-  tradelink:    { name: "Tradelink",      cls: "bg-cyan-100 text-cyan-700 border-cyan-200 dark:bg-cyan-950/50 dark:text-cyan-300 dark:border-cyan-800" },
-  rexel:        { name: "Rexel",          cls: "bg-purple-100 text-purple-700 border-purple-200 dark:bg-purple-950/50 dark:text-purple-300 dark:border-purple-800" },
-  haymans:      { name: "Haymans Elec.",  cls: "bg-indigo-100 text-indigo-700 border-indigo-200 dark:bg-indigo-950/50 dark:text-indigo-300 dark:border-indigo-800" },
+  tradelink:    { name: "Tradelink",      cls: "bg-muted/15 text-[#E1DCC9]/80 border-border/35 dark:bg-card/60 dark:text-[#E1DCC9]/80 dark:border-border/40" },
+  rexel:        { name: "Rexel",          cls: "bg-muted/15 text-muted-foreground border-border/30 dark:bg-muted/20 dark:text-muted-foreground dark:border-border/40" },
+  haymans:      { name: "Haymans Elec.",  cls: "bg-muted/15 text-muted-foreground border-border/35 dark:bg-muted/20 dark:text-muted-foreground dark:border-border/45" },
   beaumont:     { name: "Beaumont Tiles", cls: "bg-amber-100 text-amber-700 border-amber-200 dark:bg-amber-950/50 dark:text-amber-300 dark:border-amber-800" },
   nationalTiles:{ name: "National Tiles", cls: "bg-yellow-100 text-yellow-800 border-yellow-200 dark:bg-yellow-950/50 dark:text-yellow-300 dark:border-yellow-800" },
 };
@@ -408,7 +408,7 @@ const MarketInsights = () => {
                           </TableCell>
                           <TableCell className="text-center text-xs font-mono text-muted-foreground">{item.unit}</TableCell>
                           <TableCell className="text-right font-mono text-sm">
-                            <span className="text-green-600 dark:text-green-400 font-medium">{fmt(allLo)}</span>
+                            <span className="text-[#E1DCC9]/70 dark:text-[#E1DCC9]/80 font-medium">{fmt(allLo)}</span>
                             <span className="text-muted-foreground mx-1">–</span>
                             <span className="text-red-600 dark:text-red-400 font-medium">{fmt(allHi)}</span>
                           </TableCell>
@@ -467,11 +467,11 @@ const MarketInsights = () => {
                   const award = ap(l.award, lm);
                   const pct = ((typ - lo) / (hi - lo)) * 100;
                   const catColors: Record<string, string> = {
-                    Structural: "bg-blue-50 border-blue-200 dark:bg-blue-950/40 dark:border-blue-700",
+                    Structural: "bg-muted/10 border-border/40 dark:bg-background/40 dark:border-border/40",
                     Services:   "bg-yellow-50 border-yellow-200 dark:bg-yellow-950/40 dark:border-yellow-700",
-                    Lining:     "bg-purple-50 border-purple-200 dark:bg-purple-950/40 dark:border-purple-700",
-                    Finishing:  "bg-green-50 border-green-200 dark:bg-green-950/40 dark:border-green-700",
-                    External:   "bg-emerald-50 border-emerald-200 dark:bg-emerald-950/40 dark:border-emerald-700",
+                    Lining:     "bg-muted/10 border-border/30 dark:bg-muted/20 dark:border-border/40",
+                    Finishing:  "bg-muted/10 border-border/35 dark:bg-card/40 dark:border-border/40",
+                    External:   "bg-muted/10 border-[#E1DCC9]/20 dark:bg-[#E1DCC9]/8 dark:border-[#E1DCC9]/25",
                     Civil:      "bg-orange-50 border-orange-200 dark:bg-orange-950/40 dark:border-orange-700",
                   };
                   return (
@@ -490,7 +490,7 @@ const MarketInsights = () => {
                       {/* Rate range bar */}
                       <div className="mb-3">
                         <div className="flex justify-between text-xs mb-1">
-                          <span className="text-green-600 dark:text-green-400 font-medium">{fmt(lo)}/hr</span>
+                          <span className="text-[#E1DCC9]/70 dark:text-[#E1DCC9]/80 font-medium">{fmt(lo)}/hr</span>
                           <span className="font-semibold text-foreground">{fmt(typ)}/hr typical</span>
                           <span className="text-red-600 dark:text-red-400 font-medium">{fmt(hi)}/hr</span>
                         </div>

@@ -321,7 +321,7 @@ const NewProject = () => {
             </div>
             <div className="w-full space-y-2">
               <div className="flex items-center gap-2 text-sm">
-                <CheckCircle className="h-4 w-4 text-green-500" />
+                <CheckCircle className="h-4 w-4 text-[#E1DCC9]/80" />
                 <span>Extracting text and dimensions</span>
               </div>
               <div className="flex items-center gap-2 text-sm">
@@ -360,7 +360,7 @@ const NewProject = () => {
       <div className="min-h-screen bg-muted/30 flex items-center justify-center">
         <Card className="p-12 text-center max-w-md">
           <div className="flex flex-col items-center gap-6">
-            <CheckCircle className="h-16 w-16 text-green-500" />
+            <CheckCircle className="h-16 w-16 text-[#E1DCC9]/80" />
             <div>
               <h2 className="text-2xl font-bold mb-2">Project Created!</h2>
               <p className="text-muted-foreground">

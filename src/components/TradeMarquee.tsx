@@ -31,14 +31,14 @@ const TradeList = ({ aria }: { aria?: boolean }) => (
 );
 
 const TradeMarquee = () => (
-  <div className="relative overflow-hidden py-5 bg-[#09111f]">
+  <div className="relative overflow-hidden py-5 bg-[#000000]">
     <div
       className="absolute left-0 top-0 bottom-0 w-24 z-10 pointer-events-none"
-      style={{ background: "linear-gradient(to right, #09111f, transparent)" }}
+      style={{ background: "linear-gradient(to right, #000000, transparent)" }}
     />
     <div
       className="absolute right-0 top-0 bottom-0 w-24 z-10 pointer-events-none"
-      style={{ background: "linear-gradient(to left, #09111f, transparent)" }}
+      style={{ background: "linear-gradient(to left, #000000, transparent)" }}
     />
 
     <div className="flex" style={{ animation: "marquee-scroll 30s linear infinite" }}>

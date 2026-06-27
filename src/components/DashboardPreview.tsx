@@ -18,7 +18,7 @@ const projects = [
 
 const DashboardPreview = () => {
   return (
-    <section id="insights" className="py-20 md:py-28 bg-[#09111f]">
+    <section id="insights" className="py-20 md:py-28 bg-[#000000]">
       <div className="container mx-auto px-6 lg:px-12">
 
         <motion.div
@@ -29,8 +29,8 @@ const DashboardPreview = () => {
           className="max-w-2xl mb-12"
         >
           <div className="flex items-center gap-3 mb-6">
-            <div className="h-px w-8 bg-cyan-400/50" />
-            <span className="text-xs font-mono text-cyan-400/60 uppercase tracking-widest">Command center</span>
+            <div className="h-px w-8 bg-primary/15" />
+            <span className="text-xs font-mono text-[#E1DCC9]/70 uppercase tracking-widest">Command center</span>
           </div>
           <h2 className="font-display text-4xl sm:text-5xl font-bold text-white leading-tight">
             Every project.
@@ -49,10 +49,10 @@ const DashboardPreview = () => {
           className="rounded-2xl border border-white/8 bg-[#0c1825] overflow-hidden shadow-[0_24px_80px_rgba(0,0,0,0.55)]"
         >
           {/* App nav */}
-          <div className="flex items-center gap-5 px-5 py-3 border-b border-white/[0.06] bg-[#0a1522]">
+          <div className="flex items-center gap-5 px-5 py-3 border-b border-white/[0.06] bg-[#000000]">
             <div className="flex items-center gap-2 shrink-0">
-              <div className="w-6 h-6 rounded bg-[#09111f] border border-cyan-400/30 flex items-center justify-center">
-                <span className="text-cyan-400 text-[9px] font-bold">M</span>
+              <div className="w-6 h-6 rounded bg-[#000000] border border-foreground/20 flex items-center justify-center">
+                <span className="text-[#E1DCC9] text-[9px] font-bold">M</span>
               </div>
               <span className="text-[11px] font-bold text-white/50 uppercase tracking-widest">Metricore</span>
             </div>
@@ -60,15 +60,15 @@ const DashboardPreview = () => {
               {["Dashboard", "Projects", "Materials", "Settings"].map((n) => (
                 <span
                   key={n}
-                  className={`text-[11px] font-mono ${n === "Dashboard" ? "text-cyan-400" : "text-white/25"}`}
+                  className={`text-[11px] font-mono ${n === "Dashboard" ? "text-[#E1DCC9]" : "text-white/25"}`}
                 >
                   {n}
                 </span>
               ))}
             </div>
             <div className="ml-auto">
-              <div className="w-6 h-6 rounded-full bg-cyan-400/20 border border-cyan-400/30 flex items-center justify-center">
-                <span className="text-[9px] text-cyan-400 font-bold">JB</span>
+              <div className="w-6 h-6 rounded-full bg-primary/15 border border-foreground/20 flex items-center justify-center">
+                <span className="text-[9px] text-[#E1DCC9] font-bold">JB</span>
               </div>
             </div>
           </div>
@@ -85,7 +85,7 @@ const DashboardPreview = () => {
           </div>
 
           {/* Table header */}
-          <div className="grid grid-cols-[1fr_110px_90px_52px] gap-4 px-5 py-2.5 border-b border-white/[0.05] bg-[#0a1522]">
+          <div className="grid grid-cols-[1fr_110px_90px_52px] gap-4 px-5 py-2.5 border-b border-white/[0.05] bg-[#000000]">
             {["PROJECT", "VALUE", "STATUS", "STATE"].map((h) => (
               <span key={h} className="text-[9px] font-mono text-white/20 uppercase tracking-widest">{h}</span>
             ))}
@@ -106,7 +106,7 @@ const DashboardPreview = () => {
                   p.status === "Complete"
                     ? { background: "rgba(52,211,153,0.10)", color: "#34d399" }
                     : p.status === "In Progress"
-                    ? { background: "rgba(34,211,238,0.10)", color: "#22d3ee" }
+                    ? { background: "rgba(34,211,238,0.10)", color: "#E1DCC9" }
                     : { background: "rgba(255,255,255,0.05)", color: "rgba(255,255,255,0.28)" }
                 }
               >
@@ -117,9 +117,9 @@ const DashboardPreview = () => {
           ))}
 
           {/* Footer */}
-          <div className="px-5 py-3 bg-[#0a1522] border-t border-white/[0.05] flex items-center justify-between">
+          <div className="px-5 py-3 bg-[#000000] border-t border-white/[0.05] flex items-center justify-between">
             <span className="text-[10px] font-mono text-white/20">Showing 4 of 24 projects</span>
-            <span className="text-[10px] font-mono text-cyan-400/40">view all →</span>
+            <span className="text-[10px] font-mono text-[#E1DCC9]/70">view all →</span>
           </div>
         </motion.div>
 

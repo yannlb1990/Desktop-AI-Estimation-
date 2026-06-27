@@ -435,7 +435,7 @@ ${clone.outerHTML}
   const riskColor = (level: string) => {
     if (level === "High") return "bg-red-100 text-red-700"
     if (level === "Medium") return "bg-amber-100 text-amber-700"
-    return "bg-green-100 text-green-700"
+    return "bg-muted/20 text-[#E1DCC9]/60"
   }
 
   return (
@@ -910,11 +910,11 @@ ${clone.outerHTML}
                   <SH title="6. Scope of Works" />
                   <div className="grid grid-cols-2 gap-6">
                     <div>
-                      <h3 className="text-sm font-semibold text-gray-700 mb-3 flex items-center gap-2"><span className="text-green-500 text-base">✓</span> Inclusions</h3>
+                      <h3 className="text-sm font-semibold text-gray-700 mb-3 flex items-center gap-2"><span className="text-[#E1DCC9]/80 text-base">✓</span> Inclusions</h3>
                       <ul className="space-y-2">
                         {inclusions.filter(Boolean).map((item, i) => (
-                          <li key={i} className="flex items-start gap-2 text-sm text-gray-600 bg-green-50 rounded p-2">
-                            <span className="text-green-500 font-bold mt-0.5 flex-shrink-0">✓</span>{item}
+                          <li key={i} className="flex items-start gap-2 text-sm text-gray-600 bg-muted/10 rounded p-2">
+                            <span className="text-[#E1DCC9]/80 font-bold mt-0.5 flex-shrink-0">✓</span>{item}
                           </li>
                         ))}
                       </ul>
@@ -1128,7 +1128,7 @@ ${clone.outerHTML}
                             {v.saving && (
                               <div className="text-right flex-shrink-0">
                                 <div className="text-xs text-gray-400">Saving</div>
-                                <div className="font-bold text-green-600 font-mono">{v.saving.startsWith("-") ? v.saving : `-${v.saving}`}</div>
+                                <div className="font-bold text-[#E1DCC9]/70 font-mono">{v.saving.startsWith("-") ? v.saving : `-${v.saving}`}</div>
                               </div>
                             )}
                           </div>
@@ -1169,7 +1169,7 @@ ${clone.outerHTML}
                   {lessonsLearnt && (
                     <>
                       <SH title="15. Lessons Learnt from Similar Projects" />
-                      <div className="bg-blue-50 border border-blue-100 rounded-xl p-5">
+                      <div className="bg-muted/10 border border-border/30 rounded-xl p-5">
                         <p className="text-sm text-gray-700 leading-relaxed whitespace-pre-line">{lessonsLearnt}</p>
                       </div>
                     </>
@@ -1183,8 +1183,8 @@ ${clone.outerHTML}
                       { label: "EMP Delivery", value: "2 weeks", sub: "post contract award" },
                       { label: "NCC Compliance", value: "100%", sub: "all works" },
                     ].map(({ label, value, sub }) => (
-                      <div key={label} className="text-center p-3 rounded-xl bg-green-50 border border-green-100">
-                        <div className="text-xl font-bold text-green-700">{value}</div>
+                      <div key={label} className="text-center p-3 rounded-xl bg-muted/10 border border-[#E1DCC9]/15">
+                        <div className="text-xl font-bold text-[#E1DCC9]/60">{value}</div>
                         <div className="text-xs font-medium text-gray-600 mt-0.5">{label}</div>
                         <div className="text-[10px] text-gray-400">{sub}</div>
                       </div>
@@ -1200,7 +1200,7 @@ ${clone.outerHTML}
                       <div className="space-y-2">
                         {handoverItems.filter(Boolean).map((item, i) => (
                           <div key={i} className="flex items-start gap-2 text-sm text-gray-600 bg-gray-50 rounded-lg px-3 py-2">
-                            <span className="text-blue-500 font-bold mt-0.5 flex-shrink-0">✓</span>{item}
+                            <span className="text-foreground/70 font-bold mt-0.5 flex-shrink-0">✓</span>{item}
                           </div>
                         ))}
                       </div>

@@ -134,10 +134,10 @@ export function ProjectTemplateSelector({
 
   const getCategoryColor = (category: string) => {
     const colors: Record<string, string> = {
-      residential: 'bg-blue-100 text-blue-800',
-      commercial: 'bg-purple-100 text-purple-800',
+      residential: 'bg-muted/20 text-foreground/90',
+      commercial: 'bg-muted/15 text-muted-foreground',
       renovation: 'bg-amber-100 text-amber-800',
-      extension: 'bg-green-100 text-green-800',
+      extension: 'bg-muted/20 text-foreground/80',
       'new-build': 'bg-red-100 text-red-800',
     };
     return colors[category] || 'bg-gray-100 text-gray-800';
@@ -260,7 +260,7 @@ export function ProjectTemplateSelector({
                   <div className="flex flex-wrap gap-2">
                     {selectedTemplate.nccRequirements.map((req, idx) => (
                       <Badge key={idx} variant="outline" className="text-xs">
-                        <CheckCircle2 className="h-3 w-3 mr-1 text-green-600" />
+                        <CheckCircle2 className="h-3 w-3 mr-1 text-[#E1DCC9]/70" />
                         {req}
                       </Badge>
                     ))}

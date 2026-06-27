@@ -69,13 +69,13 @@ export function NCCCompliancePanel({
 
   // Get score color
   const getScoreColor = (score: number) => {
-    if (score >= 90) return 'text-green-600';
+    if (score >= 90) return 'text-[#E1DCC9]/70';
     if (score >= 70) return 'text-amber-600';
     return 'text-red-600';
   };
 
   const getScoreBg = (score: number) => {
-    if (score >= 90) return 'bg-green-100';
+    if (score >= 90) return 'bg-muted/20';
     if (score >= 70) return 'bg-amber-100';
     return 'bg-red-100';
   };
@@ -116,16 +116,16 @@ export function NCCCompliancePanel({
   // Get work type badge color
   const getWorkTypeColor = (workType: string) => {
     const colors: Record<string, string> = {
-      bathroom: 'bg-blue-100 text-blue-800',
-      shower: 'bg-cyan-100 text-cyan-800',
-      laundry: 'bg-indigo-100 text-indigo-800',
+      bathroom: 'bg-muted/20 text-foreground/90',
+      shower: 'bg-muted/15 text-[#E1DCC9]/90',
+      laundry: 'bg-muted/15 text-muted-foreground',
       deck: 'bg-amber-100 text-amber-800',
       electrical: 'bg-yellow-100 text-yellow-800',
-      plumbing: 'bg-sky-100 text-sky-800',
+      plumbing: 'bg-muted/15 text-foreground/60',
       insulation: 'bg-orange-100 text-orange-800',
       glazing: 'bg-violet-100 text-violet-800',
       fire: 'bg-red-100 text-red-800',
-      access: 'bg-green-100 text-green-800',
+      access: 'bg-muted/20 text-foreground/80',
     };
     return colors[workType] || 'bg-gray-100 text-gray-800';
   };
@@ -170,7 +170,7 @@ export function NCCCompliancePanel({
 
               <div className="flex items-center gap-4">
                 {result.isCompliant ? (
-                  <Badge className="bg-green-100 text-green-800">
+                  <Badge className="bg-muted/20 text-foreground/80">
                     <CheckCircle2 className="h-3 w-3 mr-1" />
                     Fully Compliant
                   </Badge>
@@ -319,11 +319,11 @@ export function NCCCompliancePanel({
                       <div
                         key={idx}
                         className={`flex items-start gap-3 p-2 rounded ${
-                          req.met ? 'bg-green-50' : req.mandatory ? 'bg-red-50' : 'bg-amber-50'
+                          req.met ? 'bg-muted/10' : req.mandatory ? 'bg-red-50' : 'bg-amber-50'
                         }`}
                       >
                         {req.met ? (
-                          <CheckCircle2 className="h-5 w-5 text-green-600 shrink-0" />
+                          <CheckCircle2 className="h-5 w-5 text-[#E1DCC9]/70 shrink-0" />
                         ) : req.mandatory ? (
                           <XCircle className="h-5 w-5 text-red-600 shrink-0" />
                         ) : (

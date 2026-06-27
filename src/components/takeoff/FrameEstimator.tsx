@@ -253,7 +253,7 @@ function WallList({
               </button>
 
               {w.hasRakingPlate && (
-                <span className="text-xs text-purple-400 font-medium shrink-0">Raking</span>
+                <span className="text-xs text-muted-foreground font-medium shrink-0">Raking</span>
               )}
 
               {/* Openings summary */}
@@ -272,7 +272,7 @@ function WallList({
                     onClick={() => setExpandedWallId(isExpanded ? null : w.id)}
                     className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors"
                   >
-                    <AppWindow className="h-3 w-3 text-cyan-400" />
+                    <AppWindow className="h-3 w-3 text-[#E1DCC9]" />
                     {windowCount}
                   </button>
                 )}
@@ -308,7 +308,7 @@ function WallList({
                   <div key={o.id} className="flex items-center gap-2 px-2 py-1 rounded text-xs hover:bg-muted/20 group/op">
                     {o.type === 'door'
                       ? <DoorOpen className="h-3 w-3 text-violet-400 shrink-0" />
-                      : <AppWindow className="h-3 w-3 text-cyan-400 shrink-0" />
+                      : <AppWindow className="h-3 w-3 text-[#E1DCC9] shrink-0" />
                     }
                     <span className="capitalize text-muted-foreground">{o.type}</span>
                     <span className="font-mono tabular-nums text-foreground/80">{o.widthMm}mm</span>
@@ -333,7 +333,7 @@ function WallList({
                     'flex items-center gap-1.5 px-2 py-1 text-xs rounded border transition-colors shrink-0',
                     newOpeningType === 'door'
                       ? 'border-violet-600/50 text-violet-400 bg-violet-950/30'
-                      : 'border-cyan-600/50 text-cyan-400 bg-cyan-950/30',
+                      : 'border-foreground/20 text-[#E1DCC9] bg-card/50',
                   )}
                 >
                   {newOpeningType === 'door'

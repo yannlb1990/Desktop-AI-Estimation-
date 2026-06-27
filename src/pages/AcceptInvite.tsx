@@ -66,7 +66,7 @@ const AcceptInvite = () => {
 
       {status === "success" && (
         <>
-          <CheckCircle className="h-16 w-16 text-green-500" />
+          <CheckCircle className="h-16 w-16 text-[#E1DCC9]/80" />
           <h1 className="font-display text-3xl font-bold">Welcome to the team!</h1>
           <p className="text-muted-foreground max-w-sm">
             Your account is now active with Business plan access. Redirecting to your dashboard…

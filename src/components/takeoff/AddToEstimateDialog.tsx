@@ -13,7 +13,7 @@ interface AddToEstimateDialogProps {
 const TYPES = [
   { id: 'wall' as const, label: 'Wall', icon: Columns, color: 'bg-amber-500' },
   { id: 'door' as const, label: 'Door', icon: DoorOpen, color: 'bg-violet-500' },
-  { id: 'window' as const, label: 'Window', icon: AppWindow, color: 'bg-cyan-500' },
+  { id: 'window' as const, label: 'Window', icon: AppWindow, color: 'bg-primary' },
 ];
 
 export const AddToEstimateDialog: React.FC<AddToEstimateDialogProps> = ({

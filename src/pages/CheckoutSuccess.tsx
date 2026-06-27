@@ -50,7 +50,7 @@ const CheckoutSuccess = () => {
 
       {status === 'success' && (
         <>
-          <CheckCircle className="h-16 w-16 text-green-500" />
+          <CheckCircle className="h-16 w-16 text-[#E1DCC9]/80" />
           <h1 className="font-display text-3xl font-bold">You're all set!</h1>
           <p className="text-muted-foreground max-w-sm">
             Your subscription is now active. Redirecting to your dashboard…
@@ -63,7 +63,7 @@ const CheckoutSuccess = () => {
 
       {status === 'slow' && (
         <>
-          <CheckCircle className="h-16 w-16 text-green-500" />
+          <CheckCircle className="h-16 w-16 text-[#E1DCC9]/80" />
           <h1 className="font-display text-2xl font-bold">Payment confirmed!</h1>
           <p className="text-muted-foreground max-w-sm">
             Your subscription is activating. This can take a few moments.

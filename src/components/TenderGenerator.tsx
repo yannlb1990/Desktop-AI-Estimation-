@@ -273,33 +273,33 @@ export const TenderGenerator = ({ project, estimate }: TenderGeneratorProps) => 
               <div className="max-w-[780px] mx-auto bg-white shadow-xl" id="printable-tender">
 
                 {/* Cover header */}
-                <div style={{ background: "linear-gradient(135deg, #0f172a 0%, #1e3a5f 60%, #0f4c81 100%)" }} className="p-10 text-white">
+                <div style={{ background: "linear-gradient(135deg, #000000 0%, #1F150C 60%, #0f4c81 100%)" }} className="p-10 text-white">
                   <div className="flex justify-between items-start">
                     <div>
-                      <div className="text-xs uppercase tracking-widest text-blue-300 mb-1">Construction Proposal</div>
+                      <div className="text-xs uppercase tracking-widest text-foreground/70 mb-1">Construction Proposal</div>
                       <h1 className="text-3xl font-bold mb-1">{companyName}</h1>
-                      {companyABN && <div className="text-blue-200 text-sm">ABN: {companyABN}</div>}
-                      {builderLicence && <div className="text-blue-200 text-sm">Licence: {builderLicence}</div>}
+                      {companyABN && <div className="text-foreground/80 text-sm">ABN: {companyABN}</div>}
+                      {builderLicence && <div className="text-foreground/80 text-sm">Licence: {builderLicence}</div>}
                     </div>
                     <div className="text-right">
-                      <div className="text-4xl font-bold text-blue-300 tracking-tight">{tenderNumber}</div>
-                      <div className="text-sm text-blue-200 mt-1">Date: {fmt(today)}</div>
-                      <div className="text-sm text-blue-200">Valid until: {fmt(validUntil)}</div>
+                      <div className="text-4xl font-bold text-foreground/70 tracking-tight">{tenderNumber}</div>
+                      <div className="text-sm text-foreground/80 mt-1">Date: {fmt(today)}</div>
+                      <div className="text-sm text-foreground/80">Valid until: {fmt(validUntil)}</div>
                     </div>
                   </div>
 
                   <div className="mt-8 pt-6 border-t border-white/20 grid grid-cols-2 gap-6">
                     <div>
-                      <div className="text-xs uppercase tracking-widest text-blue-300 mb-2">Project</div>
+                      <div className="text-xs uppercase tracking-widest text-foreground/70 mb-2">Project</div>
                       <div className="text-xl font-semibold">{project?.name || "—"}</div>
                       {(project?.site_address || project?.address) && (
-                        <div className="text-blue-200 text-sm mt-1">{project?.site_address || project?.address}</div>
+                        <div className="text-foreground/80 text-sm mt-1">{project?.site_address || project?.address}</div>
                       )}
                     </div>
                     <div>
-                      <div className="text-xs uppercase tracking-widest text-blue-300 mb-2">Prepared For</div>
+                      <div className="text-xs uppercase tracking-widest text-foreground/70 mb-2">Prepared For</div>
                       <div className="text-xl font-semibold">{project?.client_name || "Client"}</div>
-                      <div className="text-blue-200 text-sm mt-1">
+                      <div className="text-foreground/80 text-sm mt-1">
                         {companyPhone && <div>{companyPhone}</div>}
                         {companyEmail && <div>{companyEmail}</div>}
                       </div>
@@ -314,15 +314,15 @@ export const TenderGenerator = ({ project, estimate }: TenderGeneratorProps) => 
 
                   {/* Contract sum highlight */}
                   {subtotalNum > 0 && (
-                    <div className="rounded-xl border-2 border-blue-100 bg-blue-50 p-6 flex items-center justify-between">
+                    <div className="rounded-xl border-2 border-border/30 bg-muted/10 p-6 flex items-center justify-between">
                       <div>
-                        <div className="text-sm text-blue-600 font-medium uppercase tracking-wide mb-1">Total Contract Value</div>
-                        <div className="text-4xl font-bold text-blue-900 font-mono">
+                        <div className="text-sm text-foreground/70 font-medium uppercase tracking-wide mb-1">Total Contract Value</div>
+                        <div className="text-4xl font-bold text-foreground font-mono">
                           ${totalIncGst.toLocaleString("en-AU", { minimumFractionDigits: 2 })}
                         </div>
-                        <div className="text-sm text-blue-500 mt-1">Inclusive of GST</div>
+                        <div className="text-sm text-foreground/70 mt-1">Inclusive of GST</div>
                       </div>
-                      <div className="text-right text-sm text-blue-700 space-y-1">
+                      <div className="text-right text-sm text-foreground/80 space-y-1">
                         <div>Subtotal: ${subtotalNum.toLocaleString("en-AU", { minimumFractionDigits: 2 })}</div>
                         <div>GST (10%): ${gstAmount.toLocaleString("en-AU", { minimumFractionDigits: 2 })}</div>
                       </div>
@@ -332,19 +332,19 @@ export const TenderGenerator = ({ project, estimate }: TenderGeneratorProps) => 
                   {/* Scope of Works */}
                   <section>
                     <div className="flex items-center gap-3 mb-4">
-                      <div className="w-1 h-6 rounded-full bg-blue-600" />
+                      <div className="w-1 h-6 rounded-full bg-muted/70" />
                       <h2 className="text-lg font-bold text-gray-900">Scope of Works</h2>
                     </div>
 
                     <div className="grid grid-cols-2 gap-6">
                       <div>
                         <h3 className="text-sm font-semibold text-gray-700 mb-2 flex items-center gap-1">
-                          <span className="text-green-500">✓</span> Inclusions
+                          <span className="text-[#E1DCC9]/80">✓</span> Inclusions
                         </h3>
                         <ul className="space-y-1.5">
                           {inclusions.filter(Boolean).map((item, i) => (
                             <li key={i} className="flex items-start gap-2 text-sm text-gray-600">
-                              <ChevronRight className="h-3.5 w-3.5 mt-0.5 flex-shrink-0 text-green-500" />
+                              <ChevronRight className="h-3.5 w-3.5 mt-0.5 flex-shrink-0 text-[#E1DCC9]/80" />
                               {item}
                             </li>
                           ))}
@@ -376,14 +376,14 @@ export const TenderGenerator = ({ project, estimate }: TenderGeneratorProps) => 
                   {subtotalNum > 0 && (
                     <section>
                       <div className="flex items-center gap-3 mb-4">
-                        <div className="w-1 h-6 rounded-full bg-blue-600" />
+                        <div className="w-1 h-6 rounded-full bg-muted/70" />
                         <h2 className="text-lg font-bold text-gray-900">Payment Schedule</h2>
                       </div>
                       <div className="grid grid-cols-3 gap-4">
                         {[
-                          { label: "Deposit", pct: depositPct, amount: depositAmount, note: "Due upon acceptance", color: "bg-blue-50 border-blue-200" },
+                          { label: "Deposit", pct: depositPct, amount: depositAmount, note: "Due upon acceptance", color: "bg-muted/10 border-border/40" },
                           { label: "Progress Payment", pct: progressPct, amount: progressAmount, note: "Due at practical completion stage", color: "bg-violet-50 border-violet-200" },
-                          { label: "Final Payment", pct: finalPct, amount: finalAmount, note: "Due upon project completion", color: "bg-green-50 border-green-200" },
+                          { label: "Final Payment", pct: finalPct, amount: finalAmount, note: "Due upon project completion", color: "bg-muted/10 border-border/35" },
                         ].map(({ label, pct, amount, note, color }) => (
                           <div key={label} className={`rounded-xl border p-4 ${color}`}>
                             <div className="text-xs uppercase tracking-wide text-gray-500 mb-1">{label}</div>
@@ -401,7 +401,7 @@ export const TenderGenerator = ({ project, estimate }: TenderGeneratorProps) => 
                   {/* Terms */}
                   <section>
                     <div className="flex items-center gap-3 mb-4">
-                      <div className="w-1 h-6 rounded-full bg-blue-600" />
+                      <div className="w-1 h-6 rounded-full bg-muted/70" />
                       <h2 className="text-lg font-bold text-gray-900">Terms & Conditions</h2>
                     </div>
                     <p className="text-sm text-gray-600 leading-relaxed">{terms}</p>

@@ -3,7 +3,7 @@ import { motion } from "framer-motion";
 const viewportOpts = { once: true, margin: "-60px" } as const;
 
 const exportDocs = [
-  { label: "Tender PDF",      desc: "Branded BOQ ready to send",        color: "#22d3ee", bg: "rgba(34,211,238,0.08)",  border: "rgba(34,211,238,0.20)" },
+  { label: "Tender PDF",      desc: "Branded BOQ ready to send",        color: "#E1DCC9", bg: "rgba(34,211,238,0.08)",  border: "rgba(34,211,238,0.20)" },
   { label: "Cost Breakdown",  desc: "Trade-by-trade with your margin",   color: "#818cf8", bg: "rgba(129,140,248,0.08)", border: "rgba(129,140,248,0.18)" },
   { label: "Gantt Schedule",  desc: "Construction timeline per stage",   color: "#34d399", bg: "rgba(52,211,153,0.08)",  border: "rgba(52,211,153,0.18)" },
   { label: "Supplier Quotes", desc: "Email-ready RFQs per trade",        color: "#fb923c", bg: "rgba(251,146,60,0.08)",  border: "rgba(251,146,60,0.18)" },
@@ -13,7 +13,7 @@ const exportDocs = [
 
 const TakeoffVisual = () => {
   return (
-    <section className="py-20 md:py-28 bg-[#09111f]">
+    <section className="py-20 md:py-28 bg-[#000000]">
       <div className="container mx-auto px-6 lg:px-12">
         <div className="grid lg:grid-cols-2 gap-12 lg:gap-20 items-start">
 
@@ -26,8 +26,8 @@ const TakeoffVisual = () => {
             className="space-y-6 lg:sticky lg:top-24"
           >
             <div className="flex items-center gap-3">
-              <div className="h-px w-8 bg-cyan-400/50" />
-              <span className="text-xs font-mono text-cyan-400/60 uppercase tracking-widest">What comes out</span>
+              <div className="h-px w-8 bg-primary/15" />
+              <span className="text-xs font-mono text-[#E1DCC9]/70 uppercase tracking-widest">What comes out</span>
             </div>
             <h2 className="font-display text-4xl sm:text-5xl font-bold text-white leading-tight">
               One takeoff.
@@ -51,7 +51,7 @@ const TakeoffVisual = () => {
 
             <button
               onClick={() => window.location.href = "/project/new"}
-              className="inline-flex items-center px-7 py-3 rounded-full bg-cyan-400 text-[#09111f] font-bold hover:bg-cyan-300 transition-colors"
+              className="inline-flex items-center px-7 py-3 rounded-full bg-primary text-[#000000] font-bold hover:bg-primary/80 transition-colors"
             >
               Start a takeoff
             </button>
@@ -66,27 +66,27 @@ const TakeoffVisual = () => {
             className="space-y-3"
           >
             {/* Canvas mockup */}
-            <div className="rounded-xl overflow-hidden border border-white/8 bg-[#0d1829] shadow-[0_20px_60px_rgba(0,0,0,0.5)]">
+            <div className="rounded-xl overflow-hidden border border-white/8 bg-[#1F150C] shadow-[0_20px_60px_rgba(0,0,0,0.5)]">
               {/* Window chrome */}
-              <div className="flex items-center gap-2 px-3 py-2 bg-[#111e30] border-b border-white/8">
+              <div className="flex items-center gap-2 px-3 py-2 bg-[#1F150C] border-b border-white/8">
                 <div className="flex gap-1">
                   <div className="w-2.5 h-2.5 rounded-full bg-[#ff5f57]" />
                   <div className="w-2.5 h-2.5 rounded-full bg-[#febc2e]" />
                   <div className="w-2.5 h-2.5 rounded-full bg-[#28c840]" />
                 </div>
                 <span className="text-[10px] text-white/30 font-mono ml-2 flex-1 truncate">Ground_Floor_DA-01.pdf</span>
-                <span className="text-[9px] font-mono text-emerald-400/80 bg-emerald-400/10 border border-emerald-400/20 px-1.5 py-0.5 rounded">✓ 1:100</span>
+                <span className="text-[9px] font-mono text-[#E1DCC9]/70 bg-[#E1DCC9]/8 border border-[#E1DCC9]/20 px-1.5 py-0.5 rounded">✓ 1:100</span>
               </div>
               {/* Toolbar + canvas */}
               <div className="flex">
-                <div className="w-10 shrink-0 bg-[#0a1522] border-r border-white/6 flex flex-col items-center py-3 gap-3">
+                <div className="w-10 shrink-0 bg-[#000000] border-r border-white/6 flex flex-col items-center py-3 gap-3">
                   {["↖", "—", "▭", "✏", "⊕"].map((sym) => (
                     <div key={sym} className="w-6 h-6 flex items-center justify-center rounded text-white/20 text-[10px]">
                       {sym}
                     </div>
                   ))}
                 </div>
-                <div className="flex-1 bg-[#0f1c2e] relative">
+                <div className="flex-1 bg-[#1F150C] relative">
                   <svg viewBox="0 0 380 240" className="w-full" style={{ display: "block" }}>
                     <defs>
                       <pattern id="tv-grid" width="16" height="16" patternUnits="userSpaceOnUse">
@@ -98,23 +98,23 @@ const TakeoffVisual = () => {
                     <line x1="150" y1="16" x2="150" y2="224" stroke="#c8d8e8" strokeWidth="1.2" />
                     <line x1="150" y1="130" x2="356" y2="130" stroke="#c8d8e8" strokeWidth="1.2" />
                     <line x1="260" y1="16" x2="260" y2="224" stroke="#c8d8e8" strokeWidth="1.2" />
-                    <polygon points="24,16 150,16 150,224 24,224" fill="rgba(34,211,238,0.09)" stroke="#22d3ee" strokeWidth="1.4" />
-                    <circle cx="24" cy="16" r="3" fill="#22d3ee" />
-                    <circle cx="150" cy="16" r="3" fill="#22d3ee" />
-                    <circle cx="150" cy="224" r="3" fill="#22d3ee" />
-                    <circle cx="24" cy="224" r="3" fill="#22d3ee" />
-                    <rect x="44" y="109" width="72" height="20" rx="4" fill="rgba(34,211,238,0.22)" stroke="#22d3ee" strokeWidth="0.8" />
-                    <text x="80" y="123" textAnchor="middle" fontSize="10" fontFamily="monospace" fill="#22d3ee" fontWeight="bold">44.6 m²</text>
+                    <polygon points="24,16 150,16 150,224 24,224" fill="rgba(34,211,238,0.09)" stroke="#E1DCC9" strokeWidth="1.4" />
+                    <circle cx="24" cy="16" r="3" fill="#E1DCC9" />
+                    <circle cx="150" cy="16" r="3" fill="#E1DCC9" />
+                    <circle cx="150" cy="224" r="3" fill="#E1DCC9" />
+                    <circle cx="24" cy="224" r="3" fill="#E1DCC9" />
+                    <rect x="44" y="109" width="72" height="20" rx="4" fill="rgba(34,211,238,0.22)" stroke="#E1DCC9" strokeWidth="0.8" />
+                    <text x="80" y="123" textAnchor="middle" fontSize="10" fontFamily="monospace" fill="#E1DCC9" fontWeight="bold">44.6 m²</text>
                     <text x="87" y="72" textAnchor="middle" fontSize="7.5" fill="rgba(200,216,232,0.28)" fontFamily="system-ui">LIVING / DINING</text>
                     <text x="197" y="68" textAnchor="middle" fontSize="7" fill="rgba(200,216,232,0.22)" fontFamily="system-ui">KITCHEN</text>
                     <text x="305" y="68" textAnchor="middle" fontSize="7" fill="rgba(200,216,232,0.22)" fontFamily="system-ui">MASTER BED</text>
                     <text x="197" y="178" textAnchor="middle" fontSize="7" fill="rgba(200,216,232,0.22)" fontFamily="system-ui">BED 2</text>
                     <text x="305" y="178" textAnchor="middle" fontSize="7" fill="rgba(200,216,232,0.22)" fontFamily="system-ui">ENSUITE</text>
-                    <circle cx="150" cy="224" r="5" fill="none" stroke="#22d3ee" strokeWidth="0.8" opacity="0.5">
+                    <circle cx="150" cy="224" r="5" fill="none" stroke="#E1DCC9" strokeWidth="0.8" opacity="0.5">
                       <animate attributeName="r" values="4;9;4" dur="2s" repeatCount="indefinite" />
                       <animate attributeName="opacity" values="0.5;0.1;0.5" dur="2s" repeatCount="indefinite" />
                     </circle>
-                    <circle cx="150" cy="224" r="2.5" fill="#22d3ee" />
+                    <circle cx="150" cy="224" r="2.5" fill="#E1DCC9" />
                     <rect x="310" y="16" width="46" height="88" fill="rgba(10,21,34,0.85)" stroke="rgba(255,255,255,0.08)" strokeWidth="0.8" />
                     <text x="316" y="28" fontSize="5.5" fill="rgba(255,255,255,0.25)" fontFamily="monospace">ITEMS</text>
                     {[
@@ -129,10 +129,10 @@ const TakeoffVisual = () => {
                       </g>
                     ))}
                     <line x1="312" y1="88" x2="352" y2="88" stroke="rgba(255,255,255,0.08)" strokeWidth="0.6" />
-                    <text x="352" y="100" textAnchor="end" fontSize="5.5" fill="#22d3ee" fontFamily="monospace" fontWeight="bold">99.8 m²</text>
+                    <text x="352" y="100" textAnchor="end" fontSize="5.5" fill="#E1DCC9" fontFamily="monospace" fontWeight="bold">99.8 m²</text>
                   </svg>
-                  <div className="absolute bottom-1.5 left-12 right-2 flex items-center justify-between px-2 py-1 bg-[#0a1522]/90 border border-white/6 rounded text-[8px] font-mono">
-                    <span className="text-cyan-400">Polygon · 4 pts · 44.6 m²</span>
+                  <div className="absolute bottom-1.5 left-12 right-2 flex items-center justify-between px-2 py-1 bg-[#000000]/90 border border-white/6 rounded text-[8px] font-mono">
+                    <span className="text-[#E1DCC9]">Polygon · 4 pts · 44.6 m²</span>
                     <span className="text-white/20">Page 1 / 3</span>
                   </div>
                 </div>

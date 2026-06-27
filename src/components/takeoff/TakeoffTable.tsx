@@ -154,8 +154,8 @@ const RoofPitchPanel = ({ measurement: m, onUpdateMeasurement }: RoofPitchPanelP
             onClick={() => { applyWaste(pct); setCustomWaste(''); }}
             className={`h-5 px-1.5 rounded text-[10px] font-mono transition-colors ${
               waste === pct
-                ? 'bg-cyan-600 text-white'
-                : 'bg-muted text-muted-foreground hover:bg-cyan-600/20 hover:text-cyan-400'
+                ? 'bg-[#412D15] text-white'
+                : 'bg-muted text-muted-foreground hover:bg-[#412D15]/20 hover:text-[#E1DCC9]'
             }`}
           >
             {pct}%
@@ -456,8 +456,8 @@ export const TakeoffTable = ({
       <div
         className={cn(
           'grid grid-cols-12 gap-2 p-3 border-b items-start text-sm',
-          m.lockedToSOW && 'bg-blue-50 dark:bg-blue-950/30',
-          m.validated && 'bg-green-50 dark:bg-green-950/30',
+          m.lockedToSOW && 'bg-muted/10 dark:bg-background/70',
+          m.validated && 'bg-muted/10 dark:bg-card/50',
           selectedIds.has(m.id) && 'bg-accent/50'
         )}
       >
@@ -537,7 +537,7 @@ export const TakeoffTable = ({
                 <Button
                   variant={m.lockedToSOW ? 'default' : 'ghost'}
                   size="icon"
-                  className={cn('h-7 w-7', m.lockedToSOW && 'bg-blue-600 hover:bg-blue-700')}
+                  className={cn('h-7 w-7', m.lockedToSOW && 'bg-muted/70 hover:bg-muted/80')}
                   onClick={() => handleLockToSOW(m.id)}
                 >
                   <Lock className="h-3 w-3" />
@@ -575,8 +575,8 @@ export const TakeoffTable = ({
         <div
           className={cn(
             'grid grid-cols-12 gap-2 p-3 border-b items-start text-sm',
-            m.lockedToSOW && 'bg-blue-50 dark:bg-blue-950/30',
-            m.validated && 'bg-green-50 dark:bg-green-950/30',
+            m.lockedToSOW && 'bg-muted/10 dark:bg-background/70',
+            m.validated && 'bg-muted/10 dark:bg-card/50',
             selectedIds.has(m.id) && 'bg-accent/50'
           )}
         >
@@ -705,7 +705,7 @@ export const TakeoffTable = ({
               {m.unit === 'count' ? 'EA' : m.unit}
             </div>
             {computed.value !== m.realValue && (
-              <div className="mt-1 text-xs text-blue-600 font-medium">
+              <div className="mt-1 text-xs text-foreground/70 font-medium">
                 → {computed.value.toFixed(2)} {computed.unit}
               </div>
             )}
@@ -737,16 +737,16 @@ export const TakeoffTable = ({
                 // Already configured — show summary badge + re-configure button
                 <div className="flex flex-col gap-1">
                   <div className="flex flex-wrap gap-1">
-                    <span className="inline-flex items-center rounded-full bg-emerald-500/15 px-2 py-0.5 text-[10px] font-medium text-emerald-600">
+                    <span className="inline-flex items-center rounded-full bg-[#E1DCC9]/8 px-2 py-0.5 text-[10px] font-medium text-[#E1DCC9]/60">
                       ✓ {m.height}m
                     </span>
                     {m.framingSystem && m.framingSystem !== 'none' && (
-                      <span className="inline-flex items-center rounded-full bg-blue-500/15 px-2 py-0.5 text-[10px] font-medium text-blue-600 truncate max-w-[80px]">
+                      <span className="inline-flex items-center rounded-full bg-muted/100/15 px-2 py-0.5 text-[10px] font-medium text-foreground/70 truncate max-w-[80px]">
                         {m.framingSystem.replace('_', ' ')}
                       </span>
                     )}
                     {m.hasLining && (
-                      <span className="inline-flex items-center rounded-full bg-purple-500/15 px-2 py-0.5 text-[10px] font-medium text-purple-600">
+                      <span className="inline-flex items-center rounded-full bg-muted/20 px-2 py-0.5 text-[10px] font-medium text-muted-foreground">
                         Lining
                       </span>
                     )}
@@ -770,7 +770,7 @@ export const TakeoffTable = ({
               ) : (
                 // Not yet configured — show setup button
                 <button
-                  className="flex items-center gap-1.5 rounded-md border border-dashed border-cyan-500/50 px-2 py-1.5 text-[11px] font-medium text-cyan-500 hover:border-cyan-400 hover:text-cyan-400 hover:bg-cyan-500/5 transition-colors"
+                  className="flex items-center gap-1.5 rounded-md border border-dashed border-foreground/20 px-2 py-1.5 text-[11px] font-medium text-[#E1DCC9] hover:border-foreground/40 hover:text-[#E1DCC9] hover:bg-primary/10 transition-colors"
                   onClick={() => {
                     setWallsForSetup([m]);
                     setPendingNonWallIds([]);
@@ -806,7 +806,7 @@ export const TakeoffTable = ({
                   <Button
                     variant={m.lockedToSOW ? 'default' : 'ghost'}
                     size="icon"
-                    className={cn('h-7 w-7', m.lockedToSOW && 'bg-blue-600 hover:bg-blue-700')}
+                    className={cn('h-7 w-7', m.lockedToSOW && 'bg-muted/70 hover:bg-muted/80')}
                     onClick={() => handleLockToSOW(m.id)}
                   >
                     <Lock className="h-3 w-3" />
@@ -1038,7 +1038,7 @@ export const TakeoffTable = ({
               return (
                 <Button
                   variant="outline"
-                  className={`col-span-2 ${mixedUnits ? 'border-amber-400 text-amber-400 opacity-70 cursor-not-allowed' : 'border-blue-400 text-blue-400 hover:bg-blue-950/40'}`}
+                  className={`col-span-2 ${mixedUnits ? 'border-amber-400 text-amber-400 opacity-70 cursor-not-allowed' : 'border-foreground/25 text-foreground/60 hover:bg-background/40'}`}
                   onClick={mixedUnits ? undefined : handleCombineSelected}
                   disabled={mixedUnits}
                 >

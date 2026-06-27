@@ -2184,7 +2184,7 @@ export const InteractiveCanvas = ({
       const snapGuide = perpSnapRef.current;
       if (snapGuide) {
         ctx.save();
-        ctx.strokeStyle = '#22d3ee';
+        ctx.strokeStyle = '#E1DCC9';
         ctx.lineWidth = 1.5 * dpr;
         ctx.setLineDash([6 * dpr, 4 * dpr]);
         ctx.beginPath();
@@ -2220,7 +2220,7 @@ export const InteractiveCanvas = ({
         const cx = tpx(epSnap.x), cy = tpy(epSnap.y);
         const r = 8 * dpr;
         ctx.save();
-        ctx.strokeStyle = '#22d3ee';
+        ctx.strokeStyle = '#E1DCC9';
         ctx.lineWidth = 2 * dpr;
         ctx.setLineDash([]);
         ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI * 2); ctx.stroke();
@@ -2326,7 +2326,7 @@ export const InteractiveCanvas = ({
           const s = 4.5 * dpr;
           ctx.save();
           ctx.setLineDash([]);
-          ctx.fillStyle = (m.color || '#22d3ee') + 'cc';
+          ctx.fillStyle = (m.color || '#E1DCC9') + 'cc';
           ctx.strokeStyle = 'rgba(255,255,255,0.85)';
           ctx.lineWidth = 1.2 * dpr;
           ctx.beginPath();
@@ -4641,7 +4641,7 @@ export const InteractiveCanvas = ({
         <div className="absolute top-3 left-1/2 transform -translate-x-1/2 flex gap-2 z-10">
           <Button
             onClick={() => setTimeout(() => handleDoubleClick(), 0)}
-            className="bg-green-600 hover:bg-green-700 text-white shadow-lg"
+            className="bg-[#412D15]/70 hover:bg-[#412D15]/80 text-white shadow-lg"
             size="sm"
           >
             <Check className="h-4 w-4 mr-1" />
@@ -4661,7 +4661,7 @@ export const InteractiveCanvas = ({
 
       {/* Polygon hint when drawing */}
       {activeTool === 'polygon' && polygonPoints.length > 0 && polygonPoints.length < 3 && hintVisible && (
-        <div className="absolute bottom-4 left-1/2 transform -translate-x-1/2 bg-blue-500/90 text-white px-4 py-2 rounded-md text-sm font-medium z-10 shadow-lg transition-opacity duration-500">
+        <div className="absolute bottom-4 left-1/2 transform -translate-x-1/2 bg-muted/100/90 text-white px-4 py-2 rounded-md text-sm font-medium z-10 shadow-lg transition-opacity duration-500">
           Click to add points ({polygonPoints.length}/3 minimum)
         </div>
       )}
@@ -4722,7 +4722,7 @@ export const InteractiveCanvas = ({
 
       {/* Select tool hint */}
       {activeTool === 'select' && hintVisible && (
-        <div className="absolute bottom-4 left-1/2 transform -translate-x-1/2 bg-blue-600/90 text-white px-4 py-2 rounded-md text-sm font-medium z-10 shadow-lg transition-opacity duration-500">
+        <div className="absolute bottom-4 left-1/2 transform -translate-x-1/2 bg-muted/70/90 text-white px-4 py-2 rounded-md text-sm font-medium z-10 shadow-lg transition-opacity duration-500">
           Click shapes to select - drag corners to resize, drag center to move
         </div>
       )}

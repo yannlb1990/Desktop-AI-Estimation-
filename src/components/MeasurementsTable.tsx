@@ -36,8 +36,8 @@ export const MeasurementsTable = ({ measurements, onDelete, onEdit }: Measuremen
   const getTypeColor = (type: string) => {
     switch(type) {
       case 'linear': return 'bg-red-100 text-red-800';
-      case 'area': return 'bg-green-100 text-green-800';
-      case 'volume': return 'bg-blue-100 text-blue-800';
+      case 'area': return 'bg-muted/20 text-foreground/80';
+      case 'volume': return 'bg-muted/20 text-foreground/90';
       case 'ea': return 'bg-orange-100 text-orange-800';
       default: return 'bg-gray-100 text-gray-800';
     }

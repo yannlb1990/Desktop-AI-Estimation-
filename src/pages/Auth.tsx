@@ -295,8 +295,8 @@ const Auth = () => {
         <div className="container mx-auto px-6">
           <div className="max-w-md mx-auto">
             <Card className="p-8 shadow-xl text-center space-y-5">
-              <div className="w-16 h-16 bg-cyan-400/10 rounded-full flex items-center justify-center mx-auto">
-                <Mail className="h-8 w-8 text-cyan-400" />
+              <div className="w-16 h-16 bg-primary/15 rounded-full flex items-center justify-center mx-auto">
+                <Mail className="h-8 w-8 text-[#E1DCC9]" />
               </div>
               <div>
                 <h1 className="font-display text-2xl font-bold mb-2">Verify your email</h1>
@@ -348,7 +348,7 @@ const Auth = () => {
 
           <Button
             variant="ghost"
-            className="mb-6 text-white/70 hover:text-white hover:bg-white/10"
+            className="mb-6 text-white/70 hover:text-foreground hover:bg-white/10"
             onClick={() => navigate("/")}
           >
             <ArrowLeft className="h-4 w-4 mr-2" />
@@ -486,7 +486,7 @@ const Auth = () => {
                 </div>
                 <Button
                   type="submit"
-                  className="w-full bg-cyan-400 text-[#09111f] hover:bg-cyan-300 rounded-full font-bold"
+                  className="w-full bg-primary text-[#000000] hover:bg-primary/80 rounded-full font-bold"
                   disabled={isLoading}
                 >
                   {isLoading
@@ -619,7 +619,7 @@ const Auth = () => {
 
                 <Button
                   type="submit"
-                  className="w-full bg-cyan-400 text-[#09111f] hover:bg-cyan-300 rounded-full font-bold"
+                  className="w-full bg-primary text-[#000000] hover:bg-primary/80 rounded-full font-bold"
                   disabled={isLoading || !projectType}
                 >
                   {isLoading
@@ -676,9 +676,9 @@ const Auth = () => {
 
           <p className="text-center mt-4 text-sm text-white/50">
             By continuing you agree to our{" "}
-            <a href="/terms" className="underline hover:text-white/80">Terms of Service</a>
+            <a href="/terms" className="underline hover:text-foreground/80">Terms of Service</a>
             {" "}&amp;{" "}
-            <a href="/privacy" className="underline hover:text-white/80">Privacy Policy</a>
+            <a href="/privacy" className="underline hover:text-foreground/80">Privacy Policy</a>
           </p>
         </div>
       </div>

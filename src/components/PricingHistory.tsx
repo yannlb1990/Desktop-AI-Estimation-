@@ -89,7 +89,7 @@ export const PricingHistory = ({ projectId, currentItem }: PricingHistoryProps) 
     } else if (diff > 0) {
       return { icon: TrendingUp, text: `${diff.toFixed(1)}% Above`, color: "text-destructive" };
     } else {
-      return { icon: TrendingDown, text: `${Math.abs(diff).toFixed(1)}% Below`, color: "text-green-500" };
+      return { icon: TrendingDown, text: `${Math.abs(diff).toFixed(1)}% Below`, color: "text-[#E1DCC9]/80" };
     }
   };
 

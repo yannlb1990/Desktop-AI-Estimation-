@@ -1166,8 +1166,8 @@ function buildSections(climateZone: string, buildingClass: string): Section[] {
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 const STATUS_CONFIG: Record<CheckStatus, { label: string; color: string; icon: React.ReactNode }> = {
-  unchecked: { label: "Not Checked", color: "bg-slate-500/15 text-slate-400 border-slate-500/30", icon: <MinusCircle className="h-3.5 w-3.5" /> },
-  pass:      { label: "Pass ✓",      color: "bg-green-500/15 text-green-400 border-green-500/30",  icon: <CheckCircle2 className="h-3.5 w-3.5" /> },
+  unchecked: { label: "Not Checked", color: "bg-muted/15 text-muted-foreground border-border/30", icon: <MinusCircle className="h-3.5 w-3.5" /> },
+  pass:      { label: "Pass ✓",      color: "bg-muted/100/15 text-[#E1DCC9]/80 border-[#E1DCC9]/20",  icon: <CheckCircle2 className="h-3.5 w-3.5" /> },
   fail:      { label: "Fail ✗",      color: "bg-red-500/15 text-red-400 border-red-500/30",        icon: <XCircle className="h-3.5 w-3.5" /> },
   na:        { label: "N/A",         color: "bg-primary/10 text-primary/80 border-primary/20",     icon: <MinusCircle className="h-3.5 w-3.5" /> },
 };
@@ -1185,9 +1185,9 @@ const SECTION_COLOR_MAP: Record<string, string> = {
   yellow: "bg-yellow-500/10 border-yellow-500/30",
   blue:   "bg-primary/10 border-primary/20",
   red:    "bg-red-500/10 border-red-500/30",
-  cyan:   "bg-cyan-500/10 border-cyan-500/30",
-  green:  "bg-green-500/10 border-green-500/30",
-  purple: "bg-purple-500/10 border-purple-500/30",
+  cyan:   "bg-primary/10 border-foreground/20",
+  green:  "bg-muted/100/10 border-[#E1DCC9]/20",
+  purple: "bg-muted/20 border-border/30",
   teal:   "bg-teal-500/10 border-teal-500/30",
   rose:   "bg-rose-500/10 border-rose-500/30",
 };
@@ -2329,9 +2329,9 @@ export const NCCComplianceCard = ({ projectId }: NCCComplianceCardProps) => {
           <div className="grid grid-cols-2 md:grid-cols-5 gap-3 mb-4">
             {[
               { label: "Total Items", val: stats.total, color: "text-foreground" },
-              { label: "Pass", val: stats.pass, color: "text-green-600" },
+              { label: "Pass", val: stats.pass, color: "text-[#E1DCC9]/70" },
               { label: "Fail", val: stats.fail, color: "text-red-600" },
-              { label: "N/A", val: stats.na, color: "text-blue-600" },
+              { label: "N/A", val: stats.na, color: "text-foreground/70" },
               { label: "Not Checked", val: stats.unchecked, color: "text-muted-foreground" },
             ].map(({ label, val, color }) => (
               <div key={label} className="text-center p-3 bg-muted/40 rounded-lg">
@@ -2343,7 +2343,7 @@ export const NCCComplianceCard = ({ projectId }: NCCComplianceCardProps) => {
           <div className="space-y-1">
             <div className="flex justify-between text-xs text-muted-foreground">
               <span>Compliance score ({stats.checked} of {stats.total} checked)</span>
-              <span className={stats.score >= 90 ? "text-green-600 font-semibold" : stats.score >= 70 ? "text-amber-600 font-semibold" : "text-red-600 font-semibold"}>
+              <span className={stats.score >= 90 ? "text-[#E1DCC9]/70 font-semibold" : stats.score >= 70 ? "text-amber-600 font-semibold" : "text-red-600 font-semibold"}>
                 {stats.checked > 0 ? `${stats.score}%` : "—"}
               </span>
             </div>
@@ -2376,7 +2376,7 @@ export const NCCComplianceCard = ({ projectId }: NCCComplianceCardProps) => {
                       </div>
                       <div className="flex items-center gap-2">
                         {sFail > 0 && <Badge variant="destructive" className="text-xs h-5">{sFail} Fail</Badge>}
-                        {sPass > 0 && <Badge className="text-xs h-5 bg-green-600">{sPass} Pass</Badge>}
+                        {sPass > 0 && <Badge className="text-xs h-5 bg-[#412D15]/70">{sPass} Pass</Badge>}
                         {isOpen ? <ChevronDown className="h-4 w-4 text-muted-foreground" /> : <ChevronRight className="h-4 w-4 text-muted-foreground" />}
                       </div>
                     </div>
@@ -2393,7 +2393,7 @@ export const NCCComplianceCard = ({ projectId }: NCCComplianceCardProps) => {
                     const isShowingNotes = showNotes === item.id;
 
                     return (
-                      <div key={item.id} className={`rounded-lg border p-3 transition-colors ${status === "fail" ? "bg-red-500/10 border-red-500/30" : status === "pass" ? "bg-green-500/10 border-green-500/25" : "bg-card border-border"}`}>
+                      <div key={item.id} className={`rounded-lg border p-3 transition-colors ${status === "fail" ? "bg-red-500/10 border-red-500/30" : status === "pass" ? "bg-muted/100/10 border-[#E1DCC9]/20" : "bg-card border-border"}`}>
                         <div className="flex items-start gap-3">
                           {/* Status cycle button */}
                           <button
@@ -2507,9 +2507,9 @@ export const NCCComplianceCard = ({ projectId }: NCCComplianceCardProps) => {
                       className={`px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${
                         libraryBuildingType === v
                           ? v === "residential"
-                            ? "bg-emerald-600 text-white shadow-sm"
+                            ? "bg-[#412D15]/70 text-white shadow-sm"
                             : v === "commercial"
-                            ? "bg-indigo-600 text-white shadow-sm"
+                            ? "bg-muted/50 text-foreground shadow-sm"
                             : "bg-background text-foreground shadow-sm"
                           : "text-muted-foreground hover:text-foreground"
                       }`}
@@ -2582,7 +2582,7 @@ export const NCCComplianceCard = ({ projectId }: NCCComplianceCardProps) => {
                           <span className="text-xs font-bold uppercase tracking-wide text-muted-foreground bg-muted px-1.5 py-0.5 rounded">NCC Rule</span>
                           <Badge variant="outline" className="text-xs h-4 px-1.5">{rule.category}</Badge>
                           <Badge
-                            className={`text-xs h-4 px-1.5 ${rule.buildingType === "commercial" ? "bg-indigo-100 text-indigo-700 border-indigo-200" : "bg-emerald-100 text-emerald-700 border-emerald-200"}`}
+                            className={`text-xs h-4 px-1.5 ${rule.buildingType === "commercial" ? "bg-muted/15 text-muted-foreground border-border/35" : "bg-muted/15 text-[#E1DCC9]/60 border-[#E1DCC9]/20"}`}
                             variant="outline"
                           >
                             {rule.buildingType === "both" ? "Res + Comm" : rule.buildingType === "commercial" ? "Commercial" : "Residential"}
@@ -2644,7 +2644,7 @@ export const NCCComplianceCard = ({ projectId }: NCCComplianceCardProps) => {
                           <span className="text-xs font-bold uppercase tracking-wide text-primary/80 bg-primary/10 border border-primary/20 px-1.5 py-0.5 rounded">AS Standard</span>
                           <Badge variant="outline" className="text-xs h-4 px-1.5">{as.category}</Badge>
                           <Badge
-                            className={`text-xs h-4 px-1.5 ${as.buildingType === "commercial" ? "bg-indigo-500/15 text-indigo-400 border-indigo-500/30" : as.buildingType === "residential" ? "bg-emerald-500/15 text-emerald-400 border-emerald-500/30" : "bg-slate-500/15 text-slate-400 border-slate-500/30"}`}
+                            className={`text-xs h-4 px-1.5 ${as.buildingType === "commercial" ? "bg-muted/20 text-muted-foreground border-border/30" : as.buildingType === "residential" ? "bg-[#E1DCC9]/8 text-[#E1DCC9]/70 border-[#E1DCC9]/20" : "bg-muted/15 text-muted-foreground border-border/30"}`}
                             variant="outline"
                           >
                             {as.buildingType === "both" ? "Res + Comm" : as.buildingType === "commercial" ? "Commercial" : "Residential"}
@@ -2750,7 +2750,7 @@ export const NCCComplianceCard = ({ projectId }: NCCComplianceCardProps) => {
                       <div className="flex flex-col gap-1 shrink-0">
                         <button
                           onClick={() => toggleAS(as.id)}
-                          className={`p-2 rounded transition-colors ${isExpanded ? "bg-blue-100 text-blue-700 hover:bg-blue-200" : "hover:bg-muted text-muted-foreground hover:text-foreground"}`}
+                          className={`p-2 rounded transition-colors ${isExpanded ? "bg-muted/20 text-foreground/80 hover:bg-muted/30" : "hover:bg-muted text-muted-foreground hover:text-foreground"}`}
                           title={isExpanded ? "Collapse details" : "Expand details"}
                         >
                           {isExpanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
@@ -2880,7 +2880,7 @@ export const NCCComplianceCard = ({ projectId }: NCCComplianceCardProps) => {
                               <Button
                                 size="sm"
                                 variant="ghost"
-                                className="h-7 px-2 text-xs gap-1 text-emerald-700 hover:text-emerald-800 hover:bg-emerald-50"
+                                className="h-7 px-2 text-xs gap-1 text-[#E1DCC9]/60 hover:text-[#E1DCC9]/70 hover:bg-muted/10"
                                 title="Add to estimate"
                                 onClick={() => addToEstimate(s)}
                               >

@@ -253,7 +253,7 @@ function buildPrintHTML(
           <div style="width:${LEFT_W}px;flex-shrink:0;border-right:1px solid #e2e8f0;display:flex;align-items:center;padding:0 8px;gap:6px;overflow:hidden;">
             <div style="width:3px;height:28px;flex-shrink:0;background:${task.color};border-radius:2px;"></div>
             <div style="overflow:hidden;flex:1;">
-              <div style="font-size:11px;font-weight:600;color:#0f172a;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${task.name}</div>
+              <div style="font-size:11px;font-weight:600;color:#000000;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${task.name}</div>
               <div style="font-size:9px;color:#64748b;">${format(parseISO(task.startDate), "dd MMM")}–${format(parseISO(task.endDate), "dd MMM")} · ${task.durationDays}d${task.progress > 0 ? ` · ${task.progress}%` : ""}</div>
             </div>
           </div>
@@ -286,7 +286,7 @@ function buildPrintHTML(
   <div style="display:flex;align-items:center;gap:14px;">
     ${brand.logo ? `<img src="${brand.logo}" style="max-height:48px;object-fit:contain;">` : ""}
     <div>
-      <div style="font-size:20px;font-weight:700;color:#0f172a;">Project Schedule</div>
+      <div style="font-size:20px;font-weight:700;color:#000000;">Project Schedule</div>
       <div style="font-size:12px;color:#64748b;margin-top:2px;">${projectName}</div>
       ${brand.companyName ? `<div style="font-size:11px;color:#94a3b8;">${brand.companyName}${brand.abn ? ` · ABN ${brand.abn}` : ""}</div>` : ""}
     </div>
@@ -921,7 +921,7 @@ export default function GanttSchedule({ projectId }: GanttScheduleProps) {
   // ─── Loading ──────────────────────────────────────────────────────────────
 
   if (!loaded) {
-    return <div className="flex items-center justify-center h-32 text-slate-400">Loading schedule…</div>;
+    return <div className="flex items-center justify-center h-32 text-muted-foreground">Loading schedule…</div>;
   }
 
   // ─── Render ───────────────────────────────────────────────────────────────
@@ -942,18 +942,18 @@ export default function GanttSchedule({ projectId }: GanttScheduleProps) {
             <span className="font-semibold text-sm">{tooltip.task.name}</span>
           </div>
           {tooltip.task.trade && tooltip.task.trade !== tooltip.task.name && (
-            <div className="text-slate-400 mb-1">{tooltip.task.trade}</div>
+            <div className="text-muted-foreground mb-1">{tooltip.task.trade}</div>
           )}
-          <div className="text-slate-300">
+          <div className="text-foreground/60">
             {format(parseISO(tooltip.task.startDate), "dd MMM yyyy")} → {format(parseISO(tooltip.task.endDate), "dd MMM yyyy")}
           </div>
-          <div className="text-slate-400">
+          <div className="text-muted-foreground">
             {tooltip.task.durationDays}d cal
             {workDays && ` · ${countWorkingDays(parseISO(tooltip.task.startDate), parseISO(tooltip.task.endDate), exclHolidays)}wd`}
-            {" · "}<span className="text-cyan-400 font-medium">{tooltip.task.progress}% complete</span>
+            {" · "}<span className="text-[#E1DCC9] font-medium">{tooltip.task.progress}% complete</span>
           </div>
           {tooltip.task.notes && (
-            <div className="text-slate-500 mt-1 border-t border-slate-700 pt-1">{tooltip.task.notes}</div>
+            <div className="text-slate-500 mt-1 border-t border-border/50 pt-1">{tooltip.task.notes}</div>
           )}
         </div>
       )}
@@ -968,7 +968,7 @@ export default function GanttSchedule({ projectId }: GanttScheduleProps) {
           <div className="flex items-center gap-1.5">
             {/* View mode selector */}
             <Select value={viewMode} onValueChange={(v) => setViewMode(v as ViewMode)}>
-              <SelectTrigger className="h-8 w-32 text-xs bg-slate-800 border-slate-700 text-slate-300 gap-1">
+              <SelectTrigger className="h-8 w-32 text-xs bg-card/90 border-border/50 text-foreground/60 gap-1">
                 <Calendar className="w-3.5 h-3.5 flex-shrink-0" />
                 <SelectValue />
               </SelectTrigger>
@@ -979,7 +979,7 @@ export default function GanttSchedule({ projectId }: GanttScheduleProps) {
               </SelectContent>
             </Select>
 
-            <div className="w-px h-5 bg-slate-700 mx-0.5" />
+            <div className="w-px h-5 bg-muted/60 mx-0.5" />
 
             {/* Working-day toggles */}
             <Button
@@ -990,7 +990,7 @@ export default function GanttSchedule({ projectId }: GanttScheduleProps) {
                 localStorage.setItem("gantt_workDays", next ? "1" : "0");
                 if (!next) { setExclHolidays(false); localStorage.setItem("gantt_exclHolidays", "0"); }
               }}
-              className={`h-8 gap-1 text-xs ${workDays ? "bg-cyan-600 hover:bg-cyan-700 border-cyan-600 text-white" : "bg-transparent border border-slate-700 text-slate-300 hover:bg-slate-700 hover:text-white"}`}
+              className={`h-8 gap-1 text-xs ${workDays ? "bg-[#412D15] hover:bg-[#412D15]/90 border-[#412D15] text-white" : "bg-transparent border border-border/50 text-foreground/60 hover:bg-muted/60 hover:text-foreground"}`}
               title="Exclude weekends. Hit Reset to regenerate with working-day dates."
             >
               <CalendarCheck className="w-3.5 h-3.5" /> Work Days
@@ -1003,67 +1003,67 @@ export default function GanttSchedule({ projectId }: GanttScheduleProps) {
                   setExclHolidays(next);
                   localStorage.setItem("gantt_exclHolidays", next ? "1" : "0");
                 }}
-                className={`h-8 gap-1 text-xs ${exclHolidays ? "bg-cyan-600 hover:bg-cyan-700 border-cyan-600 text-white" : "bg-transparent border border-slate-700 text-slate-300 hover:bg-slate-700 hover:text-white"}`}
+                className={`h-8 gap-1 text-xs ${exclHolidays ? "bg-[#412D15] hover:bg-[#412D15]/90 border-[#412D15] text-white" : "bg-transparent border border-border/50 text-foreground/60 hover:bg-muted/60 hover:text-foreground"}`}
                 title="Also skip QLD public holidays"
               >
                 Holidays
               </Button>
             )}
 
-            <div className="w-px h-5 bg-slate-700 mx-0.5" />
+            <div className="w-px h-5 bg-muted/60 mx-0.5" />
 
-            <Button size="sm" variant="outline" onClick={handleReset} className="gap-1 text-slate-300 border-slate-700 hover:bg-slate-700 hover:text-white">
+            <Button size="sm" variant="outline" onClick={handleReset} className="gap-1 text-foreground/60 border-border/50 hover:bg-muted/60 hover:text-foreground">
               <RotateCcw className="w-3.5 h-3.5" /> Reset
             </Button>
 
-            <div className="w-px h-5 bg-slate-700 mx-0.5" />
+            <div className="w-px h-5 bg-muted/60 mx-0.5" />
 
-            <Button size="sm" variant="outline" onClick={handlePrint} className="gap-1 text-slate-300 border-slate-700 hover:bg-slate-700 hover:text-white">
+            <Button size="sm" variant="outline" onClick={handlePrint} className="gap-1 text-foreground/60 border-border/50 hover:bg-muted/60 hover:text-foreground">
               <Printer className="w-3.5 h-3.5" /> Print
             </Button>
-            <Button size="sm" variant="outline" onClick={handlePDFExport} className="gap-1 text-slate-300 border-slate-700 hover:bg-slate-700 hover:text-white">
+            <Button size="sm" variant="outline" onClick={handlePDFExport} className="gap-1 text-foreground/60 border-border/50 hover:bg-muted/60 hover:text-foreground">
               <FileDown className="w-3.5 h-3.5" /> PDF
             </Button>
-            <Button size="sm" variant="outline" onClick={handleExcelExport} className="gap-1 text-slate-300 border-slate-700 hover:bg-slate-700 hover:text-white">
+            <Button size="sm" variant="outline" onClick={handleExcelExport} className="gap-1 text-foreground/60 border-border/50 hover:bg-muted/60 hover:text-foreground">
               <FileSpreadsheet className="w-3.5 h-3.5" /> Excel
             </Button>
 
-            <div className="w-px h-5 bg-slate-700 mx-0.5" />
+            <div className="w-px h-5 bg-muted/60 mx-0.5" />
 
-            <Button size="sm" onClick={handleAddTask} className="gap-1 bg-cyan-600 hover:bg-cyan-700 text-white">
+            <Button size="sm" onClick={handleAddTask} className="gap-1 bg-[#412D15] hover:bg-[#412D15]/90 text-white">
               <Plus className="w-3.5 h-3.5" /> Add Task
             </Button>
           </div>
         </div>
 
         {/* ── Gantt container ──────────────────────────────────────────────── */}
-        <div className="border border-slate-700 rounded-xl overflow-hidden bg-slate-900 shadow-xl">
+        <div className="border border-border/50 rounded-xl overflow-hidden bg-slate-900 shadow-xl">
           <div className="flex">
 
             {/* Left fixed column */}
-            <div className="flex-shrink-0 w-56 border-r border-slate-700 bg-slate-800/60">
-              <div className="h-12 border-b border-slate-700 flex items-center px-4 bg-slate-800">
-                <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-widest">Task</span>
+            <div className="flex-shrink-0 w-56 border-r border-border/50 bg-card/90/60">
+              <div className="h-12 border-b border-border/50 flex items-center px-4 bg-card/90">
+                <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-widest">Task</span>
               </div>
 
               {groupedTasks.map(({ phase, tasks: phaseTasks }) => (
                 <React.Fragment key={phase}>
                   <button
                     onClick={() => togglePhase(phase)}
-                    className="w-full flex items-center gap-2 px-3 border-b border-slate-600 bg-slate-700/40 hover:bg-slate-700/70 transition-colors"
+                    className="w-full flex items-center gap-2 px-3 border-b border-slate-600 bg-muted/60/40 hover:bg-muted/60/70 transition-colors"
                     style={{ height: PH_H }}
                   >
                     {collapsedPhases.has(phase)
-                      ? <ChevronRight className="w-3 h-3 text-slate-400 flex-shrink-0" />
-                      : <ChevronDown  className="w-3 h-3 text-slate-400 flex-shrink-0" />
+                      ? <ChevronRight className="w-3 h-3 text-muted-foreground flex-shrink-0" />
+                      : <ChevronDown  className="w-3 h-3 text-muted-foreground flex-shrink-0" />
                     }
-                    <span className="text-[10px] font-bold text-slate-300 uppercase tracking-widest flex-1 text-left">{phase}</span>
+                    <span className="text-[10px] font-bold text-foreground/60 uppercase tracking-widest flex-1 text-left">{phase}</span>
                     <span className="text-[10px] text-slate-500 bg-slate-600/50 rounded px-1.5 py-0.5">{phaseTasks.length}</span>
                   </button>
 
                   {!collapsedPhases.has(phase) && phaseTasks.map((task) => (
                     <div key={task.id}>
-                      <div className="border-b border-slate-700/80 px-3 flex items-center gap-2.5 hover:bg-slate-700/30 transition-colors" style={{ height: ROW_H }}>
+                      <div className="border-b border-border/50/80 px-3 flex items-center gap-2.5 hover:bg-muted/60/30 transition-colors" style={{ height: ROW_H }}>
                         <div className="w-2 h-8 rounded-full flex-shrink-0" style={{ backgroundColor: task.color }} />
                         <div className="flex flex-col min-w-0 flex-1">
                           <span className="text-sm font-semibold text-white truncate leading-tight">{task.name}</span>
@@ -1071,12 +1071,12 @@ export default function GanttSchedule({ projectId }: GanttScheduleProps) {
                             {format(parseISO(task.startDate), "dd MMM")} – {format(parseISO(task.endDate), "dd MMM")} · {workDays ? `${countWorkingDays(parseISO(task.startDate), parseISO(task.endDate), exclHolidays)}wd` : `${task.durationDays}d`}
                           </span>
                           {task.progress > 0 && (
-                            <span className="text-[10px] text-cyan-400 font-semibold leading-tight">{task.progress}% done</span>
+                            <span className="text-[10px] text-[#E1DCC9] font-semibold leading-tight">{task.progress}% done</span>
                           )}
                         </div>
                       </div>
                       {expandedId === task.id && (
-                        <div className="gantt-edit-panel border-b border-slate-700 bg-slate-800/80 px-3 py-2" />
+                        <div className="gantt-edit-panel border-b border-border/50 bg-card/90/80 px-3 py-2" />
                       )}
                     </div>
                   ))}
@@ -1089,7 +1089,7 @@ export default function GanttSchedule({ projectId }: GanttScheduleProps) {
               <div style={{ minWidth: `${displayColumns.length * COL_W}px` }} className="relative">
 
                 {/* Week/day/month headers */}
-                <div className="flex border-b border-slate-700 bg-slate-800 relative" style={{ height: 48 }}>
+                <div className="flex border-b border-border/50 bg-card/90 relative" style={{ height: 48 }}>
                   {displayTodayPct >= 0 && displayTodayPct <= 100 && (
                     <div className="absolute top-0 bottom-0 w-0.5 bg-red-500/70 z-20 pointer-events-none" style={{ left: `${displayTodayPct}%` }}>
                       <span className="absolute top-1 left-1 text-[8px] text-red-400 font-bold tracking-widest whitespace-nowrap">TODAY</span>
@@ -1114,19 +1114,19 @@ export default function GanttSchedule({ projectId }: GanttScheduleProps) {
                       const newMonth = !prev || format(col, "MMM") !== format(prev, "MMM");
                       label    = isHoliday
                         ? <span className="text-amber-400 font-bold text-[9px]" title="QLD Public Holiday">{format(col, "d")}</span>
-                        : newMonth ? <strong className="text-slate-300 text-[9px]">{format(col, "d MMM")}</strong> : format(col, "d");
+                        : newMonth ? <strong className="text-foreground/60 text-[9px]">{format(col, "d MMM")}</strong> : format(col, "d");
                     }
 
                     return (
                       <div
                         key={i}
-                        className={`flex-shrink-0 border-r border-slate-700/40 flex flex-col items-center justify-center gap-0.5 relative ${isWknd ? "bg-slate-700/25" : ""}`}
+                        className={`flex-shrink-0 border-r border-border/50/40 flex flex-col items-center justify-center gap-0.5 relative ${isWknd ? "bg-muted/60/25" : ""}`}
                         style={{ width: COL_W }}
                       >
                         {viewMode === "weekly" && (
-                          <div className="absolute top-0 bottom-0 pointer-events-none bg-slate-700/20" style={{ left: `${(5 / 7) * 100}%`, width: `${(2 / 7) * 100}%` }} />
+                          <div className="absolute top-0 bottom-0 pointer-events-none bg-muted/60/20" style={{ left: `${(5 / 7) * 100}%`, width: `${(2 / 7) * 100}%` }} />
                         )}
-                        <span className="text-[10px] text-slate-400 font-medium relative z-10 leading-tight">{label}</span>
+                        <span className="text-[10px] text-muted-foreground font-medium relative z-10 leading-tight">{label}</span>
                         {subLabel && <span className="text-[8px] text-slate-600 relative z-10 leading-tight">{subLabel}</span>}
                       </div>
                     );
@@ -1136,7 +1136,7 @@ export default function GanttSchedule({ projectId }: GanttScheduleProps) {
                 {/* Task rows */}
                 {groupedTasks.map(({ phase, tasks: phaseTasks }) => (
                   <React.Fragment key={phase}>
-                    <div className="border-b border-slate-600 bg-slate-700/20" style={{ height: PH_H, minWidth: `${displayColumns.length * COL_W}px` }} />
+                    <div className="border-b border-slate-600 bg-muted/60/20" style={{ height: PH_H, minWidth: `${displayColumns.length * COL_W}px` }} />
 
                     {!collapsedPhases.has(phase) && phaseTasks.map((task) => {
                       const barLeft  = displayPct(parseISO(task.startDate));
@@ -1148,7 +1148,7 @@ export default function GanttSchedule({ projectId }: GanttScheduleProps) {
                       return (
                         <div key={task.id}>
                           <div
-                            className="border-b border-slate-700/60 relative flex items-center"
+                            className="border-b border-border/50/60 relative flex items-center"
                             style={{ height: ROW_H, minWidth: `${displayColumns.length * COL_W}px` }}
                           >
                             {/* Weekend shading */}
@@ -1171,7 +1171,7 @@ export default function GanttSchedule({ projectId }: GanttScheduleProps) {
 
                             {/* Grid lines */}
                             {displayColumns.map((_, i) => (
-                              <div key={i} className="absolute top-0 bottom-0 border-r border-slate-700/20 pointer-events-none" style={{ left: `${(i / displayColumns.length) * 100}%` }} />
+                              <div key={i} className="absolute top-0 bottom-0 border-r border-border/50/20 pointer-events-none" style={{ left: `${(i / displayColumns.length) * 100}%` }} />
                             ))}
 
                             {/* Today line */}
@@ -1204,32 +1204,32 @@ export default function GanttSchedule({ projectId }: GanttScheduleProps) {
 
                           {/* Inline edit panel */}
                           {expandedId === task.id && editDraft?.id === task.id && (
-                            <div className="gantt-edit-panel border-b border-slate-600 bg-slate-800 px-4 py-3" style={{ minWidth: `${displayColumns.length * COL_W}px` }}>
+                            <div className="gantt-edit-panel border-b border-slate-600 bg-card/90 px-4 py-3" style={{ minWidth: `${displayColumns.length * COL_W}px` }}>
                               <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-3">
                                 <div>
-                                  <Label className="text-xs text-slate-400 mb-1 block">Task Name</Label>
-                                  <Input value={editDraft.name} onChange={(e) => setEditDraft({ ...editDraft, name: e.target.value })} className="h-7 text-sm bg-slate-700 border-slate-600 text-white" />
+                                  <Label className="text-xs text-muted-foreground mb-1 block">Task Name</Label>
+                                  <Input value={editDraft.name} onChange={(e) => setEditDraft({ ...editDraft, name: e.target.value })} className="h-7 text-sm bg-muted/60 border-slate-600 text-white" />
                                 </div>
                                 <div>
-                                  <Label className="text-xs text-slate-400 mb-1 block">Start Date</Label>
-                                  <Input type="date" value={editDraft.startDate} onChange={(e) => setEditDraft({ ...editDraft, startDate: e.target.value })} className="h-7 text-sm bg-slate-700 border-slate-600 text-white" />
+                                  <Label className="text-xs text-muted-foreground mb-1 block">Start Date</Label>
+                                  <Input type="date" value={editDraft.startDate} onChange={(e) => setEditDraft({ ...editDraft, startDate: e.target.value })} className="h-7 text-sm bg-muted/60 border-slate-600 text-white" />
                                 </div>
                                 <div>
-                                  <Label className="text-xs text-slate-400 mb-1 block">End Date</Label>
-                                  <Input type="date" value={editDraft.endDate} onChange={(e) => setEditDraft({ ...editDraft, endDate: e.target.value })} className="h-7 text-sm bg-slate-700 border-slate-600 text-white" />
+                                  <Label className="text-xs text-muted-foreground mb-1 block">End Date</Label>
+                                  <Input type="date" value={editDraft.endDate} onChange={(e) => setEditDraft({ ...editDraft, endDate: e.target.value })} className="h-7 text-sm bg-muted/60 border-slate-600 text-white" />
                                 </div>
                                 <div>
-                                  <Label className="text-xs text-slate-400 mb-1 block">Progress (%)</Label>
-                                  <Input type="number" min={0} max={100} value={editDraft.progress} onChange={(e) => setEditDraft({ ...editDraft, progress: Math.min(100, Math.max(0, Number(e.target.value))) })} className="h-7 text-sm bg-slate-700 border-slate-600 text-white" />
+                                  <Label className="text-xs text-muted-foreground mb-1 block">Progress (%)</Label>
+                                  <Input type="number" min={0} max={100} value={editDraft.progress} onChange={(e) => setEditDraft({ ...editDraft, progress: Math.min(100, Math.max(0, Number(e.target.value))) })} className="h-7 text-sm bg-muted/60 border-slate-600 text-white" />
                                 </div>
                               </div>
                               <div className="grid grid-cols-2 gap-3 mb-3">
                                 <div>
-                                  <Label className="text-xs text-slate-400 mb-1 block">Trade / Assignee</Label>
-                                  <Input value={editDraft.trade} onChange={(e) => setEditDraft({ ...editDraft, trade: e.target.value })} placeholder="e.g. Carpenter" className="h-7 text-sm bg-slate-700 border-slate-600 text-white" />
+                                  <Label className="text-xs text-muted-foreground mb-1 block">Trade / Assignee</Label>
+                                  <Input value={editDraft.trade} onChange={(e) => setEditDraft({ ...editDraft, trade: e.target.value })} placeholder="e.g. Carpenter" className="h-7 text-sm bg-muted/60 border-slate-600 text-white" />
                                 </div>
                                 <div>
-                                  <Label className="text-xs text-slate-400 mb-1 block">Bar Colour</Label>
+                                  <Label className="text-xs text-muted-foreground mb-1 block">Bar Colour</Label>
                                   <div className="flex items-center gap-2">
                                     <input type="color" value={editDraft.color} onChange={(e) => setEditDraft({ ...editDraft, color: e.target.value })} className="h-7 w-10 rounded cursor-pointer border-0 bg-transparent" />
                                     <span className="text-xs text-slate-500">{editDraft.color}</span>
@@ -1237,12 +1237,12 @@ export default function GanttSchedule({ projectId }: GanttScheduleProps) {
                                 </div>
                               </div>
                               <div className="mb-3">
-                                <Label className="text-xs text-slate-400 mb-1 block">Notes</Label>
-                                <Input value={editDraft.notes} onChange={(e) => setEditDraft({ ...editDraft, notes: e.target.value })} placeholder="Optional notes…" className="h-7 text-sm bg-slate-700 border-slate-600 text-white" />
+                                <Label className="text-xs text-muted-foreground mb-1 block">Notes</Label>
+                                <Input value={editDraft.notes} onChange={(e) => setEditDraft({ ...editDraft, notes: e.target.value })} placeholder="Optional notes…" className="h-7 text-sm bg-muted/60 border-slate-600 text-white" />
                               </div>
                               <div className="flex gap-2">
-                                <Button size="sm" onClick={handleSave} className="h-7 text-xs bg-cyan-600 hover:bg-cyan-700">Save</Button>
-                                <Button size="sm" variant="ghost" onClick={() => { setExpandedId(null); setEditDraft(null); }} className="h-7 text-xs text-slate-400 hover:text-white">Cancel</Button>
+                                <Button size="sm" onClick={handleSave} className="h-7 text-xs bg-[#412D15] hover:bg-[#412D15]/90">Save</Button>
+                                <Button size="sm" variant="ghost" onClick={() => { setExpandedId(null); setEditDraft(null); }} className="h-7 text-xs text-muted-foreground hover:text-foreground">Cancel</Button>
                                 <Button size="sm" variant="ghost" onClick={() => handleDelete(task.id)} className="h-7 text-xs text-red-400 hover:text-red-300 ml-auto">Delete</Button>
                               </div>
                             </div>
@@ -1270,7 +1270,7 @@ export default function GanttSchedule({ projectId }: GanttScheduleProps) {
           <div className="ml-auto flex items-center gap-2">
             {groupedTasks.map(({ phase }) => (
               <button key={phase} onClick={() => togglePhase(phase)}
-                className={`text-[10px] px-2 py-0.5 rounded border transition-colors ${collapsedPhases.has(phase) ? "border-slate-600 text-slate-500 bg-slate-800" : "border-slate-600 text-slate-400 hover:bg-slate-700/50"}`}
+                className={`text-[10px] px-2 py-0.5 rounded border transition-colors ${collapsedPhases.has(phase) ? "border-slate-600 text-slate-500 bg-card/90" : "border-slate-600 text-muted-foreground hover:bg-muted/60/50"}`}
               >
                 {collapsedPhases.has(phase) ? "▶" : "▼"} {phase}
               </button>

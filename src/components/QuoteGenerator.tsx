@@ -756,7 +756,7 @@ ${clone.outerHTML}
                                     <span>{au$(line.unitPrice)}</span>
                                     <span>=</span>
                                     <span className="font-semibold text-foreground">{au$(line.qty * line.unitPrice)}</span>
-                                    {line.fromEstimate && <span className="ml-1 text-[9px] bg-blue-50 text-blue-500 border border-blue-100 rounded px-1 font-sans">estimate</span>}
+                                    {line.fromEstimate && <span className="ml-1 text-[9px] bg-muted/10 text-foreground/70 border border-border/30 rounded px-1 font-sans">estimate</span>}
                                   </div>
                                 </div>
                                 <div className="flex gap-1 flex-shrink-0">
@@ -1035,7 +1035,7 @@ ${clone.outerHTML}
                         <ul className="space-y-1.5">
                           {inclusions.filter(Boolean).map((item, i) => (
                             <li key={i} className="flex items-start gap-2 text-sm text-gray-600">
-                              <ChevronRight className="h-3.5 w-3.5 mt-0.5 flex-shrink-0 text-green-500" />{item}
+                              <ChevronRight className="h-3.5 w-3.5 mt-0.5 flex-shrink-0 text-[#E1DCC9]/80" />{item}
                             </li>
                           ))}
                         </ul>
@@ -1097,7 +1097,7 @@ ${clone.outerHTML}
                       ))}
                     </div>
                     {builderLicence && (
-                      <div className="mt-3 p-3 bg-green-50 border border-green-100 rounded-lg flex items-center gap-2 text-sm text-green-800">
+                      <div className="mt-3 p-3 bg-muted/10 border border-[#E1DCC9]/15 rounded-lg flex items-center gap-2 text-sm text-foreground/80">
                         <span>✓</span>
                         <span>Licensed builder · Licence No. <strong>{builderLicence}</strong>. All works comply with National Construction Code (NCC) and applicable Australian Standards.</span>
                       </div>
