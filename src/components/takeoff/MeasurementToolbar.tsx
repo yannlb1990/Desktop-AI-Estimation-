@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { MousePointer, Move, Eraser, Minus, Square, Pentagon, Circle, Hash, Undo, Redo, DoorOpen, AppWindow, PenLine, Columns3, Crosshair, Spline } from 'lucide-react';
+import { MousePointer, Move, Eraser, Minus, Square, Pentagon, Circle, Hash, Undo, Redo, DoorOpen, AppWindow, PenLine, Columns3, Crosshair, Spline, Type } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
@@ -168,6 +168,7 @@ export const MeasurementToolbar = ({
     { id: 'wall-line' as const, icon: Columns3, label: 'Wall Line (T)', color: 'bg-amber-700' },
     { id: 'arc-wall' as const, icon: Spline, label: 'Arc Wall (A) — 3 clicks: start → end → curve', color: 'bg-orange-500' },
     { id: 'offset' as const, icon: Crosshair, label: 'Reference Line (G)', color: 'bg-sky-400' },
+    { id: 'text' as const, icon: Type, label: 'Text Annotation (X)', color: 'bg-yellow-500' },
   ];
 
   const modTools: Array<{ id: ModId; icon: React.ComponentType<{ className?: string }>; label: string; color: string; ring: string }> = [

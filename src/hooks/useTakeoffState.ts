@@ -29,7 +29,7 @@ const initialState: TakeoffState = {
   estimate: { materials: 0, labor: 0, subtotal: 0, markup: 0, total: 0 },
   roofPitch: { rise: 4, run: 12 },
   depthInput: 0.1,
-  selectedColor: '#FF0000',
+  selectedColor: '#22d3ee',
   rotations: {},
   history: [[]],
   historyIndex: 0

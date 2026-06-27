@@ -1,5 +1,6 @@
 import { useEffect, useLayoutEffect, useRef, useState, useCallback } from 'react';
-import { Canvas as FabricCanvas, FabricImage, Circle, Line, Path, Rect, Polygon, Text, Point as FabricPoint, util as fabricUtil } from 'fabric';
+import { toast } from 'sonner';
+import { Canvas as FabricCanvas, FabricImage, Circle, Line, Path, Rect, Polygon, Text, IText, Point as FabricPoint, util as fabricUtil } from 'fabric';
 import * as pdfjsLib from 'pdfjs-dist';
 import { Loader2, Check, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -284,6 +285,8 @@ interface InteractiveCanvasProps {
   canvasElementRef?: React.MutableRefObject<HTMLCanvasElement | null>;
   /** Pre-fill the count name from the toolbar when count tool is active. */
   countName?: string;
+  /** Called when the canvas wants to switch the active tool (e.g. text → select after placing). */
+  onToolChange?: (tool: ToolType) => void;
 }
 
 export const InteractiveCanvas = ({
@@ -316,6 +319,7 @@ export const InteractiveCanvas = ({
   canvasActionsRef,
   canvasElementRef,
   countName: countNameProp = '',
+  onToolChange,
 }: InteractiveCanvasProps) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -1198,6 +1202,46 @@ export const InteractiveCanvas = ({
           fill: color + '4d', stroke: color, strokeWidth,
           selectable: false, evented: false,
         });
+      } else if ((measurement as any).type === 'count') {
+        // Restore count markers: one small circle per worldPoint
+        const markerRadius = getZoomAwareSize(6);
+        const markerColor = color || '#FF9800';
+        const shapes: any[] = [];
+        measurement.worldPoints.forEach((wp, i) => {
+          const dot = new Circle({
+            left: wp.x - markerRadius,
+            top: wp.y - markerRadius,
+            radius: markerRadius,
+            fill: markerColor,
+            stroke: '#ffffff',
+            strokeWidth: 1.5,
+            selectable: false,
+            evented: false,
+            hasControls: false,
+            hasBorders: false,
+          });
+          canvas.add(dot);
+          shapes.push(dot);
+          shapeToMeasurementIdRef.current.set(dot, measurement.id);
+          const numLabel = new Text(String(i + 1), {
+            left: wp.x - markerRadius,
+            top: wp.y - markerRadius,
+            fontSize: markerRadius * 1.4,
+            fill: '#ffffff',
+            fontWeight: 'bold',
+            originX: 'center',
+            originY: 'center',
+            selectable: false,
+            evented: false,
+          });
+          canvas.add(numLabel);
+          shapes.push(numLabel);
+          shapeToMeasurementIdRef.current.set(numLabel, measurement.id);
+        });
+        if (shapes.length > 0) {
+          objectsMap.set(measurement.id, shapes);
+        }
+        return; // handled above
       }
 
       if (!shape) return;
@@ -2551,7 +2595,7 @@ export const InteractiveCanvas = ({
           startPoint = { x: p1.x - nx * hw, y: p1.y - ny * hw };
           endPoint   = { x: p2.x - nx * hw, y: p2.y - ny * hw };
           // Sync companion objects immediately after commit
-          if (objects) syncWallCompanions(target, objects, (existingMeasurement as any).wallThickness, _vUpmLine);
+          if (objects) syncWallFromRect(target, objects, (existingMeasurement as any).wallThickness, _vUpmLine);
         } else {
           startPoint = { x: p1.x, y: p1.y };
           endPoint   = { x: p2.x, y: p2.y };
@@ -3063,7 +3107,10 @@ export const InteractiveCanvas = ({
   // Handle calibration DRAG (new drag-to-calibrate)
   const handleCalibrationMouseDown = useCallback((worldPoint: WorldPoint) => {
     const canvas = fabricCanvasRef.current;
-    if (!canvas || !viewport) return;
+    if (!canvas || !viewport) {
+      toast.error('Calibration failed — canvas not ready. Try again.');
+      return;
+    }
 
     // Clear any previous calibration objects from canvas before starting fresh
     setCalibrationObjects(prev => {
@@ -3160,6 +3207,20 @@ export const InteractiveCanvas = ({
       canvas.remove(calibrationPreviewLineRef.current);
       calibrationPreviewLineRef.current = null;
       setCalibrationPreviewLine(null);
+    }
+
+    // Guard: drag distance in screen pixels must be at least 2px
+    const zoom = canvas.getZoom() || 1;
+    const dragScreenDist = Math.hypot(worldPoint.x - start.x, worldPoint.y - start.y) * zoom;
+    if (dragScreenDist < 2) {
+      // Reset drag state so user can try again
+      isCalibrationDraggingRef.current = false;
+      calibrationStartPointRef.current = null;
+      setIsCalibrationDragging(false);
+      setCalibrationStartPoint(null);
+      canvas.requestRenderAll();
+      toast.error('Calibration line too short. Click and drag further to set the scale.');
+      return;
     }
 
     const strokeWidth = getZoomAwareSize(2);
@@ -3440,6 +3501,24 @@ export const InteractiveCanvas = ({
       return;
     }
 
+    // Handle text annotation tool
+    if (activeTool === 'text') {
+      const textObj = new IText('Annotation', {
+        left: worldPoint.x,
+        top: worldPoint.y,
+        fontSize: 14,
+        fill: '#f59e0b',
+        fontFamily: 'Inter, sans-serif',
+        selectable: true,
+        evented: true,
+      });
+      canvas.add(textObj);
+      canvas.setActiveObject(textObj);
+      canvas.renderAll();
+      onToolChange?.('select');
+      return;
+    }
+
     // Arc-wall 3-click flow — intercept before normal draw logic
     if (activeTool === 'arc-wall') {
       const phase = arcStateRef.current.phase;
@@ -3511,6 +3590,7 @@ export const InteractiveCanvas = ({
           label: `Arc wall ${wallThicknessRef.current}mm`,
           worldPoints: [p1, p2],
           arcControlPoint: ctrl,
+          worldValue: arcLen,
           realValue: result.realValue,
           unit: 'LM',
           color: arcColor,
@@ -3518,6 +3598,7 @@ export const InteractiveCanvas = ({
           wallThickness: wallThicknessRef.current,
           wallHatchType: wallHatchTypeRef.current,
           wallHatchSide: wallHatchSideRef.current,
+          timestamp: Date.now(),
         } as any);
 
         canvas.renderAll();
@@ -3723,6 +3804,11 @@ export const InteractiveCanvas = ({
       if (polygonPoints.length >= 2) {
         const first = polygonPoints[0];
         const isNearFirst = Math.hypot(snapWorld.x - first.x, snapWorld.y - first.y) < snapThreshold;
+
+        if (isNearFirst) {
+          // Snap cursor exactly to first point so live area preview matches the final saved area
+          polygonCursorRef.current = first;
+        }
 
         if (snapIndicatorRef.current) {
           canvas.remove(snapIndicatorRef.current);
@@ -4391,7 +4477,8 @@ export const InteractiveCanvas = ({
     viewport, transform, isPanning, isDrawing, startPoint,
     activeTool, isCalibrated, unitsPerMetre, pageIndex,
     onMeasurementComplete, calibrationMode, isCalibrationDragging,
-    calibrationStartPoint, handleCalibrationMouseUp, getZoomAwareSize
+    calibrationStartPoint, handleCalibrationMouseUp, getZoomAwareSize,
+    onToolChange
   ]);
 
 

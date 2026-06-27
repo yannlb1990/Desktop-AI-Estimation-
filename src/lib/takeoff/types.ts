@@ -63,7 +63,7 @@ export interface WallOpening {
   widthMm: number;
 }
 export type MeasurementUnit = string;
-export type ToolType = 'select' | 'pan' | 'eraser' | 'line' | 'rectangle' | 'polygon' | 'circle' | 'count' | 'wall-line' | 'arc-wall' | 'offset' | null;
+export type ToolType = 'select' | 'pan' | 'eraser' | 'line' | 'rectangle' | 'polygon' | 'circle' | 'count' | 'wall-line' | 'arc-wall' | 'offset' | 'text' | null;
 
 // Area options for measurements
 export type MeasurementArea = 'Kitchen' | 'Bathroom' | 'Bedroom' | 'Living Room' | 'Dining Room' | 'Laundry' | 'Garage' | 'Patio' | 'Balcony' | 'Hallway' | 'Entry' | 'Office' | 'Storage' | 'Utility' | 'Ensuite' | 'WC' | 'External' | 'Other';
@@ -142,6 +142,7 @@ export interface Measurement {
   framingSystem?: string;
   hasLining?: boolean;
   liningType?: string;
+  liningFaces?: number;
   customLining?: string;
   hasInsulation?: boolean;
   insulationType?: string;
@@ -157,6 +158,11 @@ export interface Measurement {
   countName?: string;
   itemSize?: string;
   itemModel?: string;
+
+  // Roof pitch / waste correction
+  roofRawPlanArea?: number;     // Original plan-view m² before pitch/waste adjustment
+  roofPitchDeg?: number;        // Pitch angle in degrees (0 = flat, 45 = steep)
+  roofWastePercent?: number;    // Waste allowance percentage (0–30)
 
   // Computed values
   computedM2?: number;          // Calculated wall area (LM × height)

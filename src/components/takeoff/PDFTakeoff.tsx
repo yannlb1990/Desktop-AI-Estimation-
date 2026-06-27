@@ -207,6 +207,7 @@ export const PDFTakeoff = ({ projectId, estimateId, onAddCostItems }: PDFTakeoff
       if (key === 'w') { setModMode(null); dispatch({ type: 'SET_ACTIVE_TOOL', payload: 'wall-line' }); return; }
       if (key === 'd') { setModMode('door'); dispatch({ type: 'SET_ACTIVE_TOOL', payload: 'line' }); return; }
       if (key === 'q') { setModMode('window'); dispatch({ type: 'SET_ACTIVE_TOOL', payload: 'line' }); return; }
+      if (key === 'x') { setModMode(null); dispatch({ type: 'SET_ACTIVE_TOOL', payload: 'text' }); return; }
       // ArrowLeft / ArrowRight: page navigation (only when no active drawing tool)
       if (e.key === 'ArrowLeft' && !state.activeTool && state.pdfFile && state.currentPageIndex > 0) {
         e.preventDefault();
@@ -743,6 +744,14 @@ export const PDFTakeoff = ({ projectId, estimateId, onAddCostItems }: PDFTakeoff
               '40mpa': '40 MPa Concrete',
             };
             material = concreteLabels[measurement.concreteType || ''] || 'Concrete';
+          } else if (measurement.measurementType === 'Tiling') {
+            autoTrade = 'Tiler';
+          } else if (measurement.measurementType === 'Roofing') {
+            autoTrade = 'Roofer';
+          } else if (measurement.measurementType === 'Painting') {
+            autoTrade = 'Painter';
+          } else if (measurement.measurementType === 'Cladding') {
+            autoTrade = 'Cladder';
           } else if (measurement.measurementType === 'Floor') {
             autoTrade = 'Tiler'; // Default for floor finishes
           } else if (measurement.measurementType === 'Ceiling') {
@@ -785,6 +794,119 @@ export const PDFTakeoff = ({ projectId, estimateId, onAddCostItems }: PDFTakeoff
       toast.success(`${itemsCreated} cost item${itemsCreated !== 1 ? 's' : ''} added. Continue validating or switch to Costs tab.`);
     }
   }, [state.measurements, dispatch]);
+
+  // Handles wall additions from WallSetupDialog — receives pre-configured measurements directly
+  // so we never hit the stale-closure problem of reading state.measurements after dispatch.
+  const handleAddWallsToEstimate = useCallback((configuredWalls: Measurement[], nonWallIds: string[]) => {
+    const framingLabels: Record<string, string> = {
+      'steel_64': 'Steel Frame 64mm',
+      'steel_92': 'Steel Frame 92mm',
+      'timber_90_mgp12': 'Timber Frame 90mm MGP12',
+      'timber_90_mgp10': 'Timber Frame 90mm MGP10',
+    };
+    const liningLabels: Record<string, string> = {
+      'pb_10': 'Plasterboard 10mm', 'pb_13': 'Plasterboard 13mm',
+      'fc_6': 'FC Cement 6mm', 'fc_9': 'FC Cement 9mm',
+    };
+    const insulationLabels: Record<string, string> = {
+      'r2_batts': 'R2.0 Batts', 'r25_batts': 'R2.5 Batts',
+      'r3_batts': 'R3.0 Batts', 'r4_batts': 'R4.0 Batts',
+      'acoustic': 'Acoustic Batts',
+    };
+
+    let itemsCreated = 0;
+    configuredWalls.forEach(m => {
+      // Persist the wall configuration back to state
+      dispatch({ type: 'UPDATE_MEASUREMENT', payload: { id: m.id, updates: m } });
+
+      const height = m.height || 2.7;
+      const framingM2 = m.realValue * height;
+      const drawingNumber = m.drawingNumber || `Page ${(m.pageIndex ?? 0) + 1}`;
+
+      // Framing
+      if (m.framingSystem && m.framingSystem !== 'none') {
+        const framingItem: CostItem = {
+          id: crypto.randomUUID(),
+          category: 'Framing',
+          name: framingLabels[m.framingSystem] || 'Framing',
+          description: `Wall framing - ${m.area || 'General'}`,
+          unit: 'M2',
+          unitCost: 0,
+          quantity: framingM2,
+          linkedMeasurements: [m.id],
+          wasteFactor: 1.1,
+          subtotal: 0,
+          area: m.area,
+          measurementType: 'Wall',
+          drawingNumber,
+          trade: m.framingSystem.includes('steel') ? 'General' : 'Carpenter',
+          material: framingLabels[m.framingSystem],
+        };
+        dispatch({ type: 'ADD_COST_ITEM', payload: framingItem });
+        itemsCreated++;
+      }
+
+      // Lining
+      if (m.hasLining) {
+        const liningItem: CostItem = {
+          id: crypto.randomUUID(),
+          category: 'Lining',
+          name: liningLabels[m.liningType || ''] || 'Wall Lining',
+          description: `Wall lining - ${m.area || 'General'}`,
+          unit: 'M2',
+          unitCost: 0,
+          quantity: framingM2 * (m.liningFaces || 1),
+          linkedMeasurements: [m.id],
+          wasteFactor: 1.1,
+          subtotal: 0,
+          area: m.area,
+          measurementType: 'Wall',
+          drawingNumber,
+          parentItemId: m.id,
+          trade: 'Plasterer',
+          material: liningLabels[m.liningType || ''],
+        };
+        dispatch({ type: 'ADD_COST_ITEM', payload: liningItem });
+        itemsCreated++;
+      }
+
+      // Insulation
+      if (m.hasInsulation) {
+        const insulationItem: CostItem = {
+          id: crypto.randomUUID(),
+          category: 'Insulation',
+          name: insulationLabels[m.insulationType || ''] || 'Wall Insulation',
+          description: `Wall insulation - ${m.area || 'General'}`,
+          unit: 'M2',
+          unitCost: 0,
+          quantity: framingM2,
+          linkedMeasurements: [m.id],
+          wasteFactor: 1.05,
+          subtotal: 0,
+          area: m.area,
+          measurementType: 'Wall',
+          drawingNumber,
+          parentItemId: m.id,
+          trade: 'Insulation',
+          material: insulationLabels[m.insulationType || ''],
+        };
+        dispatch({ type: 'ADD_COST_ITEM', payload: insulationItem });
+        itemsCreated++;
+      }
+
+      dispatch({ type: 'UPDATE_MEASUREMENT', payload: { id: m.id, updates: { addedToEstimate: true, validated: true } } });
+    });
+
+    // Non-wall measurements go through normal path
+    if (nonWallIds.length > 0) {
+      handleAddToEstimate(nonWallIds);
+    }
+
+    if (itemsCreated > 0) {
+      const total = itemsCreated + (nonWallIds.length > 0 ? 0 : 0);
+      toast.success(`${itemsCreated} cost item${itemsCreated !== 1 ? 's' : ''} added to estimate`);
+    }
+  }, [dispatch, handleAddToEstimate]);
 
   // Calibration popover — floats above canvas, always visible during manual calibration
   const calibrationBar = state.calibrationMode === 'manual' && calibInstructVisible ? (
@@ -907,279 +1029,8 @@ export const PDFTakeoff = ({ projectId, estimateId, onAddCostItems }: PDFTakeoff
     />
   );
 
-  // ── Fullscreen portal ───────────────────────────────────────────────────────
-  const fullscreenPortal = isTakeoffFullscreen && state.pdfFile ? createPortal(
-    <div className="fixed inset-0 z-[9999] bg-[#0f172a] text-white flex flex-col">
-      {/* Focus mode hover strip — hover to restore toolbar */}
-      {focusMode && (
-        <div
-          className="absolute top-0 left-0 right-0 h-2 z-10 bg-gray-700/50 hover:bg-gray-500/70 cursor-pointer transition-colors"
-          onClick={() => setFocusMode(false)}
-          title="Click to restore toolbar (or press Escape)"
-        />
-      )}
-      {/* Top bar */}
-      <div className={`flex items-center gap-2 px-3 bg-[#1e293b] border-b border-gray-700 shrink-0 transition-all duration-200 overflow-hidden ${focusMode ? 'max-h-0 py-0 border-0' : 'max-h-96 py-2'}`}>
-        {renderToolbar(fsContextOpen)}
-        {/* Zoom + rotate + fit */}
-        <div className="flex items-center gap-1 border-l border-gray-600 pl-2 ml-1">
-          <Button variant="ghost" size="sm" onClick={handleZoomOut} className="h-8 text-gray-200 hover:bg-gray-700"><ZoomOut className="h-4 w-4" /></Button>
-          <span className="text-sm font-medium min-w-14 text-center text-gray-200">{Math.round(state.transform.zoom * 100)}%</span>
-          <Button variant="ghost" size="sm" onClick={handleZoomIn} className="h-8 text-gray-200 hover:bg-gray-700"><ZoomIn className="h-4 w-4" /></Button>
-          <Button variant="ghost" size="sm" onClick={handleRotate} className="h-8 text-gray-200 hover:bg-gray-700"><RotateCw className="h-4 w-4" /></Button>
-          <Button variant="ghost" size="sm" onClick={handleFitToScreen} className="h-8 text-gray-200 hover:bg-gray-700" title="Fit to screen"><Maximize2 className="h-4 w-4" /></Button>
-        </div>
-        {/* Scale */}
-        <div className="flex items-center gap-1 border-l border-gray-600 pl-2 ml-1">
-          {state.isCalibrated ? (
-            <>
-              <span className="text-xs font-medium text-green-400 flex items-center gap-1">
-                <CheckCircle className="h-3.5 w-3.5" />
-                {state.currentScale?.scaleFactor ? `1:${state.currentScale.scaleFactor}` : 'Calibrated'}
-              </span>
-              <Button variant="ghost" size="icon" className="h-7 w-7 text-gray-400 hover:text-white hover:bg-gray-700" onClick={() => dispatch({ type: 'SET_CALIBRATION_MODE', payload: 'manual' })} title="Re-calibrate">
-                <Ruler className="h-3.5 w-3.5" />
-              </Button>
-              <Button variant="ghost" size="icon" className="h-7 w-7 text-gray-400 hover:text-white hover:bg-gray-700" onClick={handleResetScale} title="Reset scale">
-                <RotateCcw className="h-3 w-3" />
-              </Button>
-            </>
-          ) : (
-            <Button variant="ghost" size="sm" className="h-8 gap-1.5 text-amber-400 hover:bg-amber-950/40" onClick={() => dispatch({ type: 'SET_CALIBRATION_MODE', payload: 'manual' })} title="Calibrate scale">
-              <Ruler className="h-3.5 w-3.5" />
-              Set Scale
-            </Button>
-          )}
-        </div>
-        {/* Page navigation */}
-        {state.pdfFile.pageCount > 1 && (
-          <div className="flex items-center gap-1 border-l border-gray-600 pl-2 ml-1">
-            <Button variant="ghost" size="sm" onClick={handlePagePrevious} disabled={state.currentPageIndex === 0} className="h-8 text-gray-200 hover:bg-gray-700"><ChevronLeft className="h-4 w-4" /></Button>
-            <select
-              value={state.currentPageIndex + 1}
-              onChange={e => dispatch({ type: 'SET_CURRENT_PAGE', payload: Number(e.target.value) - 1 })}
-              className="h-7 text-sm bg-gray-800 border border-gray-600 rounded text-gray-100 px-1 cursor-pointer focus:outline-none focus:border-blue-400 min-w-[100px]"
-            >
-              {Array.from({ length: state.pdfFile.pageCount }, (_, i) => i + 1).map(p => {
-                const scaleForPage = state.scales[i];
-                const dot = scaleForPage
-                  ? (scaleForPage.scaleMethod === 'manual' ? '🟢' : '🟡')
-                  : '🔴';
-                return (
-                  <option key={p} value={p} className="bg-gray-800">
-                    {dot} Page {p} / {state.pdfFile!.pageCount}
-                  </option>
-                );
-              })}
-            </select>
-            <Button variant="ghost" size="sm" onClick={handlePageNext} disabled={state.currentPageIndex === state.pdfFile.pageCount - 1} className="h-8 text-gray-200 hover:bg-gray-700"><ChevronRight className="h-4 w-4" /></Button>
-          </div>
-        )}
-        <div className="ml-auto flex items-center gap-1">
-          {/* Context panel toggle */}
-          <Button
-            size="sm"
-            variant="ghost"
-            onClick={() => setFsContextOpen(v => !v)}
-            className="h-8 text-gray-400 hover:text-white hover:bg-gray-700"
-            title={fsContextOpen ? 'Collapse tool options' : 'Expand tool options'}
-          >
-            {fsContextOpen ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
-          </Button>
-          {/* Focus mode */}
-          <Button
-            size="sm"
-            variant="ghost"
-            onClick={() => setFocusMode(true)}
-            className="h-8 text-gray-400 hover:text-white hover:bg-gray-700"
-            title="Focus mode — hides toolbar (Esc to restore)"
-          >
-            <EyeOff className="h-4 w-4" />
-          </Button>
-          <Button
-            size="sm"
-            variant="ghost"
-            onClick={() => canvasExportRef.current?.export()}
-            className="h-8 gap-1.5 text-gray-200 hover:bg-gray-700"
-            title="Export this page with markup as PNG"
-          >
-            <Download className="h-4 w-4" />
-            Export
-          </Button>
-          <Button
-            size="sm"
-            onClick={() => setIsTakeoffFullscreen(false)}
-            className="bg-red-700 hover:bg-red-600 text-white"
-          >
-            <Minimize2 className="h-4 w-4 mr-1.5" />
-            Exit Full Screen
-          </Button>
-        </div>
-      </div>
-
-      {/* Canvas — full width, takes all remaining vertical space */}
-      <div className="flex-1 overflow-hidden relative">
-        {/* Calibration status badge — always visible on canvas */}
-        {state.pdfFile && (
-          <div className={`absolute bottom-3 left-3 z-20 flex items-center gap-1.5 px-2 py-1 rounded text-[10px] font-mono backdrop-blur-sm pointer-events-none ${
-            state.isCalibrated
-              ? 'bg-slate-900/70 text-green-400 border border-green-800/40'
-              : 'bg-slate-900/70 text-amber-400 border border-amber-800/40'
-          }`}>
-            {state.isCalibrated
-              ? `1:${Math.round(state.currentScale!.unitsPerMetre / (72 / 0.0254) * 1000) || '?'} · Page ${state.currentPageIndex + 1}${state.pdfFile.pageCount > 1 ? ` / ${state.pdfFile.pageCount}` : ''}`
-              : `Not calibrated · Page ${state.currentPageIndex + 1}${state.pdfFile.pageCount > 1 ? ` / ${state.pdfFile.pageCount}` : ''}`
-            }
-          </div>
-        )}
-        {/* Floating context picker — shown when toolbar context rows are hidden */}
-        {(focusMode || !fsContextOpen) && modMode === 'door' && (
-          <div className="absolute top-3 left-3 z-20 flex items-center gap-1.5 px-2 py-1.5 bg-slate-800/95 border border-violet-700/60 rounded-lg backdrop-blur-sm shadow-lg">
-            <span className="text-[10px] font-semibold text-violet-400 uppercase tracking-widest mr-1 shrink-0">Door</span>
-            {(['Internal','Entry','Cavity Slider','Bi-fold','French','Garage','Fire Door'] as const).map((id) => (
-              <button key={id} onClick={() => setDoorSubtype(id)} className={`h-6 px-2 rounded text-xs font-medium transition-colors ${doorSubtype === id ? 'bg-violet-600 text-white' : 'bg-slate-700 text-slate-300 hover:bg-slate-600'}`}>
-                {id}
-              </button>
-            ))}
-          </div>
-        )}
-        {(focusMode || !fsContextOpen) && modMode === 'window' && (
-          <div className="absolute top-3 left-3 z-20 flex items-center gap-1.5 px-2 py-1.5 bg-slate-800/95 border border-cyan-700/60 rounded-lg backdrop-blur-sm shadow-lg">
-            <span className="text-[10px] font-semibold text-cyan-400 uppercase tracking-widest mr-1 shrink-0">Window</span>
-            {(['Awning','Casement','Sliding','Fixed','Louvre','Skylight'] as const).map((id) => (
-              <button key={id} onClick={() => setWindowSubtype(id)} className={`h-6 px-2 rounded text-xs font-medium transition-colors ${windowSubtype === id ? 'bg-cyan-600 text-white' : 'bg-slate-700 text-slate-300 hover:bg-slate-600'}`}>
-                {id}
-              </button>
-            ))}
-          </div>
-        )}
-        {(focusMode || !fsContextOpen) && (modMode === null || modMode === 'wall') && (state.activeTool === 'wall-line' || state.activeTool === 'arc-wall') && (
-          <div className="absolute top-3 left-3 z-20 flex items-center gap-1.5 px-2 py-1.5 bg-slate-800/95 border border-amber-700/60 rounded-lg backdrop-blur-sm shadow-lg">
-            <span className="text-[10px] font-semibold text-amber-400 uppercase tracking-widest mr-1 shrink-0">Wall</span>
-            {[64, 70, 90, 92, 110, 150].map(mm => (
-              <button key={mm} onClick={() => setWallThicknessMm(mm)} className={`h-6 px-2 rounded text-xs font-mono transition-colors ${wallThicknessMm === mm ? 'bg-amber-600 text-white' : 'bg-slate-700 text-slate-300 hover:bg-slate-600'}`}>
-                {mm}
-              </button>
-            ))}
-          </div>
-        )}
-        {calibrationBar}
-        <InteractiveCanvas
-          key={`${state.currentPageIndex}-${state.pdfFile?.planId ?? 'none'}`}
-          pdfUrl={state.pdfFile.url}
-          planId={state.pdfFile?.planId}
-          fileName={state.pdfFile?.name}
-          pageIndex={state.currentPageIndex}
-          transform={state.transform}
-          activeTool={state.activeTool}
-          isCalibrated={state.isCalibrated}
-          unitsPerMetre={state.currentScale?.unitsPerMetre || null}
-          calibrationMode={state.calibrationMode}
-          selectedColor={
-            modMode === 'wall' ? '#f59e0b' :
-            modMode === 'door' ? '#8b5cf6' :
-            modMode === 'window' ? '#06b6d4' :
-            (state.activeTool === 'wall-line' || state.activeTool === 'arc-wall')
-              ? (wallClassification === 'external' ? '#f59e0b' : '#38bdf8') :
-            state.selectedColor
-          }
-          measurements={state.measurements.filter(m => {
-            if (!state.pdfFile?.planId) return false;
-            if (m.pageIndex !== state.currentPageIndex) return false;
-            if (m.planId !== state.pdfFile.planId) return false;
-            return true;
-          })}
-          detectedOpenings={detectedOpenings}
-          onMeasurementComplete={handleMeasurementComplete}
-          onMeasurementUpdate={handleMeasurementUpdate}
-          onCalibrationPointsSet={handleCalibrationPointsSet}
-          onTransformChange={handleTransformChange}
-          onViewportReady={handleViewportReady}
-          onDeleteLastMeasurement={handleDeleteLastMeasurement}
-          onDeleteMeasurement={handleDeleteMeasurement}
-          onMeasurementSelect={handleMeasurementSelect}
-          canvasExportRef={canvasExportRef}
-          canvasActionsRef={canvasActionsRef}
-          canvasElementRef={canvasRef}
-          wallThickness={wallThicknessMm}
-          wallHatchType={wallHatchType}
-          wallHatchSide={wallHatchSide}
-          gridSnapMm={gridSnapMm}
-          countName={countName}
-          onReupload={() => {
-            dispatch({ type: 'SET_PDF_FILE', payload: null as any });
-            setIsTakeoffFullscreen(false);
-            setActiveTab('upload');
-          }}
-        />
-        <Magnifier
-          canvasRef={canvasRef as React.RefObject<HTMLCanvasElement>}
-          isVisible={showMagnifier}
-          onClose={() => setShowMagnifier(false)}
-        />
-      </div>
-
-      {/* Bottom measurements panel — collapsible */}
-      <div className={`bg-[#1e293b] border-t border-gray-700 flex flex-col shrink-0 transition-all duration-200 ${fsBottomOpen ? 'h-72' : 'h-9'}`}>
-        {/* Always-visible header strip */}
-        <button
-          className="px-3 h-9 flex items-center gap-3 w-full hover:bg-gray-700/40 shrink-0"
-          onClick={() => setFsBottomOpen(v => !v)}
-        >
-          {fsBottomOpen ? <ChevronDown className="h-3.5 w-3.5 text-gray-400 shrink-0" /> : <ChevronUp className="h-3.5 w-3.5 text-gray-400 shrink-0" />}
-          <span className="text-sm font-semibold text-gray-100">Measurements ({filteredMeasurements.length})</span>
-          {!fsBottomOpen && filteredMeasurements.length > 0 && (
-            <span className="text-xs text-gray-400 ml-1">
-              {Object.entries(
-                filteredMeasurements.reduce((acc, m) => { acc[m.unit] = (acc[m.unit] || 0) + m.realValue; return acc; }, {} as Record<string,number>)
-              ).map(([u, v]) => `${v.toFixed(2)} ${u}`).join(' · ')}
-            </span>
-          )}
-          {fsBottomOpen && (
-            <Select
-              value={String(pageFilter)}
-              onValueChange={(val) => { setPageFilter(val === 'all' ? 'all' : Number(val)); }}
-              onClick={(e) => e.stopPropagation()}
-            >
-              <SelectTrigger className="w-28 h-6 text-xs border-gray-600 bg-gray-800 text-gray-200 ml-2" onClick={(e) => e.stopPropagation()}>
-                <SelectValue placeholder="All pages" />
-              </SelectTrigger>
-              <SelectContent className="z-[10000]">
-                <SelectItem value="all">All pages</SelectItem>
-                {Array.from({ length: state.pageCount || 1 }).map((_, idx) => (
-                  <SelectItem key={idx} value={String(idx)}>Page {idx + 1}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          )}
-        </button>
-        {/* Expandable content */}
-        {fsBottomOpen && (
-          <div className="flex-1 overflow-hidden p-2">
-            {filteredMeasurements.length === 0 ? (
-              <p className="text-xs text-gray-400 text-center py-4">No measurements yet. Use the tools above to start measuring.</p>
-            ) : (
-              <TakeoffTable
-                measurements={filteredMeasurements}
-                onUpdateMeasurement={(id, updates) => dispatch({ type: 'UPDATE_MEASUREMENT', payload: { id, updates } })}
-                onDeleteMeasurement={(id) => {
-                  canvasActionsRef.current?.removeObjects(id);
-                  dispatch({ type: 'DELETE_MEASUREMENT', payload: id });
-                }}
-                onAddToEstimate={handleAddToEstimate}
-                onFetchNCCCode={handleFetchNCCCode}
-              />
-            )}
-          </div>
-        )}
-      </div>
-    </div>,
-    document.body
-  ) : null;
   return (
     <>
-    {fullscreenPortal}
-
     {/* Verify Scale Dialog */}
     <Dialog open={!!verifyMeasurement} onOpenChange={(open) => { if (!open) setVerifyMeasurement(null); }}>
       <DialogContent className="sm:max-w-md">
@@ -1427,61 +1278,248 @@ export const PDFTakeoff = ({ projectId, estimateId, onAddCostItems }: PDFTakeoff
                   </div>
                 )}
 
-                <div className="h-[calc(100vh-260px)] min-h-[500px] relative" ref={canvasContainerRef}>
-                  {!isTakeoffFullscreen && (
+                {/* CSS-based fullscreen: same canvas instance, no remount, no PDF reload */}
+                <div
+                  ref={canvasContainerRef}
+                  className={isTakeoffFullscreen
+                    ? "fixed inset-0 z-[9999] bg-[#0f172a] text-white flex flex-col"
+                    : "h-[calc(100vh-260px)] min-h-[500px] relative"
+                  }
+                >
+                  {/* Fullscreen top bar */}
+                  {isTakeoffFullscreen && (
                     <>
-                      {calibrationBar}
-                      <InteractiveCanvas
-                        key={`${state.currentPageIndex}-${state.pdfFile?.planId ?? 'none'}`}
-                        pdfUrl={state.pdfFile.url}
-                        planId={state.pdfFile?.planId}
-                        fileName={state.pdfFile?.name}
-                        pageIndex={state.currentPageIndex}
-                        transform={state.transform}
-                        activeTool={state.activeTool}
-                        isCalibrated={state.isCalibrated}
-                        unitsPerMetre={state.currentScale?.unitsPerMetre || null}
-                        calibrationMode={state.calibrationMode}
-                        selectedColor={
-                          modMode === 'wall' ? '#f59e0b' :
-                          modMode === 'door' ? '#8b5cf6' :
-                          modMode === 'window' ? '#06b6d4' :
-                          state.selectedColor
+                      {focusMode && (
+                        <div
+                          className="absolute top-0 left-0 right-0 h-2 z-10 bg-gray-700/50 hover:bg-gray-500/70 cursor-pointer transition-colors"
+                          onClick={() => setFocusMode(false)}
+                          title="Click to restore toolbar (or press Escape)"
+                        />
+                      )}
+                      <div className={`flex items-center gap-2 px-3 bg-[#1e293b] border-b border-gray-700 shrink-0 transition-all duration-200 overflow-hidden ${focusMode ? 'max-h-0 py-0 border-0' : 'max-h-96 py-2'}`}>
+                        {renderToolbar(fsContextOpen)}
+                        <div className="flex items-center gap-1 border-l border-gray-600 pl-2 ml-1">
+                          <Button variant="ghost" size="sm" onClick={handleZoomOut} className="h-8 text-gray-200 hover:bg-gray-700"><ZoomOut className="h-4 w-4" /></Button>
+                          <span className="text-sm font-medium min-w-14 text-center text-gray-200">{Math.round(state.transform.zoom * 100)}%</span>
+                          <Button variant="ghost" size="sm" onClick={handleZoomIn} className="h-8 text-gray-200 hover:bg-gray-700"><ZoomIn className="h-4 w-4" /></Button>
+                          <Button variant="ghost" size="sm" onClick={handleRotate} className="h-8 text-gray-200 hover:bg-gray-700"><RotateCw className="h-4 w-4" /></Button>
+                          <Button variant="ghost" size="sm" onClick={handleFitToScreen} className="h-8 text-gray-200 hover:bg-gray-700" title="Fit to screen"><Maximize2 className="h-4 w-4" /></Button>
+                        </div>
+                        <div className="flex items-center gap-1 border-l border-gray-600 pl-2 ml-1">
+                          {state.isCalibrated ? (
+                            <>
+                              <span className="text-xs font-medium text-green-400 flex items-center gap-1">
+                                <CheckCircle className="h-3.5 w-3.5" />
+                                {state.currentScale?.scaleFactor ? `1:${state.currentScale.scaleFactor}` : 'Calibrated'}
+                              </span>
+                              <Button variant="ghost" size="icon" className="h-7 w-7 text-gray-400 hover:text-white hover:bg-gray-700" onClick={() => dispatch({ type: 'SET_CALIBRATION_MODE', payload: 'manual' })} title="Re-calibrate">
+                                <Ruler className="h-3.5 w-3.5" />
+                              </Button>
+                              <Button variant="ghost" size="icon" className="h-7 w-7 text-gray-400 hover:text-white hover:bg-gray-700" onClick={handleResetScale} title="Reset scale">
+                                <RotateCcw className="h-3 w-3" />
+                              </Button>
+                            </>
+                          ) : (
+                            <Button variant="ghost" size="sm" className="h-8 gap-1.5 text-amber-400 hover:bg-amber-950/40" onClick={() => dispatch({ type: 'SET_CALIBRATION_MODE', payload: 'manual' })} title="Calibrate scale">
+                              <Ruler className="h-3.5 w-3.5" />
+                              Set Scale
+                            </Button>
+                          )}
+                        </div>
+                        {state.pdfFile.pageCount > 1 && (
+                          <div className="flex items-center gap-1 border-l border-gray-600 pl-2 ml-1">
+                            <Button variant="ghost" size="sm" onClick={handlePagePrevious} disabled={state.currentPageIndex === 0} className="h-8 text-gray-200 hover:bg-gray-700"><ChevronLeft className="h-4 w-4" /></Button>
+                            <select
+                              value={state.currentPageIndex + 1}
+                              onChange={e => dispatch({ type: 'SET_CURRENT_PAGE', payload: Number(e.target.value) - 1 })}
+                              className="h-7 text-sm bg-gray-800 border border-gray-600 rounded text-gray-100 px-1 cursor-pointer focus:outline-none focus:border-blue-400 min-w-[100px]"
+                            >
+                              {Array.from({ length: state.pdfFile.pageCount }, (_, idx) => idx + 1).map(p => {
+                                const scaleForPage = state.scales[p - 1];
+                                const dot = scaleForPage ? (scaleForPage.scaleMethod === 'manual' ? '🟢' : '🟡') : '🔴';
+                                return (
+                                  <option key={p} value={p} className="bg-gray-800">
+                                    {dot} Page {p} / {state.pdfFile!.pageCount}
+                                  </option>
+                                );
+                              })}
+                            </select>
+                            <Button variant="ghost" size="sm" onClick={handlePageNext} disabled={state.currentPageIndex === state.pdfFile.pageCount - 1} className="h-8 text-gray-200 hover:bg-gray-700"><ChevronRight className="h-4 w-4" /></Button>
+                          </div>
+                        )}
+                        <div className="ml-auto flex items-center gap-1">
+                          <Button size="sm" variant="ghost" onClick={() => setFsContextOpen(v => !v)} className="h-8 text-gray-400 hover:text-white hover:bg-gray-700" title={fsContextOpen ? 'Collapse tool options' : 'Expand tool options'}>
+                            {fsContextOpen ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+                          </Button>
+                          <Button size="sm" variant="ghost" onClick={() => setFocusMode(true)} className="h-8 text-gray-400 hover:text-white hover:bg-gray-700" title="Focus mode — hides toolbar (Esc to restore)">
+                            <EyeOff className="h-4 w-4" />
+                          </Button>
+                          <Button size="sm" variant="ghost" onClick={() => canvasExportRef.current?.export()} className="h-8 gap-1.5 text-gray-200 hover:bg-gray-700" title="Export page with markup as PNG">
+                            <Download className="h-4 w-4" />
+                            Export
+                          </Button>
+                          <Button size="sm" onClick={() => setIsTakeoffFullscreen(false)} className="bg-red-700 hover:bg-red-600 text-white">
+                            <Minimize2 className="h-4 w-4 mr-1.5" />
+                            Exit Full Screen
+                          </Button>
+                        </div>
+                      </div>
+                    </>
+                  )}
+
+                  {/* Canvas area — always mounted, never remounts on fullscreen toggle */}
+                  <div className={isTakeoffFullscreen ? "flex-1 overflow-hidden relative" : "absolute inset-0"}>
+                    {/* Calibration status badge (fullscreen only) */}
+                    {isTakeoffFullscreen && (
+                      <div className={`absolute bottom-3 left-3 z-20 flex items-center gap-1.5 px-2 py-1 rounded text-[10px] font-mono backdrop-blur-sm pointer-events-none ${
+                        state.isCalibrated
+                          ? 'bg-slate-900/70 text-green-400 border border-green-800/40'
+                          : 'bg-slate-900/70 text-amber-400 border border-amber-800/40'
+                      }`}>
+                        {state.isCalibrated
+                          ? `Calibrated · Page ${state.currentPageIndex + 1}${state.pdfFile.pageCount > 1 ? ` / ${state.pdfFile.pageCount}` : ''}`
+                          : `Not calibrated · Page ${state.currentPageIndex + 1}${state.pdfFile.pageCount > 1 ? ` / ${state.pdfFile.pageCount}` : ''}`
                         }
-                        measurements={state.measurements.filter(m => {
-                          if (!state.pdfFile?.planId) return false;
-                          if (m.pageIndex !== state.currentPageIndex) return false;
-                          if (m.planId !== state.pdfFile.planId) return false;
-                          return true;
-                        })}
-                        detectedOpenings={detectedOpenings}
-                        onMeasurementComplete={handleMeasurementComplete}
-                        onMeasurementUpdate={handleMeasurementUpdate}
-                        onCalibrationPointsSet={handleCalibrationPointsSet}
-                        onTransformChange={handleTransformChange}
-                        onViewportReady={handleViewportReady}
-                        onDeleteLastMeasurement={handleDeleteLastMeasurement}
-                        onDeleteMeasurement={handleDeleteMeasurement}
-                        onMeasurementSelect={handleMeasurementSelect}
-                        canvasExportRef={canvasExportRef}
-                        canvasActionsRef={canvasActionsRef}
-                        canvasElementRef={canvasRef}
-                        wallThickness={wallThicknessMm}
-                        wallHatchType={wallHatchType}
-                        wallHatchSide={wallHatchSide}
-                        gridSnapMm={gridSnapMm}
-                        countName={countName}
-                        onReupload={() => {
-                          dispatch({ type: 'SET_PDF_FILE', payload: null as any });
-                          setActiveTab('upload');
-                        }}
-                      />
+                      </div>
+                    )}
+                    {/* Floating context pickers (fullscreen, focus/collapsed mode) */}
+                    {isTakeoffFullscreen && (focusMode || !fsContextOpen) && modMode === 'door' && (
+                      <div className="absolute top-3 left-3 z-20 flex items-center gap-1.5 px-2 py-1.5 bg-slate-800/95 border border-violet-700/60 rounded-lg backdrop-blur-sm shadow-lg">
+                        <span className="text-[10px] font-semibold text-violet-400 uppercase tracking-widest mr-1 shrink-0">Door</span>
+                        {(['Internal','Entry','Cavity Slider','Bi-fold','French','Garage','Fire Door'] as const).map((id) => (
+                          <button key={id} onClick={() => setDoorSubtype(id)} className={`h-6 px-2 rounded text-xs font-medium transition-colors ${doorSubtype === id ? 'bg-violet-600 text-white' : 'bg-slate-700 text-slate-300 hover:bg-slate-600'}`}>{id}</button>
+                        ))}
+                      </div>
+                    )}
+                    {isTakeoffFullscreen && (focusMode || !fsContextOpen) && modMode === 'window' && (
+                      <div className="absolute top-3 left-3 z-20 flex items-center gap-1.5 px-2 py-1.5 bg-slate-800/95 border border-cyan-700/60 rounded-lg backdrop-blur-sm shadow-lg">
+                        <span className="text-[10px] font-semibold text-cyan-400 uppercase tracking-widest mr-1 shrink-0">Window</span>
+                        {(['Awning','Casement','Sliding','Fixed','Louvre','Skylight'] as const).map((id) => (
+                          <button key={id} onClick={() => setWindowSubtype(id)} className={`h-6 px-2 rounded text-xs font-medium transition-colors ${windowSubtype === id ? 'bg-cyan-600 text-white' : 'bg-slate-700 text-slate-300 hover:bg-slate-600'}`}>{id}</button>
+                        ))}
+                      </div>
+                    )}
+                    {isTakeoffFullscreen && (focusMode || !fsContextOpen) && (modMode === null || modMode === 'wall') && (state.activeTool === 'wall-line' || state.activeTool === 'arc-wall') && (
+                      <div className="absolute top-3 left-3 z-20 flex items-center gap-1.5 px-2 py-1.5 bg-slate-800/95 border border-amber-700/60 rounded-lg backdrop-blur-sm shadow-lg">
+                        <span className="text-[10px] font-semibold text-amber-400 uppercase tracking-widest mr-1 shrink-0">Wall</span>
+                        {[64, 70, 90, 92, 110, 150].map(mm => (
+                          <button key={mm} onClick={() => setWallThicknessMm(mm)} className={`h-6 px-2 rounded text-xs font-mono transition-colors ${wallThicknessMm === mm ? 'bg-amber-600 text-white' : 'bg-slate-700 text-slate-300 hover:bg-slate-600'}`}>{mm}</button>
+                        ))}
+                      </div>
+                    )}
+                    {calibrationBar}
+                    <InteractiveCanvas
+                      key={`${state.currentPageIndex}-${state.pdfFile?.planId ?? 'none'}`}
+                      pdfUrl={state.pdfFile.url}
+                      planId={state.pdfFile?.planId}
+                      fileName={state.pdfFile?.name}
+                      pageIndex={state.currentPageIndex}
+                      transform={state.transform}
+                      activeTool={state.activeTool}
+                      isCalibrated={state.isCalibrated}
+                      unitsPerMetre={state.currentScale?.unitsPerMetre || null}
+                      calibrationMode={state.calibrationMode}
+                      selectedColor={
+                        modMode === 'wall' ? '#f59e0b' :
+                        modMode === 'door' ? '#8b5cf6' :
+                        modMode === 'window' ? '#06b6d4' :
+                        (state.activeTool === 'wall-line' || state.activeTool === 'arc-wall')
+                          ? (wallClassification === 'external' ? '#f59e0b' : '#38bdf8') :
+                        state.selectedColor
+                      }
+                      measurements={state.measurements.filter(m => {
+                        if (!state.pdfFile?.planId) return false;
+                        if (m.pageIndex !== state.currentPageIndex) return false;
+                        if (m.planId !== state.pdfFile.planId) return false;
+                        return true;
+                      })}
+                      detectedOpenings={detectedOpenings}
+                      onMeasurementComplete={handleMeasurementComplete}
+                      onMeasurementUpdate={handleMeasurementUpdate}
+                      onCalibrationPointsSet={handleCalibrationPointsSet}
+                      onTransformChange={handleTransformChange}
+                      onViewportReady={handleViewportReady}
+                      onDeleteLastMeasurement={handleDeleteLastMeasurement}
+                      onDeleteMeasurement={handleDeleteMeasurement}
+                      onMeasurementSelect={handleMeasurementSelect}
+                      canvasExportRef={canvasExportRef}
+                      canvasActionsRef={canvasActionsRef}
+                      canvasElementRef={canvasRef}
+                      wallThickness={wallThicknessMm}
+                      wallHatchType={wallHatchType}
+                      wallHatchSide={wallHatchSide}
+                      gridSnapMm={gridSnapMm}
+                      countName={countName}
+                      onToolChange={(tool) => { setModMode(null); dispatch({ type: 'SET_ACTIVE_TOOL', payload: tool }); }}
+                      onReupload={() => {
+                        dispatch({ type: 'SET_PDF_FILE', payload: null as any });
+                        setIsTakeoffFullscreen(false);
+                        setActiveTab('upload');
+                      }}
+                    />
+                    {!isTakeoffFullscreen && (
                       <Magnifier
                         canvasRef={canvasRef as React.RefObject<HTMLCanvasElement>}
                         isVisible={showMagnifier}
                         onClose={() => setShowMagnifier(false)}
                       />
-                    </>
+                    )}
+                  </div>
+
+                  {/* Fullscreen bottom measurements panel */}
+                  {isTakeoffFullscreen && (
+                    <div className={`bg-[#1e293b] border-t border-gray-700 flex flex-col shrink-0 transition-all duration-200 ${fsBottomOpen ? 'h-72' : 'h-9'}`}>
+                      <button
+                        className="px-3 h-9 flex items-center gap-3 w-full hover:bg-gray-700/40 shrink-0"
+                        onClick={() => setFsBottomOpen(v => !v)}
+                      >
+                        {fsBottomOpen ? <ChevronDown className="h-3.5 w-3.5 text-gray-400 shrink-0" /> : <ChevronUp className="h-3.5 w-3.5 text-gray-400 shrink-0" />}
+                        <span className="text-sm font-semibold text-gray-100">Measurements ({filteredMeasurements.length})</span>
+                        {!fsBottomOpen && filteredMeasurements.length > 0 && (
+                          <span className="text-xs text-gray-400 ml-1">
+                            {Object.entries(
+                              filteredMeasurements.reduce((acc, m) => { acc[m.unit] = (acc[m.unit] || 0) + m.realValue; return acc; }, {} as Record<string,number>)
+                            ).map(([u, v]) => `${v.toFixed(2)} ${u}`).join(' · ')}
+                          </span>
+                        )}
+                        {fsBottomOpen && (
+                          <Select
+                            value={String(pageFilter)}
+                            onValueChange={(val) => { setPageFilter(val === 'all' ? 'all' : Number(val)); }}
+                            onClick={(e) => e.stopPropagation()}
+                          >
+                            <SelectTrigger className="w-28 h-6 text-xs border-gray-600 bg-gray-800 text-gray-200 ml-2" onClick={(e) => e.stopPropagation()}>
+                              <SelectValue placeholder="All pages" />
+                            </SelectTrigger>
+                            <SelectContent className="z-[10000]">
+                              <SelectItem value="all">All pages</SelectItem>
+                              {Array.from({ length: state.pageCount || 1 }).map((_, idx) => (
+                                <SelectItem key={idx} value={String(idx)}>Page {idx + 1}</SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        )}
+                      </button>
+                      {fsBottomOpen && (
+                        <div className="flex-1 overflow-hidden p-2">
+                          {filteredMeasurements.length === 0 ? (
+                            <p className="text-xs text-gray-400 text-center py-4">No measurements yet. Use the tools above to start measuring.</p>
+                          ) : (
+                            <TakeoffTable
+                              measurements={filteredMeasurements}
+                              onUpdateMeasurement={(id, updates) => dispatch({ type: 'UPDATE_MEASUREMENT', payload: { id, updates } })}
+                              onDeleteMeasurement={(id) => {
+                                canvasActionsRef.current?.removeObjects(id);
+                                dispatch({ type: 'DELETE_MEASUREMENT', payload: id });
+                              }}
+                              onAddToEstimate={handleAddToEstimate}
+                              onAddWallsToEstimate={handleAddWallsToEstimate}
+                              onFetchNCCCode={handleFetchNCCCode}
+                            />
+                          )}
+                        </div>
+                      )}
+                    </div>
                   )}
                 </div>
               </div>
@@ -1509,7 +1547,7 @@ export const PDFTakeoff = ({ projectId, estimateId, onAddCostItems }: PDFTakeoff
                     </Select>
                   </div>
 
-                  <div className="flex gap-2">
+                  <div className="flex flex-wrap gap-2">
                     <Button
                       variant="outline"
                       className="flex-1"
@@ -1589,6 +1627,7 @@ export const PDFTakeoff = ({ projectId, estimateId, onAddCostItems }: PDFTakeoff
                       dispatch({ type: 'DELETE_MEASUREMENT', payload: id });
                     }}
                     onAddToEstimate={handleAddToEstimate}
+                    onAddWallsToEstimate={handleAddWallsToEstimate}
                     onFetchNCCCode={handleFetchNCCCode}
                   />
                 </Card>

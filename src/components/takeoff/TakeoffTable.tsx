@@ -1,5 +1,6 @@
 import { useState, useMemo } from 'react';
 import { Check, Trash2, ChevronDown, ChevronRight, Plus, Search, X, Lock, MessageSquare, Clock, MapPin, Combine } from 'lucide-react';
+import { WallSetupDialog, WallUpdate } from './WallSetupDialog';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -21,6 +22,20 @@ const AREA_OPTIONS: MeasurementArea[] = [
 
 const TYPE_OPTIONS = ['Wall', 'Floor', 'Ceiling', 'Tiling', 'Roofing', 'Cladding', 'Concrete Slab', 'Framing', 'Painting', 'Waterproofing', 'Insulation', 'Other'] as const;
 type MeasurementTypeOption = typeof TYPE_OPTIONS[number];
+
+// Roof pitch presets used in AU residential construction
+const ROOF_PITCH_PRESETS = [10, 15, 18, 22, 25, 30, 35, 45] as const;
+const ROOF_WASTE_PRESETS = [5, 10, 15] as const;
+
+/** Pitch multiplier: plan footprint → actual roof surface area */
+function pitchMultiplier(deg: number): number {
+  if (!deg || deg <= 0) return 1;
+  return 1 / Math.cos((deg * Math.PI) / 180);
+}
+
+function roofAdjustedArea(rawPlanArea: number, pitchDeg: number, wastePct: number): number {
+  return rawPlanArea * pitchMultiplier(pitchDeg) * (1 + wastePct / 100);
+}
 
 // Framing system options
 const FRAMING_OPTIONS = [
@@ -64,11 +79,142 @@ const CONCRETE_OPTIONS = [
 // Count item presets
 const COUNT_PRESETS = ['Toilet', 'Window', 'Door', 'Light', 'Power Point', 'Switch', 'Custom'];
 
+/* ─── Roof Pitch Panel ─────────────────────────────────────────────────────── */
+
+interface RoofPitchPanelProps {
+  measurement: Measurement;
+  onUpdateMeasurement: (id: string, updates: Partial<Measurement>) => void;
+}
+
+const RoofPitchPanel = ({ measurement: m, onUpdateMeasurement }: RoofPitchPanelProps) => {
+  const [customWaste, setCustomWaste] = useState('');
+  const rawArea = m.roofRawPlanArea ?? m.realValue;
+  const pitch = m.roofPitchDeg ?? 0;
+  const waste = m.roofWastePercent ?? 0;
+  const multiplier = pitchMultiplier(pitch);
+  const adjustedArea = roofAdjustedArea(rawArea, pitch, waste);
+
+  const applyPitch = (deg: number) => {
+    const raw = m.roofRawPlanArea ?? m.realValue;
+    const w = m.roofWastePercent ?? 0;
+    onUpdateMeasurement(m.id, {
+      roofPitchDeg: deg,
+      roofRawPlanArea: raw,
+      realValue: roofAdjustedArea(raw, deg, w),
+    });
+  };
+
+  const applyWaste = (pct: number) => {
+    const raw = m.roofRawPlanArea ?? m.realValue;
+    const p = m.roofPitchDeg ?? 0;
+    onUpdateMeasurement(m.id, {
+      roofWastePercent: pct,
+      roofRawPlanArea: raw,
+      realValue: roofAdjustedArea(raw, p, pct),
+    });
+  };
+
+  return (
+    <div className="mt-2 rounded-md border border-orange-400/20 bg-orange-400/5 p-2 space-y-2">
+      <div className="text-[9px] font-mono text-orange-400/80 uppercase tracking-widest">Roof Pitch</div>
+
+      {/* Pitch presets */}
+      <div className="flex flex-wrap gap-1">
+        {ROOF_PITCH_PRESETS.map((deg) => (
+          <button
+            key={deg}
+            onClick={() => applyPitch(deg)}
+            className={`h-6 px-2 rounded text-[10px] font-mono transition-colors ${
+              pitch === deg
+                ? 'bg-orange-500 text-white'
+                : 'bg-muted text-muted-foreground hover:bg-orange-500/20 hover:text-orange-400'
+            }`}
+          >
+            {deg}°
+          </button>
+        ))}
+        <button
+          onClick={() => applyPitch(0)}
+          className={`h-6 px-2 rounded text-[10px] font-mono transition-colors ${
+            pitch === 0
+              ? 'bg-slate-600 text-white'
+              : 'bg-muted text-muted-foreground hover:bg-slate-600/40'
+          }`}
+        >
+          Flat
+        </button>
+      </div>
+
+      {/* Waste presets */}
+      <div className="flex items-center gap-1.5">
+        <span className="text-[9px] text-muted-foreground font-mono">Waste:</span>
+        {ROOF_WASTE_PRESETS.map((pct) => (
+          <button
+            key={pct}
+            onClick={() => { applyWaste(pct); setCustomWaste(''); }}
+            className={`h-5 px-1.5 rounded text-[10px] font-mono transition-colors ${
+              waste === pct
+                ? 'bg-cyan-600 text-white'
+                : 'bg-muted text-muted-foreground hover:bg-cyan-600/20 hover:text-cyan-400'
+            }`}
+          >
+            {pct}%
+          </button>
+        ))}
+        <input
+          type="number"
+          min="0"
+          max="30"
+          placeholder="%"
+          value={customWaste}
+          onChange={(e) => setCustomWaste(e.target.value)}
+          onBlur={() => {
+            const v = parseFloat(customWaste);
+            if (!isNaN(v) && v >= 0 && v <= 30) { applyWaste(v); }
+          }}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') {
+              const v = parseFloat(customWaste);
+              if (!isNaN(v) && v >= 0 && v <= 30) { applyWaste(v); }
+            }
+          }}
+          className="h-5 w-10 text-[10px] border border-border rounded px-1 bg-background text-foreground focus:outline-none focus:border-orange-400"
+        />
+      </div>
+
+      {/* Result breakdown */}
+      {pitch > 0 && (
+        <div className="space-y-0.5 pt-1 border-t border-orange-400/10">
+          <div className="flex justify-between text-[9px] text-muted-foreground">
+            <span>Plan area</span>
+            <span className="font-mono">{rawArea.toFixed(2)} m²</span>
+          </div>
+          <div className="flex justify-between text-[9px] text-muted-foreground">
+            <span>Pitch ×{multiplier.toFixed(3)}</span>
+            <span className="font-mono">{(rawArea * multiplier).toFixed(2)} m²</span>
+          </div>
+          {waste > 0 && (
+            <div className="flex justify-between text-[9px] text-muted-foreground">
+              <span>+{waste}% waste</span>
+              <span className="font-mono">{adjustedArea.toFixed(2)} m²</span>
+            </div>
+          )}
+          <div className="flex justify-between text-[10px] font-semibold text-orange-400 pt-0.5">
+            <span>Order qty</span>
+            <span className="font-mono">{adjustedArea.toFixed(2)} m²</span>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
 interface TakeoffTableProps {
   measurements: Measurement[];
   onUpdateMeasurement: (id: string, updates: Partial<Measurement>) => void;
   onDeleteMeasurement: (id: string) => void;
   onAddToEstimate: (measurementIds: string[]) => void;
+  onAddWallsToEstimate?: (configuredWalls: Measurement[], nonWallIds: string[]) => void;
   onFetchNCCCode?: (measurementId: string, area: string, materials: string[]) => Promise<string>;
   inline?: boolean;
 }
@@ -78,6 +224,7 @@ export const TakeoffTable = ({
   onUpdateMeasurement,
   onDeleteMeasurement,
   onAddToEstimate,
+  onAddWallsToEstimate,
   onFetchNCCCode,
   inline = false,
 }: TakeoffTableProps) => {
@@ -86,6 +233,9 @@ export const TakeoffTable = ({
   const [searchFilter, setSearchFilter] = useState('');
   const [groupByArea, setGroupByArea] = useState(false);
   const [isOpen, setIsOpen] = useState(false);
+  const [wallSetupOpen, setWallSetupOpen] = useState(false);
+  const [wallsForSetup, setWallsForSetup] = useState<Measurement[]>([]);
+  const [pendingNonWallIds, setPendingNonWallIds] = useState<string[]>([]);
 
   const filteredMeasurements = useMemo(() => {
     if (!searchFilter) return measurements;
@@ -201,6 +351,40 @@ export const TakeoffTable = ({
   const handleValidate = (id: string) => {
     const measurement = measurements.find((m) => m.id === id);
     onUpdateMeasurement(id, { validated: !measurement?.validated });
+  };
+
+  // Any LM measurement without a height is treated as an unconfigured wall
+  const isUnconfiguredWall = (m: Measurement): boolean =>
+    m.unit === 'LM' && !m.height;
+
+  const interceptAddForWalls = (ids: string[], validateFirst?: boolean) => {
+    if (validateFirst) {
+      ids.forEach(id => onUpdateMeasurement(id, { validated: true, lockedToSOW: true }));
+    }
+    const wallIds = ids.filter(id => {
+      const m = measurements.find(x => x.id === id);
+      return m && isUnconfiguredWall(m);
+    });
+    const nonWallIds = ids.filter(id => !wallIds.includes(id));
+
+    if (wallIds.length > 0 && onAddWallsToEstimate) {
+      setWallsForSetup(wallIds.map(id => measurements.find(x => x.id === id)!));
+      setPendingNonWallIds(nonWallIds);
+      setWallSetupOpen(true);
+    } else {
+      onAddToEstimate(ids);
+      setSelectedIds(new Set());
+    }
+  };
+
+  const handleWallSetupConfirm = (updates: WallUpdate[]) => {
+    if (onAddWallsToEstimate) {
+      onAddWallsToEstimate(updates.map(u => u.configuredMeasurement), pendingNonWallIds);
+    }
+    setWallSetupOpen(false);
+    setWallsForSetup([]);
+    setPendingNonWallIds([]);
+    setSelectedIds(new Set());
   };
 
   const handleLockToSOW = (id: string) => {
@@ -405,11 +589,28 @@ export const TakeoffTable = ({
             />
           </div>
 
+          {/* Label */}
+          <div className="col-span-2 min-w-0">
+            <div className="text-xs font-medium truncate text-foreground leading-tight" title={m.label}>
+              {m.label || <span className="text-muted-foreground italic">Unnamed</span>}
+            </div>
+            {m.drawingNumber && (
+              <div className="text-[10px] text-muted-foreground truncate">{m.drawingNumber}</div>
+            )}
+          </div>
+
           {/* Type */}
           <div className="col-span-2">
             <Select
               value={m.measurementType || ''}
-              onValueChange={(v: MeasurementTypeOption) => onUpdateMeasurement(m.id, { measurementType: v })}
+              onValueChange={(v: MeasurementTypeOption) => {
+                const updates: Partial<Measurement> = { measurementType: v };
+                // Capture raw plan area when first switching to Roofing
+                if (v === 'Roofing' && m.unit === 'M2' && !m.roofRawPlanArea) {
+                  updates.roofRawPlanArea = m.realValue;
+                }
+                onUpdateMeasurement(m.id, updates);
+              }}
             >
               <SelectTrigger className="h-8 text-xs">
                 <SelectValue placeholder="Type..." />
@@ -488,6 +689,11 @@ export const TakeoffTable = ({
                 )}
               </div>
             )}
+
+            {/* Conditional: Roof Pitch + Waste for Roofing */}
+            {m.measurementType === 'Roofing' && m.unit === 'M2' && (
+              <RoofPitchPanel measurement={m} onUpdateMeasurement={onUpdateMeasurement} />
+            )}
           </div>
 
           {/* Qty + Computed */}
@@ -524,102 +730,58 @@ export const TakeoffTable = ({
             </Select>
           </div>
 
-          {/* Framing */}
-          <div className="col-span-2">
-            <Select
-              value={m.framingSystem || 'none'}
-              onValueChange={(v) => onUpdateMeasurement(m.id, { framingSystem: v })}
-            >
-              <SelectTrigger className="h-8 text-xs">
-                <SelectValue placeholder="Framing..." />
-              </SelectTrigger>
-              <SelectContent className="bg-popover">
-                {FRAMING_OPTIONS.map((opt) => (
-                  <SelectItem key={opt.value} value={opt.value} className="text-xs">
-                    {opt.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-
-          {/* Lining + Insulation - Hidden for concrete floors */}
-          <div className="col-span-2 space-y-1">
-            {m.isConcreteFloor ? (
-              <span className="text-[9px] text-muted-foreground italic">N/A - Concrete</span>
+          {/* Wall Config — replaces old Framing + Lining/Insul columns */}
+          <div className="col-span-3">
+            {m.unit === 'LM' ? (
+              m.height ? (
+                // Already configured — show summary badge + re-configure button
+                <div className="flex flex-col gap-1">
+                  <div className="flex flex-wrap gap-1">
+                    <span className="inline-flex items-center rounded-full bg-emerald-500/15 px-2 py-0.5 text-[10px] font-medium text-emerald-600">
+                      ✓ {m.height}m
+                    </span>
+                    {m.framingSystem && m.framingSystem !== 'none' && (
+                      <span className="inline-flex items-center rounded-full bg-blue-500/15 px-2 py-0.5 text-[10px] font-medium text-blue-600 truncate max-w-[80px]">
+                        {m.framingSystem.replace('_', ' ')}
+                      </span>
+                    )}
+                    {m.hasLining && (
+                      <span className="inline-flex items-center rounded-full bg-purple-500/15 px-2 py-0.5 text-[10px] font-medium text-purple-600">
+                        Lining
+                      </span>
+                    )}
+                    {m.hasInsulation && (
+                      <span className="inline-flex items-center rounded-full bg-orange-500/15 px-2 py-0.5 text-[10px] font-medium text-orange-600">
+                        Insul.
+                      </span>
+                    )}
+                  </div>
+                  <button
+                    className="text-[10px] text-muted-foreground hover:text-foreground underline-offset-2 hover:underline text-left"
+                    onClick={() => {
+                      setWallsForSetup([m]);
+                      setPendingNonWallIds([]);
+                      setWallSetupOpen(true);
+                    }}
+                  >
+                    Edit wall spec
+                  </button>
+                </div>
+              ) : (
+                // Not yet configured — show setup button
+                <button
+                  className="flex items-center gap-1.5 rounded-md border border-dashed border-cyan-500/50 px-2 py-1.5 text-[11px] font-medium text-cyan-500 hover:border-cyan-400 hover:text-cyan-400 hover:bg-cyan-500/5 transition-colors"
+                  onClick={() => {
+                    setWallsForSetup([m]);
+                    setPendingNonWallIds([]);
+                    setWallSetupOpen(true);
+                  }}
+                >
+                  ⚙ Set up wall
+                </button>
+              )
             ) : (
-              <>
-                <div className="flex items-center gap-1">
-                  <Checkbox
-                    checked={m.hasLining || false}
-                    onCheckedChange={(checked) => onUpdateMeasurement(m.id, { hasLining: !!checked })}
-                    className="h-3 w-3"
-                  />
-                  <span className="text-[10px]">Lining</span>
-                  {m.hasLining && (
-                    <Select
-                      value={m.liningType || ''}
-                      onValueChange={(v) => onUpdateMeasurement(m.id, { liningType: v })}
-                    >
-                      <SelectTrigger className="h-6 text-[10px] flex-1">
-                        <SelectValue placeholder="Type" />
-                      </SelectTrigger>
-                      <SelectContent className="bg-popover">
-                        {LINING_OPTIONS.map((opt) => (
-                          <SelectItem key={opt.value} value={opt.value} className="text-xs">
-                            {opt.label}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  )}
-                </div>
-                {/* Show computed lining m² for walls */}
-                {m.hasLining && getWallArea(m) && (
-                  <div className="text-[10px] text-blue-600 font-medium pl-4">
-                    → {getWallArea(m)?.toFixed(2)} m² lining
-                  </div>
-                )}
-                {m.hasLining && m.liningType === 'custom' && (
-                  <Input
-                    value={m.customLining || ''}
-                    onChange={(e) => onUpdateMeasurement(m.id, { customLining: e.target.value })}
-                    className="h-6 text-xs"
-                    placeholder="Custom lining..."
-                  />
-                )}
-                <div className="flex items-center gap-1">
-                  <Checkbox
-                    checked={m.hasInsulation || false}
-                    onCheckedChange={(checked) => onUpdateMeasurement(m.id, { hasInsulation: !!checked })}
-                    className="h-3 w-3"
-                  />
-                  <span className="text-[10px]">Insul.</span>
-                  {m.hasInsulation && (
-                    <Select
-                      value={m.insulationType || ''}
-                      onValueChange={(v) => onUpdateMeasurement(m.id, { insulationType: v })}
-                    >
-                      <SelectTrigger className="h-6 text-[10px] flex-1">
-                        <SelectValue placeholder="Type" />
-                      </SelectTrigger>
-                      <SelectContent className="bg-popover">
-                        {INSULATION_OPTIONS.map((opt) => (
-                          <SelectItem key={opt.value} value={opt.value} className="text-xs">
-                            {opt.label}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  )}
-                </div>
-                {/* Show computed insulation m² for walls */}
-                {m.hasInsulation && getWallArea(m) && (
-                  <div className="text-[10px] text-green-600 font-medium pl-4">
-                    → {getWallArea(m)?.toFixed(2)} m² insulation
-                  </div>
-                )}
-              </>
+              <span className="text-[10px] text-muted-foreground/40">—</span>
             )}
           </div>
 
@@ -664,19 +826,17 @@ export const TakeoffTable = ({
             >
               <Trash2 className="h-3 w-3" />
             </Button>
-          </div>
 
-          {/* NCC Badge (moved to row end) */}
-          <div className="col-span-1">
+            {/* NCC inline in actions */}
             {m.nccCode ? (
-              <Badge variant="outline" className="text-[10px]">
+              <Badge variant="outline" className="text-[10px] ml-0.5">
                 {m.nccCode}
               </Badge>
             ) : m.area ? (
               <Button
                 variant="outline"
                 size="sm"
-                className="h-6 text-[10px] px-2"
+                className="h-6 text-[10px] px-2 ml-0.5"
                 onClick={() => handleFetchNCC(m)}
               >
                 NCC
@@ -824,13 +984,12 @@ export const TakeoffTable = ({
           />
           <span>#</span>
         </div>
+        <div className="col-span-2">Label</div>
         <div className="col-span-2">Type</div>
         <div className="col-span-1">Qty</div>
         <div className="col-span-1">Area</div>
-        <div className="col-span-2">Framing</div>
-        <div className="col-span-2">Lining/Insul.</div>
+        <div className="col-span-3">Wall Config</div>
         <div className="col-span-2">Actions</div>
-        <div className="col-span-1">NCC</div>
       </div>
 
       {/* Table Body */}
@@ -901,8 +1060,7 @@ export const TakeoffTable = ({
                 const ids = selectedIds.size > 0
                   ? Array.from(selectedIds)
                   : measurements.map(m => m.id);
-                onAddToEstimate(ids);
-                setSelectedIds(new Set());
+                interceptAddForWalls(ids);
               }}
             >
               <Plus className="h-4 w-4 mr-2" />
@@ -919,9 +1077,7 @@ export const TakeoffTable = ({
                 const ids = selectedIds.size > 0
                   ? Array.from(selectedIds)
                   : measurements.map(m => m.id);
-                ids.forEach(id => onUpdateMeasurement(id, { validated: true, lockedToSOW: true }));
-                onAddToEstimate(ids);
-                setSelectedIds(new Set());
+                interceptAddForWalls(ids, true);
               }}
             >
               <Lock className="h-4 w-4 mr-2" />
@@ -944,31 +1100,44 @@ export const TakeoffTable = ({
   }
 
   return (
-    <Sheet open={isOpen} onOpenChange={setIsOpen}>
-      <SheetTrigger asChild>
-        <Button variant="outline" className="w-full">
-          <Plus className="h-4 w-4 mr-2" />
-          Takeoff Table ({measurements.length})
-          {lockedCount > 0 && (
-            <Badge variant="secondary" className="ml-2">
-              {lockedCount} locked
-            </Badge>
-          )}
-        </Button>
-      </SheetTrigger>
-      <SheetContent side="bottom" className="h-[92vh]">
-        <SheetHeader className="pb-2">
-          <SheetTitle className="flex items-center justify-between">
-            <span>Takeoff Measurements ({measurements.length})</span>
-            <span className="text-xs font-normal text-muted-foreground">
-              Validate, assign type/area, then Add to Estimate. The sheet stays open so you can keep going.
-            </span>
-          </SheetTitle>
-        </SheetHeader>
-        <div className="mt-2 h-full overflow-hidden">
-          {tableContent}
-        </div>
-      </SheetContent>
-    </Sheet>
+    <>
+      <Sheet open={isOpen} onOpenChange={setIsOpen}>
+        <SheetTrigger asChild>
+          <Button variant="outline" className="w-full">
+            <Plus className="h-4 w-4 mr-2" />
+            Takeoff Table ({measurements.length})
+            {lockedCount > 0 && (
+              <Badge variant="secondary" className="ml-2">
+                {lockedCount} locked
+              </Badge>
+            )}
+          </Button>
+        </SheetTrigger>
+        <SheetContent side="bottom" className="h-[92vh]">
+          <SheetHeader className="pb-2">
+            <SheetTitle className="flex items-center justify-between">
+              <span>Takeoff Measurements ({measurements.length})</span>
+              <span className="text-xs font-normal text-muted-foreground">
+                Validate, assign type/area, then Add to Estimate. The sheet stays open so you can keep going.
+              </span>
+            </SheetTitle>
+          </SheetHeader>
+          <div className="mt-2 h-full overflow-hidden">
+            {tableContent}
+          </div>
+        </SheetContent>
+      </Sheet>
+
+      <WallSetupDialog
+        open={wallSetupOpen}
+        walls={wallsForSetup}
+        onConfirm={handleWallSetupConfirm}
+        onCancel={() => {
+          setWallSetupOpen(false);
+          setWallsForSetup([]);
+          setPendingNonWallIds([]);
+        }}
+      />
+    </>
   );
 };
