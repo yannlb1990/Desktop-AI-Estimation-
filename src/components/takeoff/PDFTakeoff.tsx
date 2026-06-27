@@ -17,6 +17,9 @@ import { WorldPoint, MeasurementUnit, Measurement, PDFViewportData, CostItem, Di
 import { calculateManualScaleWorld } from '@/lib/takeoff/calculations';
 import { DetectedOpening } from '@/lib/takeoff/pdfTextExtractor';
 import { fetchNCCCode } from '@/lib/takeoff/nccCodeFetcher';
+import { getFramingRate, getLiningRate, getInsulationRate, getMeasurementTypeRate } from '@/lib/takeoff/rateAutoFill';
+import { getUserStorageKey } from '@/lib/localAuth';
+import { type AustralianState } from '@/data/scopeOfWorkRates';
 import { toast } from 'sonner';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -52,6 +55,21 @@ interface PDFTakeoffProps {
 
 export const PDFTakeoff = ({ projectId, estimateId, onAddCostItems }: PDFTakeoffProps) => {
   const { state, dispatch } = useTakeoffState(projectId);
+
+  // Derive project state for rate auto-fill. Priority: CostEstimator prefs → project.state → QLD
+  const projectState = useMemo((): AustralianState => {
+    try {
+      const prefsKey = getUserStorageKey(`cost_estimator_prefs_${projectId}`);
+      const prefs = JSON.parse(localStorage.getItem(prefsKey) || '{}');
+      if (prefs?.selectedState) return prefs.selectedState as AustralianState;
+      const projectsKey = getUserStorageKey('local_projects');
+      const projects: any[] = JSON.parse(localStorage.getItem(projectsKey) || '[]');
+      const project = projects.find(p => p.id === projectId);
+      if (project?.state) return project.state as AustralianState;
+    } catch {}
+    return 'QLD';
+  }, [projectId]);
+
   const [activeTab, setActiveTab] = React.useState('upload');
   const [rotation, setRotation] = useState<0 | 90 | 180 | 270>(0);
   const [manualCalibrationPoints, setManualCalibrationPoints] = useState<[WorldPoint, WorldPoint] | null>(null);
@@ -641,7 +659,7 @@ export const PDFTakeoff = ({ projectId, estimateId, onAddCostItems }: PDFTakeoff
           name: framingLabels[measurement.framingSystem] || 'Framing',
           description: `${measurement.measurementType} framing - ${measurement.area || 'General'}`,
           unit: 'M2', // Framing is always M2
-          unitCost: 0,
+          unitCost: getFramingRate(projectState),
           quantity: framingQty,
           linkedMeasurements: [measurement.id],
           wasteFactor: 1.1,
@@ -675,7 +693,7 @@ export const PDFTakeoff = ({ projectId, estimateId, onAddCostItems }: PDFTakeoff
           name: liningName,
           description: `${measurement.measurementType} lining - ${measurement.area || 'General'}`,
           unit: 'M2',
-          unitCost: 0,
+          unitCost: getLiningRate(measurement.liningType, projectState),
           quantity: quantity, // Same m² as framing
           linkedMeasurements: [measurement.id],
           wasteFactor: 1.1,
@@ -712,7 +730,7 @@ export const PDFTakeoff = ({ projectId, estimateId, onAddCostItems }: PDFTakeoff
           name: insulationName,
           description: `${measurement.measurementType} insulation - ${measurement.area || 'General'}`,
           unit: 'M2',
-          unitCost: 0,
+          unitCost: getInsulationRate(projectState),
           quantity: quantity, // Same m² as framing
           linkedMeasurements: [measurement.id],
           wasteFactor: 1.05,
@@ -766,7 +784,7 @@ export const PDFTakeoff = ({ projectId, estimateId, onAddCostItems }: PDFTakeoff
             name: measurement.label || `${measurement.measurementType || measurement.type} - ${measurement.area || 'General'}`,
             description: measurement.comments || `Measurement from takeoff`,
             unit: unit,
-            unitCost: 0,
+            unitCost: getMeasurementTypeRate(measurement.measurementType, unit, !!measurement.isConcreteFloor, projectState),
             quantity: quantity,
             linkedMeasurements: [measurement.id],
             wasteFactor: 1.0,
@@ -831,7 +849,7 @@ export const PDFTakeoff = ({ projectId, estimateId, onAddCostItems }: PDFTakeoff
           name: framingLabels[m.framingSystem] || 'Framing',
           description: `Wall framing - ${m.area || 'General'}`,
           unit: 'M2',
-          unitCost: 0,
+          unitCost: getFramingRate(projectState),
           quantity: framingM2,
           linkedMeasurements: [m.id],
           wasteFactor: 1.1,
@@ -854,7 +872,7 @@ export const PDFTakeoff = ({ projectId, estimateId, onAddCostItems }: PDFTakeoff
           name: liningLabels[m.liningType || ''] || 'Wall Lining',
           description: `Wall lining - ${m.area || 'General'}`,
           unit: 'M2',
-          unitCost: 0,
+          unitCost: getLiningRate(m.liningType, projectState),
           quantity: framingM2 * (m.liningFaces || 1),
           linkedMeasurements: [m.id],
           wasteFactor: 1.1,
@@ -878,7 +896,7 @@ export const PDFTakeoff = ({ projectId, estimateId, onAddCostItems }: PDFTakeoff
           name: insulationLabels[m.insulationType || ''] || 'Wall Insulation',
           description: `Wall insulation - ${m.area || 'General'}`,
           unit: 'M2',
-          unitCost: 0,
+          unitCost: getInsulationRate(projectState),
           quantity: framingM2,
           linkedMeasurements: [m.id],
           wasteFactor: 1.05,
