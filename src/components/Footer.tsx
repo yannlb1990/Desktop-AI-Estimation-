@@ -2,7 +2,7 @@ import { MetricoreLogoMark } from "@/components/MetricoreLogoMark";
 
 const Footer = () => {
   return (
-    <footer className="border-t border-border bg-background py-12">
+    <footer className="bg-background py-12">
       <div className="container mx-auto px-6">
         <div className="grid grid-cols-1 md:grid-cols-4 gap-8 mb-8">
           {/* Brand */}
@@ -12,7 +12,7 @@ const Footer = () => {
               <span className="font-display text-xl font-bold">Metricore</span>
             </div>
             <p className="text-sm text-muted-foreground">
-              AI-powered estimation for Australian builders.
+              Estimation software for trades, builders and construction projects of every size.
             </p>
           </div>
 
@@ -46,7 +46,7 @@ const Footer = () => {
         </div>
 
         <div className="pt-8 border-t border-border flex flex-col sm:flex-row items-center justify-between gap-2 text-sm text-muted-foreground">
-          <p>© 2026 Metricore. All rights reserved. Built for Australian builders.</p>
+          <p>© 2026 Metricore. All rights reserved.</p>
           <a href="mailto:admin@metricore.com.au" className="text-xs text-muted-foreground/60 hover:text-muted-foreground transition-colors">
             admin@metricore.com.au
           </a>

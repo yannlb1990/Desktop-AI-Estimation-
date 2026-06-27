@@ -1,62 +1,101 @@
-import { Button } from "@/components/ui/button";
-import { ArrowRight, CheckCircle } from "lucide-react";
+import { motion } from "framer-motion";
 import { isSignedIn } from "@/lib/localAuth";
 
 const CTA = () => {
+  const words1 = ["Price", "the", "job."];
+  const words2 = ["Get", "home", "for", "dinner."];
+
   return (
-    <section className="py-24 bg-muted/30">
-      <div className="container mx-auto px-4 sm:px-6">
-        <div className="max-w-4xl mx-auto">
-          <div className="relative rounded-2xl overflow-hidden shadow-lg">
-            {/* Gradient Background */}
-            <div className="absolute inset-0 gradient-primary opacity-95" />
+    <section className="relative py-32 md:py-40 bg-[#09111f] overflow-hidden">
 
-            {/* Content */}
-            <div className="relative z-10 px-6 py-12 md:px-16 md:py-20 text-center">
-              <h2 className="font-display text-4xl md:text-5xl font-bold text-white mb-5 leading-tight">
-                Price a job in the time it
-                <span className="block mt-1">takes to make a coffee.</span>
-              </h2>
-              <p className="text-xl text-white/80 mb-10 max-w-2xl mx-auto">
-                Australian builders waste 4 to 6 hours on every manual estimate.
-                Metricore gets it done in under 30 minutes.
-              </p>
+      <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+        <div className="w-[700px] h-[400px] bg-cyan-500/5 blur-[120px] rounded-full" />
+      </div>
 
-              {/* Benefits */}
-              <div className="flex flex-wrap justify-center gap-3 sm:gap-6 mb-10">
-                {[
-                  "14-day free trial",
-                  "No credit card required",
-                  "Cancel anytime",
-                  "Full feature access",
-                ].map((benefit) => (
-                  <div key={benefit} className="flex items-center gap-2 text-white">
-                    <CheckCircle className="h-5 w-5 text-accent" />
-                    <span className="font-medium">{benefit}</span>
-                  </div>
-                ))}
-              </div>
+      <div className="container mx-auto px-6 lg:px-12 relative z-10 text-center">
 
-              {/* CTA */}
-              <Button
-                size="lg"
-                onClick={() =>
-                  window.location.href = isSignedIn()
-                    ? "/dashboard"
-                    : "/auth?plan=pro&mode=signup"
-                }
-                className="bg-accent text-accent-foreground hover:bg-accent/90 shadow-glow text-base md:text-lg px-8 md:px-10 py-6 md:py-7 h-auto w-full sm:w-auto"
+        <motion.div
+          initial={{ opacity: 0 }}
+          whileInView={{ opacity: 1 }}
+          viewport={{ once: true }}
+          transition={{ duration: 0.5 }}
+          className="inline-flex items-center gap-2.5 mb-10"
+        >
+          <div className="w-1.5 h-1.5 rounded-full bg-cyan-400 animate-pulse" />
+          <span className="text-xs font-mono text-cyan-400/60 uppercase tracking-widest">
+            Start today
+          </span>
+        </motion.div>
+
+        <h2
+          className="font-display font-bold text-white leading-[0.9] tracking-tight mb-8 mx-auto"
+          style={{ fontSize: "clamp(2.75rem, 7vw, 6rem)", maxWidth: "16ch" }}
+        >
+          <span className="flex flex-wrap justify-center gap-x-[0.25em]">
+            {words1.map((word, i) => (
+              <motion.span
+                key={word + i}
+                initial={{ opacity: 0, y: 24 }}
+                whileInView={{ opacity: 1, y: 0 }}
+                viewport={{ once: true }}
+                transition={{ duration: 0.5, delay: i * 0.1, ease: [0.25, 0, 0.2, 1] }}
               >
-                Start Your Free Trial
-                <ArrowRight className="ml-2 h-5 w-5" />
-              </Button>
+                {word}
+              </motion.span>
+            ))}
+          </span>
+          <span className="flex flex-wrap justify-center gap-x-[0.25em] text-white/25 mt-1">
+            {words2.map((word, i) => (
+              <motion.span
+                key={word + i}
+                initial={{ opacity: 0, y: 24 }}
+                whileInView={{ opacity: 1, y: 0 }}
+                viewport={{ once: true }}
+                transition={{ duration: 0.5, delay: 0.3 + i * 0.1, ease: [0.25, 0, 0.2, 1] }}
+              >
+                {word}
+              </motion.span>
+            ))}
+          </span>
+        </h2>
 
-              <p className="mt-5 text-xs sm:text-sm text-white/60 font-mono">
-                Plans from $79/month · Trusted by builders across QLD, NSW, VIC and WA
-              </p>
-            </div>
-          </div>
-        </div>
+        <motion.p
+          initial={{ opacity: 0, y: 16 }}
+          whileInView={{ opacity: 1, y: 0 }}
+          viewport={{ once: true }}
+          transition={{ duration: 0.5, delay: 0.5 }}
+          className="text-white/40 text-base max-w-sm mx-auto mb-12 leading-relaxed"
+        >
+          Builders spend hours writing up quotes by hand every week.
+          Metricore turns that into 30 minutes.
+        </motion.p>
+
+        <motion.div
+          initial={{ opacity: 0, scale: 0.95 }}
+          whileInView={{ opacity: 1, scale: 1 }}
+          viewport={{ once: true }}
+          transition={{ duration: 0.5, delay: 0.6 }}
+        >
+          <motion.button
+            whileHover={{ scale: 1.04 }}
+            whileTap={{ scale: 0.97 }}
+            onClick={() => window.location.href = isSignedIn() ? "/dashboard" : "/auth?plan=pro&mode=signup"}
+            className="inline-flex items-center px-9 py-5 rounded-full bg-cyan-400 text-[#09111f] font-bold text-base hover:bg-cyan-300 transition-colors shadow-[0_0_50px_rgba(34,211,238,0.25)] hover:shadow-[0_0_60px_rgba(34,211,238,0.35)]"
+          >
+            Start free for 14 days
+          </motion.button>
+        </motion.div>
+
+        <motion.p
+          initial={{ opacity: 0 }}
+          whileInView={{ opacity: 1 }}
+          viewport={{ once: true }}
+          transition={{ duration: 0.5, delay: 0.75 }}
+          className="mt-7 text-[11px] font-mono text-white/20 tracking-widest uppercase"
+        >
+          No credit card · Full access · Cancel anytime · From $79/month
+        </motion.p>
+
       </div>
     </section>
   );

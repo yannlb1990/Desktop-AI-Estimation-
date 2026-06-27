@@ -616,23 +616,15 @@ const ProjectDetail = () => {
             <TakeoffErrorBoundary>
               <AIPlanAnalyzerEnhanced key={projectId} projectId={projectId!} estimateId={estimate?.id} />
             </TakeoffErrorBoundary>
-            <Card className="p-4 border-dashed border-primary/30 bg-primary/5">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm font-semibold text-foreground">Done measuring and costing?</p>
-                  <p className="text-xs text-muted-foreground mt-0.5">
-                    Use "Send All to Estimate" in the Costs tab above, then review your full estimate.
-                  </p>
-                </div>
-                <Button
-                  onClick={() => setActiveMainTab("estimate")}
-                  className="bg-primary text-primary-foreground hover:bg-primary/90 shrink-0 ml-4"
-                >
-                  View Estimate
-                  <ArrowLeft className="h-4 w-4 ml-2 rotate-180" />
-                </Button>
-              </div>
-            </Card>
+            <div className="flex justify-end">
+              <Button
+                onClick={() => setActiveMainTab("estimate")}
+                className="bg-primary text-primary-foreground hover:bg-primary/90"
+              >
+                View Estimate
+                <ArrowLeft className="h-4 w-4 ml-2 rotate-180" />
+              </Button>
+            </div>
           </TabsContent>
 
           {/* Step 2 — Estimate */}
@@ -647,7 +639,7 @@ const ProjectDetail = () => {
                 className="bg-primary text-primary-foreground hover:bg-primary/90"
                 size="sm"
               >
-                Estimate looks good? Generate Tender
+                Generate Tender
                 <ArrowLeft className="h-4 w-4 ml-2 rotate-180" />
               </Button>
             </div>
@@ -661,31 +653,23 @@ const ProjectDetail = () => {
                 </div>
               </Card>
             )}
-            <Card className="p-4 border-dashed border-primary/30 bg-primary/5">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm font-semibold text-foreground">Ready to send this to the client?</p>
-                  <p className="text-xs text-muted-foreground mt-0.5">Quote: fast branded proposal · Tender: full compliance document.</p>
-                </div>
-                <div className="flex gap-2 shrink-0 ml-4">
-                  <Button
-                    variant="outline"
-                    onClick={() => setActiveMainTab("tender")}
-                    className="border-primary/50 text-primary hover:bg-primary/10"
-                  >
-                    <FileText className="h-4 w-4 mr-2" />
-                    Generate Quote
-                  </Button>
-                  <Button
-                    onClick={() => setActiveMainTab("tender")}
-                    className="bg-primary text-primary-foreground hover:bg-primary/90"
-                  >
-                    Generate Tender
-                    <ArrowLeft className="h-4 w-4 ml-2 rotate-180" />
-                  </Button>
-                </div>
-              </div>
-            </Card>
+            <div className="flex justify-end gap-2">
+              <Button
+                variant="outline"
+                onClick={() => setActiveMainTab("tender")}
+                className="border-primary/50 text-primary hover:bg-primary/10"
+              >
+                <FileText className="h-4 w-4 mr-2" />
+                Generate Quote
+              </Button>
+              <Button
+                onClick={() => setActiveMainTab("tender")}
+                className="bg-primary text-primary-foreground hover:bg-primary/90"
+              >
+                Generate Tender
+                <ArrowLeft className="h-4 w-4 ml-2 rotate-180" />
+              </Button>
+            </div>
           </TabsContent>
 
           {/* Step 3 — Tender */}

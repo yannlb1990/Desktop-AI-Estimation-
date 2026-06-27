@@ -2,6 +2,7 @@ import { Helmet } from "react-helmet-async";
 import { Mail, MessageSquare, Clock, FileQuestion } from "lucide-react";
 import Navigation from "@/components/Navigation";
 import Footer from "@/components/Footer";
+import SectionDivider from "@/components/SectionDivider";
 import {
   Accordion,
   AccordionContent,
@@ -272,6 +273,7 @@ const Support = () => {
           </div>
 
         </main>
+        <SectionDivider />
         <Footer />
       </div>
     </>

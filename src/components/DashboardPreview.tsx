@@ -1,100 +1,128 @@
-import { Card } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { BarChart3, DollarSign, FileText, TrendingUp } from "lucide-react";
+import { motion } from "framer-motion";
+
+const viewportOpts = { once: true, margin: "-60px" } as const;
+
+const stats = [
+  { label: "Active Projects", value: "24",    sub: "across all states" },
+  { label: "Total Value",     value: "$4.2M", sub: "estimated this month" },
+  { label: "Avg. Margin",     value: "18.5%", sub: "across all tenders" },
+  { label: "Win Rate",        value: "67%",   sub: "tenders awarded" },
+];
+
+const projects = [
+  { name: "Duplex Build — Gold Coast",     value: "$485,000", status: "Complete",    state: "QLD" },
+  { name: "Renovation — Brisbane North",   value: "$125,000", status: "In Progress", state: "QLD" },
+  { name: "Extension — Sunshine Coast",    value: "$215,000", status: "Complete",    state: "QLD" },
+  { name: "New Build — Northern Beaches",  value: "$690,000", status: "Draft",       state: "NSW" },
+];
 
 const DashboardPreview = () => {
   return (
-    <section id="insights" className="py-16 md:py-24 bg-background">
-      <div className="container mx-auto px-4 sm:px-6">
-        <div className="max-w-3xl mx-auto text-center mb-16">
-          <h2 className="font-display text-4xl md:text-5xl font-bold mb-6">
-            Your Command Center for
-            <span className="block mt-2 text-primary">Construction Estimates</span>
+    <section id="insights" className="py-20 md:py-28 bg-[#09111f]">
+      <div className="container mx-auto px-6 lg:px-12">
+
+        <motion.div
+          initial={{ opacity: 0, y: 30 }}
+          whileInView={{ opacity: 1, y: 0 }}
+          viewport={viewportOpts}
+          transition={{ duration: 0.6, ease: [0.25, 0, 0.2, 1] }}
+          className="max-w-2xl mb-12"
+        >
+          <div className="flex items-center gap-3 mb-6">
+            <div className="h-px w-8 bg-cyan-400/50" />
+            <span className="text-xs font-mono text-cyan-400/60 uppercase tracking-widest">Command center</span>
+          </div>
+          <h2 className="font-display text-4xl sm:text-5xl font-bold text-white leading-tight">
+            Every project.
+            <span className="block text-white/30 mt-1">One place.</span>
           </h2>
-          <p className="text-lg text-muted-foreground">
-            A modern dashboard that gives you complete visibility and control over all your projects.
+          <p className="text-white/50 mt-4 text-base leading-relaxed max-w-xl">
+            Track all your estimates, margins, and win rates without a spreadsheet in sight.
           </p>
-        </div>
+        </motion.div>
 
-        <div className="max-w-6xl mx-auto">
-          {/* Dashboard Mock */}
-          <Card className="p-8 shadow-lg border-border bg-gradient-to-br from-card to-muted/20">
-            {/* Top Stats */}
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
-              <Card className="p-6 bg-background border-border">
-                <div className="flex items-center gap-3 mb-2">
-                  <div className="p-2 bg-primary/10 rounded-lg">
-                    <FileText className="h-5 w-5 text-primary" />
-                  </div>
-                  <span className="text-sm text-muted-foreground">Active Projects</span>
-                </div>
-                <div className="font-mono text-3xl font-bold text-foreground">24</div>
-              </Card>
-
-              <Card className="p-6 bg-background border-border">
-                <div className="flex items-center gap-3 mb-2">
-                  <div className="p-2 bg-accent/20 rounded-lg">
-                    <DollarSign className="h-5 w-5 text-accent" />
-                  </div>
-                  <span className="text-sm text-muted-foreground">Total Value</span>
-                </div>
-                <div className="font-mono text-3xl font-bold text-foreground">$4.2M</div>
-              </Card>
-
-              <Card className="p-6 bg-background border-border">
-                <div className="flex items-center gap-3 mb-2">
-                  <div className="p-2 bg-primary/10 rounded-lg">
-                    <BarChart3 className="h-5 w-5 text-primary" />
-                  </div>
-                  <span className="text-sm text-muted-foreground">Avg. Margin</span>
-                </div>
-                <div className="font-mono text-3xl font-bold text-foreground">18.5%</div>
-              </Card>
-
-              <Card className="p-6 bg-background border-border">
-                <div className="flex items-center gap-3 mb-2">
-                  <div className="p-2 bg-accent/20 rounded-lg">
-                    <TrendingUp className="h-5 w-5 text-accent" />
-                  </div>
-                  <span className="text-sm text-muted-foreground">Win Rate</span>
-                </div>
-                <div className="font-mono text-3xl font-bold text-foreground">67%</div>
-              </Card>
-            </div>
-
-            {/* Recent Projects Table */}
-            <Card className="p-6 bg-background border-border">
-              <h3 className="font-display text-lg font-bold mb-4 text-foreground">Recent Estimates</h3>
-              <div className="space-y-3">
-                {[
-                  { name: "Duplex Build - Gold Coast", value: "$485,000", status: "Complete", date: "2 days ago" },
-                  { name: "Renovation - Brisbane North", value: "$125,000", status: "In Progress", date: "5 days ago" },
-                  { name: "Extension - Sunshine Coast", value: "$215,000", status: "Complete", date: "1 week ago" }
-                ].map((project, index) => (
-                  <div key={index} className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1.5 py-3 border-b border-border last:border-0">
-                    <div className="flex-1 min-w-0">
-                      <div className="font-medium text-foreground text-sm truncate">{project.name}</div>
-                      <div className="text-xs text-muted-foreground">{project.date}</div>
-                    </div>
-                    <div className="flex items-center gap-3 flex-shrink-0">
-                      <div className="font-mono font-semibold text-foreground text-sm">{project.value}</div>
-                      <div className={`px-2.5 py-0.5 rounded-full text-xs font-medium whitespace-nowrap ${
-                        project.status === "Complete"
-                          ? "bg-accent/20 text-accent"
-                          : "bg-primary/10 text-primary"
-                      }`}>
-                        {project.status}
-                      </div>
-                    </div>
-                  </div>
-                ))}
+        <motion.div
+          initial={{ opacity: 0, y: 30 }}
+          whileInView={{ opacity: 1, y: 0 }}
+          viewport={viewportOpts}
+          transition={{ duration: 0.6, delay: 0.15, ease: [0.25, 0, 0.2, 1] }}
+          className="rounded-2xl border border-white/8 bg-[#0c1825] overflow-hidden shadow-[0_24px_80px_rgba(0,0,0,0.55)]"
+        >
+          {/* App nav */}
+          <div className="flex items-center gap-5 px-5 py-3 border-b border-white/[0.06] bg-[#0a1522]">
+            <div className="flex items-center gap-2 shrink-0">
+              <div className="w-6 h-6 rounded bg-[#09111f] border border-cyan-400/30 flex items-center justify-center">
+                <span className="text-cyan-400 text-[9px] font-bold">M</span>
               </div>
-              <Button className="w-full mt-6 bg-primary text-primary-foreground hover:bg-primary/90">
-                View All Projects
-              </Button>
-            </Card>
-          </Card>
-        </div>
+              <span className="text-[11px] font-bold text-white/50 uppercase tracking-widest">Metricore</span>
+            </div>
+            <div className="flex items-center gap-5 ml-2">
+              {["Dashboard", "Projects", "Materials", "Settings"].map((n) => (
+                <span
+                  key={n}
+                  className={`text-[11px] font-mono ${n === "Dashboard" ? "text-cyan-400" : "text-white/25"}`}
+                >
+                  {n}
+                </span>
+              ))}
+            </div>
+            <div className="ml-auto">
+              <div className="w-6 h-6 rounded-full bg-cyan-400/20 border border-cyan-400/30 flex items-center justify-center">
+                <span className="text-[9px] text-cyan-400 font-bold">JB</span>
+              </div>
+            </div>
+          </div>
+
+          {/* Stats row */}
+          <div className="grid grid-cols-2 sm:grid-cols-4 divide-x divide-white/[0.05] border-b border-white/[0.05]">
+            {stats.map((s) => (
+              <div key={s.label} className="px-5 py-5">
+                <div className="text-[9px] font-mono text-white/25 uppercase tracking-widest mb-2">{s.label}</div>
+                <div className="font-mono text-2xl font-bold text-white leading-none">{s.value}</div>
+                <div className="text-[10px] text-white/20 mt-1.5">{s.sub}</div>
+              </div>
+            ))}
+          </div>
+
+          {/* Table header */}
+          <div className="grid grid-cols-[1fr_110px_90px_52px] gap-4 px-5 py-2.5 border-b border-white/[0.05] bg-[#0a1522]">
+            {["PROJECT", "VALUE", "STATUS", "STATE"].map((h) => (
+              <span key={h} className="text-[9px] font-mono text-white/20 uppercase tracking-widest">{h}</span>
+            ))}
+          </div>
+
+          {/* Table rows */}
+          {projects.map((p, i) => (
+            <div
+              key={p.name}
+              className="grid grid-cols-[1fr_110px_90px_52px] gap-4 px-5 py-3.5 border-b border-white/[0.04] last:border-0 items-center"
+              style={{ opacity: 1 - i * 0.12 }}
+            >
+              <span className="text-sm text-white/60 truncate">{p.name}</span>
+              <span className="text-sm font-mono text-white/55">{p.value}</span>
+              <span
+                className="text-[10px] font-mono px-2 py-0.5 rounded-full text-center"
+                style={
+                  p.status === "Complete"
+                    ? { background: "rgba(52,211,153,0.10)", color: "#34d399" }
+                    : p.status === "In Progress"
+                    ? { background: "rgba(34,211,238,0.10)", color: "#22d3ee" }
+                    : { background: "rgba(255,255,255,0.05)", color: "rgba(255,255,255,0.28)" }
+                }
+              >
+                {p.status}
+              </span>
+              <span className="text-[10px] font-mono text-white/25">{p.state}</span>
+            </div>
+          ))}
+
+          {/* Footer */}
+          <div className="px-5 py-3 bg-[#0a1522] border-t border-white/[0.05] flex items-center justify-between">
+            <span className="text-[10px] font-mono text-white/20">Showing 4 of 24 projects</span>
+            <span className="text-[10px] font-mono text-cyan-400/40">view all →</span>
+          </div>
+        </motion.div>
+
       </div>
     </section>
   );

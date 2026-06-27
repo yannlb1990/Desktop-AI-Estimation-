@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Menu, X } from "lucide-react";
@@ -8,7 +8,14 @@ import { MetricoreLogoMark } from "@/components/MetricoreLogoMark";
 const Navigation = () => {
   const navigate = useNavigate();
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [scrolled, setScrolled] = useState(false);
   const signedIn = isSignedIn();
+
+  useEffect(() => {
+    const onScroll = () => setScrolled(window.scrollY > 60);
+    window.addEventListener("scroll", onScroll, { passive: true });
+    return () => window.removeEventListener("scroll", onScroll);
+  }, []);
 
   const handleSignOut = async () => {
     await localSignOut();
@@ -22,7 +29,13 @@ const Navigation = () => {
   ];
 
   return (
-    <nav className="fixed top-0 w-full z-50 bg-background/80 backdrop-blur-md border-b border-border">
+    <nav
+      className={`fixed top-0 w-full z-50 transition-all duration-300 ${
+        scrolled
+          ? "bg-[#09111f]/85 backdrop-blur-xl border-b border-white/6"
+          : "bg-transparent border-b border-transparent"
+      }`}
+    >
       <div className="container mx-auto px-6 py-4">
         <div className="flex items-center justify-between">
           <Link to="/" className="flex items-center gap-2">
@@ -31,7 +44,7 @@ const Navigation = () => {
           </Link>
 
           <div className="hidden md:flex items-center gap-8">
-            {links.map(l =>
+            {links.map((l) =>
               l.internal ? (
                 <Link
                   key={l.label}
@@ -67,7 +80,7 @@ const Navigation = () => {
                 <Button
                   size="sm"
                   onClick={() => navigate("/auth?plan=pro&mode=signup")}
-                  className="bg-accent text-accent-foreground hover:bg-accent/90"
+                  className="bg-cyan-400 text-[#09111f] hover:bg-cyan-300 rounded-full font-bold"
                 >
                   Start Free Trial
                 </Button>
@@ -75,14 +88,14 @@ const Navigation = () => {
             )}
           </div>
 
-          <Button variant="ghost" size="icon" className="md:hidden" onClick={() => setMobileOpen(v => !v)}>
+          <Button variant="ghost" size="icon" className="md:hidden" onClick={() => setMobileOpen((v) => !v)}>
             {mobileOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
           </Button>
         </div>
 
         {mobileOpen && (
           <div className="md:hidden border-t border-border mt-4 pt-4 pb-2 space-y-1">
-            {links.map(l =>
+            {links.map((l) =>
               l.internal ? (
                 <Link
                   key={l.label}
@@ -120,7 +133,7 @@ const Navigation = () => {
                   </Button>
                   <Button
                     size="sm"
-                    className="flex-1 bg-accent text-accent-foreground hover:bg-accent/90"
+                    className="flex-1 bg-cyan-400 text-[#09111f] hover:bg-cyan-300 rounded-full font-bold"
                     onClick={() => navigate("/auth?plan=pro&mode=signup")}
                   >
                     Start Free Trial

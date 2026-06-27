@@ -1,6 +1,7 @@
 import { Helmet } from "react-helmet-async";
 import Navigation from "@/components/Navigation";
 import Footer from "@/components/Footer";
+import SectionDivider from "@/components/SectionDivider";
 
 const PrivacyPolicy = () => {
   return (
@@ -330,6 +331,7 @@ const PrivacyPolicy = () => {
 
           </section>
         </main>
+        <SectionDivider />
         <Footer />
       </div>
     </>

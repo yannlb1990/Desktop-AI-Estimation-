@@ -295,8 +295,8 @@ const Auth = () => {
         <div className="container mx-auto px-6">
           <div className="max-w-md mx-auto">
             <Card className="p-8 shadow-xl text-center space-y-5">
-              <div className="w-16 h-16 bg-blue-50 dark:bg-blue-950/30 rounded-full flex items-center justify-center mx-auto">
-                <Mail className="h-8 w-8 text-blue-600" />
+              <div className="w-16 h-16 bg-cyan-400/10 rounded-full flex items-center justify-center mx-auto">
+                <Mail className="h-8 w-8 text-cyan-400" />
               </div>
               <div>
                 <h1 className="font-display text-2xl font-bold mb-2">Verify your email</h1>
@@ -486,7 +486,7 @@ const Auth = () => {
                 </div>
                 <Button
                   type="submit"
-                  className="w-full bg-primary text-primary-foreground hover:bg-primary/90"
+                  className="w-full bg-cyan-400 text-[#09111f] hover:bg-cyan-300 rounded-full font-bold"
                   disabled={isLoading}
                 >
                   {isLoading
@@ -619,7 +619,7 @@ const Auth = () => {
 
                 <Button
                   type="submit"
-                  className="w-full bg-primary text-primary-foreground hover:bg-primary/90"
+                  className="w-full bg-cyan-400 text-[#09111f] hover:bg-cyan-300 rounded-full font-bold"
                   disabled={isLoading || !projectType}
                 >
                   {isLoading

@@ -1,95 +1,433 @@
-import { Button } from "@/components/ui/button";
-import { ArrowRight, Clock, CheckCircle, Zap } from "lucide-react";
+import { useRef, useState, useEffect } from "react";
+import { motion, useMotionValue, useSpring, useTransform } from "framer-motion";
+import { ArrowRight } from "lucide-react";
 import { isSignedIn } from "@/lib/localAuth";
 
-const Hero = () => {
+/* ─── Text scramble ──────────────────────────────────────────────────────── */
+const SCRAMBLE_CHARS = "ABCDEFGHIJKLMNOPQRSTUVWXYZ#@$%&!?";
+
+function ScrambleText({ text, delay = 0 }: { text: string; delay?: number }) {
+  const [output, setOutput] = useState(text);
+  const frame = useRef<number | null>(null);
+  const start = useRef<number | null>(null);
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      const revealMs = 520;
+      const tick = (ts: number) => {
+        if (!start.current) start.current = ts;
+        const elapsed = ts - start.current;
+        const progress = Math.min(elapsed / revealMs, 1);
+        const revealed = Math.floor(progress * text.length);
+        setOutput(
+          text.split("").map((ch, i) => {
+            if (ch === "." || ch === " ") return ch;
+            if (i < revealed) return ch;
+            return SCRAMBLE_CHARS[Math.floor(Math.random() * SCRAMBLE_CHARS.length)];
+          }).join("")
+        );
+        if (elapsed < revealMs + 60) {
+          frame.current = requestAnimationFrame(tick);
+        } else {
+          setOutput(text);
+        }
+      };
+      frame.current = requestAnimationFrame(tick);
+    }, delay);
+    return () => {
+      clearTimeout(timer);
+      if (frame.current !== null) cancelAnimationFrame(frame.current);
+    };
+  }, [text, delay]);
+
+  return <>{output}</>;
+}
+
+const stagger = {
+  hidden: {},
+  show: { transition: { staggerChildren: 0.13, delayChildren: 0.1 } },
+};
+const fadeUp = {
+  hidden: { opacity: 0, y: 40 },
+  show: { opacity: 1, y: 0, transition: { duration: 0.65, ease: [0.25, 0, 0.2, 1] as const } },
+};
+const fadeIn = {
+  hidden: { opacity: 0 },
+  show: { opacity: 1, transition: { duration: 0.6, ease: "easeOut" } },
+};
+
+/* ─── Card 1: Floor Plan (front) ─────────────────────────────────────────── */
+const FloorPlanCard = () => (
+  <div className="w-full rounded-2xl overflow-hidden border border-white/10 shadow-[0_32px_80px_rgba(0,0,0,0.65)] bg-[#0d1829]">
+    <div className="flex items-center gap-2 px-4 py-2.5 bg-[#111e30] border-b border-white/8">
+      <div className="flex gap-1.5">
+        <div className="w-2.5 h-2.5 rounded-full bg-[#ff5f57]" />
+        <div className="w-2.5 h-2.5 rounded-full bg-[#febc2e]" />
+        <div className="w-2.5 h-2.5 rounded-full bg-[#28c840]" />
+      </div>
+      <span className="ml-2 text-[10px] text-white/30 font-mono">Ground_Floor_DA-01.pdf</span>
+      <div className="ml-auto text-[9px] font-mono text-emerald-400/80 bg-emerald-400/10 border border-emerald-400/20 px-1.5 py-0.5 rounded">
+        ✓ Calibrated 1:100
+      </div>
+    </div>
+    <div className="bg-[#0f1c2e] relative">
+      <svg viewBox="0 0 480 300" className="w-full" style={{ display: "block" }}>
+        <defs>
+          <pattern id="h-grid" width="20" height="20" patternUnits="userSpaceOnUse">
+            <path d="M 20 0 L 0 0 0 20" fill="none" stroke="#1a3050" strokeWidth="0.4" />
+          </pattern>
+          <pattern id="h-grid-major" width="100" height="100" patternUnits="userSpaceOnUse">
+            <rect width="100" height="100" fill="url(#h-grid)" />
+            <path d="M 100 0 L 0 0 0 100" fill="none" stroke="#1a3050" strokeWidth="0.8" />
+          </pattern>
+          <marker id="h-end" markerWidth="5" markerHeight="5" refX="4" refY="2.5" orient="auto">
+            <path d="M 0 1 L 4 2.5 L 0 4 Z" fill="#22d3ee" />
+          </marker>
+          <marker id="h-start" markerWidth="5" markerHeight="5" refX="1" refY="2.5" orient="auto">
+            <path d="M 5 1 L 1 2.5 L 5 4 Z" fill="#22d3ee" />
+          </marker>
+        </defs>
+        <rect width="480" height="300" fill="url(#h-grid-major)" />
+        <rect x="50" y="28" width="390" height="248" fill="#152030" stroke="#c8d8e8" strokeWidth="2" />
+        <line x1="185" y1="28" x2="185" y2="276" stroke="#c8d8e8" strokeWidth="1.5" />
+        <line x1="185" y1="155" x2="440" y2="155" stroke="#c8d8e8" strokeWidth="1.5" />
+        <line x1="325" y1="28" x2="325" y2="276" stroke="#c8d8e8" strokeWidth="1.5" />
+        <text x="117" y="158" textAnchor="middle" fontSize="8" fill="rgba(200,216,232,0.4)" fontFamily="system-ui" letterSpacing="0.5">LIVING</text>
+        <text x="255" y="94"  textAnchor="middle" fontSize="8" fill="rgba(200,216,232,0.4)" fontFamily="system-ui">KITCHEN</text>
+        <text x="382" y="94"  textAnchor="middle" fontSize="8" fill="rgba(200,216,232,0.4)" fontFamily="system-ui">MASTER</text>
+        <text x="255" y="224" textAnchor="middle" fontSize="8" fill="rgba(200,216,232,0.4)" fontFamily="system-ui">BED 2</text>
+        <text x="382" y="224" textAnchor="middle" fontSize="8" fill="rgba(200,216,232,0.4)" fontFamily="system-ui">ENSUITE</text>
+        <polygon points="50,28 185,28 185,276 50,276" fill="rgba(34,211,238,0.07)" stroke="#22d3ee" strokeWidth="1.5" />
+        <circle cx="50"  cy="28"  r="2.5" fill="#22d3ee" />
+        <circle cx="185" cy="28"  r="2.5" fill="#22d3ee" />
+        <circle cx="185" cy="276" r="2.5" fill="#22d3ee" />
+        <circle cx="50"  cy="276" r="2.5" fill="#22d3ee" />
+        <rect x="80" y="143" width="74" height="20" rx="4" fill="rgba(34,211,238,0.18)" stroke="#22d3ee" strokeWidth="1" />
+        <text x="117" y="157" textAnchor="middle" fontSize="11" fontFamily="monospace" fill="#22d3ee" fontWeight="bold">44.6 m²</text>
+        <line x1="50" y1="16" x2="440" y2="16" stroke="#22d3ee" strokeWidth="0.8" markerStart="url(#h-start)" markerEnd="url(#h-end)" />
+        <rect x="202" y="7" width="56" height="12" rx="2" fill="#0f1c2e" />
+        <text x="230" y="16" textAnchor="middle" fontSize="8" fontFamily="monospace" fill="#22d3ee">13.2 m</text>
+        <line x1="36" y1="28" x2="36" y2="276" stroke="#22d3ee" strokeWidth="0.8" markerStart="url(#h-start)" markerEnd="url(#h-end)" />
+        <rect x="12" y="142" width="38" height="12" rx="2" fill="#0f1c2e" />
+        <text x="31" y="151" textAnchor="middle" fontSize="8" fontFamily="monospace" fill="#22d3ee" transform="rotate(-90 31 151)">9.6 m</text>
+        <circle cx="185" cy="276" r="5" fill="none" stroke="#22d3ee" strokeWidth="1" opacity="0.6">
+          <animate attributeName="r" values="4;8;4" dur="2s" repeatCount="indefinite" />
+          <animate attributeName="opacity" values="0.6;0.1;0.6" dur="2s" repeatCount="indefinite" />
+        </circle>
+        <circle cx="185" cy="276" r="2" fill="#22d3ee" />
+      </svg>
+      <div className="absolute bottom-2 left-2 right-2 flex items-center justify-between px-2.5 py-1.5 bg-[#0a1522]/90 border border-white/8 rounded text-[10px] font-mono backdrop-blur-sm">
+        <span className="text-cyan-400">Polygon · 4 pts · 44.6 m²</span>
+        <span className="text-white/25">Page 1 / 3</span>
+      </div>
+    </div>
+  </div>
+);
+
+/* ─── Card 2: Cost Breakdown (middle-left) ────────────────────────────────── */
+const CostCard = () => (
+  <div className="w-full h-full rounded-2xl overflow-hidden border border-white/10 shadow-[0_24px_60px_rgba(0,0,0,0.55)] bg-[#0c1825]">
+    <div className="px-4 py-3 border-b border-white/8 flex items-center justify-between">
+      <span className="text-[11px] font-semibold text-white/80">Cost Summary</span>
+      <span className="text-[9px] font-mono text-cyan-400/60 bg-cyan-400/8 border border-cyan-400/15 rounded px-1.5 py-0.5">26 trades</span>
+    </div>
+    <div className="p-4 space-y-3">
+      {[
+        { t: "Framing & Structure", v: "$13,728", pct: 100 },
+        { t: "Concrete & Footings",  v: "$15,904", pct: 116 },
+        { t: "Roofing",              v: "$15,288", pct: 111 },
+        { t: "Electrical",           v: "$9,120",  pct: 66  },
+        { t: "Plumbing",             v: "$8,640",  pct: 63  },
+      ].map((r) => (
+        <div key={r.t}>
+          <div className="flex justify-between text-[9px] mb-1.5">
+            <span className="text-white/45">{r.t}</span>
+            <span className="font-mono text-white/65">{r.v}</span>
+          </div>
+          <div className="h-1 bg-white/5 rounded-full overflow-hidden">
+            <div
+              className="h-full rounded-full"
+              style={{
+                width: `${Math.min(r.pct, 100)}%`,
+                background: "linear-gradient(90deg, rgba(34,211,238,0.25), rgba(34,211,238,0.55))",
+              }}
+            />
+          </div>
+        </div>
+      ))}
+      <div className="pt-3 border-t border-white/6 flex justify-between items-center">
+        <div>
+          <div className="text-[8px] font-mono text-white/25 uppercase tracking-widest mb-0.5">TOTAL INC. MARGIN</div>
+          <div className="text-[9px] font-mono text-white/40">$65,416 + 15%</div>
+        </div>
+        <span className="font-bold font-mono text-cyan-400" style={{ fontSize: "1.15rem" }}>$75,228</span>
+      </div>
+    </div>
+  </div>
+);
+
+/* ─── Card 3: Tender PDF (back-right) ────────────────────────────────────── */
+const TenderCard = () => (
+  <div className="w-full h-full rounded-2xl overflow-hidden shadow-[0_24px_60px_rgba(0,0,0,0.55)] bg-white">
+    <div className="bg-[#09111f] px-4 py-2.5 flex items-center justify-between">
+      <div className="flex items-center gap-2">
+        <div className="w-5 h-5 rounded bg-cyan-400 flex items-center justify-center shrink-0">
+          <span className="text-[8px] font-bold text-[#09111f]">M</span>
+        </div>
+        <span className="text-[11px] font-bold text-white">Metricore</span>
+      </div>
+      <span className="text-[8px] font-mono text-white/35">Tender · PDF</span>
+    </div>
+    <div className="p-4">
+      <div className="flex justify-between items-start mb-3 pb-3 border-b border-gray-100">
+        <div>
+          <div className="font-bold text-gray-800 text-xs">BUILD.CO PTY LTD</div>
+          <div className="text-[9px] text-gray-400 font-mono mt-0.5">ABN 12 345 678 901</div>
+        </div>
+        <div className="text-right">
+          <div className="text-[9px] text-gray-400 font-mono">REF-2024-0847</div>
+          <div className="text-[9px] text-gray-400 font-mono mt-0.5">15 Oct 2024</div>
+        </div>
+      </div>
+      <div className="text-[9px] font-mono text-gray-400 mb-3">42 Riverside Ave, Brisbane QLD 4000</div>
+      <div className="space-y-1.5">
+        {[
+          { t: "Framing & Structure", v: "$13,728" },
+          { t: "Concrete & Footings",  v: "$15,904" },
+          { t: "Roofing Works",        v: "$15,288" },
+          { t: "Electrical",           v: "$9,120"  },
+          { t: "Plumbing",             v: "$8,640"  },
+          { t: "Joinery & Finishing",  v: "$7,744"  },
+        ].map((r) => (
+          <div key={r.t} className="flex justify-between py-0.5">
+            <span className="text-[9px] text-gray-500">{r.t}</span>
+            <span className="text-[9px] font-mono text-gray-600">{r.v}</span>
+          </div>
+        ))}
+      </div>
+      <div className="mt-3 pt-2.5 border-t-2 border-gray-800 flex justify-between items-center">
+        <span className="text-[9px] font-bold text-gray-700 uppercase tracking-wide">TOTAL INC. GST</span>
+        <span className="font-bold font-mono text-sm text-gray-800">$75,228</span>
+      </div>
+      <div className="mt-3 flex justify-center">
+        <div className="inline-flex items-center gap-1.5 bg-emerald-50 border border-emerald-200 rounded-full px-3 py-1">
+          <div className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+          <span className="text-[9px] font-mono text-emerald-700 font-medium">Ready to send</span>
+        </div>
+      </div>
+    </div>
+  </div>
+);
+
+/* ─── Stacked Cards ──────────────────────────────────────────────────────── */
+const StackedCards = () => {
+  const ref = useRef<HTMLDivElement>(null);
+  const [hovered, setHovered] = useState(false);
+
+  const rawX = useMotionValue(0.5);
+  const rawY = useMotionValue(0.5);
+  const rotateY = useSpring(useTransform(rawX, [0, 1], [-10, 10]), { stiffness: 80, damping: 25 });
+  const rotateX = useSpring(useTransform(rawY, [0, 1], [6, -6]),   { stiffness: 80, damping: 25 });
+
   return (
-    <section className="relative min-h-screen flex items-center overflow-hidden pt-16">
-      {/* Background */}
-      <div className="absolute inset-0 gradient-hero opacity-95" />
+    <div
+      ref={ref}
+      className="relative w-full select-none"
+      style={{ perspective: "1400px", perspectiveOrigin: "50% 40%" }}
+      onMouseMove={(e) => {
+        if (!ref.current) return;
+        const r = ref.current.getBoundingClientRect();
+        rawX.set((e.clientX - r.left) / r.width);
+        rawY.set((e.clientY - r.top)  / r.height);
+      }}
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => {
+        setHovered(false);
+        rawX.set(0.5);
+        rawY.set(0.5);
+      }}
+    >
+      <motion.div
+        style={{ rotateX, rotateY, transformStyle: "preserve-3d" as const }}
+        animate={{ y: [0, -8, 0] }}
+        transition={{ duration: 6, repeat: Infinity, ease: "easeInOut", repeatType: "mirror" }}
+        className="relative"
+      >
+        {/* Card 3: Tender PDF — back right */}
+        <motion.div
+          className="absolute inset-0"
+          animate={
+            hovered
+              ? { rotate: 12, x: 64, y: -28, scale: 0.84 }
+              : { rotate: 6,  x: 32, y: -14, scale: 0.87 }
+          }
+          initial={{ rotate: 6, x: 32, y: -14, scale: 0.87 }}
+          transition={{ duration: 0.55, ease: [0.25, 0, 0.2, 1] }}
+          style={{ originX: "50%", originY: "0%", zIndex: 1 }}
+        >
+          <TenderCard />
+        </motion.div>
 
-      {/* Subtle grid overlay */}
-      <div className="absolute inset-0 bg-[url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNjAiIGhlaWdodD0iNjAiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+PGRlZnM+PHBhdHRlcm4gaWQ9ImdyaWQiIHdpZHRoPSI2MCIgaGVpZ2h0PSI2MCIgcGF0dGVyblVuaXRzPSJ1c2VyU3BhY2VPblVzZSI+PHBhdGggZD0iTSAxMCAwIEwgMCAwIDAgMTAiIGZpbGw9Im5vbmUiIHN0cm9rZT0id2hpdGUiIHN0cm9rZS1vcGFjaXR5PSIwLjA1IiBzdHJva2Utd2lkdGg9IjEiLz48L3BhdHRlcm4+PC9kZWZzPjxyZWN0IHdpZHRoPSIxMDAlIiBoZWlnaHQ9IjEwMCUiIGZpbGw9InVybCgjZ3JpZCkiLz48L3N2Zz4=')] opacity-30" />
+        {/* Card 2: Cost Breakdown — back left */}
+        <motion.div
+          className="absolute inset-0"
+          animate={
+            hovered
+              ? { rotate: -8, x: -56, y: 18, scale: 0.89 }
+              : { rotate: -3, x: -18, y: 8,  scale: 0.92 }
+          }
+          initial={{ rotate: -3, x: -18, y: 8, scale: 0.92 }}
+          transition={{ duration: 0.55, ease: [0.25, 0, 0.2, 1] }}
+          style={{ originX: "50%", originY: "0%", zIndex: 2 }}
+        >
+          <CostCard />
+        </motion.div>
 
-      {/* Glow blobs */}
-      <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[900px] h-[500px] bg-primary/8 rounded-full blur-3xl pointer-events-none" />
-      <div className="absolute bottom-0 right-0 w-[500px] h-[400px] bg-primary/5 rounded-full blur-3xl pointer-events-none" />
+        {/* Card 1: Floor Plan — front (sets container height) */}
+        <motion.div
+          className="relative"
+          animate={hovered ? { scale: 1.025, y: -4 } : { scale: 1, y: 0 }}
+          initial={{ scale: 1, y: 0 }}
+          transition={{ duration: 0.55, ease: [0.25, 0, 0.2, 1] }}
+          style={{ zIndex: 10 }}
+        >
+          <FloorPlanCard />
+        </motion.div>
+      </motion.div>
 
-      <div className="container mx-auto px-6 py-20 relative z-10">
-        <div className="max-w-3xl mx-auto text-center">
+      {/* Ambient glow under the stack */}
+      <div className="absolute -bottom-10 left-16 right-16 h-16 bg-cyan-500/8 blur-2xl pointer-events-none" />
+    </div>
+  );
+};
 
-          {/* Badge */}
-          <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-primary/10 border border-primary/30 mb-8">
-            <Zap className="h-4 w-4 text-primary" />
-            <span className="text-sm font-medium text-white/90">
-              Built for Australian Builders
-            </span>
-          </div>
+/* ─── Hero ───────────────────────────────────────────────────────────────── */
+const Hero = () => {
+  const heroRef = useRef<HTMLElement>(null);
 
-          {/* Heading */}
-          <h1 className="font-display text-4xl sm:text-5xl md:text-7xl font-bold text-white mb-6 leading-tight">
-            From Plans to
-            <span className="block mt-1 bg-gradient-to-r from-primary via-cyan-300 to-white bg-clip-text text-transparent">
-              Tenders in Minutes
-            </span>
-          </h1>
+  const mouseX = useMotionValue(-1000);
+  const mouseY = useMotionValue(-1000);
+  const glowX = useSpring(mouseX, { stiffness: 60, damping: 20 });
+  const glowY = useSpring(mouseY, { stiffness: 60, damping: 20 });
 
-          {/* Description */}
-          <p className="text-lg md:text-xl text-white/65 mb-10 leading-relaxed max-w-2xl mx-auto">
-            Measure plans digitally, price by trade, and send professional
-            tenders. One tool built for Australian construction.
-          </p>
+  const handleMouseMove = (e: React.MouseEvent<HTMLElement>) => {
+    if (!heroRef.current) return;
+    const rect = heroRef.current.getBoundingClientRect();
+    mouseX.set(e.clientX - rect.left);
+    mouseY.set(e.clientY - rect.top);
+  };
 
-          {/* CTAs */}
-          <div className="flex flex-col sm:flex-row gap-4 justify-center mb-14">
-            <Button
-              size="lg"
-              onClick={() => window.location.href = isSignedIn() ? "/dashboard" : "/auth?mode=signup"}
-              className="bg-primary text-primary-foreground hover:bg-primary/90 shadow-glow text-base md:text-lg px-8 py-6 h-auto font-semibold w-full sm:w-auto"
-            >
-              Start for Free
-              <ArrowRight className="ml-2 h-5 w-5" />
-            </Button>
-            <Button
-              size="lg"
-              variant="outline"
-              className="border-white/25 text-white bg-white/5 hover:bg-white/10 hover:border-white/40 text-base md:text-lg px-8 py-6 h-auto font-semibold w-full sm:w-auto"
-              onClick={() => document.getElementById("demo")?.scrollIntoView({ behavior: "smooth" })}
-            >
-              Watch the Demo
-            </Button>
-          </div>
+  return (
+    <section
+      ref={heroRef}
+      onMouseMove={handleMouseMove}
+      onMouseLeave={() => { mouseX.set(-1000); mouseY.set(-1000); }}
+      className="relative min-h-screen flex items-center overflow-hidden pt-20 bg-[#09111f]"
+    >
+      {/* Cursor-tracking glow */}
+      <motion.div
+        className="pointer-events-none absolute z-0 w-[500px] h-[500px] rounded-full bg-cyan-400/5 blur-[120px]"
+        style={{ x: glowX, y: glowY, translateX: "-50%", translateY: "-50%" }}
+      />
 
-          {/* Stats — compact on mobile */}
-          <div className="grid grid-cols-3 gap-4 pt-8 border-t border-white/10 max-w-sm sm:max-w-xl mx-auto">
-            <div className="text-center">
-              <div className="flex items-center gap-1 justify-center mb-1">
-                <Clock className="h-3.5 w-3.5 text-primary" />
-              </div>
-              <div className="font-mono text-xl sm:text-2xl font-bold text-white">10×</div>
-              <div className="text-[10px] sm:text-xs text-white/50 mt-0.5 leading-tight">Faster than manual</div>
+      {/* Static atmosphere */}
+      <div className="absolute inset-0 pointer-events-none">
+        <div
+          className="absolute inset-0 opacity-[0.022]"
+          style={{
+            backgroundImage: `
+              linear-gradient(rgba(34,211,238,1) 1px, transparent 1px),
+              linear-gradient(90deg, rgba(34,211,238,1) 1px, transparent 1px)
+            `,
+            backgroundSize: "60px 60px",
+          }}
+        />
+        <div className="absolute -top-40 -left-40 w-[800px] h-[800px] bg-cyan-500/4 rounded-full blur-[160px]" />
+        <div className="absolute -bottom-20 right-0 w-[400px] h-[400px] bg-amber-500/3 rounded-full blur-[120px]" />
+      </div>
+
+      <div className="container mx-auto px-6 lg:px-12 py-16 relative z-10 w-full">
+        <div className="grid lg:grid-cols-[1fr_1.1fr] gap-12 xl:gap-20 items-center">
+
+          {/* ── Left: Copy ─────────────────────────────────────── */}
+          <motion.div variants={stagger} initial="hidden" animate="show" className="space-y-8">
+
+            <motion.div variants={fadeIn} className="flex items-center gap-3">
+              <div className="w-2 h-2 rounded-full bg-cyan-400 animate-pulse" />
+              <span className="text-xs font-mono text-cyan-400/70 uppercase tracking-widest">
+                Construction projects · Trades · Builders
+              </span>
+            </motion.div>
+
+            <div className="space-y-0 -ml-1">
+              {(["MEASURE.", "PRICE.", "WIN."] as const).map((word, i) => (
+                <motion.h1
+                  key={word}
+                  variants={fadeUp}
+                  className={`font-display font-bold leading-[0.88] tracking-tight ${i === 1 ? "text-cyan-400" : "text-white"}`}
+                  style={{ fontSize: "clamp(4rem, 8.5vw, 7.5rem)" }}
+                >
+                  <ScrambleText text={word} delay={300 + i * 180} />
+                </motion.h1>
+              ))}
             </div>
-            <div className="text-center">
-              <div className="flex items-center gap-1 justify-center mb-1">
-                <Zap className="h-3.5 w-3.5 text-primary" />
+
+            <motion.p variants={fadeIn} className="text-white/50 text-base sm:text-lg leading-relaxed max-w-sm">
+              Drop in a plan, draw your measurements, and send a tender the same day. No spreadsheets. No Sunday nights doing maths.
+            </motion.p>
+
+            <motion.div variants={fadeIn} className="flex flex-wrap gap-4 items-center">
+              <motion.button
+                whileHover={{ scale: 1.04 }}
+                whileTap={{ scale: 0.97 }}
+                onClick={() => window.location.href = isSignedIn() ? "/dashboard" : "/auth?mode=signup"}
+                className="inline-flex items-center gap-2.5 bg-cyan-400 text-[#09111f] hover:bg-cyan-300 font-bold text-base px-8 py-4 rounded-full transition-colors shadow-[0_0_40px_rgba(34,211,238,0.2)]"
+              >
+                Start free for 14 days
+                <ArrowRight className="h-4 w-4" />
+              </motion.button>
+              <button
+                className="text-white/50 hover:text-white/80 text-sm font-mono transition-colors flex items-center gap-2"
+                onClick={() => document.getElementById("how-it-works")?.scrollIntoView({ behavior: "smooth" })}
+              >
+                See how it works <ArrowRight className="h-3.5 w-3.5" />
+              </button>
+            </motion.div>
+
+            <motion.div variants={fadeIn} className="flex flex-wrap items-center gap-x-6 gap-y-3 pt-6 border-t border-white/6">
+              <div className="flex items-center gap-2.5">
+                <div className="flex -space-x-2">
+                  {["BC", "DT", "JM"].map((i) => (
+                    <div key={i} className="w-7 h-7 rounded-full bg-cyan-400/15 border border-cyan-400/30 flex items-center justify-center text-[10px] font-bold text-cyan-300">
+                      {i}
+                    </div>
+                  ))}
+                </div>
+                <span className="text-xs text-white/35 font-mono">Trusted by builders</span>
               </div>
-              <div className="font-mono text-xl sm:text-2xl font-bold text-white">26</div>
-              <div className="text-[10px] sm:text-xs text-white/50 mt-0.5 leading-tight">Trades covered</div>
-            </div>
-            <div className="text-center">
-              <div className="flex items-center gap-1 justify-center mb-1">
-                <CheckCircle className="h-3.5 w-3.5 text-primary" />
-              </div>
-              <div className="font-mono text-xl sm:text-2xl font-bold text-white">NCC</div>
-              <div className="text-[10px] sm:text-xs text-white/50 mt-0.5 leading-tight">Rate references</div>
-            </div>
-          </div>
+              <div className="hidden sm:block w-px h-4 bg-white/8" />
+              <span className="text-xs font-mono text-white/30 tracking-widest">QLD · NSW · VIC · WA</span>
+              <div className="hidden sm:block w-px h-4 bg-white/8" />
+              <span className="text-xs font-mono text-white/30">
+                From <span className="text-white/60">$79</span>/mo
+              </span>
+            </motion.div>
+          </motion.div>
+
+          {/* ── Right: Stacked cards ────────────────────────────── */}
+          <motion.div
+            initial={{ opacity: 0, x: 60 }}
+            animate={{ opacity: 1, x: 0 }}
+            transition={{ duration: 0.85, delay: 0.3, ease: [0.25, 0, 0.2, 1] }}
+            className="relative lg:pl-8"
+          >
+            <StackedCards />
+          </motion.div>
 
         </div>
       </div>
 
-      {/* Bottom fade */}
-      <div className="absolute bottom-0 left-0 right-0 h-32 bg-gradient-to-t from-background to-transparent" />
+      <div className="absolute bottom-0 left-0 right-0 h-24 bg-gradient-to-t from-background to-transparent pointer-events-none" />
     </section>
   );
 };

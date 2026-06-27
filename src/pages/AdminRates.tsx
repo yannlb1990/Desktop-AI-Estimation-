@@ -12,7 +12,7 @@ import { SCOPE_OF_WORK_RATES, SOW_METADATA, type AustralianState } from "@/data/
 import { fetchRateOverrides, saveRateOverride, deleteRateOverride } from "@/lib/rateOverrides";
 
 const STATES: AustralianState[] = ['NSW', 'VIC', 'QLD', 'SA', 'WA', 'TAS', 'NT', 'ACT'];
-const ADMIN_EMAIL = 'admin@metricore.com.au';
+const ADMIN_EMAIL = (import.meta.env.VITE_OWNER_EMAIL as string | undefined) ?? 'admin@metricore.com.au';
 
 const AdminRates = () => {
   const navigate = useNavigate();

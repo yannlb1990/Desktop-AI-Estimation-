@@ -1,183 +1,161 @@
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { Card } from "@/components/ui/card";
-import {
-  Circle,
-  Compass,
-  Download,
-  Layers,
-  MousePointer2,
-  PenLine,
-  Ruler,
-  Square
-} from "lucide-react";
+import { motion } from "framer-motion";
 
-const toolbarItems = [
-  { icon: MousePointer2, label: "Select" },
-  { icon: Ruler, label: "Line" },
-  { icon: Square, label: "Area" },
-  { icon: Circle, label: "Circle" },
-  { icon: PenLine, label: "Polyline" },
-  { icon: Compass, label: "Calibrate" }
+const viewportOpts = { once: true, margin: "-60px" } as const;
+
+const exportDocs = [
+  { label: "Tender PDF",      desc: "Branded BOQ ready to send",        color: "#22d3ee", bg: "rgba(34,211,238,0.08)",  border: "rgba(34,211,238,0.20)" },
+  { label: "Cost Breakdown",  desc: "Trade-by-trade with your margin",   color: "#818cf8", bg: "rgba(129,140,248,0.08)", border: "rgba(129,140,248,0.18)" },
+  { label: "Gantt Schedule",  desc: "Construction timeline per stage",   color: "#34d399", bg: "rgba(52,211,153,0.08)",  border: "rgba(52,211,153,0.18)" },
+  { label: "Supplier Quotes", desc: "Email-ready RFQs per trade",        color: "#fb923c", bg: "rgba(251,146,60,0.08)",  border: "rgba(251,146,60,0.18)" },
+  { label: "FF&E Schedule",   desc: "Fixtures, fittings and equipment",  color: "#f472b6", bg: "rgba(244,114,182,0.08)", border: "rgba(244,114,182,0.18)" },
+  { label: "Progress Claims", desc: "Stage payment claim documents",     color: "#a78bfa", bg: "rgba(167,139,250,0.08)", border: "rgba(167,139,250,0.18)" },
 ];
 
-const measurementCards = [
-  {
-    title: "Wall Run",
-    value: "18.4 LM",
-    detail: "Internal walls",
-    color: "text-primary"
-  },
-  {
-    title: "Living Room",
-    value: "42.8 m²",
-    detail: "Tiles + plaster",
-    color: "text-foreground"
-  },
-  {
-    title: "Slab Depth",
-    value: "0.45 m",
-    detail: "With mesh",
-    color: "text-foreground"
-  }
-];
-
-export const TakeoffVisual = () => {
+const TakeoffVisual = () => {
   return (
-    <section className="py-16 md:py-24 bg-muted/40">
-      <div className="container mx-auto px-4 sm:px-6">
-        <div className="grid lg:grid-cols-2 gap-10 items-center">
-          <div className="space-y-6">
-            <Badge variant="secondary" className="uppercase tracking-wide text-xs">
-              Visual Walkthrough
-            </Badge>
-            <h2 className="font-display text-4xl md:text-5xl font-bold leading-tight text-foreground">
-              See the PDF takeoff workspace in action
+    <section className="py-20 md:py-28 bg-[#09111f]">
+      <div className="container mx-auto px-6 lg:px-12">
+        <div className="grid lg:grid-cols-2 gap-12 lg:gap-20 items-start">
+
+          {/* Left: copy */}
+          <motion.div
+            initial={{ opacity: 0, y: 30 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={viewportOpts}
+            transition={{ duration: 0.6, ease: [0.25, 0, 0.2, 1] }}
+            className="space-y-6 lg:sticky lg:top-24"
+          >
+            <div className="flex items-center gap-3">
+              <div className="h-px w-8 bg-cyan-400/50" />
+              <span className="text-xs font-mono text-cyan-400/60 uppercase tracking-widest">What comes out</span>
+            </div>
+            <h2 className="font-display text-4xl sm:text-5xl font-bold text-white leading-tight">
+              One takeoff.
+              <span className="block text-white/30 mt-1">Six documents, ready to send.</span>
             </h2>
-            <p className="text-lg text-muted-foreground">
-              Upload a plan, calibrate scale, and start drawing measurements that stay aligned as you
-              pan and zoom. Link quantities to cost items, export them, and keep every room organized by
-              scope.
+            <p className="text-white/50 leading-relaxed">
+              Upload your plans, measure on the canvas, and Metricore generates every document your project needs in the same session. Tender, Gantt, cost breakdown, FF&E — one click each.
             </p>
 
-            <div className="grid sm:grid-cols-2 gap-4">
-              {["Multi-page PDFs", "World-space storage", "CSV / JSON export", "Cost-linked items"].map(
-                (item) => (
-                  <div
-                    key={item}
-                    className="flex items-center gap-2 rounded-lg border border-border bg-background px-4 py-3 shadow-sm"
-                  >
-                    <div className="h-2 w-2 rounded-full bg-primary" />
-                    <span className="text-sm font-medium text-foreground">{item}</span>
-                  </div>
-                )
-              )}
-            </div>
-
-            <div className="flex gap-3">
-              <Button
-                className="bg-primary text-primary-foreground hover:bg-primary/90"
-                onClick={() => window.location.href = "/project/new"}
-              >
-                Start a takeoff
-              </Button>
-              <Button
-                variant="outline"
-                className="gap-2"
-                onClick={() => {
-                  const el = document.getElementById("features");
-                  el ? el.scrollIntoView({ behavior: "smooth" }) : window.location.href = "/auth";
-                }}
-              >
-                <Download className="h-4 w-4" />
-                Export preview
-              </Button>
-            </div>
-          </div>
-
-          <Card className="p-6 bg-background shadow-xl border-border">
-            <div className="flex gap-4 h-full">
-              <div className="w-16 rounded-xl bg-muted/50 border border-border p-2 flex flex-col gap-2">
-                {toolbarItems.map((item) => (
-                  <div
-                    key={item.label}
-                    className="flex flex-col items-center justify-center gap-1 rounded-lg bg-background border border-border p-2 text-center"
-                  >
-                    <item.icon className="h-5 w-5 text-foreground" />
-                    <span className="text-[10px] text-muted-foreground leading-tight">{item.label}</span>
-                  </div>
-                ))}
-              </div>
-
-              <div className="flex-1 space-y-4">
-                <div className="relative h-[280px] sm:h-[360px] md:h-[420px] rounded-xl border border-border bg-gradient-to-br from-background via-muted/60 to-background overflow-hidden">
-                  <div className="absolute inset-0 opacity-40 bg-[radial-gradient(circle_at_25%_20%,hsl(var(--primary)/0.12),transparent_25%),radial-gradient(circle_at_80%_10%,hsl(var(--secondary)/0.12),transparent_30%),radial-gradient(circle_at_30%_80%,hsl(var(--accent)/0.12),transparent_28%)]" />
-
-                  <div className="absolute inset-6 rounded-lg border border-dashed border-border/80 bg-card/60 backdrop-blur">
-                    <div className="absolute top-4 left-4 bg-background/80 px-3 py-2 rounded-md shadow-sm border border-border">
-                      <div className="text-xs uppercase text-muted-foreground tracking-wider">Scale</div>
-                      <div className="font-semibold text-foreground">1:100 | Metric</div>
-                    </div>
-
-                    <div className="absolute bottom-4 left-4 flex gap-2">
-                      {["Walls", "Areas", "Openings"].map((layer) => (
-                        <Badge key={layer} variant="outline" className="bg-background/80">
-                          {layer}
-                        </Badge>
-                      ))}
-                    </div>
-
-                    <div className="absolute top-16 right-6 space-y-3">
-                      {measurementCards.map((card, index) => (
-                        <div
-                          key={card.title}
-                          className={`rounded-lg border border-border bg-background/90 px-4 py-3 shadow-sm ${
-                            index === 0 ? "ring-2 ring-primary/40" : ""
-                          }`}
-                        >
-                          <div className="flex items-center justify-between gap-3">
-                            <div>
-                              <div className="text-xs uppercase text-muted-foreground tracking-wide">{card.title}</div>
-                              <div className={`font-semibold text-lg ${card.color}`}>{card.value}</div>
-                            </div>
-                            <Badge variant="secondary" className="text-[10px]">
-                              Cost linked
-                            </Badge>
-                          </div>
-                          <div className="text-xs text-muted-foreground mt-1">{card.detail}</div>
-                        </div>
-                      ))}
-                    </div>
-
-                    <div className="absolute inset-0 pointer-events-none">
-                      <div className="absolute left-16 top-24 h-40 w-48 rounded-xl border-2 border-primary/80 bg-primary/10 shadow-lg" />
-                      <div className="absolute left-40 top-36 h-24 w-20 rounded-xl border-2 border-accent/80 bg-accent/10 rotate-3 shadow-lg" />
-                      <div className="absolute right-16 bottom-20 h-28 w-28 rounded-full border-2 border-foreground/70 bg-foreground/5 shadow-lg" />
-                      <div className="absolute left-10 bottom-16 h-12 w-24 rounded-full bg-primary text-primary-foreground text-xs font-semibold flex items-center justify-center shadow-md">
-                        Snap enabled
-                      </div>
-                      <div className="absolute right-10 top-24 flex items-center gap-3 bg-background/90 border border-border px-3 py-2 rounded-md shadow-sm">
-                        <Layers className="h-4 w-4 text-muted-foreground" />
-                        <div>
-                          <div className="text-[11px] uppercase text-muted-foreground tracking-wide">View</div>
-                          <div className="text-sm font-semibold text-foreground">PDF + Wireframe</div>
-                        </div>
-                      </div>
-                    </div>
+            <div className="grid grid-cols-2 gap-x-8 gap-y-4">
+              {exportDocs.map((e) => (
+                <div key={e.label} className="flex items-start gap-3">
+                  <div className="h-1.5 w-1.5 rounded-full shrink-0 mt-[7px]" style={{ background: e.color, opacity: 0.7 }} />
+                  <div>
+                    <div className="text-sm font-medium text-white/70">{e.label}</div>
+                    <div className="text-xs text-white/30 mt-0.5">{e.desc}</div>
                   </div>
                 </div>
+              ))}
+            </div>
 
-                <div className="flex items-center justify-between text-sm text-muted-foreground">
-                  <div className="flex items-center gap-3">
-                    <div className="h-2 w-2 rounded-full bg-primary" /> Measurements stay in world space
-                  </div>
-                  <div className="flex items-center gap-3">
-                    <div className="h-2 w-2 rounded-full bg-accent" /> Exportable as CSV / JSON / XLSX
+            <button
+              onClick={() => window.location.href = "/project/new"}
+              className="inline-flex items-center px-7 py-3 rounded-full bg-cyan-400 text-[#09111f] font-bold hover:bg-cyan-300 transition-colors"
+            >
+              Start a takeoff
+            </button>
+          </motion.div>
+
+          {/* Right: canvas + export stack */}
+          <motion.div
+            initial={{ opacity: 0, y: 30 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={viewportOpts}
+            transition={{ duration: 0.6, delay: 0.15, ease: [0.25, 0, 0.2, 1] }}
+            className="space-y-3"
+          >
+            {/* Canvas mockup */}
+            <div className="rounded-xl overflow-hidden border border-white/8 bg-[#0d1829] shadow-[0_20px_60px_rgba(0,0,0,0.5)]">
+              {/* Window chrome */}
+              <div className="flex items-center gap-2 px-3 py-2 bg-[#111e30] border-b border-white/8">
+                <div className="flex gap-1">
+                  <div className="w-2.5 h-2.5 rounded-full bg-[#ff5f57]" />
+                  <div className="w-2.5 h-2.5 rounded-full bg-[#febc2e]" />
+                  <div className="w-2.5 h-2.5 rounded-full bg-[#28c840]" />
+                </div>
+                <span className="text-[10px] text-white/30 font-mono ml-2 flex-1 truncate">Ground_Floor_DA-01.pdf</span>
+                <span className="text-[9px] font-mono text-emerald-400/80 bg-emerald-400/10 border border-emerald-400/20 px-1.5 py-0.5 rounded">✓ 1:100</span>
+              </div>
+              {/* Toolbar + canvas */}
+              <div className="flex">
+                <div className="w-10 shrink-0 bg-[#0a1522] border-r border-white/6 flex flex-col items-center py-3 gap-3">
+                  {["↖", "—", "▭", "✏", "⊕"].map((sym) => (
+                    <div key={sym} className="w-6 h-6 flex items-center justify-center rounded text-white/20 text-[10px]">
+                      {sym}
+                    </div>
+                  ))}
+                </div>
+                <div className="flex-1 bg-[#0f1c2e] relative">
+                  <svg viewBox="0 0 380 240" className="w-full" style={{ display: "block" }}>
+                    <defs>
+                      <pattern id="tv-grid" width="16" height="16" patternUnits="userSpaceOnUse">
+                        <path d="M 16 0 L 0 0 0 16" fill="none" stroke="#1a3050" strokeWidth="0.5" />
+                      </pattern>
+                    </defs>
+                    <rect width="380" height="240" fill="url(#tv-grid)" />
+                    <rect x="24" y="16" width="332" height="208" fill="#152030" stroke="#c8d8e8" strokeWidth="2" />
+                    <line x1="150" y1="16" x2="150" y2="224" stroke="#c8d8e8" strokeWidth="1.2" />
+                    <line x1="150" y1="130" x2="356" y2="130" stroke="#c8d8e8" strokeWidth="1.2" />
+                    <line x1="260" y1="16" x2="260" y2="224" stroke="#c8d8e8" strokeWidth="1.2" />
+                    <polygon points="24,16 150,16 150,224 24,224" fill="rgba(34,211,238,0.09)" stroke="#22d3ee" strokeWidth="1.4" />
+                    <circle cx="24" cy="16" r="3" fill="#22d3ee" />
+                    <circle cx="150" cy="16" r="3" fill="#22d3ee" />
+                    <circle cx="150" cy="224" r="3" fill="#22d3ee" />
+                    <circle cx="24" cy="224" r="3" fill="#22d3ee" />
+                    <rect x="44" y="109" width="72" height="20" rx="4" fill="rgba(34,211,238,0.22)" stroke="#22d3ee" strokeWidth="0.8" />
+                    <text x="80" y="123" textAnchor="middle" fontSize="10" fontFamily="monospace" fill="#22d3ee" fontWeight="bold">44.6 m²</text>
+                    <text x="87" y="72" textAnchor="middle" fontSize="7.5" fill="rgba(200,216,232,0.28)" fontFamily="system-ui">LIVING / DINING</text>
+                    <text x="197" y="68" textAnchor="middle" fontSize="7" fill="rgba(200,216,232,0.22)" fontFamily="system-ui">KITCHEN</text>
+                    <text x="305" y="68" textAnchor="middle" fontSize="7" fill="rgba(200,216,232,0.22)" fontFamily="system-ui">MASTER BED</text>
+                    <text x="197" y="178" textAnchor="middle" fontSize="7" fill="rgba(200,216,232,0.22)" fontFamily="system-ui">BED 2</text>
+                    <text x="305" y="178" textAnchor="middle" fontSize="7" fill="rgba(200,216,232,0.22)" fontFamily="system-ui">ENSUITE</text>
+                    <circle cx="150" cy="224" r="5" fill="none" stroke="#22d3ee" strokeWidth="0.8" opacity="0.5">
+                      <animate attributeName="r" values="4;9;4" dur="2s" repeatCount="indefinite" />
+                      <animate attributeName="opacity" values="0.5;0.1;0.5" dur="2s" repeatCount="indefinite" />
+                    </circle>
+                    <circle cx="150" cy="224" r="2.5" fill="#22d3ee" />
+                    <rect x="310" y="16" width="46" height="88" fill="rgba(10,21,34,0.85)" stroke="rgba(255,255,255,0.08)" strokeWidth="0.8" />
+                    <text x="316" y="28" fontSize="5.5" fill="rgba(255,255,255,0.25)" fontFamily="monospace">ITEMS</text>
+                    {[
+                      { y: 40, label: "Living", val: "44.6" },
+                      { y: 52, label: "Kitchen", val: "18.3" },
+                      { y: 64, label: "Master", val: "22.1" },
+                      { y: 76, label: "Bed 2", val: "14.8" },
+                    ].map((r) => (
+                      <g key={r.label}>
+                        <text x="316" y={r.y} fontSize="5" fill="rgba(255,255,255,0.3)" fontFamily="monospace">{r.label}</text>
+                        <text x="352" y={r.y} textAnchor="end" fontSize="5" fill="rgba(34,211,238,0.7)" fontFamily="monospace">{r.val}</text>
+                      </g>
+                    ))}
+                    <line x1="312" y1="88" x2="352" y2="88" stroke="rgba(255,255,255,0.08)" strokeWidth="0.6" />
+                    <text x="352" y="100" textAnchor="end" fontSize="5.5" fill="#22d3ee" fontFamily="monospace" fontWeight="bold">99.8 m²</text>
+                  </svg>
+                  <div className="absolute bottom-1.5 left-12 right-2 flex items-center justify-between px-2 py-1 bg-[#0a1522]/90 border border-white/6 rounded text-[8px] font-mono">
+                    <span className="text-cyan-400">Polygon · 4 pts · 44.6 m²</span>
+                    <span className="text-white/20">Page 1 / 3</span>
                   </div>
                 </div>
               </div>
             </div>
-          </Card>
+
+            {/* Export document cards */}
+            <div className="grid grid-cols-3 gap-2">
+              {exportDocs.map((e) => (
+                <div
+                  key={e.label}
+                  className="rounded-lg px-3 py-2.5 border"
+                  style={{ background: e.bg, borderColor: e.border }}
+                >
+                  <div className="text-[9px] font-mono uppercase tracking-widest mb-0.5" style={{ color: e.color, opacity: 0.85 }}>
+                    {e.label}
+                  </div>
+                  <div className="text-[8px] text-white/25 leading-tight">{e.desc}</div>
+                </div>
+              ))}
+            </div>
+          </motion.div>
+
         </div>
       </div>
     </section>

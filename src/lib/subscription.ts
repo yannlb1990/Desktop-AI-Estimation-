@@ -148,8 +148,8 @@ export function getSubscriptionStatus(): SubscriptionStatus {
 
   const GRACE_MS = 3 * 86_400_000
 
-  // Admin account — full business access, all caps, never expired
-  if (sub?.email === ADMIN_EMAIL) {
+  // Admin check via loadSubscription (normal path)
+  if (ADMIN_EMAIL && sub?.email === ADMIN_EMAIL) {
     return {
       subscription: sub,
       isActive: true,
@@ -161,6 +161,35 @@ export function getSubscriptionStatus(): SubscriptionStatus {
       isPastDue: false,
       pastDueGraceDaysLeft: 0,
     };
+  }
+
+  // Fallback admin check — reads the Supabase session key directly in case
+  // getUserStorageKey() returned __anon__ (access token expired mid-session).
+  if (ADMIN_EMAIL) {
+    try {
+      const sbKey = Object.keys(localStorage).find(
+        k => k.startsWith('sb-') && k.endsWith('-auth-token')
+      );
+      if (sbKey) {
+        const session = JSON.parse(localStorage.getItem(sbKey) ?? '{}');
+        if (session?.user?.email === ADMIN_EMAIL) {
+          const adminSub = (() => {
+            try { return JSON.parse(localStorage.getItem(`${ADMIN_EMAIL}:estimate_subscription`) ?? '{}'); } catch { return {}; }
+          })();
+          return {
+            subscription: adminSub as Subscription,
+            isActive: true,
+            isTrialing: false,
+            isTrialExpired: false,
+            daysLeftInTrial: 0,
+            effectivePlan: 'business',
+            caps: PLAN_CAPS.business,
+            isPastDue: false,
+            pastDueGraceDaysLeft: 0,
+          };
+        }
+      }
+    } catch { /* ignore — fall through to normal path */ }
   }
 
   if (!sub) {

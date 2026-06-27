@@ -18,7 +18,10 @@ function readStoredSession(): any | null {
     const raw = localStorage.getItem(key);
     if (!raw) return null;
     const parsed = JSON.parse(raw);
-    if (parsed?.expires_at && Date.now() / 1000 > parsed.expires_at) return null;
+    // Don't check expires_at here — the Supabase client auto-refreshes the access
+    // token using the refresh_token. Checking expires_at causes false sign-outs
+    // in the brief window between access token expiry and the client refresh.
+    // A truly invalid session will fail at the Supabase API level instead.
     return parsed;
   } catch {
     return null;

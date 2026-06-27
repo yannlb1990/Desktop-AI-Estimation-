@@ -1,6 +1,7 @@
 import { Helmet } from "react-helmet-async";
 import Navigation from "@/components/Navigation";
 import Footer from "@/components/Footer";
+import SectionDivider from "@/components/SectionDivider";
 
 const TermsOfService = () => {
   return (
@@ -262,6 +263,7 @@ const TermsOfService = () => {
 
           </section>
         </main>
+        <SectionDivider />
         <Footer />
       </div>
     </>

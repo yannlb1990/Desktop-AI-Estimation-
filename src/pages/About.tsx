@@ -1,6 +1,7 @@
 import { Helmet } from "react-helmet-async";
 import Navigation from "@/components/Navigation";
 import Footer from "@/components/Footer";
+import SectionDivider from "@/components/SectionDivider";
 import { MetricoreLogoMark } from "@/components/MetricoreLogoMark";
 
 const About = () => {
@@ -73,6 +74,7 @@ const About = () => {
             </div>
           </div>
         </main>
+        <SectionDivider />
         <Footer />
       </div>
     </>

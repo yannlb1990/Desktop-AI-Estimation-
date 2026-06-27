@@ -10,6 +10,7 @@ import {
 } from "lucide-react";
 import Navigation from "@/components/Navigation";
 import Footer from "@/components/Footer";
+import SectionDivider from "@/components/SectionDivider";
 import { PLAN_PRICES, PLAN_NAMES, PlanId, TRIAL_DAYS, getSubscriptionStatus } from "@/lib/subscription";
 import { isSignedIn } from "@/lib/localAuth";
 import { redirectToStripeCheckout } from "@/lib/api/stripe";
@@ -320,8 +321,8 @@ const Pricing = () => {
                 <Button
                   className={`w-full ${
                     isSelected
-                      ? 'bg-primary text-primary-foreground hover:bg-primary/90'
-                      : 'bg-muted text-foreground hover:bg-primary hover:text-primary-foreground'
+                      ? 'bg-cyan-400 text-[#09111f] hover:bg-cyan-300 rounded-full font-bold'
+                      : 'bg-muted text-foreground hover:bg-cyan-400 hover:text-[#09111f] hover:rounded-full font-bold'
                   }`}
                   disabled={checkingOut || alreadyPaid}
                   onClick={(e) => { e.stopPropagation(); handleCTA(plan.id); }}
@@ -365,7 +366,7 @@ const Pricing = () => {
             <div className="flex flex-col items-stretch md:items-end gap-2 shrink-0">
               <Button
                 size="lg"
-                className="bg-primary text-primary-foreground hover:bg-primary/90 px-8"
+                className="bg-cyan-400 text-[#09111f] hover:bg-cyan-300 rounded-full font-bold px-8"
                 disabled={checkingOut || alreadyPaid}
                 onClick={() => handleCTA(selected)}
               >
@@ -546,6 +547,7 @@ const Pricing = () => {
         </div>
 
       </div>
+      <SectionDivider />
       <Footer />
     </div>
     </>
