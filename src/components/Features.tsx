@@ -54,7 +54,7 @@ const TakeoffPreview = () => (
           <circle cx="110" cy="184" r="2" fill="#E1DCC9" /><circle cx="20" cy="184" r="2" fill="#E1DCC9" />
           <rect x="35" y="89" width="56" height="16" rx="3" fill="rgba(225,220,201,0.2)" stroke="#E1DCC9" strokeWidth="0.8" />
           <text x="63" y="100" textAnchor="middle" fontSize="9" fontFamily="monospace" fill="#E1DCC9" fontWeight="bold">44.6 m²</text>
-          <text x="65" y="58" textAnchor="middle" fontSize="6.5" fill="rgba(200,216,232,0.35)" fontFamily="system-ui">LIVING / DINING</text>
+          <text x="65" y="58" textAnchor="middle" fontSize="6.5" fill="rgba(225,220,201,0.35)" fontFamily="system-ui">LIVING / DINING</text>
           <text x="148" y="56" textAnchor="middle" fontSize="6" fill="rgba(225,220,201,0.25)" fontFamily="system-ui">KITCHEN</text>
           <text x="222" y="56" textAnchor="middle" fontSize="6" fill="rgba(225,220,201,0.25)" fontFamily="system-ui">MASTER</text>
           <text x="148" y="148" textAnchor="middle" fontSize="6" fill="rgba(225,220,201,0.25)" fontFamily="system-ui">BED 2</text>

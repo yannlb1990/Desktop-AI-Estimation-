@@ -93,14 +93,14 @@ function MeasureVisual() {
         <svg viewBox="0 0 320 175" className="w-full h-full" style={{ display: "block" }}>
           <defs>
             <pattern id="hiw-grid" width="14" height="14" patternUnits="userSpaceOnUse">
-              <path d="M 14 0 L 0 0 0 14" fill="none" stroke="#1a3050" strokeWidth="0.4" />
+              <path d="M 14 0 L 0 0 0 14" fill="none" stroke="rgba(225,220,201,0.06)" strokeWidth="0.4" />
             </pattern>
           </defs>
           <rect width="320" height="175" fill="url(#hiw-grid)" />
-          <rect x="20" y="12" width="280" height="155" fill="#152030" stroke="#c8d8e8" strokeWidth="1.8" />
-          <line x1="140" y1="12" x2="140" y2="167" stroke="#c8d8e8" strokeWidth="1.2" />
-          <line x1="140" y1="95" x2="300" y2="95" stroke="#c8d8e8" strokeWidth="1.2" />
-          <line x1="220" y1="12" x2="220" y2="167" stroke="#c8d8e8" strokeWidth="1.2" />
+          <rect x="20" y="12" width="280" height="155" fill="#1F150C" stroke="rgba(225,220,201,0.35)" strokeWidth="1.8" />
+          <line x1="140" y1="12" x2="140" y2="167" stroke="rgba(225,220,201,0.25)" strokeWidth="1.2" />
+          <line x1="140" y1="95" x2="300" y2="95" stroke="rgba(225,220,201,0.25)" strokeWidth="1.2" />
+          <line x1="220" y1="12" x2="220" y2="167" stroke="rgba(225,220,201,0.25)" strokeWidth="1.2" />
           <polygon points="20,12 140,12 140,167 20,167" fill="rgba(225,220,201,0.10)" stroke="#E1DCC9" strokeWidth="1.4" />
           <circle cx="20" cy="12" r="2.5" fill="#E1DCC9" />
           <circle cx="140" cy="12" r="2.5" fill="#E1DCC9" />
@@ -108,11 +108,11 @@ function MeasureVisual() {
           <circle cx="20" cy="167" r="2.5" fill="#E1DCC9" />
           <rect x="45" y="79" width="66" height="18" rx="4" fill="rgba(225,220,201,0.22)" stroke="#E1DCC9" strokeWidth="0.8" />
           <text x="78" y="91" textAnchor="middle" fontSize="9.5" fontFamily="monospace" fill="#E1DCC9" fontWeight="bold">44.6 m²</text>
-          <text x="80" y="50" textAnchor="middle" fontSize="7" fill="rgba(200,216,232,0.3)" fontFamily="system-ui">LIVING / DINING</text>
-          <text x="178" y="50" textAnchor="middle" fontSize="6.5" fill="rgba(200,216,232,0.25)" fontFamily="system-ui">KITCHEN</text>
-          <text x="257" y="50" textAnchor="middle" fontSize="6.5" fill="rgba(200,216,232,0.25)" fontFamily="system-ui">MASTER</text>
-          <text x="178" y="130" textAnchor="middle" fontSize="6.5" fill="rgba(200,216,232,0.25)" fontFamily="system-ui">BED 2</text>
-          <text x="257" y="130" textAnchor="middle" fontSize="6.5" fill="rgba(200,216,232,0.25)" fontFamily="system-ui">WC / ENS</text>
+          <text x="80" y="50" textAnchor="middle" fontSize="7" fill="rgba(225,220,201,0.3)" fontFamily="system-ui">LIVING / DINING</text>
+          <text x="178" y="50" textAnchor="middle" fontSize="6.5" fill="rgba(225,220,201,0.25)" fontFamily="system-ui">KITCHEN</text>
+          <text x="257" y="50" textAnchor="middle" fontSize="6.5" fill="rgba(225,220,201,0.25)" fontFamily="system-ui">MASTER</text>
+          <text x="178" y="130" textAnchor="middle" fontSize="6.5" fill="rgba(225,220,201,0.25)" fontFamily="system-ui">BED 2</text>
+          <text x="257" y="130" textAnchor="middle" fontSize="6.5" fill="rgba(225,220,201,0.25)" fontFamily="system-ui">WC / ENS</text>
           <circle cx="140" cy="167" r="5" fill="none" stroke="#E1DCC9" strokeWidth="0.8" opacity="0.5">
             <animate attributeName="r" values="4;8;4" dur="2s" repeatCount="indefinite" />
             <animate attributeName="opacity" values="0.5;0.1;0.5" dur="2s" repeatCount="indefinite" />
