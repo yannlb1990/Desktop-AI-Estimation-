@@ -3,7 +3,7 @@ import { motion } from "framer-motion";
 const viewportOpts = { once: true, margin: "-60px" } as const;
 
 const exportDocs = [
-  { label: "Tender PDF",      desc: "Branded BOQ ready to send",        color: "#E1DCC9", bg: "rgba(34,211,238,0.08)",  border: "rgba(34,211,238,0.20)" },
+  { label: "Tender PDF",      desc: "Branded BOQ ready to send",        color: "#E1DCC9", bg: "rgba(225,220,201,0.07)",  border: "rgba(225,220,201,0.18)" },
   { label: "Cost Breakdown",  desc: "Trade-by-trade with your margin",   color: "#818cf8", bg: "rgba(129,140,248,0.08)", border: "rgba(129,140,248,0.18)" },
   { label: "Gantt Schedule",  desc: "Construction timeline per stage",   color: "#34d399", bg: "rgba(52,211,153,0.08)",  border: "rgba(52,211,153,0.18)" },
   { label: "Supplier Quotes", desc: "Email-ready RFQs per trade",        color: "#fb923c", bg: "rgba(251,146,60,0.08)",  border: "rgba(251,146,60,0.18)" },
@@ -90,32 +90,32 @@ const TakeoffVisual = () => {
                   <svg viewBox="0 0 380 240" className="w-full" style={{ display: "block" }}>
                     <defs>
                       <pattern id="tv-grid" width="16" height="16" patternUnits="userSpaceOnUse">
-                        <path d="M 16 0 L 0 0 0 16" fill="none" stroke="#1a3050" strokeWidth="0.5" />
+                        <path d="M 16 0 L 0 0 0 16" fill="none" stroke="rgba(225,220,201,0.05)" strokeWidth="0.5" />
                       </pattern>
                     </defs>
                     <rect width="380" height="240" fill="url(#tv-grid)" />
-                    <rect x="24" y="16" width="332" height="208" fill="#152030" stroke="#c8d8e8" strokeWidth="2" />
-                    <line x1="150" y1="16" x2="150" y2="224" stroke="#c8d8e8" strokeWidth="1.2" />
-                    <line x1="150" y1="130" x2="356" y2="130" stroke="#c8d8e8" strokeWidth="1.2" />
-                    <line x1="260" y1="16" x2="260" y2="224" stroke="#c8d8e8" strokeWidth="1.2" />
-                    <polygon points="24,16 150,16 150,224 24,224" fill="rgba(34,211,238,0.09)" stroke="#E1DCC9" strokeWidth="1.4" />
+                    <rect x="24" y="16" width="332" height="208" fill="#1F150C" stroke="rgba(225,220,201,0.35)" strokeWidth="2" />
+                    <line x1="150" y1="16" x2="150" y2="224" stroke="rgba(225,220,201,0.25)" strokeWidth="1.2" />
+                    <line x1="150" y1="130" x2="356" y2="130" stroke="rgba(225,220,201,0.25)" strokeWidth="1.2" />
+                    <line x1="260" y1="16" x2="260" y2="224" stroke="rgba(225,220,201,0.25)" strokeWidth="1.2" />
+                    <polygon points="24,16 150,16 150,224 24,224" fill="rgba(225,220,201,0.06)" stroke="#E1DCC9" strokeWidth="1.4" />
                     <circle cx="24" cy="16" r="3" fill="#E1DCC9" />
                     <circle cx="150" cy="16" r="3" fill="#E1DCC9" />
                     <circle cx="150" cy="224" r="3" fill="#E1DCC9" />
                     <circle cx="24" cy="224" r="3" fill="#E1DCC9" />
-                    <rect x="44" y="109" width="72" height="20" rx="4" fill="rgba(34,211,238,0.22)" stroke="#E1DCC9" strokeWidth="0.8" />
+                    <rect x="44" y="109" width="72" height="20" rx="4" fill="rgba(65,45,21,0.6)" stroke="#E1DCC9" strokeWidth="0.8" />
                     <text x="80" y="123" textAnchor="middle" fontSize="10" fontFamily="monospace" fill="#E1DCC9" fontWeight="bold">44.6 m²</text>
-                    <text x="87" y="72" textAnchor="middle" fontSize="7.5" fill="rgba(200,216,232,0.28)" fontFamily="system-ui">LIVING / DINING</text>
-                    <text x="197" y="68" textAnchor="middle" fontSize="7" fill="rgba(200,216,232,0.22)" fontFamily="system-ui">KITCHEN</text>
-                    <text x="305" y="68" textAnchor="middle" fontSize="7" fill="rgba(200,216,232,0.22)" fontFamily="system-ui">MASTER BED</text>
-                    <text x="197" y="178" textAnchor="middle" fontSize="7" fill="rgba(200,216,232,0.22)" fontFamily="system-ui">BED 2</text>
-                    <text x="305" y="178" textAnchor="middle" fontSize="7" fill="rgba(200,216,232,0.22)" fontFamily="system-ui">ENSUITE</text>
+                    <text x="87" y="72" textAnchor="middle" fontSize="7.5" fill="rgba(225,220,201,0.28)" fontFamily="system-ui">LIVING / DINING</text>
+                    <text x="197" y="68" textAnchor="middle" fontSize="7" fill="rgba(225,220,201,0.22)" fontFamily="system-ui">KITCHEN</text>
+                    <text x="305" y="68" textAnchor="middle" fontSize="7" fill="rgba(225,220,201,0.22)" fontFamily="system-ui">MASTER BED</text>
+                    <text x="197" y="178" textAnchor="middle" fontSize="7" fill="rgba(225,220,201,0.22)" fontFamily="system-ui">BED 2</text>
+                    <text x="305" y="178" textAnchor="middle" fontSize="7" fill="rgba(225,220,201,0.22)" fontFamily="system-ui">ENSUITE</text>
                     <circle cx="150" cy="224" r="5" fill="none" stroke="#E1DCC9" strokeWidth="0.8" opacity="0.5">
                       <animate attributeName="r" values="4;9;4" dur="2s" repeatCount="indefinite" />
                       <animate attributeName="opacity" values="0.5;0.1;0.5" dur="2s" repeatCount="indefinite" />
                     </circle>
                     <circle cx="150" cy="224" r="2.5" fill="#E1DCC9" />
-                    <rect x="310" y="16" width="46" height="88" fill="rgba(10,21,34,0.85)" stroke="rgba(255,255,255,0.08)" strokeWidth="0.8" />
+                    <rect x="310" y="16" width="46" height="88" fill="rgba(0,0,0,0.85)" stroke="rgba(255,255,255,0.08)" strokeWidth="0.8" />
                     <text x="316" y="28" fontSize="5.5" fill="rgba(255,255,255,0.25)" fontFamily="monospace">ITEMS</text>
                     {[
                       { y: 40, label: "Living", val: "44.6" },
@@ -125,7 +125,7 @@ const TakeoffVisual = () => {
                     ].map((r) => (
                       <g key={r.label}>
                         <text x="316" y={r.y} fontSize="5" fill="rgba(255,255,255,0.3)" fontFamily="monospace">{r.label}</text>
-                        <text x="352" y={r.y} textAnchor="end" fontSize="5" fill="rgba(34,211,238,0.7)" fontFamily="monospace">{r.val}</text>
+                        <text x="352" y={r.y} textAnchor="end" fontSize="5" fill="rgba(225,220,201,0.7)" fontFamily="monospace">{r.val}</text>
                       </g>
                     ))}
                     <line x1="312" y1="88" x2="352" y2="88" stroke="rgba(255,255,255,0.08)" strokeWidth="0.6" />

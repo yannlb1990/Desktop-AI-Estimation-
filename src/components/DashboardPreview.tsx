@@ -106,7 +106,7 @@ const DashboardPreview = () => {
                   p.status === "Complete"
                     ? { background: "rgba(52,211,153,0.10)", color: "#34d399" }
                     : p.status === "In Progress"
-                    ? { background: "rgba(34,211,238,0.10)", color: "#E1DCC9" }
+                    ? { background: "rgba(225,220,201,0.10)", color: "#E1DCC9" }
                     : { background: "rgba(255,255,255,0.05)", color: "rgba(255,255,255,0.28)" }
                 }
               >

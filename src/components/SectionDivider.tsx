@@ -7,7 +7,7 @@ const SectionDivider = () => (
         top: "-24px",
         bottom: "-24px",
         background:
-          "radial-gradient(ellipse 45% 100% at 50% 50%, rgba(34,211,238,0.07), transparent 70%)",
+          "radial-gradient(ellipse 45% 100% at 50% 50%, rgba(225,220,201,0.07), transparent 70%)",
         filter: "blur(10px)",
       }}
     />
