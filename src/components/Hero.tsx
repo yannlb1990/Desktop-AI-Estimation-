@@ -2,6 +2,7 @@ import { useRef, useState, useEffect } from "react";
 import { motion, useMotionValue, useSpring, useTransform } from "framer-motion";
 import { ArrowRight } from "lucide-react";
 import { isSignedIn } from "@/lib/localAuth";
+import { MetricoreLogoMark } from "@/components/MetricoreLogoMark";
 
 /* ─── Text scramble ──────────────────────────────────────────────────────── */
 const SCRAMBLE_CHARS = "ABCDEFGHIJKLMNOPQRSTUVWXYZ#@$%&!?";
@@ -171,9 +172,7 @@ const TenderCard = () => (
   <div className="w-full h-full rounded-2xl overflow-hidden shadow-[0_24px_60px_rgba(0,0,0,0.55)] bg-white">
     <div className="bg-background px-4 py-2.5 flex items-center justify-between">
       <div className="flex items-center gap-2">
-        <div className="w-5 h-5 rounded bg-primary flex items-center justify-center shrink-0">
-          <span className="text-[8px] font-bold text-[#000000]">M</span>
-        </div>
+        <MetricoreLogoMark height={16} />
         <span className="text-[11px] font-bold text-white">Metricore</span>
       </div>
       <span className="text-[8px] font-mono text-white/35">Tender · PDF</span>
@@ -181,7 +180,7 @@ const TenderCard = () => (
     <div className="p-4">
       <div className="flex justify-between items-start mb-3 pb-3 border-b border-gray-100">
         <div>
-          <div className="font-bold text-gray-800 text-xs">BUILD.CO PTY LTD</div>
+          <div className="font-bold text-gray-800 text-xs">Metricore Pty Ltd</div>
           <div className="text-[9px] text-gray-400 font-mono mt-0.5">ABN 12 345 678 901</div>
         </div>
         <div className="text-right">

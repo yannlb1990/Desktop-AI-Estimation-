@@ -7,6 +7,7 @@ import {
   useMotionValueEvent,
 } from "framer-motion";
 import { FileSearch, BadgeDollarSign, FileOutput } from "lucide-react";
+import { MetricoreLogoMark } from "@/components/MetricoreLogoMark";
 
 /* ─── Takeoff Canvas Mockup ─────────────────────────────────────────────── */
 const TakeoffPreview = () => (
@@ -79,7 +80,7 @@ const CostBreakdownPreview = () => (
   <div className="rounded-xl overflow-hidden border border-white/8 bg-card shadow-[0_20px_60px_rgba(0,0,0,0.5)]">
     <div className="flex items-center gap-2 px-3 py-2.5 bg-card/80 border-b border-white/8">
       <BadgeDollarSign className="h-3.5 w-3.5 text-[#E1DCC9]/70" />
-      <span className="text-[10px] text-white/40 font-mono">Trade Breakdown — 42 Riverside Ave</span>
+      <span className="text-[10px] text-white/40 font-mono">Trade Breakdown · 42 Riverside Ave</span>
       <span className="ml-auto text-[9px] font-mono text-[#E1DCC9]/70 bg-[#E1DCC9]/8 border border-[#E1DCC9]/20 px-1.5 py-0.5 rounded">✓ QLD Rates 2024</span>
     </div>
     <div className="p-4 space-y-0.5">
@@ -136,10 +137,8 @@ const TenderPreview = () => (
       <div className="flex items-start justify-between mb-3 pb-2 border-b border-gray-200">
         <div>
           <div className="flex items-center gap-1.5 mb-1">
-            <div className="w-4 h-4 rounded bg-background flex items-center justify-center">
-              <span className="text-[#E1DCC9] text-[8px] font-bold">M</span>
-            </div>
-            <span className="text-[9px] font-bold text-gray-700 uppercase tracking-widest">BUILD.CO</span>
+            <MetricoreLogoMark height={14} markColor="#1F150C" dotColor="#412D15" />
+            <span className="text-[9px] font-bold text-gray-700 uppercase tracking-widest">Metricore</span>
           </div>
           <div className="text-[8px] text-gray-400">ABN 45 123 456 789</div>
         </div>

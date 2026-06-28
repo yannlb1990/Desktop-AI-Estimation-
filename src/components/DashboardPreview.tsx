@@ -1,4 +1,5 @@
 import { motion } from "framer-motion";
+import { MetricoreLogoMark } from "@/components/MetricoreLogoMark";
 
 const viewportOpts = { once: true, margin: "-60px" } as const;
 
@@ -10,10 +11,10 @@ const stats = [
 ];
 
 const projects = [
-  { name: "Duplex Build — Gold Coast",     value: "$485,000", status: "Complete",    state: "QLD" },
-  { name: "Renovation — Brisbane North",   value: "$125,000", status: "In Progress", state: "QLD" },
-  { name: "Extension — Sunshine Coast",    value: "$215,000", status: "Complete",    state: "QLD" },
-  { name: "New Build — Northern Beaches",  value: "$690,000", status: "Draft",       state: "NSW" },
+  { name: "Duplex Build, Gold Coast",     value: "$485,000", status: "Complete",    state: "QLD" },
+  { name: "Renovation, Brisbane North",   value: "$125,000", status: "In Progress", state: "QLD" },
+  { name: "Extension, Sunshine Coast",    value: "$215,000", status: "Complete",    state: "QLD" },
+  { name: "New Build, Northern Beaches",  value: "$690,000", status: "Draft",       state: "NSW" },
 ];
 
 const DashboardPreview = () => {
@@ -46,15 +47,13 @@ const DashboardPreview = () => {
           whileInView={{ opacity: 1, y: 0 }}
           viewport={viewportOpts}
           transition={{ duration: 0.6, delay: 0.15, ease: [0.25, 0, 0.2, 1] }}
-          className="rounded-2xl border border-white/8 bg-[#0c1825] overflow-hidden shadow-[0_24px_80px_rgba(0,0,0,0.55)]"
+          className="rounded-2xl border border-white/8 bg-[#1F150C] overflow-hidden shadow-[0_24px_80px_rgba(0,0,0,0.55)]"
         >
           {/* App nav */}
           <div className="flex items-center gap-5 px-5 py-3 border-b border-white/[0.06] bg-[#000000]">
             <div className="flex items-center gap-2 shrink-0">
-              <div className="w-6 h-6 rounded bg-[#000000] border border-foreground/20 flex items-center justify-center">
-                <span className="text-[#E1DCC9] text-[9px] font-bold">M</span>
-              </div>
-              <span className="text-[11px] font-bold text-white/50 uppercase tracking-widest">Metricore</span>
+              <MetricoreLogoMark height={18} />
+              <span className="text-[11px] font-bold text-white/70 uppercase tracking-widest">Metricore</span>
             </div>
             <div className="flex items-center gap-5 ml-2">
               {["Dashboard", "Projects", "Materials", "Settings"].map((n) => (
