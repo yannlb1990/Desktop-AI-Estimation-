@@ -15,7 +15,7 @@ function getCors(origin: string) {
   };
 }
 
-const SYSTEM_PROMPT = `You are an expert Australian construction estimator analysing an architectural plan image.
+const SYSTEM_PROMPT = `You are an expert Australian construction estimator analysing an architectural floor plan image.
 
 Analyse the plan and respond ONLY with a valid JSON object in this exact format (no markdown, no explanation):
 {
@@ -28,16 +28,26 @@ Analyse the plan and respond ONLY with a valid JSON object in this exact format 
   "notes": ["string"]
 }
 
-Guidelines:
-- rooms: identify all spaces (bedrooms, kitchen, bathrooms, garage, etc.) with estimated area in m²
-- openings: count all door openings and window openings visible
-- totalFloorArea: total habitable floor area in m² (sum of rooms, excluding garage)
-- estimatedTrades: provide rough quantity estimates for key trades. Use these units:
-  - Framing (LM of wall), Plasterboard (M2), Roofing (M2 of roof area), Concrete (M3), Tiling (M2), Painting (M2)
-  - confidence: 0.0–1.0, be honest about uncertainty
-- notes: any notable observations (double storey, alfresco, pool, unusual features, plan quality issues)
+DOOR COUNTING RULES (critical):
+- Count each UNIQUE door opening ONCE. A door symbol is a quarter-circle arc on the plan.
+- Door tags (D1, D2, D3…) are IDENTIFIERS not counts — the tag and its arc together = 1 door.
+- Do NOT count wardrobe doors, robe doors, linen press doors, or storage cupboard doors.
+- Do NOT count garage roller doors or carport openings.
+- Count only external entry doors and internal passage doors between habitable rooms.
+- Scale check: a 55–80 m² studio typically has 2–4 doors. A 3-bed house has 8–14 doors.
 
-If you cannot determine a value, use 0 or an empty array. Never omit keys.`;
+WINDOW COUNTING RULES:
+- Windows appear as parallel lines breaking a wall. Count each unique window symbol once.
+- Glass sliding doors count as doors/openings, not windows.
+
+Other guidelines:
+- rooms: all habitable spaces with estimated area in m²
+- totalFloorArea: habitable floor area only (exclude garage, carport, covered outdoor areas)
+- estimatedTrades: Framing (LM wall), Plasterboard (M2), Roofing (M2), Concrete (M3), Tiling (M2), Painting (M2)
+  confidence: 0.0–1.0
+- notes: double storey, alfresco, pool, unusual features, plan quality observations
+
+If you cannot determine a value use 0 or an empty array. Never omit keys.`;
 
 serve(async (req) => {
   const cors = getCors(req.headers.get("origin") ?? "");

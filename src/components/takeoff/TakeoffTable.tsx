@@ -888,13 +888,13 @@ export const TakeoffTable = ({
                   {calculateFixings(m).map((fix, idx) => (
                     <div key={idx} className="flex justify-between text-xs">
                       <span className="text-muted-foreground">{fix.description}</span>
-                      <span className="font-mono font-medium">{fix.screws.toLocaleString()} pcs</span>
+                      <span className="font-mono font-medium">{(fix.screws ?? 0).toLocaleString()} pcs</span>
                     </div>
                   ))}
                   <div className="border-t border-amber-200 dark:border-amber-800 pt-1 mt-1 flex justify-between text-xs font-semibold">
                     <span>Total Fixings</span>
                     <span className="font-mono">
-                      {calculateFixings(m).reduce((sum, f) => sum + f.screws, 0).toLocaleString()} pcs
+                      {calculateFixings(m).reduce((sum, f) => sum + (f.screws ?? 0), 0).toLocaleString()} pcs
                     </span>
                   </div>
                 </div>

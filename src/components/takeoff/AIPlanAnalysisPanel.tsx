@@ -27,7 +27,19 @@ function cacheKey(projectId: string) {
 function loadCached(projectId: string): CachedAnalysis | null {
   try {
     const raw = localStorage.getItem(cacheKey(projectId));
-    return raw ? (JSON.parse(raw) as CachedAnalysis) : null;
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as CachedAnalysis;
+    // Validate shape so stale/malformed cache doesn't crash the panel
+    if (
+      !parsed?.result?.rooms ||
+      !parsed?.result?.openings ||
+      !Array.isArray(parsed.result.estimatedTrades) ||
+      !Array.isArray(parsed.result.notes)
+    ) {
+      localStorage.removeItem(cacheKey(projectId));
+      return null;
+    }
+    return parsed;
   } catch {
     return null;
   }

@@ -1760,7 +1760,7 @@ export const PDFTakeoff = ({ projectId, estimateId, onAddCostItems }: PDFTakeoff
                               </SelectContent>
                             </Select>
                             <div className="flex items-center gap-2 text-sm">
-                              <span className="font-semibold">{m.realValue.toFixed(2)}</span>
+                              <span className="font-semibold">{(m.realValue ?? 0).toFixed(2)}</span>
                               <Select
                                 value={m.unit}
                                 onValueChange={(unit: string) =>
@@ -1990,7 +1990,7 @@ export const PDFTakeoff = ({ projectId, estimateId, onAddCostItems }: PDFTakeoff
                   {m.measurementType ?? m.label?.split(' ')[0] ?? 'Measurement'}
                 </p>
                 <p className="text-sm font-bold mt-0.5">{m.label}</p>
-                <p className="text-xs text-muted-foreground">{m.realValue.toFixed(2)} {m.unit}</p>
+                <p className="text-xs text-muted-foreground">{(m.realValue ?? 0).toFixed(2)} {m.unit}</p>
               </div>
               <button
                 className="text-muted-foreground hover:text-destructive ml-2 mt-0.5"
