@@ -36,7 +36,7 @@ import { TourTip } from "@/components/TourTip";
 // ── Template icon + colour mapping (by template id) ───────────────────────────
 const TEMPLATE_STYLES: Record<string, { Icon: React.ElementType; bg: string; text: string }> = {
   'new-build':         { Icon: Home,           bg: 'bg-muted/15',   text: 'text-foreground/60' },
-  'bathroom-reno':     { Icon: Droplets,        bg: 'bg-teal-400/10',   text: 'text-teal-400' },
+  'bathroom-reno':     { Icon: Droplets,        bg: 'bg-[#412D15]/20',  text: 'text-[#E1DCC9]/70' },
   'kitchen-reno':      { Icon: Utensils,        bg: 'bg-amber-400/10',  text: 'text-amber-400' },
   'deck-outdoor':      { Icon: TreePine,        bg: 'bg-[#E1DCC9]/8',  text: 'text-[#E1DCC9]/80' },
   'commercial-fitout': { Icon: Building2,       bg: 'bg-muted/20', text: 'text-muted-foreground' },

@@ -45,7 +45,7 @@ const LaunchVideoSection = () => {
           </div>
           <h2 className="font-display text-3xl sm:text-4xl md:text-5xl font-bold text-white mb-4 leading-tight">
             From plans to tender,
-            <span className="block mt-1 bg-gradient-to-r from-primary via-cyan-300 to-white bg-clip-text text-transparent">
+            <span className="block mt-1 bg-gradient-to-r from-primary via-[#E1DCC9]/80 to-primary/60 bg-clip-text text-transparent">
               in minutes.
             </span>
           </h2>

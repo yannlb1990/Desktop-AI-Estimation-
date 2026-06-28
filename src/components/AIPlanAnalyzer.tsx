@@ -652,7 +652,7 @@ export function AIPlanAnalyzer({
         className={`
           ${!selectedItems.has(item.id) ? 'opacity-50 bg-gray-50 dark:bg-gray-900' : ''}
           ${item.isEdited ? 'bg-yellow-50 dark:bg-yellow-950/30' : ''}
-          ${isEditing ? 'bg-muted/10 dark:bg-background/70 ring-2 ring-blue-500' : ''}
+          ${isEditing ? 'bg-muted/10 dark:bg-background/70 ring-2 ring-primary/60' : ''}
           hover:bg-muted/50
         `}
       >
@@ -2393,7 +2393,7 @@ export function AIPlanAnalyzer({
           )}
 
           {/* Totals Summary */}
-          <Card className="p-4 bg-gradient-to-r from-slate-50 to-blue-50 dark:from-slate-900 dark:to-blue-950">
+          <Card className="p-4 bg-gradient-to-r from-[#1F150C] to-[#412D15]/30">
             <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
               <div>
                 <p className="text-xs text-muted-foreground uppercase">Materials</p>

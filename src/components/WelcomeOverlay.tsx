@@ -46,7 +46,7 @@ const WelcomeOverlay = ({ firstName, trialDays, onDismiss }: Props) => {
       <div className="w-full max-w-lg bg-card border border-border rounded-2xl shadow-2xl overflow-hidden">
 
         {/* Top accent bar */}
-        <div className="h-1 w-full bg-gradient-to-r from-primary via-cyan-400 to-primary/40" />
+        <div className="h-1 w-full bg-gradient-to-r from-[#412D15] via-primary to-[#412D15]/60" />
 
         <div className="p-8 space-y-7">
 

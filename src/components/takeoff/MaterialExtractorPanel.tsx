@@ -23,7 +23,7 @@ const TYPE_COLORS: Record<MaterialType, string> = {
   Framing:     'bg-amber-100 text-amber-700',
   Lining:      'bg-yellow-100 text-yellow-700',
   Finish:      'bg-muted/20 text-[#E1DCC9]/60',
-  Hardware:    'bg-teal-100 text-teal-700',
+  Hardware:    'bg-[#412D15]/25 text-[#E1DCC9]/75',
   Plumbing:    'bg-muted/20 text-foreground/80',
   Electrical:  'bg-muted/15 text-muted-foreground',
   Other:       'bg-gray-100 text-gray-600',

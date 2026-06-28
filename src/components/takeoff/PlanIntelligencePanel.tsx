@@ -49,9 +49,9 @@ const SPEC_COLORS: Record<SpecCategory, string> = {
   Fixings:       'bg-yellow-100 text-yellow-800',
   Roofing:       'bg-red-100 text-red-800',
   Fire:          'bg-red-200 text-red-900',
-  Energy:        'bg-lime-100 text-lime-800',
-  Acoustic:      'bg-violet-100 text-violet-800',
-  Plumbing:      'bg-teal-100 text-teal-800',
+  Energy:        'bg-[#E1DCC9]/15 text-[#E1DCC9]/70',
+  Acoustic:      'bg-[#412D15]/30 text-[#E1DCC9]/80',
+  Plumbing:      'bg-[#412D15]/25 text-[#E1DCC9]/75',
   Electrical:    'bg-muted/15 text-muted-foreground',
   Other:         'bg-gray-100 text-gray-700',
 };

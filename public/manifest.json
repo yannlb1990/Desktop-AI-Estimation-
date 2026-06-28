@@ -4,8 +4,8 @@
   "description": "AI-powered construction estimation for Australian builders",
   "start_url": "/",
   "display": "standalone",
-  "background_color": "#0f172a",
-  "theme_color": "#06b6d4",
+  "background_color": "#000000",
+  "theme_color": "#412D15",
   "icons": [
     {
       "src": "/favicon.svg",

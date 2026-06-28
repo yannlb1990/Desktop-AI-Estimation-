@@ -268,18 +268,18 @@ export const WallSetupDialog: React.FC<WallSetupDialogProps> = ({
 
           <div className="flex justify-between text-sm">
             <span className="text-muted-foreground">
-              Framing — {FRAMING_LABELS[selectedSpec.framingSystem] || selectedSpec.framingSystem}
+              Framing: {FRAMING_LABELS[selectedSpec.framingSystem] || selectedSpec.framingSystem}
             </span>
             <span className="font-mono font-medium">
-              {totalLM.toFixed(1)} LM → {framingM2.toFixed(1)} m²
+              {totalLM.toFixed(1)} LM · {framingM2.toFixed(1)} m²
             </span>
           </div>
 
           {selectedSpec.hasLining && (
             <div className="flex justify-between text-sm">
               <span className="text-muted-foreground">
-                Lining — {LINING_LABELS[selectedSpec.liningType] || selectedSpec.liningType}
-                {selectedSpec.liningFaces === 2 && ' (× 2 faces)'}
+                Lining: {LINING_LABELS[selectedSpec.liningType] || selectedSpec.liningType}
+                {selectedSpec.liningFaces === 2 && ' (2 faces)'}
               </span>
               <span className="font-mono font-medium">{liningM2.toFixed(1)} m²</span>
             </div>
@@ -288,7 +288,7 @@ export const WallSetupDialog: React.FC<WallSetupDialogProps> = ({
           {selectedSpec.hasInsulation && (
             <div className="flex justify-between text-sm">
               <span className="text-muted-foreground">
-                Insulation — {INSULATION_LABELS[selectedSpec.insulationType] || selectedSpec.insulationType}
+                Insulation: {INSULATION_LABELS[selectedSpec.insulationType] || selectedSpec.insulationType}
               </span>
               <span className="font-mono font-medium">{framingM2.toFixed(1)} m²</span>
             </div>

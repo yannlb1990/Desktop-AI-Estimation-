@@ -1186,9 +1186,9 @@ const SECTION_COLOR_MAP: Record<string, string> = {
   blue:   "bg-primary/10 border-primary/20",
   red:    "bg-red-500/10 border-red-500/30",
   cyan:   "bg-primary/10 border-foreground/20",
-  green:  "bg-muted/100/10 border-[#E1DCC9]/20",
+  green:  "bg-[#412D15]/10 border-[#E1DCC9]/20",
   purple: "bg-muted/20 border-border/30",
-  teal:   "bg-teal-500/10 border-teal-500/30",
+  teal:   "bg-[#412D15]/20 border-[#412D15]/40",
   rose:   "bg-rose-500/10 border-rose-500/30",
 };
 
@@ -2634,7 +2634,7 @@ export const NCCComplianceCard = ({ projectId }: NCCComplianceCardProps) => {
               {filteredAS.map(as => {
                 const isExpanded = expandedAS.has(as.id);
                 return (
-                <Card key={as.id} className={`transition-shadow border-l-4 border-l-blue-400 ${isExpanded ? "shadow-md" : "hover:shadow-sm"}`}>
+                <Card key={as.id} className={`transition-shadow border-l-4 border-l-[#412D15] ${isExpanded ? "shadow-md" : "hover:shadow-sm"}`}>
                   <CardContent className="pt-4 pb-4">
                     <div className="flex items-start gap-3">
                       <div className="flex-1 min-w-0">

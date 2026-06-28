@@ -52,17 +52,17 @@ export const DEFAULT_ROOMS: Omit<FFERoom, 'id'>[] = [
 ];
 
 export const CATEGORY_COLORS: Record<FFECategory, string> = {
-  Appliance:  'bg-blue-100 text-blue-700',
-  Fixture:    'bg-purple-100 text-purple-700',
-  Fitting:    'bg-teal-100 text-teal-700',
+  Appliance:  'bg-[#E1DCC9]/15 text-[#E1DCC9]/80',
+  Fixture:    'bg-[#412D15]/30 text-[#E1DCC9]/75',
+  Fitting:    'bg-[#412D15]/25 text-[#E1DCC9]/70',
   Furniture:  'bg-amber-100 text-amber-700',
   Equipment:  'bg-orange-100 text-orange-700',
-  Other:      'bg-gray-100 text-gray-600',
+  Other:      'bg-muted/20 text-muted-foreground',
 };
 
 export const STATUS_COLORS: Record<FFEStatus, string> = {
-  Specified:      'bg-green-100 text-green-700',
-  Allowance:      'bg-yellow-100 text-yellow-700',
+  Specified:      'bg-[#412D15]/20 text-[#E1DCC9]/80',
+  Allowance:      'bg-amber-100 text-amber-700',
   TBC:            'bg-orange-100 text-orange-700',
-  'Client Supply': 'bg-blue-100 text-blue-700',
+  'Client Supply': 'bg-[#E1DCC9]/15 text-[#E1DCC9]/80',
 };
