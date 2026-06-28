@@ -11,7 +11,7 @@ const LaunchVideoSection = () => {
     <section
       id="demo"
       className="relative py-16 md:py-24 overflow-hidden"
-      style={{ background: "linear-gradient(180deg, #081521 0%, #0c1d2e 60%, #081521 100%)" }}
+      style={{ background: "linear-gradient(180deg, #000000 0%, #1F150C 60%, #000000 100%)" }}
     >
       {/* Grid backdrop */}
       <div
@@ -19,7 +19,7 @@ const LaunchVideoSection = () => {
         className="pointer-events-none absolute inset-0 opacity-[0.04]"
         style={{
           backgroundImage:
-            "linear-gradient(#1fb6c9 1px, transparent 1px), linear-gradient(90deg, #1fb6c9 1px, transparent 1px)",
+            "linear-gradient(rgba(225,220,201,0.8) 1px, transparent 1px), linear-gradient(90deg, rgba(225,220,201,0.8) 1px, transparent 1px)",
           backgroundSize: "56px 56px",
         }}
       />
@@ -30,7 +30,7 @@ const LaunchVideoSection = () => {
         className="pointer-events-none absolute inset-0"
         style={{
           background:
-            "radial-gradient(ellipse 80% 50% at 50% 50%, rgba(31,182,201,0.07) 0%, transparent 70%)",
+            "radial-gradient(ellipse 80% 50% at 50% 50%, rgba(65,45,21,0.4) 0%, transparent 70%)",
         }}
       />
 
@@ -61,7 +61,7 @@ const LaunchVideoSection = () => {
           style={{
             maxWidth: 1100,
             boxShadow:
-              "0 0 0 1px rgba(31,182,201,0.25), 0 0 60px rgba(31,182,201,0.12), 0 40px 120px rgba(8,21,33,0.6)",
+              "0 0 0 1px rgba(225,220,201,0.15), 0 0 60px rgba(65,45,21,0.3), 0 40px 120px rgba(0,0,0,0.6)",
           }}
         >
           {/* 16:9 aspect ratio container */}
@@ -71,7 +71,7 @@ const LaunchVideoSection = () => {
           >
             {/* Loading skeleton */}
             {!loaded && (
-              <div className="absolute inset-0 flex items-center justify-center bg-[#081521]">
+              <div className="absolute inset-0 flex items-center justify-center bg-[#000000]">
                 <div className="flex flex-col items-center gap-4">
                   <div className="w-14 h-14 rounded-full border-2 border-primary/30 border-t-primary animate-spin" />
                   <span className="text-white/40 text-sm font-mono tracking-wider">
@@ -95,7 +95,7 @@ const LaunchVideoSection = () => {
           <div
             className="flex items-center justify-between px-4 py-2.5 rounded-b-xl md:rounded-b-2xl"
             style={{
-              background: "rgba(8,21,33,0.92)",
+              background: "rgba(0,0,0,0.92)",
               borderTop: "1px solid rgba(255,255,255,0.06)",
             }}
           >

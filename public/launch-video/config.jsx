@@ -1,30 +1,30 @@
 // config.jsx — Metricore launch video: palette, timeline, camera, cursor, captions, tabs
-// Loaded after animations.jsx. Exports to window. Palette: navy + cyan (kept by request).
+// Palette: black/dark-brown + cream (Metricore brand).
 
 const C = {
-  navy900: '#081521',
-  navy850: '#0c1d2e',
-  navy800: '#0f2436',
-  navy750: '#12293c',
-  navy700: '#163349',
-  navy600: '#1f4763',
+  navy900: '#000000',
+  navy850: '#0a0806',
+  navy800: '#1F150C',
+  navy750: '#2a1a0c',
+  navy700: '#412D15',
+  navy600: '#5c3e1c',
   line:    'rgba(255,255,255,0.10)',
   line2:   'rgba(255,255,255,0.06)',
   canvas:  '#eef2f5',
   canvas2: '#e4e9ee',
   paper:   '#ffffff',
-  ink:     '#0f2436',
-  ink2:    '#46606f',
-  ink3:    '#8197a5',
-  cyan:    '#1fb6c9',
-  cyanSoft:'rgba(31,182,201,0.16)',
-  cyanLine:'rgba(31,182,201,0.85)',
+  ink:     '#1F150C',
+  ink2:    '#6B4F35',
+  ink3:    '#A07850',
+  cyan:    '#E1DCC9',
+  cyanSoft:'rgba(225,220,201,0.16)',
+  cyanLine:'rgba(225,220,201,0.85)',
   green:   '#36c08a',
   amber:   '#e8a13a',
   violet:  '#9b8cf0',
   white:   '#f3f7f9',
-  wall:    '#243b4d',
-  wall2:   '#9fb2bf',
+  wall:    '#412D15',
+  wall2:   '#C4B8A0',
 };
 // trade colour-coding for measurements + bars
 const TRADE = {
