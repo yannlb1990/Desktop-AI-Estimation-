@@ -1544,8 +1544,9 @@ export const PDFTakeoff = ({ projectId, estimateId, onAddCostItems }: PDFTakeoff
                 {/* Plan Intelligence — below PDF canvas, full-width within the 3-col area */}
                 <AIPlanAnalysisPanel
                   canvasElementRef={canvasRef}
+                  planId={state.pdfFile?.planId}
                   projectId={projectId}
-                  projectState="QLD"
+                  projectState={projectState}
                   isCalibrated={state.isCalibrated}
                   onAddCostItems={(items) => items.forEach(item => dispatch({ type: 'ADD_COST_ITEM', payload: item as any }))}
                 />

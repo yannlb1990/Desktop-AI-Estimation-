@@ -1,14 +1,19 @@
 import React, { useState, useEffect } from 'react';
-import { ScanLine, Loader2, ChevronDown, ChevronRight, Plus, Lock, Clock } from 'lucide-react';
+import { ScanLine, Loader2, ChevronDown, ChevronRight, Plus, Lock, Clock, Layers } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { useAIPlanAnalysis, AnalysisTrade, AnalysisResult } from '@/hooks/useAIPlanAnalysis';
 import { CostItem } from '@/lib/takeoff/types';
 import { getSubscriptionStatus } from '@/lib/subscription';
+import { getCachedPDF } from '@/lib/takeoff/pdfCache';
+import { extractAnalysisPages } from '@/lib/takeoff/pdfPageExtractor';
+import { buildCostItemsFromTrades } from '@/lib/takeoff/rateResolver';
+import type { AustralianState } from '@/data/scopeOfWorkRates';
 
 interface AIPlanAnalysisPanelProps {
-  canvasElementRef: React.RefObject<HTMLCanvasElement | null>;
+  canvasElementRef?: React.RefObject<HTMLCanvasElement | null>;
+  planId?: string;
   projectId?: string;
   projectState?: string;
   onAddCostItems?: (items: Partial<CostItem>[]) => void;
@@ -29,7 +34,6 @@ function loadCached(projectId: string): CachedAnalysis | null {
     const raw = localStorage.getItem(cacheKey(projectId));
     if (!raw) return null;
     const parsed = JSON.parse(raw) as CachedAnalysis;
-    // Validate shape so stale/malformed cache doesn't crash the panel
     if (
       !parsed?.result?.rooms ||
       !parsed?.result?.openings ||
@@ -48,7 +52,7 @@ function loadCached(projectId: string): CachedAnalysis | null {
 function saveCache(projectId: string, result: AnalysisResult) {
   try {
     localStorage.setItem(cacheKey(projectId), JSON.stringify({ result, timestamp: Date.now() }));
-  } catch { /* storage full — ignore */ }
+  } catch { /* storage full */ }
 }
 
 function clearCache(projectId: string) {
@@ -76,19 +80,22 @@ function confidenceBadge(confidence: number) {
 
 export function AIPlanAnalysisPanel({
   canvasElementRef,
+  planId,
   projectId,
   projectState,
   onAddCostItems,
   isCalibrated,
 }: AIPlanAnalysisPanelProps) {
-  const { analyse, loading, result, error, reset, setResult } = useAIPlanAnalysis();
+  const { analysePages, analyse, loading, result, error, reset, setResult } = useAIPlanAnalysis();
   const [expanded, setExpanded] = useState(true);
   const [roomsOpen, setRoomsOpen] = useState(false);
   const [cachedAt, setCachedAt] = useState<number | null>(null);
+  const [pageCount, setPageCount] = useState<number | null>(null);
+  const [statusMsg, setStatusMsg] = useState<string>('');
   const { caps, isTrialing, effectivePlan } = getSubscriptionStatus();
   const locked = !caps.planAnalysis;
+  const state = (projectState as AustralianState) ?? 'QLD';
 
-  // Load from cache on mount
   useEffect(() => {
     if (!projectId || locked) return;
     const cached = loadCached(projectId);
@@ -98,58 +105,73 @@ export function AIPlanAnalysisPanel({
     }
   }, [projectId, locked]);
 
-  // Save to cache whenever result changes
   useEffect(() => {
     if (!projectId || !result || cachedAt !== null) return;
-    saveCache(projectId, result);
+    if (projectId) saveCache(projectId, result);
     setCachedAt(Date.now());
   }, [result, projectId]);
 
   const handleAnalyse = async () => {
-    const canvas = canvasElementRef.current;
-    if (!canvas) return;
     if (projectId) clearCache(projectId);
     setCachedAt(null);
+    setStatusMsg('');
+
+    // Multi-page path: use planId to get the full PDF and extract all pages
+    if (planId) {
+      try {
+        setStatusMsg('Loading PDF…');
+        const cached = await getCachedPDF(planId);
+        if (!cached) throw new Error('PDF not found in cache. Please reload the plan.');
+        const file = new File([cached.data], cached.name, { type: 'application/pdf' });
+        setStatusMsg(`Rendering pages…`);
+        const pages = await extractAnalysisPages(file, 12);
+        setPageCount(pages.length);
+        setStatusMsg(`Analysing ${pages.length} page${pages.length > 1 ? 's' : ''}…`);
+        const newResult = await analysePages(pages, { state, projectType: 'residential' });
+        if (newResult && projectId) {
+          saveCache(projectId, newResult);
+          setCachedAt(Date.now());
+        }
+      } catch (err) {
+        setStatusMsg('');
+        // Error is set by the hook; nothing more to do here
+        console.error('[AIPlanAnalysisPanel]', err);
+      }
+      setStatusMsg('');
+      return;
+    }
+
+    // Fallback: capture current canvas if no planId available
+    const canvas = canvasElementRef?.current;
+    if (!canvas) return;
+    setStatusMsg('Analysing current page…');
     const imageBase64 = canvas.toDataURL('image/png').replace(/^data:image\/png;base64,/, '');
-    const newResult = await analyse(imageBase64, { state: projectState ?? 'QLD', projectType: 'residential' });
+    const newResult = await analyse(imageBase64, { state, projectType: 'residential' });
     if (newResult && projectId) {
       saveCache(projectId, newResult);
       setCachedAt(Date.now());
     }
+    setStatusMsg('');
   };
 
   const handleReanalyse = () => {
     if (projectId) clearCache(projectId);
     setCachedAt(null);
+    setPageCount(null);
+    setStatusMsg('');
     reset();
   };
 
   const pushTrade = (trade: AnalysisTrade) => {
     if (!onAddCostItems) return;
-    onAddCostItems([{
-      id: crypto.randomUUID(),
-      trade: trade.trade,
-      description: `${trade.trade} (estimated — ${Math.round(trade.confidence * 100)}% confidence)`,
-      quantity: trade.quantity,
-      unit: trade.unit,
-      rate: 0,
-      total: 0,
-    }]);
+    const items = buildCostItemsFromTrades([trade], state);
+    onAddCostItems(items);
   };
 
   const pushAll = () => {
     if (!onAddCostItems || !result) return;
-    onAddCostItems(
-      result.estimatedTrades.map((t) => ({
-        id: crypto.randomUUID(),
-        trade: t.trade,
-        description: `${t.trade} (estimated — ${Math.round(t.confidence * 100)}% confidence)`,
-        quantity: t.quantity,
-        unit: t.unit,
-        rate: 0,
-        total: 0,
-      }))
-    );
+    const items = buildCostItemsFromTrades(result.estimatedTrades, state);
+    onAddCostItems(items);
   };
 
   return (
@@ -162,6 +184,12 @@ export function AIPlanAnalysisPanel({
           <ScanLine className="h-4 w-4 text-foreground/60" />
           <span className="font-semibold text-sm">Plan Intelligence</span>
           <Badge className="text-[10px] px-1.5 py-0.5 bg-amber-900/40 text-amber-300 border border-amber-700/50">Beta</Badge>
+          {pageCount && pageCount > 1 && (
+            <span className="flex items-center gap-0.5 text-[10px] text-muted-foreground">
+              <Layers className="h-2.5 w-2.5" />
+              {pageCount}p
+            </span>
+          )}
         </div>
         <div className="flex items-center gap-2">
           {cachedAt && (
@@ -201,9 +229,11 @@ export function AIPlanAnalysisPanel({
           {!locked && !result && !loading && (
             <div className="space-y-2">
               <p className="text-xs text-muted-foreground">
-                Capture the current page and let Metricore estimate rooms, openings, and trade quantities from the plan image.
+                {planId
+                  ? 'Analyse all pages of the uploaded plan to extract rooms, openings, and trade quantities.'
+                  : 'Capture the current page and let Metricore estimate rooms, openings, and trade quantities.'}
               </p>
-              {!isCalibrated && (
+              {!isCalibrated && !planId && (
                 <p className="text-[11px] text-amber-400">
                   Tip: calibrate the plan first for better area estimates.
                 </p>
@@ -215,7 +245,7 @@ export function AIPlanAnalysisPanel({
                 disabled={loading}
               >
                 <ScanLine className="h-3.5 w-3.5" />
-                Analyse Current Page
+                {planId ? 'Analyse Full Plan' : 'Analyse Current Page'}
               </Button>
             </div>
           )}
@@ -223,7 +253,7 @@ export function AIPlanAnalysisPanel({
           {!locked && loading && (
             <div className="flex flex-col items-center gap-2 py-4">
               <Loader2 className="h-6 w-6 text-foreground/50 animate-spin" />
-              <p className="text-xs text-muted-foreground">Analysing plan…</p>
+              <p className="text-xs text-muted-foreground">{statusMsg || 'Analysing plan…'}</p>
             </div>
           )}
 
@@ -247,12 +277,21 @@ export function AIPlanAnalysisPanel({
                 <div className="bg-muted/40 rounded-md p-2">
                   <p className="text-[10px] text-muted-foreground">Doors</p>
                   <p className="text-sm font-semibold">{result.openings.doors}</p>
+                  {result.openings.externalDoors != null && (
+                    <p className="text-[9px] text-muted-foreground">{result.openings.externalDoors} ext · {result.openings.internalDoors ?? result.openings.doors - result.openings.externalDoors} int</p>
+                  )}
                 </div>
                 <div className="bg-muted/40 rounded-md p-2">
                   <p className="text-[10px] text-muted-foreground">Windows</p>
                   <p className="text-sm font-semibold">{result.openings.windows}</p>
                 </div>
               </div>
+
+              {result.levels && result.levels > 1 && (
+                <p className="text-[11px] text-muted-foreground text-center">
+                  {result.levels}-storey building
+                </p>
+              )}
 
               {/* Rooms collapsible */}
               {result.rooms.length > 0 && (
@@ -265,10 +304,13 @@ export function AIPlanAnalysisPanel({
                     Rooms ({result.rooms.length})
                   </button>
                   {roomsOpen && (
-                    <div className="mt-1.5 space-y-1 max-h-40 overflow-y-auto pr-1">
+                    <div className="mt-1.5 space-y-1 max-h-48 overflow-y-auto pr-1">
                       {result.rooms.map((room, i) => (
                         <div key={i} className="flex justify-between text-xs">
-                          <span className="text-foreground">{room.name}</span>
+                          <span className="text-foreground">
+                            {room.name}
+                            {room.level && <span className="text-muted-foreground ml-1 text-[10px]">({room.level})</span>}
+                          </span>
                           <span className="text-muted-foreground">{room.areaSqm > 0 ? `${room.areaSqm} m²` : '—'}</span>
                         </div>
                       ))}
@@ -284,19 +326,24 @@ export function AIPlanAnalysisPanel({
                     <p className="text-xs font-medium">Estimated Quantities</p>
                     {onAddCostItems && (
                       <Button size="sm" variant="outline" className="h-6 text-[10px] px-2" onClick={pushAll}>
-                        Push All
+                        Push All ({result.estimatedTrades.length})
                       </Button>
                     )}
                   </div>
-                  <div className="space-y-1">
+                  <div className="space-y-1 max-h-64 overflow-y-auto pr-0.5">
                     {result.estimatedTrades.map((t, i) => (
-                      <div key={i} className="flex items-center justify-between gap-2 py-1 border-b border-border/40 last:border-0">
-                        <div className="flex items-center gap-1.5 min-w-0">
+                      <div key={i} className="flex items-center justify-between gap-2 py-1.5 border-b border-border/30 last:border-0">
+                        <div className="flex items-center gap-1.5 min-w-0 flex-1">
                           {confidenceBadge(t.confidence)}
-                          <span className="text-xs truncate">{t.trade}</span>
+                          <div className="min-w-0">
+                            <span className="text-xs block truncate">{t.trade}</span>
+                            {t.notes && <span className="text-[10px] text-muted-foreground truncate block">{t.notes}</span>}
+                          </div>
                         </div>
                         <div className="flex items-center gap-1.5 shrink-0">
-                          <span className="text-xs text-muted-foreground">{t.quantity} {t.unit}</span>
+                          <div className="text-right">
+                            <span className="text-xs text-muted-foreground block">{t.quantity} {t.unit}</span>
+                          </div>
                           {onAddCostItems && (
                             <button
                               onClick={() => pushTrade(t)}
@@ -316,10 +363,10 @@ export function AIPlanAnalysisPanel({
               {/* Notes */}
               {result.notes.length > 0 && (
                 <div className="space-y-1">
-                  <p className="text-[10px] font-medium text-muted-foreground uppercase tracking-wide">Notes</p>
+                  <p className="text-[10px] font-medium text-muted-foreground uppercase tracking-wide">Observations</p>
                   <ul className="space-y-0.5">
                     {result.notes.map((n, i) => (
-                      <li key={i} className="text-xs text-muted-foreground">• {n}</li>
+                      <li key={i} className="text-xs text-muted-foreground">· {n}</li>
                     ))}
                   </ul>
                 </div>
