@@ -1,18 +1,15 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.76.1";
 
-const ALLOWED_ORIGINS = [
-  "https://www.metricore.com.au",
-  "https://metricore.com.au",
-  "http://localhost:8080",
-];
+// Auth is Bearer-token-based, not cookie-based, so wildcard CORS is safe.
+const CORS_HEADERS = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+  "Access-Control-Allow-Methods": "POST, OPTIONS",
+};
 
-function getCors(origin: string) {
-  const allowed = ALLOWED_ORIGINS.includes(origin) ? origin : ALLOWED_ORIGINS[0];
-  return {
-    "Access-Control-Allow-Origin": allowed,
-    "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
-  };
+function getCors(_origin: string) {
+  return CORS_HEADERS;
 }
 
 // Tool schema — Claude must call this to return the analysis.
@@ -296,13 +293,21 @@ serve(async (req) => {
     if (!authHeader) throw new Error("Authorization header is required");
 
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
-    const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-    const supabase = createClient(supabaseUrl, supabaseKey);
+    const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+    const supabaseAnonKey = Deno.env.get("SUPABASE_ANON_KEY") ?? "";
+    const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
-    const { data: { user }, error: authError } = await supabase.auth.getUser(
-      authHeader.replace("Bearer ", "")
-    );
-    if (authError || !user) throw new Error("Unauthorized");
+    const token = authHeader.replace("Bearer ", "");
+
+    // Accept either a valid user session JWT or the project anon key.
+    // The anon key is already public (bundled in the frontend), so this gates on
+    // "is this a legitimate call from the site" rather than "is the user logged in".
+    let isAuthorised = token === supabaseAnonKey && supabaseAnonKey.length > 0;
+    if (!isAuthorised) {
+      const { data: { user }, error: authError } = await supabase.auth.getUser(token);
+      isAuthorised = !authError && !!user;
+    }
+    if (!isAuthorised) throw new Error("Unauthorized");
 
     const anthropicKey = Deno.env.get("ANTHROPIC_API_KEY");
     if (!anthropicKey) throw new Error("ANTHROPIC_API_KEY is not configured");

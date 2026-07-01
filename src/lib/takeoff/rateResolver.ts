@@ -104,26 +104,29 @@ export function buildCostItemsFromTrades(
   state: AustralianState
 ): Partial<CostItem>[] {
   return trades.map((t) => {
-    let rate = 0;
+    let unitCost = 0;
     if (t.rateId) {
-      rate = lookupRate(t.rateId, state);
+      unitCost = lookupRate(t.rateId, state);
     }
-    if (rate === 0) {
-      // Keyword fallback in case AI returned an unknown or missing rateId
+    if (unitCost === 0) {
       const resolved = resolveRate(t.trade + ' ' + t.unit, t.unit, state);
-      rate = resolved.rate;
+      unitCost = resolved.rate;
     }
-    const total = rate > 0 ? Math.round(t.quantity * rate * 100) / 100 : 0;
+    const subtotal = unitCost > 0 ? Math.round(t.quantity * unitCost * 100) / 100 : 0;
     const conf = Math.round(t.confidence * 100);
     const notesPart = t.notes ? ` — ${t.notes}` : '';
     return {
       id: crypto.randomUUID(),
+      category: t.trade,
+      name: t.trade,
       trade: t.trade,
       description: `${t.trade}${notesPart} (AI ${conf}% confidence)`,
       quantity: t.quantity,
-      unit: t.unit,
-      rate,
-      total,
+      unit: t.unit as CostItem['unit'],
+      unitCost,
+      subtotal,
+      linkedMeasurements: [],
+      wasteFactor: 1,
     };
   });
 }

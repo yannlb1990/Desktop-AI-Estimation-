@@ -100,6 +100,24 @@ function loadPersisted(projectId: string): PersistedState {
         m.planId ? m : { ...m, planId: data.planId }
       );
     }
+    // Migrate AI-pushed cost items that used wrong field names (rate/total → unitCost/subtotal)
+    if (data.costItems) {
+      data.costItems = data.costItems.map((item: any) => {
+        if (item.unitCost === undefined && item.rate !== undefined) {
+          const unitCost = item.rate ?? 0;
+          return {
+            ...item,
+            unitCost,
+            subtotal: item.total ?? unitCost * (item.quantity ?? 0),
+            linkedMeasurements: item.linkedMeasurements ?? [],
+            wasteFactor: item.wasteFactor ?? 1,
+            category: item.category ?? item.trade ?? 'General',
+            name: item.name ?? item.description ?? item.trade ?? 'Cost Item',
+          };
+        }
+        return item;
+      });
+    }
     return data;
   } catch {
     return { measurements: [], costItems: [], scales: {} };
