@@ -15,8 +15,8 @@ const Index = () => {
   return (
     <>
       <Helmet>
-        <title>Complete Estimation Tool for Australian Builders | Metricore</title>
-        <meta name="description" content="Upload your blueprints, capture the full scope of works instantly, and send professional quotes and tenders the same day. The complete estimation tool for Australian builders." />
+        <title>Estimation and Tender Tool for Australian Builders and Trades | Metricore</title>
+        <meta name="description" content="Upload your blueprints, capture the full scope of works, and generate NCC-compliant quotes and tenders the same day. Built for Australian builders, trades, and construction professionals." />
         <link rel="canonical" href="https://metricore.com.au/" />
         <meta property="og:url" content="https://metricore.com.au/" />
       </Helmet>

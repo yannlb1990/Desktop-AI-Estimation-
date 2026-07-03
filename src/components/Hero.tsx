@@ -354,7 +354,7 @@ const Hero = () => {
             <motion.div variants={fadeIn} className="flex items-center gap-3">
               <div className="w-2 h-2 rounded-full bg-primary animate-pulse" />
               <span className="text-xs font-mono text-[#E1DCC9]/70 uppercase tracking-widest">
-                Blueprint Analyser · Scope Capture · Tender Ready
+                Builders · Trades · NCC Compliance · Scope Capture
               </span>
             </motion.div>
 
@@ -372,7 +372,7 @@ const Hero = () => {
             </div>
 
             <motion.p variants={fadeIn} className="text-white/50 text-base sm:text-lg leading-relaxed max-w-sm">
-              Upload your blueprint and capture the full scope of works in minutes. Price every trade at current Australian rates and send a professional tender the same day. No spreadsheets. No Sunday nights doing maths.
+              Upload your blueprint and capture the full scope of works in minutes. Price every trade at NCC-embedded Australian rates and send a compliant tender the same day. No spreadsheets. No Sunday nights doing maths.
             </motion.p>
 
             <motion.div variants={fadeIn} className="flex flex-wrap gap-4 items-center">
@@ -402,7 +402,7 @@ const Hero = () => {
                     </div>
                   ))}
                 </div>
-                <span className="text-xs text-white/35 font-mono">Trusted by builders</span>
+                <span className="text-xs text-white/35 font-mono">Builders and trades</span>
               </div>
               <div className="hidden sm:block w-px h-4 bg-white/8" />
               <span className="text-xs font-mono text-white/30 tracking-widest">QLD · NSW · VIC · WA</span>
