@@ -2,11 +2,12 @@ import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import {
   X, ScanLine, Loader2, Plus, CheckCheck, RefreshCw,
-  Layers, DoorOpen, ChevronDown, ChevronRight, ArrowUpRight,
+  Layers, ChevronDown, ChevronRight, ArrowUpRight,
   Home, AlertCircle,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { toast } from 'sonner';
 import { useAIPlanAnalysis, AnalysisTrade, AnalysisResult } from '@/hooks/useAIPlanAnalysis';
 import { CostItem } from '@/lib/takeoff/types';
 import { getCachedPDF, cachePDF } from '@/lib/takeoff/pdfCache';
@@ -366,25 +367,43 @@ export function PlanAnalyserModal({
   };
 
   const pushTrade = (t: AnalysisTrade) => {
-    const items = buildCostItemsFromTrades([t], state);
-    onAddCostItems(items);
-    const key = t.trade + t.quantity + t.unit;
-    setPushedIds(prev => new Set([...prev, key]));
+    try {
+      const items = buildCostItemsFromTrades([t], state);
+      onAddCostItems(items);
+      const key = t.trade + t.quantity + t.unit;
+      setPushedIds(prev => new Set([...prev, key]));
+      toast.success(`${t.trade} added to estimate`, { duration: 2000 });
+    } catch (err) {
+      toast.error('Could not add item — check console for details');
+      console.error('[PlanAnalyser] pushTrade error:', err);
+    }
   };
 
   const pushAll = () => {
     if (!result) return;
-    const items = buildCostItemsFromTrades(result.estimatedTrades, state);
-    onAddCostItems(items);
-    const allKeys = new Set(result.estimatedTrades.map(t => t.trade + t.quantity + t.unit));
-    setPushedIds(allKeys);
+    try {
+      const items = buildCostItemsFromTrades(result.estimatedTrades, state);
+      onAddCostItems(items);
+      const allKeys = new Set(result.estimatedTrades.map(t => t.trade + t.quantity + t.unit));
+      setPushedIds(allKeys);
+      toast.success(`${items.length} items added to estimate`);
+    } catch (err) {
+      toast.error('Could not add items — check console for details');
+      console.error('[PlanAnalyser] pushAll error:', err);
+    }
   };
 
   const pushCategory = (trades: AnalysisTrade[]) => {
-    const items = buildCostItemsFromTrades(trades, state);
-    onAddCostItems(items);
-    const keys = trades.map(t => t.trade + t.quantity + t.unit);
-    setPushedIds(prev => new Set([...prev, ...keys]));
+    try {
+      const items = buildCostItemsFromTrades(trades, state);
+      onAddCostItems(items);
+      const keys = trades.map(t => t.trade + t.quantity + t.unit);
+      setPushedIds(prev => new Set([...prev, ...keys]));
+      toast.success(`${items.length} items added to estimate`, { duration: 2000 });
+    } catch (err) {
+      toast.error('Could not add items — check console for details');
+      console.error('[PlanAnalyser] pushCategory error:', err);
+    }
   };
 
   // Keyboard escape
@@ -408,7 +427,7 @@ export function PlanAnalyserModal({
       <div className="absolute inset-0 bg-black/80 backdrop-blur-sm" onClick={onClose} />
 
       {/* Modal panel */}
-      <div className="relative flex flex-col w-full h-full max-w-7xl mx-auto my-0 md:my-6 md:h-[calc(100vh-48px)] bg-[#0D1117] md:rounded-2xl overflow-hidden border border-white/[0.08] shadow-2xl">
+      <div className="relative z-10 flex flex-col w-full h-full max-w-7xl mx-auto my-0 md:my-6 md:h-[calc(100vh-48px)] bg-[#0D1117] md:rounded-2xl overflow-hidden border border-white/[0.08] shadow-2xl">
 
         {/* Header */}
         <div className="flex items-center justify-between px-5 py-3.5 border-b border-white/[0.07] bg-[#0D1117]/90 backdrop-blur shrink-0">

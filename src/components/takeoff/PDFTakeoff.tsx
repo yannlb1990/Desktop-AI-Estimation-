@@ -1114,7 +1114,7 @@ export const PDFTakeoff = ({ projectId, estimateId, onAddCostItems }: PDFTakeoff
           <TabsList>
             <TabsTrigger value="upload">1. Upload Plan</TabsTrigger>
             <TabsTrigger value="measure" disabled={!state.pdfFile}>2. Measure</TabsTrigger>
-            <TabsTrigger value="costs" disabled={!state.measurements.length}>3. Costs</TabsTrigger>
+            <TabsTrigger value="costs" disabled={!state.pdfFile && !state.costItems.length}>3. Costs</TabsTrigger>
           </TabsList>
           <Button
             variant="outline"
@@ -2070,7 +2070,10 @@ export const PDFTakeoff = ({ projectId, estimateId, onAddCostItems }: PDFTakeoff
       pdfPageCount={state.pdfFile?.pageCount}
       projectId={projectId}
       projectState={projectState}
-      onAddCostItems={(items) => items.forEach(item => dispatch({ type: 'ADD_COST_ITEM', payload: item as any }))}
+      onAddCostItems={(items) => {
+        items.forEach(item => dispatch({ type: 'ADD_COST_ITEM', payload: item as any }));
+        setActiveTab('costs');
+      }}
     />
     </>
   );
