@@ -15,8 +15,8 @@ const Index = () => {
   return (
     <>
       <Helmet>
-        <title>Construction Estimation AI for Australian Builders | Metricore</title>
-        <meta name="description" content="AI construction estimation for Australian builders. Upload your plans, generate accurate takeoffs and produce professional tenders in minutes." />
+        <title>Complete Estimation Tool for Australian Builders | Metricore</title>
+        <meta name="description" content="Upload your blueprints, capture the full scope of works instantly, and send professional quotes and tenders the same day. The complete estimation tool for Australian builders." />
         <link rel="canonical" href="https://metricore.com.au/" />
         <meta property="og:url" content="https://metricore.com.au/" />
       </Helmet>

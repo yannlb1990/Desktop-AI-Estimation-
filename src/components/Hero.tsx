@@ -354,7 +354,7 @@ const Hero = () => {
             <motion.div variants={fadeIn} className="flex items-center gap-3">
               <div className="w-2 h-2 rounded-full bg-primary animate-pulse" />
               <span className="text-xs font-mono text-[#E1DCC9]/70 uppercase tracking-widest">
-                Construction projects · Trades · Builders
+                Blueprint Analyser · Scope Capture · Tender Ready
               </span>
             </motion.div>
 
@@ -372,7 +372,7 @@ const Hero = () => {
             </div>
 
             <motion.p variants={fadeIn} className="text-white/50 text-base sm:text-lg leading-relaxed max-w-sm">
-              Drop in a plan, draw your measurements, and send a tender the same day. No spreadsheets. No Sunday nights doing maths.
+              Upload your blueprint and capture the full scope of works in minutes. Price every trade at current Australian rates and send a professional tender the same day. No spreadsheets. No Sunday nights doing maths.
             </motion.p>
 
             <motion.div variants={fadeIn} className="flex flex-wrap gap-4 items-center">

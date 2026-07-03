@@ -186,9 +186,9 @@ const features = [
   {
     num: "01",
     icon: FileSearch,
-    title: "Measure from any PDF plan",
+    title: "Upload blueprints. Capture the scope.",
     description:
-      "Drop in any PDF or DXF plan and start measuring straight away. Draw areas, walls, and counts on the canvas. Every quantity lands in the right trade column before you even reach for the phone.",
+      "Upload any PDF blueprint and use the plan analyser to capture the full scope of works before you draw a single line. Then measure areas, walls, and counts on the canvas. Every quantity lands in the right trade column automatically.",
     visual: <TakeoffPreview />,
   },
   {

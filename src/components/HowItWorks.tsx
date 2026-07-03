@@ -166,8 +166,8 @@ const steps = [
   {
     num: "01",
     icon: Upload,
-    title: "Upload your plan",
-    body: "Drag in any PDF, DXF, or image plan straight from your email or desktop. Whatever your architect sends you, Metricore reads it.",
+    title: "Upload your blueprint",
+    body: "Drag in any PDF, DXF, or image plan straight from your email or desktop. The plan analyser reads your blueprint and captures the scope of works before you draw a single measurement.",
     detail: "Supports PDF · PNG · JPG · DXF",
     visual: <UploadVisual />,
   },
@@ -206,7 +206,7 @@ const HowItWorks = () => {
             <span className="text-xs font-mono text-[#E1DCC9]/60 uppercase tracking-widest">How it works</span>
           </div>
           <h2 className="font-display text-4xl sm:text-5xl font-bold text-white leading-tight">
-            Upload. Measure. Export.
+            Upload. Scope. Quote.
             <span className="block text-white/30 mt-1">Faster than you have ever quoted.</span>
           </h2>
         </motion.div>
