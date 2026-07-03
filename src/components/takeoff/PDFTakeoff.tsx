@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { Download, ZoomIn, ZoomOut, RotateCw, RotateCcw, Maximize2, Minimize2, ChevronLeft, ChevronRight, ChevronUp, ChevronDown, Trash2, FileText, SlidersHorizontal, Combine, Ruler, X, CheckCircle, EyeOff, Lock } from 'lucide-react';
+import { Download, ZoomIn, ZoomOut, RotateCw, RotateCcw, Maximize2, Minimize2, ChevronLeft, ChevronRight, ChevronUp, ChevronDown, Trash2, FileText, SlidersHorizontal, Combine, Ruler, X, CheckCircle, EyeOff, Lock, ScanLine } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { PDFUploadManager } from './PDFUploadManager';
@@ -31,6 +31,7 @@ import { generateTakeoffPdf, generateAnnotatedTakeoffPdf } from '@/lib/takeoff/p
 import { GroupLegend } from './GroupLegend';
 import { MaterialExtractorPanel } from './MaterialExtractorPanel';
 import { AIPlanAnalysisPanel } from './AIPlanAnalysisPanel';
+import { PlanAnalyserModal } from './PlanAnalyserModal';
 import { PlanIntelligencePanel } from './PlanIntelligencePanel';
 import { SOWGeneratorDialog } from './SOWGeneratorDialog';
 import { ProfileConfigDialog } from './ProfileConfigDialog';
@@ -123,6 +124,8 @@ export const PDFTakeoff = ({ projectId, estimateId, onAddCostItems }: PDFTakeoff
   const [customLinePending, setCustomLinePending] = useState<Measurement | null>(null);
   // Existing measurement popup (select tool click)
   const [measurementPopup, setMeasurementPopup] = useState<{ id: string; screenX: number; screenY: number } | null>(null);
+  // Plan Analyser full-screen modal
+  const [showAnalyserModal, setShowAnalyserModal] = useState(false);
   const sub = useSubscription();
   const canvasContainerRef = useRef<HTMLDivElement | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
@@ -1161,14 +1164,24 @@ export const PDFTakeoff = ({ projectId, estimateId, onAddCostItems }: PDFTakeoff
                 <span className="font-medium text-foreground">Plan:</span> {state.pdfFile.name}
                 {state.pdfFile.pageCount > 1 && ` (${state.pdfFile.pageCount} pages)`}
               </span>
-              <Button
-                variant="outline"
-                size="sm"
-                className="shrink-0 ml-2"
-                onClick={() => setActiveTab('upload')}
-              >
-                Change Plan
-              </Button>
+              <div className="flex items-center gap-2 shrink-0">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="gap-1.5 border-cyan-700/50 text-cyan-400 hover:bg-cyan-950/40 hover:border-cyan-500/70"
+                  onClick={() => setShowAnalyserModal(true)}
+                >
+                  <ScanLine className="h-3.5 w-3.5" />
+                  AI Analyse
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setActiveTab('upload')}
+                >
+                  Change Plan
+                </Button>
+              </div>
             </div>
           )}
           {state.pdfFile && (
@@ -2035,11 +2048,30 @@ export const PDFTakeoff = ({ projectId, estimateId, onAddCostItems }: PDFTakeoff
                 </button>
               );
             })()}
+            <button
+              onClick={() => { setMeasurementPopup(null); setShowAnalyserModal(true); }}
+              className="mt-2 w-full px-2.5 py-1.5 rounded text-xs font-medium border border-cyan-500/40 text-cyan-400 hover:bg-cyan-950/30 hover:border-cyan-400/70 flex items-center justify-center gap-1.5 transition-colors"
+            >
+              <ScanLine className="h-3.5 w-3.5" />
+              AI Plan Analyser
+            </button>
           </div>
         </>,
         document.body
       );
     })()}
+
+    <PlanAnalyserModal
+      open={showAnalyserModal}
+      onClose={() => setShowAnalyserModal(false)}
+      planId={state.pdfFile?.planId}
+      pdfUrl={state.pdfFile?.url?.startsWith('https://') ? state.pdfFile.url : undefined}
+      pdfName={state.pdfFile?.name}
+      pdfPageCount={state.pdfFile?.pageCount}
+      projectId={projectId}
+      projectState={projectState}
+      onAddCostItems={(items) => items.forEach(item => dispatch({ type: 'ADD_COST_ITEM', payload: item as any }))}
+    />
     </>
   );
 };
