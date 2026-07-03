@@ -422,12 +422,20 @@ export function PlanAnalyserModal({
   const allPushed = result ? result.estimatedTrades.every(t => pushedIds.has(t.trade + t.quantity + t.unit)) : false;
 
   return createPortal(
-    <div className="fixed inset-0 z-[10020] flex flex-col" role="dialog" aria-modal="true">
-      {/* Dark overlay */}
-      <div className="absolute inset-0 bg-black/80 backdrop-blur-sm" onClick={onClose} />
+    <div
+      className="fixed inset-0 z-[10020] flex flex-col"
+      role="dialog"
+      aria-modal="true"
+      onClick={onClose}
+    >
+      {/* Dark overlay — pointer-events-none so it never intercepts clicks on the panel */}
+      <div className="absolute inset-0 bg-black/80 backdrop-blur-sm pointer-events-none" />
 
-      {/* Modal panel */}
-      <div className="relative z-10 flex flex-col w-full h-full max-w-7xl mx-auto my-0 md:my-6 md:h-[calc(100vh-48px)] bg-[#0D1117] md:rounded-2xl overflow-hidden border border-white/[0.08] shadow-2xl">
+      {/* Modal panel — stopPropagation prevents the outer onClick from closing when clicking inside */}
+      <div
+        className="relative z-10 flex flex-col w-full h-full max-w-7xl mx-auto my-0 md:my-6 md:h-[calc(100vh-48px)] bg-[#0D1117] md:rounded-2xl overflow-hidden border border-white/[0.08] shadow-2xl"
+        onClick={e => e.stopPropagation()}
+      >
 
         {/* Header */}
         <div className="flex items-center justify-between px-5 py-3.5 border-b border-white/[0.07] bg-[#0D1117]/90 backdrop-blur shrink-0">
