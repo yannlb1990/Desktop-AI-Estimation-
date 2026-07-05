@@ -19,7 +19,7 @@ const ANALYSIS_TOOL = {
   description: "Submit the complete construction quantity take-off analysis.",
   input_schema: {
     type: "object",
-    required: ["rooms", "openings", "totalFloorArea", "estimatedTrades", "notes"],
+    required: ["rooms", "openings", "totalFloorArea", "estimatedTrades", "notes", "constructionOverview", "scopeHighlights", "riskItems", "assumptions"],
     properties: {
       rooms: {
         type: "array",
@@ -80,12 +80,39 @@ const ANALYSIS_TOOL = {
               description: "Rate ID from scopeOfWorkRates.ts — must match exactly one of the provided IDs.",
             },
             notes: { type: "string" },
+            materialSpec: {
+              type: "string",
+              description: "Brief material specification for this trade item. e.g. '90mm pine studs @ 450mm centres, F5 grade' or 'Colorbond Surfmist steel roofing, 0.42 BMT' or '600x600 rectified porcelain tiles'.",
+            },
+            nccRef: {
+              type: "string",
+              description: "Most relevant NCC 2022 Volume 2 section for this work item, if applicable. e.g. 'NCC Vol 2 Part 3.4.2' or 'NCC Vol 2 H6.3'. Leave blank if not directly applicable.",
+            },
           },
         },
       },
       notes: {
         type: "array",
         description: "Key observations: double storey, alfresco, unusual construction, plan quality, etc.",
+        items: { type: "string" },
+      },
+      constructionOverview: {
+        type: "string",
+        description: "One concise sentence describing the construction: frame type, external cladding, roof type, foundation, storeys. e.g. 'Timber frame, brick veneer cladding, Colorbond hip roof, concrete slab on ground, single storey, 4 bed 2 bath.'",
+      },
+      scopeHighlights: {
+        type: "array",
+        description: "8-12 concise scope-of-works statements covering the major work items in this project, written as a builder's scope checklist. Each item should be one clear sentence.",
+        items: { type: "string" },
+      },
+      riskItems: {
+        type: "array",
+        description: "Items that increase cost risk or need clarification before finalising an estimate: structural queries, specification gaps, scope ambiguity, unusual features, coordination risks. Each as one sentence.",
+        items: { type: "string" },
+      },
+      assumptions: {
+        type: "array",
+        description: "Key assumptions underpinning the quantities in this analysis. Each as one sentence.",
         items: { type: "string" },
       },
     },
@@ -260,6 +287,54 @@ STEP 4 — QUALITY CHECKS
 - If a schedule page exists for doors or windows, set confidence to 0.95 for those counts.
 - Do NOT include the same trade twice with different rateIds unless they are genuinely separate work items.
 - notes array: record number of storeys, any alfresco, pool, unusual construction type, plan scale if stated, scan quality.
+
+STEP 5 — SCOPE REPORT (for qualified estimate preparation)
+
+MATERIAL SPECIFICATIONS: For every trade in estimatedTrades, add a materialSpec field with a brief but precise specification note. Examples:
+- Wall framing → "90mm MGP10 pine studs @ 600mm centres with top plate, bottom plate and noggings"
+- Roof → "Colorbond® Custom Orb 0.42 BMT steel roofing, Windspeed N3 rated" or "300x300mm concrete roof tiles"
+- Concrete slab → "100mm reinforced concrete slab on 200mm compacted fill, SL72 mesh"
+- Brickwork → "Standard face brick, 10mm mortar joints, Single leaf 110mm"
+- Plasterboard → "10mm Gyprock® to ceilings, 10mm Gyprock® to walls, cornice 55mm cove"
+- Tiling → "600x600mm rectified porcelain tiles, 1.5mm grout joint" or describe as 'as-specified'
+- Cabinetry → "Flat pack kitchen cabinetry, laminate finish, 16mm carcass"
+- Electrical → "Standard domestic GPO with 3-core+earth cabling to AS/NZS 3000"
+If material is not specified in the plans, note "Specification to be confirmed" or give a typical Australian residential default.
+
+NCC REFERENCES: For each trade item, include the most directly applicable NCC 2022 Volume 2 section where it adds compliance value for the estimator. Key sections:
+- Wall framing: NCC Vol 2 Part H1.3 (structural), Part H6.2 (energy)
+- Roof framing: NCC Vol 2 Part H1.3
+- Concrete slab: NCC Vol 2 Part H1.4 (footings), AS 2870 (residential slabs)
+- Waterproofing: NCC Vol 2 Part F2.2 / AS 3740
+- Energy (insulation): NCC Vol 2 Part H6 (thermal performance)
+- Bushfire: NCC Vol 2 Part H7 if BAL rating evident on plans
+- Smoke alarms: NCC Vol 2 Part G3
+Only include an nccRef if it is directly relevant to the item. Leave blank for purely finish-level items (painting, cabinetry hardware).
+
+CONSTRUCTION OVERVIEW: Write one sentence covering: frame type (timber/steel), external cladding material, roof type and material, foundation type, number of storeys, and configuration (e.g. "4 bed 2 bath"). If information is missing, note it as "unspecified".
+
+SCOPE HIGHLIGHTS: Write 8-12 concise scope-of-works bullet points that a builder would use to describe the project to a subcontractor. Each should be a clear factual statement, not a sales phrase. Examples:
+- "Supply and install 90mm timber wall framing to all internal and external walls, 2.7m ceiling height throughout"
+- "Concrete ground floor slab including reinforcement, edge thickening and ant capping"
+- "Brick veneer external cladding with 50mm cavity, standard modular brickwork"
+- "Colorbond steel roofing to hip roof with concealed fix profile, including gutters and downpipes"
+
+RISK ITEMS: Identify anything that could affect the estimate quality or project cost. Examples of risk items to flag:
+- "Soil classification not shown — assume Class M; confirm with site investigation"
+- "No window schedule provided — window sizes estimated from floor plan symbols"
+- "Roof pitch not stated — pitch factor assumed at 1.3"
+- "External cladding material unspecified — priced as brick veneer, confirm before tendering"
+- "Retaining walls may be required — site levels not shown"
+- "BAL rating not stated — bushfire provisions may apply depending on site"
+- "No electrical or plumbing specifications — standard domestic spec assumed"
+
+ASSUMPTIONS: List the key assumptions so the estimator knows what underpins the quantities:
+- "Wall height assumed 2.7m throughout ground floor"
+- "Roof framing priced as conventional timber (not trusses) — confirm with structural drawings"
+- "Slab includes entire footprint of ground floor including garage"
+- "Electrical fitout priced to standard domestic specification per AS/NZS 3000"
+- "No allowance for demolition, site cut or fill — site assumed level"
+- "Painting to two coat system throughout — substrate condition assumed good"
 
 ${RATE_REFERENCE}
 

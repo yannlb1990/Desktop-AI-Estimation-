@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom';
 import {
   X, ScanLine, Loader2, Plus, CheckCheck, RefreshCw,
   Layers, ChevronDown, ChevronRight, ArrowUpRight,
-  Home, AlertCircle,
+  Home, AlertCircle, FileText, ShieldCheck, AlertTriangle, Info, Building2,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -200,13 +200,25 @@ function CategorySection({
             return (
               <div
                 key={i}
-                className="flex items-center gap-3 px-4 py-2.5 bg-white/[0.02] hover:bg-white/[0.04] transition-colors group"
+                className="flex items-start gap-3 px-4 py-2.5 bg-white/[0.02] hover:bg-white/[0.04] transition-colors group"
               >
-                <div className="flex-1 min-w-0">
+                <div className="flex-1 min-w-0 pt-0.5">
                   <p className="text-sm text-white/90 truncate">{t.trade}</p>
                   {t.notes && <p className="text-[11px] text-white/35 truncate mt-0.5">{t.notes}</p>}
+                  {t.materialSpec && (
+                    <p className="text-[11px] text-cyan-400/60 truncate mt-0.5 flex items-center gap-1">
+                      <Building2 className="h-2.5 w-2.5 shrink-0" />
+                      {t.materialSpec}
+                    </p>
+                  )}
+                  {t.nccRef && (
+                    <p className="text-[10px] text-amber-400/50 mt-0.5 flex items-center gap-1">
+                      <ShieldCheck className="h-2.5 w-2.5 shrink-0" />
+                      {t.nccRef}
+                    </p>
+                  )}
                 </div>
-                <div className="flex items-center gap-3 shrink-0">
+                <div className="flex items-center gap-3 shrink-0 mt-0.5">
                   <span className="text-sm text-white/60 tabular-nums">{t.quantity} {t.unit}</span>
                   <span className={`text-[11px] font-medium ${confidenceColour(t.confidence)}`}>
                     {Math.round(t.confidence * 100)}%
@@ -254,6 +266,7 @@ export function PlanAnalyserModal({
   const [roomsOpen, setRoomsOpen] = useState(true);
   const [notesOpen, setNotesOpen] = useState(false);
   const [localError, setLocalError] = useState<string | null>(null);
+  const [activeTab, setActiveTab] = useState<'quantities' | 'scope'>('quantities');
   const hasAutoTriggered = useRef(false);
   const state = (projectState as AustralianState) ?? 'QLD';
 
@@ -597,95 +610,229 @@ export function PlanAnalyserModal({
                 )}
               </div>
 
-              {/* Two-column layout */}
-              <div className="grid grid-cols-1 lg:grid-cols-3 gap-5 items-start">
+              {/* Tab bar */}
+              <div className="flex gap-1 border-b border-white/[0.07] pb-0">
+                <button
+                  onClick={() => setActiveTab('quantities')}
+                  className={`px-4 py-2 text-xs font-medium border-b-2 transition-colors -mb-px ${
+                    activeTab === 'quantities'
+                      ? 'border-cyan-400 text-cyan-400'
+                      : 'border-transparent text-white/40 hover:text-white/60'
+                  }`}
+                >
+                  Estimated Quantities
+                </button>
+                <button
+                  onClick={() => setActiveTab('scope')}
+                  className={`flex items-center gap-1.5 px-4 py-2 text-xs font-medium border-b-2 transition-colors -mb-px ${
+                    activeTab === 'scope'
+                      ? 'border-cyan-400 text-cyan-400'
+                      : 'border-transparent text-white/40 hover:text-white/60'
+                  }`}
+                >
+                  <FileText className="h-3 w-3" />
+                  Scope Report
+                </button>
+              </div>
 
-                {/* Left: Rooms + Notes */}
-                <div className="lg:col-span-1 space-y-4">
+              {/* QUANTITIES TAB */}
+              {activeTab === 'quantities' && (
+                <div className="grid grid-cols-1 lg:grid-cols-3 gap-5 items-start">
 
-                  {/* Rooms */}
-                  {result.rooms.length > 0 && (
-                    <div className="rounded-xl border border-white/[0.07] overflow-hidden">
-                      <button
-                        className="w-full flex items-center justify-between px-4 py-2.5 bg-white/[0.03] hover:bg-white/[0.05] transition-colors"
-                        onClick={() => setRoomsOpen(v => !v)}
-                      >
-                        <div className="flex items-center gap-2">
-                          <Home className="h-3.5 w-3.5 text-white/40" />
-                          <span className="text-xs font-semibold text-white/70">Rooms</span>
-                          <span className="text-[11px] text-white/30">{result.rooms.length}</span>
-                        </div>
-                        {roomsOpen ? <ChevronDown className="h-3.5 w-3.5 text-white/25" /> : <ChevronRight className="h-3.5 w-3.5 text-white/25" />}
-                      </button>
-                      {roomsOpen && (
-                        <div className="divide-y divide-white/[0.04]">
-                          {result.rooms.map((room, i) => (
-                            <div key={i} className="flex items-center justify-between px-4 py-2 hover:bg-white/[0.02]">
-                              <div>
-                                <span className="text-sm text-white/80">{room.name}</span>
-                                {room.level && (
-                                  <span className="ml-2 text-[10px] text-white/25 bg-white/5 px-1.5 py-0.5 rounded">
-                                    {room.level}
-                                  </span>
-                                )}
+                  {/* Left: Rooms + Notes */}
+                  <div className="lg:col-span-1 space-y-4">
+
+                    {/* Rooms */}
+                    {result.rooms.length > 0 && (
+                      <div className="rounded-xl border border-white/[0.07] overflow-hidden">
+                        <button
+                          className="w-full flex items-center justify-between px-4 py-2.5 bg-white/[0.03] hover:bg-white/[0.05] transition-colors"
+                          onClick={() => setRoomsOpen(v => !v)}
+                        >
+                          <div className="flex items-center gap-2">
+                            <Home className="h-3.5 w-3.5 text-white/40" />
+                            <span className="text-xs font-semibold text-white/70">Rooms</span>
+                            <span className="text-[11px] text-white/30">{result.rooms.length}</span>
+                          </div>
+                          {roomsOpen ? <ChevronDown className="h-3.5 w-3.5 text-white/25" /> : <ChevronRight className="h-3.5 w-3.5 text-white/25" />}
+                        </button>
+                        {roomsOpen && (
+                          <div className="divide-y divide-white/[0.04]">
+                            {result.rooms.map((room, i) => (
+                              <div key={i} className="flex items-center justify-between px-4 py-2 hover:bg-white/[0.02]">
+                                <div>
+                                  <span className="text-sm text-white/80">{room.name}</span>
+                                  {room.level && (
+                                    <span className="ml-2 text-[10px] text-white/25 bg-white/5 px-1.5 py-0.5 rounded">
+                                      {room.level}
+                                    </span>
+                                  )}
+                                </div>
+                                <span className="text-sm text-white/40 tabular-nums">
+                                  {room.areaSqm > 0 ? `${room.areaSqm} m²` : '—'}
+                                </span>
                               </div>
-                              <span className="text-sm text-white/40 tabular-nums">
-                                {room.areaSqm > 0 ? `${room.areaSqm} m²` : '—'}
-                              </span>
-                            </div>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-                  )}
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    )}
 
-                  {/* Observations */}
-                  {result.notes.length > 0 && (
-                    <div className="rounded-xl border border-white/[0.07] overflow-hidden">
-                      <button
-                        className="w-full flex items-center justify-between px-4 py-2.5 bg-white/[0.03] hover:bg-white/[0.05] transition-colors"
-                        onClick={() => setNotesOpen(v => !v)}
-                      >
-                        <span className="text-xs font-semibold text-white/70">Observations</span>
-                        {notesOpen ? <ChevronDown className="h-3.5 w-3.5 text-white/25" /> : <ChevronRight className="h-3.5 w-3.5 text-white/25" />}
-                      </button>
-                      {notesOpen && (
-                        <ul className="px-4 py-2 space-y-1.5">
-                          {result.notes.map((n, i) => (
-                            <li key={i} className="text-[12px] text-white/45 flex items-start gap-2">
-                              <span className="text-cyan-500/60 mt-0.5">·</span>
-                              <span>{n}</span>
-                            </li>
-                          ))}
-                        </ul>
-                      )}
+                    {/* Observations */}
+                    {result.notes.length > 0 && (
+                      <div className="rounded-xl border border-white/[0.07] overflow-hidden">
+                        <button
+                          className="w-full flex items-center justify-between px-4 py-2.5 bg-white/[0.03] hover:bg-white/[0.05] transition-colors"
+                          onClick={() => setNotesOpen(v => !v)}
+                        >
+                          <span className="text-xs font-semibold text-white/70">Observations</span>
+                          {notesOpen ? <ChevronDown className="h-3.5 w-3.5 text-white/25" /> : <ChevronRight className="h-3.5 w-3.5 text-white/25" />}
+                        </button>
+                        {notesOpen && (
+                          <ul className="px-4 py-2 space-y-1.5">
+                            {result.notes.map((n, i) => (
+                              <li key={i} className="text-[12px] text-white/45 flex items-start gap-2">
+                                <span className="text-cyan-500/60 mt-0.5">·</span>
+                                <span>{n}</span>
+                              </li>
+                            ))}
+                          </ul>
+                        )}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Right: Trades grouped by category */}
+                  {tradeGroups && tradeGroups.size > 0 && (
+                    <div className="lg:col-span-2 space-y-2">
+                      <div className="flex items-center justify-between px-1 mb-3">
+                        <p className="text-xs font-semibold text-white/50 uppercase tracking-wider">Trade Quantities</p>
+                        <p className="text-[11px] text-white/25">
+                          Spec shown per line · click + to add to estimate
+                        </p>
+                      </div>
+                      {[...tradeGroups.entries()].map(([cat, trades]) => (
+                        <CategorySection
+                          key={cat}
+                          category={cat}
+                          trades={trades}
+                          pushedIds={pushedIds}
+                          onPush={pushTrade}
+                          onPushAll={pushCategory}
+                          defaultOpen={true}
+                        />
+                      ))}
                     </div>
                   )}
                 </div>
+              )}
 
-                {/* Right: Trades grouped by category */}
-                {tradeGroups && tradeGroups.size > 0 && (
-                  <div className="lg:col-span-2 space-y-2">
-                    <div className="flex items-center justify-between px-1 mb-3">
-                      <p className="text-xs font-semibold text-white/50 uppercase tracking-wider">Estimated Quantities</p>
-                      <p className="text-[11px] text-white/25">
-                        Confidence shown per line · click + to add to estimate
-                      </p>
+              {/* SCOPE REPORT TAB */}
+              {activeTab === 'scope' && (
+                <div className="space-y-4 max-w-4xl">
+
+                  {/* Construction Overview */}
+                  {result.constructionOverview && (
+                    <div className="rounded-xl border border-cyan-500/20 bg-cyan-950/20 px-5 py-4">
+                      <div className="flex items-center gap-2 mb-2">
+                        <Building2 className="h-4 w-4 text-cyan-400" />
+                        <span className="text-xs font-semibold text-cyan-300 uppercase tracking-wider">Construction Overview</span>
+                      </div>
+                      <p className="text-sm text-white/80 leading-relaxed">{result.constructionOverview}</p>
                     </div>
-                    {[...tradeGroups.entries()].map(([cat, trades]) => (
-                      <CategorySection
-                        key={cat}
-                        category={cat}
-                        trades={trades}
-                        pushedIds={pushedIds}
-                        onPush={pushTrade}
-                        onPushAll={pushCategory}
-                        defaultOpen={true}
-                      />
-                    ))}
-                  </div>
-                )}
-              </div>
+                  )}
+
+                  {/* Scope Highlights */}
+                  {result.scopeHighlights && result.scopeHighlights.length > 0 && (
+                    <div className="rounded-xl border border-white/[0.07] overflow-hidden">
+                      <div className="flex items-center gap-2 px-4 py-2.5 bg-white/[0.03] border-b border-white/[0.05]">
+                        <FileText className="h-3.5 w-3.5 text-white/50" />
+                        <span className="text-xs font-semibold text-white/70">Scope of Works</span>
+                        <span className="text-[10px] text-white/25 ml-auto">Key items for subcontractor briefing</span>
+                      </div>
+                      <ul className="divide-y divide-white/[0.04]">
+                        {result.scopeHighlights.map((item, i) => (
+                          <li key={i} className="flex items-start gap-3 px-4 py-2.5 hover:bg-white/[0.02]">
+                            <span className="text-cyan-500/50 font-mono text-[11px] mt-0.5 shrink-0 w-5 text-right">{i + 1}.</span>
+                            <span className="text-[13px] text-white/75 leading-snug">{item}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+
+                  {/* Risk Items */}
+                  {result.riskItems && result.riskItems.length > 0 && (
+                    <div className="rounded-xl border border-amber-700/30 overflow-hidden">
+                      <div className="flex items-center gap-2 px-4 py-2.5 bg-amber-950/30 border-b border-amber-800/20">
+                        <AlertTriangle className="h-3.5 w-3.5 text-amber-400" />
+                        <span className="text-xs font-semibold text-amber-300">Risk Items</span>
+                        <span className="text-[10px] text-amber-500/50 ml-auto">Items needing clarification before tendering</span>
+                      </div>
+                      <ul className="divide-y divide-white/[0.04]">
+                        {result.riskItems.map((item, i) => (
+                          <li key={i} className="flex items-start gap-3 px-4 py-2.5 hover:bg-amber-950/10">
+                            <AlertTriangle className="h-3 w-3 text-amber-500/60 mt-0.5 shrink-0" />
+                            <span className="text-[13px] text-white/70 leading-snug">{item}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+
+                  {/* Assumptions */}
+                  {result.assumptions && result.assumptions.length > 0 && (
+                    <div className="rounded-xl border border-white/[0.07] overflow-hidden">
+                      <div className="flex items-center gap-2 px-4 py-2.5 bg-white/[0.03] border-b border-white/[0.05]">
+                        <Info className="h-3.5 w-3.5 text-white/40" />
+                        <span className="text-xs font-semibold text-white/60">Assumptions</span>
+                        <span className="text-[10px] text-white/25 ml-auto">Underpins the quantities above</span>
+                      </div>
+                      <ul className="divide-y divide-white/[0.04]">
+                        {result.assumptions.map((item, i) => (
+                          <li key={i} className="flex items-start gap-3 px-4 py-2.5 hover:bg-white/[0.02]">
+                            <span className="text-white/20 mt-0.5 shrink-0">·</span>
+                            <span className="text-[13px] text-white/55 leading-snug">{item}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+
+                  {/* NCC Summary — trades that have nccRef */}
+                  {result.estimatedTrades.some(t => t.nccRef) && (
+                    <div className="rounded-xl border border-white/[0.07] overflow-hidden">
+                      <div className="flex items-center gap-2 px-4 py-2.5 bg-white/[0.03] border-b border-white/[0.05]">
+                        <ShieldCheck className="h-3.5 w-3.5 text-amber-400/70" />
+                        <span className="text-xs font-semibold text-white/60">NCC 2022 References</span>
+                        <span className="text-[10px] text-white/25 ml-auto">Compliance checkpoints per trade</span>
+                      </div>
+                      <div className="divide-y divide-white/[0.04]">
+                        {result.estimatedTrades.filter(t => t.nccRef).map((t, i) => (
+                          <div key={i} className="flex items-center justify-between px-4 py-2.5 hover:bg-white/[0.02]">
+                            <span className="text-[13px] text-white/70">{t.trade}</span>
+                            <span className="text-[11px] text-amber-400/60 font-mono">{t.nccRef}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {!result.constructionOverview && (!result.scopeHighlights || result.scopeHighlights.length === 0) && (
+                    <div className="flex flex-col items-center justify-center gap-3 py-12 text-center">
+                      <FileText className="h-8 w-8 text-white/10" />
+                      <p className="text-sm text-white/30">Scope report not available for this analysis.</p>
+                      <p className="text-[12px] text-white/20">Re-analyse the plan to generate a full scope report.</p>
+                      <button
+                        className="mt-1 text-xs text-cyan-400/60 hover:text-cyan-400 transition-colors"
+                        onClick={handleReanalyse}
+                      >
+                        Re-analyse now
+                      </button>
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
           )}
         </div>

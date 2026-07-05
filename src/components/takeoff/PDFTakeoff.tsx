@@ -1561,7 +1561,10 @@ export const PDFTakeoff = ({ projectId, estimateId, onAddCostItems }: PDFTakeoff
                   projectId={projectId}
                   projectState={projectState}
                   isCalibrated={state.isCalibrated}
-                  onAddCostItems={(items) => items.forEach(item => dispatch({ type: 'ADD_COST_ITEM', payload: item as any }))}
+                  onAddCostItems={(items) => {
+                    items.forEach(item => dispatch({ type: 'ADD_COST_ITEM', payload: item as any }));
+                    setActiveTab('costs');
+                  }}
                 />
               </div>
 

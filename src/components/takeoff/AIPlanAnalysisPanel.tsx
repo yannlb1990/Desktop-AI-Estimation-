@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { ScanLine, Loader2, ChevronDown, ChevronRight, Plus, Lock, Clock, Layers } from 'lucide-react';
+import { ScanLine, Loader2, ChevronDown, ChevronRight, Plus, CheckCheck, Lock, Clock, Layers } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+import { toast } from 'sonner';
 import { useAIPlanAnalysis, AnalysisTrade, AnalysisResult } from '@/hooks/useAIPlanAnalysis';
 import { CostItem } from '@/lib/takeoff/types';
 import { getSubscriptionStatus } from '@/lib/subscription';
@@ -92,6 +93,7 @@ export function AIPlanAnalysisPanel({
   const [cachedAt, setCachedAt] = useState<number | null>(null);
   const [pageCount, setPageCount] = useState<number | null>(null);
   const [statusMsg, setStatusMsg] = useState<string>('');
+  const [pushedIds, setPushedIds] = useState<Set<string>>(new Set());
   const { caps, isTrialing, effectivePlan } = getSubscriptionStatus();
   const locked = !caps.planAnalysis;
   const state = (projectState as AustralianState) ?? 'QLD';
@@ -159,19 +161,37 @@ export function AIPlanAnalysisPanel({
     setCachedAt(null);
     setPageCount(null);
     setStatusMsg('');
+    setPushedIds(new Set());
     reset();
   };
 
+  const tradeKey = (t: AnalysisTrade) => `${t.trade}|${t.quantity}|${t.unit}`;
+
   const pushTrade = (trade: AnalysisTrade) => {
     if (!onAddCostItems) return;
-    const items = buildCostItemsFromTrades([trade], state);
-    onAddCostItems(items);
+    try {
+      const items = buildCostItemsFromTrades([trade], state);
+      onAddCostItems(items);
+      setPushedIds(prev => new Set([...prev, tradeKey(trade)]));
+      toast.success(`${trade.trade} added to estimate`, { duration: 2000 });
+    } catch (err) {
+      toast.error('Could not add item — check console for details');
+      console.error('[AIPlanAnalysisPanel] pushTrade error:', err);
+    }
   };
 
   const pushAll = () => {
     if (!onAddCostItems || !result) return;
-    const items = buildCostItemsFromTrades(result.estimatedTrades, state);
-    onAddCostItems(items);
+    try {
+      const items = buildCostItemsFromTrades(result.estimatedTrades, state);
+      onAddCostItems(items);
+      const allKeys = new Set(result.estimatedTrades.map(tradeKey));
+      setPushedIds(allKeys);
+      toast.success(`${result.estimatedTrades.length} items added to estimate`, { duration: 2000 });
+    } catch (err) {
+      toast.error('Could not add items — check console for details');
+      console.error('[AIPlanAnalysisPanel] pushAll error:', err);
+    }
   };
 
   return (
@@ -347,10 +367,18 @@ export function AIPlanAnalysisPanel({
                           {onAddCostItems && (
                             <button
                               onClick={() => pushTrade(t)}
-                              className="h-5 w-5 flex items-center justify-center rounded hover:bg-muted text-muted-foreground hover:text-foreground"
-                              title="Add to estimate"
+                              disabled={pushedIds.has(tradeKey(t))}
+                              className={`h-5 w-5 flex items-center justify-center rounded transition-colors ${
+                                pushedIds.has(tradeKey(t))
+                                  ? 'text-emerald-400 cursor-default'
+                                  : 'text-muted-foreground hover:bg-muted hover:text-foreground'
+                              }`}
+                              title={pushedIds.has(tradeKey(t)) ? 'Added to estimate' : 'Add to estimate'}
                             >
-                              <Plus className="h-3 w-3" />
+                              {pushedIds.has(tradeKey(t))
+                                ? <CheckCheck className="h-3 w-3" />
+                                : <Plus className="h-3 w-3" />
+                              }
                             </button>
                           )}
                         </div>

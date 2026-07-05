@@ -15,6 +15,8 @@ export interface AnalysisTrade {
   confidence: number;
   rateId?: string;
   notes?: string;
+  materialSpec?: string;
+  nccRef?: string;
 }
 
 export interface AnalysisResult {
@@ -24,6 +26,10 @@ export interface AnalysisResult {
   levels?: number;
   estimatedTrades: AnalysisTrade[];
   notes: string[];
+  constructionOverview?: string;
+  scopeHighlights?: string[];
+  riskItems?: string[];
+  assumptions?: string[];
 }
 
 function parseResult(data: { result?: AnalysisResult; raw?: { content?: { type: string; text?: string }[] }; content?: { type: string; text?: string }[] }): AnalysisResult {
@@ -42,6 +48,10 @@ function parseResult(data: { result?: AnalysisResult; raw?: { content?: { type: 
       levels: r.levels,
       estimatedTrades: r.estimatedTrades ?? [],
       notes: r.notes ?? [],
+      constructionOverview: r.constructionOverview,
+      scopeHighlights: r.scopeHighlights ?? [],
+      riskItems: r.riskItems ?? [],
+      assumptions: r.assumptions ?? [],
     };
   }
 
