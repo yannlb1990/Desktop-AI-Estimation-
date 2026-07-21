@@ -57,18 +57,20 @@ interface PDFTakeoffProps {
 export const PDFTakeoff = ({ projectId, estimateId, onAddCostItems }: PDFTakeoffProps) => {
   const { state, dispatch } = useTakeoffState(projectId);
 
-  // Derive project state for rate auto-fill. Priority: CostEstimator prefs → project.state → QLD
-  const projectState = useMemo((): AustralianState => {
+  // Derive project state and name from localStorage
+  const { projectState, projectName } = useMemo((): { projectState: AustralianState; projectName: string } => {
     try {
       const prefsKey = getUserStorageKey(`cost_estimator_prefs_${projectId}`);
       const prefs = JSON.parse(localStorage.getItem(prefsKey) || '{}');
-      if (prefs?.selectedState) return prefs.selectedState as AustralianState;
       const projectsKey = getUserStorageKey('local_projects');
       const projects: any[] = JSON.parse(localStorage.getItem(projectsKey) || '[]');
       const project = projects.find(p => p.id === projectId);
-      if (project?.state) return project.state as AustralianState;
+      return {
+        projectState: (prefs?.selectedState || project?.state || 'QLD') as AustralianState,
+        projectName: project?.name || '',
+      };
     } catch {}
-    return 'QLD';
+    return { projectState: 'QLD', projectName: '' };
   }, [projectId]);
 
   const [activeTab, setActiveTab] = React.useState('upload');
@@ -341,6 +343,7 @@ export const PDFTakeoff = ({ projectId, estimateId, onAddCostItems }: PDFTakeoff
       return;
     }
     // Calculate exact unitsPerMetre from the drawn line
+    if (!verifyMeasurement.worldPoints?.length) return;
     const worldDistance = Math.hypot(
       verifyMeasurement.worldPoints[verifyMeasurement.worldPoints.length - 1].x - verifyMeasurement.worldPoints[0].x,
       verifyMeasurement.worldPoints[verifyMeasurement.worldPoints.length - 1].y - verifyMeasurement.worldPoints[0].y
@@ -504,11 +507,11 @@ export const PDFTakeoff = ({ projectId, estimateId, onAddCostItems }: PDFTakeoff
       scale = calculateManualScaleWorld(manualCalibrationPoints[0], manualCalibrationPoints[1], distance, manualUnit);
     } catch (err: any) {
       if (err?.message === 'ZERO_DISTANCE') {
-        toast.error('The two calibration points are the same — click two distinct points');
+        toast.error('The two calibration points are the same. Click two distinct points.');
       } else if (err?.message === 'IMPLAUSIBLE_SCALE') {
-        toast.error('Scale looks wrong — check the distance you typed matches a real dimension on the plan');
+        toast.error('Scale looks wrong. Check the distance you typed matches a real dimension on the plan.');
       } else {
-        toast.error('Calibration failed — try again');
+        toast.error('Calibration failed. Please try again.');
       }
       return;
     }
@@ -1169,7 +1172,7 @@ export const PDFTakeoff = ({ projectId, estimateId, onAddCostItems }: PDFTakeoff
                   variant="outline"
                   size="sm"
                   className="gap-1.5 border-cyan-700/50 text-cyan-400 hover:bg-cyan-950/40 hover:border-cyan-500/70"
-                  onClick={() => setShowAnalyserModal(true)}
+                  onClick={() => { if (!sub.caps.planAnalysis) { setUpgradeModal({ open: true, feature: 'AI Plan Analyser' }); return; } setShowAnalyserModal(true); }}
                 >
                   <ScanLine className="h-3.5 w-3.5" />
                   AI Analyse
@@ -1313,7 +1316,7 @@ export const PDFTakeoff = ({ projectId, estimateId, onAddCostItems }: PDFTakeoff
                 <div
                   ref={canvasContainerRef}
                   className={isTakeoffFullscreen
-                    ? "fixed inset-0 z-[9999] bg-[#000000] text-white flex flex-col"
+                    ? "fixed inset-0 z-[9999] bg-background text-foreground flex flex-col"
                     : "h-[calc(100vh-260px)] min-h-[500px] relative"
                   }
                 >
@@ -1322,31 +1325,31 @@ export const PDFTakeoff = ({ projectId, estimateId, onAddCostItems }: PDFTakeoff
                     <>
                       {focusMode && (
                         <div
-                          className="absolute top-0 left-0 right-0 h-2 z-10 bg-gray-700/50 hover:bg-gray-500/70 cursor-pointer transition-colors"
+                          className="absolute top-0 left-0 right-0 h-2 z-10 bg-border/50 hover:bg-border/80 cursor-pointer transition-colors"
                           onClick={() => setFocusMode(false)}
                           title="Click to restore toolbar (or press Escape)"
                         />
                       )}
-                      <div className={`flex items-center gap-2 px-3 bg-[#1e293b] border-b border-gray-700 shrink-0 transition-all duration-200 overflow-hidden ${focusMode ? 'max-h-0 py-0 border-0' : 'max-h-96 py-2'}`}>
+                      <div className={`flex items-center gap-2 px-3 bg-card border-b border-border shrink-0 transition-all duration-200 overflow-hidden ${focusMode ? 'max-h-0 py-0 border-0' : 'max-h-96 py-2'}`}>
                         {renderToolbar(fsContextOpen)}
-                        <div className="flex items-center gap-1 border-l border-gray-600 pl-2 ml-1">
-                          <Button variant="ghost" size="sm" onClick={handleZoomOut} className="h-8 text-gray-200 hover:bg-gray-700"><ZoomOut className="h-4 w-4" /></Button>
-                          <span className="text-sm font-medium min-w-14 text-center text-gray-200">{Math.round(state.transform.zoom * 100)}%</span>
-                          <Button variant="ghost" size="sm" onClick={handleZoomIn} className="h-8 text-gray-200 hover:bg-gray-700"><ZoomIn className="h-4 w-4" /></Button>
-                          <Button variant="ghost" size="sm" onClick={handleRotate} className="h-8 text-gray-200 hover:bg-gray-700"><RotateCw className="h-4 w-4" /></Button>
-                          <Button variant="ghost" size="sm" onClick={handleFitToScreen} className="h-8 text-gray-200 hover:bg-gray-700" title="Fit to screen"><Maximize2 className="h-4 w-4" /></Button>
+                        <div className="flex items-center gap-1 border-l border-border pl-2 ml-1">
+                          <Button variant="ghost" size="sm" onClick={handleZoomOut} className="h-8 text-foreground/80 hover:bg-accent"><ZoomOut className="h-4 w-4" /></Button>
+                          <span className="text-sm font-medium min-w-14 text-center text-foreground/80">{Math.round(state.transform.zoom * 100)}%</span>
+                          <Button variant="ghost" size="sm" onClick={handleZoomIn} className="h-8 text-foreground/80 hover:bg-accent"><ZoomIn className="h-4 w-4" /></Button>
+                          <Button variant="ghost" size="sm" onClick={handleRotate} className="h-8 text-foreground/80 hover:bg-accent"><RotateCw className="h-4 w-4" /></Button>
+                          <Button variant="ghost" size="sm" onClick={handleFitToScreen} className="h-8 text-foreground/80 hover:bg-accent" title="Fit to screen"><Maximize2 className="h-4 w-4" /></Button>
                         </div>
-                        <div className="flex items-center gap-1 border-l border-gray-600 pl-2 ml-1">
+                        <div className="flex items-center gap-1 border-l border-border pl-2 ml-1">
                           {state.isCalibrated ? (
                             <>
                               <span className="text-xs font-medium text-[#E1DCC9]/80 flex items-center gap-1">
                                 <CheckCircle className="h-3.5 w-3.5" />
                                 {state.currentScale?.scaleFactor ? `1:${state.currentScale.scaleFactor}` : 'Calibrated'}
                               </span>
-                              <Button variant="ghost" size="icon" className="h-7 w-7 text-gray-400 hover:text-foreground hover:bg-gray-700" onClick={() => dispatch({ type: 'SET_CALIBRATION_MODE', payload: 'manual' })} title="Re-calibrate">
+                              <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-foreground hover:bg-accent" onClick={() => dispatch({ type: 'SET_CALIBRATION_MODE', payload: 'manual' })} title="Re-calibrate">
                                 <Ruler className="h-3.5 w-3.5" />
                               </Button>
-                              <Button variant="ghost" size="icon" className="h-7 w-7 text-gray-400 hover:text-foreground hover:bg-gray-700" onClick={handleResetScale} title="Reset scale">
+                              <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-foreground hover:bg-accent" onClick={handleResetScale} title="Reset scale">
                                 <RotateCcw className="h-3 w-3" />
                               </Button>
                             </>
@@ -1358,34 +1361,34 @@ export const PDFTakeoff = ({ projectId, estimateId, onAddCostItems }: PDFTakeoff
                           )}
                         </div>
                         {state.pdfFile.pageCount > 1 && (
-                          <div className="flex items-center gap-1 border-l border-gray-600 pl-2 ml-1">
-                            <Button variant="ghost" size="sm" onClick={handlePagePrevious} disabled={state.currentPageIndex === 0} className="h-8 text-gray-200 hover:bg-gray-700"><ChevronLeft className="h-4 w-4" /></Button>
+                          <div className="flex items-center gap-1 border-l border-border pl-2 ml-1">
+                            <Button variant="ghost" size="sm" onClick={handlePagePrevious} disabled={state.currentPageIndex === 0} className="h-8 text-foreground/80 hover:bg-accent"><ChevronLeft className="h-4 w-4" /></Button>
                             <select
                               value={state.currentPageIndex + 1}
                               onChange={e => dispatch({ type: 'SET_CURRENT_PAGE', payload: Number(e.target.value) - 1 })}
-                              className="h-7 text-sm bg-gray-800 border border-gray-600 rounded text-gray-100 px-1 cursor-pointer focus:outline-none focus:border-amber-500 min-w-[100px]"
+                              className="h-7 text-sm bg-background border border-border rounded text-foreground px-1 cursor-pointer focus:outline-none focus:border-ring min-w-[100px]"
                             >
                               {Array.from({ length: state.pdfFile.pageCount }, (_, idx) => idx + 1).map(p => {
                                 const scaleForPage = state.scales[p - 1];
                                 const calibLabel = scaleForPage ? (scaleForPage.scaleMethod === 'manual' ? '[CAL]' : '[AUTO]') : '[UNCAL]';
                                 return (
-                                  <option key={p} value={p} className="bg-gray-800">
+                                  <option key={p} value={p} className="bg-background">
                                     {calibLabel} Page {p} / {state.pdfFile!.pageCount}
                                   </option>
                                 );
                               })}
                             </select>
-                            <Button variant="ghost" size="sm" onClick={handlePageNext} disabled={state.currentPageIndex === state.pdfFile.pageCount - 1} className="h-8 text-gray-200 hover:bg-gray-700"><ChevronRight className="h-4 w-4" /></Button>
+                            <Button variant="ghost" size="sm" onClick={handlePageNext} disabled={state.currentPageIndex === state.pdfFile.pageCount - 1} className="h-8 text-foreground/80 hover:bg-accent"><ChevronRight className="h-4 w-4" /></Button>
                           </div>
                         )}
                         <div className="ml-auto flex items-center gap-1">
-                          <Button size="sm" variant="ghost" onClick={() => setFsContextOpen(v => !v)} className="h-8 text-gray-400 hover:text-foreground hover:bg-gray-700" title={fsContextOpen ? 'Collapse tool options' : 'Expand tool options'}>
+                          <Button size="sm" variant="ghost" onClick={() => setFsContextOpen(v => !v)} className="h-8 text-muted-foreground hover:text-foreground hover:bg-accent" title={fsContextOpen ? 'Collapse tool options' : 'Expand tool options'}>
                             {fsContextOpen ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
                           </Button>
-                          <Button size="sm" variant="ghost" onClick={() => setFocusMode(true)} className="h-8 text-gray-400 hover:text-foreground hover:bg-gray-700" title="Focus mode — hides toolbar (Esc to restore)">
+                          <Button size="sm" variant="ghost" onClick={() => setFocusMode(true)} className="h-8 text-muted-foreground hover:text-foreground hover:bg-accent" title="Focus mode: hides toolbar. Press Esc to restore.">
                             <EyeOff className="h-4 w-4" />
                           </Button>
-                          <Button size="sm" variant="ghost" onClick={() => canvasExportRef.current?.export()} className="h-8 gap-1.5 text-gray-200 hover:bg-gray-700" title="Export page with markup as PNG">
+                          <Button size="sm" variant="ghost" onClick={() => canvasExportRef.current?.export()} className="h-8 gap-1.5 text-foreground/80 hover:bg-accent" title="Export page with markup as PNG">
                             <Download className="h-4 w-4" />
                             Export
                           </Button>
@@ -1404,8 +1407,8 @@ export const PDFTakeoff = ({ projectId, estimateId, onAddCostItems }: PDFTakeoff
                     {isTakeoffFullscreen && (
                       <div className={`absolute bottom-3 left-3 z-20 flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[10px] font-mono backdrop-blur-sm pointer-events-none ${
                         state.isCalibrated
-                          ? 'bg-slate-900/80 text-[#E1DCC9]/80 border border-[#E1DCC9]/20'
-                          : 'bg-slate-900/80 text-amber-400 border border-amber-700/50'
+                          ? 'bg-background/90 text-foreground/80 border border-foreground/20'
+                          : 'bg-background/90 text-amber-400 border border-amber-700/50'
                       }`}>
                         {state.isCalibrated && state.currentScale
                           ? `Scale ✓ [${state.currentScale.scaleMethod === 'manual' ? 'CAL' : 'AUTO'}] · Pg ${state.currentPageIndex + 1}${state.pdfFile.pageCount > 1 ? `/${state.pdfFile.pageCount}` : ''}`
@@ -1418,7 +1421,7 @@ export const PDFTakeoff = ({ projectId, estimateId, onAddCostItems }: PDFTakeoff
                       <div className="absolute top-3 left-3 z-20 flex items-center gap-1.5 px-2 py-1.5 bg-card/90/95 border border-violet-700/60 rounded-lg backdrop-blur-sm shadow-lg">
                         <span className="text-[10px] font-semibold text-violet-400 uppercase tracking-widest mr-1 shrink-0">Door</span>
                         {(['Internal','Entry','Cavity Slider','Bi-fold','French','Fire Door'] as const).map((id) => (
-                          <button key={id} onClick={() => setDoorSubtype(id)} className={`h-6 px-2 rounded text-xs font-medium transition-colors ${doorSubtype === id ? 'bg-violet-600 text-white' : 'bg-muted/60 text-foreground/60 hover:bg-slate-600'}`}>{id}</button>
+                          <button key={id} onClick={() => setDoorSubtype(id)} className={`h-6 px-2 rounded text-xs font-medium transition-colors ${doorSubtype === id ? 'bg-violet-600 text-white' : 'bg-muted/60 text-foreground/60 hover:bg-accent'}`}>{id}</button>
                         ))}
                       </div>
                     )}
@@ -1426,7 +1429,7 @@ export const PDFTakeoff = ({ projectId, estimateId, onAddCostItems }: PDFTakeoff
                       <div className="absolute top-3 left-3 z-20 flex items-center gap-1.5 px-2 py-1.5 bg-card/90/95 border border-amber-700/60 rounded-lg backdrop-blur-sm shadow-lg">
                         <span className="text-[10px] font-semibold text-amber-400 uppercase tracking-widest mr-1 shrink-0">Window</span>
                         {(['Awning','Casement','Sliding','Fixed','Louvre','Skylight'] as const).map((id) => (
-                          <button key={id} onClick={() => setWindowSubtype(id)} className={`h-6 px-2 rounded text-xs font-medium transition-colors ${windowSubtype === id ? 'bg-foreground text-background' : 'bg-muted/60 text-foreground/60 hover:bg-slate-600'}`}>{id}</button>
+                          <button key={id} onClick={() => setWindowSubtype(id)} className={`h-6 px-2 rounded text-xs font-medium transition-colors ${windowSubtype === id ? 'bg-foreground text-background' : 'bg-muted/60 text-foreground/60 hover:bg-accent'}`}>{id}</button>
                         ))}
                       </div>
                     )}
@@ -1434,7 +1437,7 @@ export const PDFTakeoff = ({ projectId, estimateId, onAddCostItems }: PDFTakeoff
                       <div className="absolute top-3 left-3 z-20 flex items-center gap-1.5 px-2 py-1.5 bg-card/90/95 border border-amber-700/60 rounded-lg backdrop-blur-sm shadow-lg">
                         <span className="text-[10px] font-semibold text-amber-400 uppercase tracking-widest mr-1 shrink-0">Wall</span>
                         {[64, 70, 90, 92, 110, 150].map(mm => (
-                          <button key={mm} onClick={() => setWallThicknessMm(mm)} className={`h-6 px-2 rounded text-xs font-mono transition-colors ${wallThicknessMm === mm ? 'bg-foreground text-background' : 'bg-muted/60 text-foreground/60 hover:bg-slate-600'}`}>{mm}</button>
+                          <button key={mm} onClick={() => setWallThicknessMm(mm)} className={`h-6 px-2 rounded text-xs font-mono transition-colors ${wallThicknessMm === mm ? 'bg-foreground text-background' : 'bg-muted/60 text-foreground/60 hover:bg-accent'}`}>{mm}</button>
                         ))}
                       </div>
                     )}
@@ -1499,9 +1502,9 @@ export const PDFTakeoff = ({ projectId, estimateId, onAddCostItems }: PDFTakeoff
 
                   {/* Fullscreen bottom measurements panel */}
                   {isTakeoffFullscreen && (
-                    <div className={`bg-[#1e293b] border-t border-gray-700 flex flex-col shrink-0 transition-all duration-200 ${fsBottomOpen ? 'h-72' : 'h-9'}`}>
+                    <div className={`bg-card border-t border-border flex flex-col shrink-0 transition-all duration-200 ${fsBottomOpen ? 'h-72' : 'h-9'}`}>
                       <button
-                        className="px-3 h-9 flex items-center gap-3 w-full hover:bg-gray-700/40 shrink-0"
+                        className="px-3 h-9 flex items-center gap-3 w-full hover:bg-accent/40 shrink-0"
                         onClick={() => setFsBottomOpen(v => !v)}
                       >
                         {fsBottomOpen ? <ChevronDown className="h-3.5 w-3.5 text-gray-400 shrink-0" /> : <ChevronUp className="h-3.5 w-3.5 text-gray-400 shrink-0" />}
@@ -1519,7 +1522,7 @@ export const PDFTakeoff = ({ projectId, estimateId, onAddCostItems }: PDFTakeoff
                             onValueChange={(val) => { setPageFilter(val === 'all' ? 'all' : Number(val)); }}
                             onClick={(e) => e.stopPropagation()}
                           >
-                            <SelectTrigger className="w-28 h-6 text-xs border-gray-600 bg-gray-800 text-gray-200 ml-2" onClick={(e) => e.stopPropagation()}>
+                            <SelectTrigger className="w-28 h-6 text-xs border-border bg-background text-foreground ml-2" onClick={(e) => e.stopPropagation()}>
                               <SelectValue placeholder="All pages" />
                             </SelectTrigger>
                             <SelectContent className="z-[10000]">
@@ -1940,6 +1943,7 @@ export const PDFTakeoff = ({ projectId, estimateId, onAddCostItems }: PDFTakeoff
             </div>
             <CostEstimator
               projectId={projectId}
+              projectName={projectName}
               measurements={planMeasurements}
               costItems={state.costItems}
               enabledTrades={appProfile.enabledTrades}
@@ -2052,7 +2056,7 @@ export const PDFTakeoff = ({ projectId, estimateId, onAddCostItems }: PDFTakeoff
               );
             })()}
             <button
-              onClick={() => { setMeasurementPopup(null); setShowAnalyserModal(true); }}
+              onClick={() => { setMeasurementPopup(null); if (!sub.caps.planAnalysis) { setUpgradeModal({ open: true, feature: 'AI Plan Analyser' }); return; } setShowAnalyserModal(true); }}
               className="mt-2 w-full px-2.5 py-1.5 rounded text-xs font-medium border border-cyan-500/40 text-cyan-400 hover:bg-cyan-950/30 hover:border-cyan-400/70 flex items-center justify-center gap-1.5 transition-colors"
             >
               <ScanLine className="h-3.5 w-3.5" />
