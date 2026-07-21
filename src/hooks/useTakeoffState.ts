@@ -29,7 +29,7 @@ const initialState: TakeoffState = {
   estimate: { materials: 0, labor: 0, subtotal: 0, markup: 0, total: 0 },
   roofPitch: { rise: 4, run: 12 },
   depthInput: 0.1,
-  selectedColor: '#E1DCC9',
+  selectedColor: '#ef4444',
   rotations: {},
   history: [[]],
   historyIndex: 0
@@ -127,9 +127,9 @@ function loadPersisted(projectId: string): PersistedState {
 function savePersisted(projectId: string, state: TakeoffState) {
   try {
     const url = state.pdfFile?.url;
-    // Only persist cloud URLs (https://). Blob URLs are session-only and will
-    // fail to load after a page refresh, causing "Failed to load PDF" errors.
-    const persistableUrl = url && url.startsWith('https://') ? url : undefined;
+    // Persist cloud URLs (https://) and storage paths (storage:bucket/path).
+    // Blob URLs are session-only and will fail to load after a page refresh.
+    const persistableUrl = url && (url.startsWith('https://') || url.startsWith('storage:')) ? url : undefined;
     const persisted: PersistedState = {
       _schemaVersion: SCHEMA_VERSION,
       measurements: state.measurements,
@@ -159,18 +159,19 @@ function buildInitialState(projectId?: string): TakeoffState {
     rotations: persisted.rotations || {},
     isCalibrated: hasScales,
     currentScale: hasScales ? persisted.scales[0] || null : null,
-    // Restore PDF only from cloud (https://) URLs — blob:// URLs expire on reload
-    pdfFile: persisted.pdfUrl && persisted.pdfUrl.startsWith('https://')
+    // Restore PDF from cloud URLs (https://) or storage paths (storage:bucket/path).
+    // Blob URLs expire on reload and are not restored.
+    pdfFile: persisted.pdfUrl && (persisted.pdfUrl.startsWith('https://') || persisted.pdfUrl.startsWith('storage:'))
       ? {
-          file: null as any, // restored from URL, no File object
-          url: persisted.pdfUrl,
+          file: null as any,
+          url: persisted.pdfUrl, // storage: paths are resolved to signed URLs via useEffect
           name: persisted.pdfName || 'plan.pdf',
           pageCount: persisted.pdfPageCount || 1,
           planId: persisted.planId,
         }
       : null,
-    uploadStatus: persisted.pdfUrl && persisted.pdfUrl.startsWith('https://') ? 'success' : 'idle',
-    pageCount: persisted.pdfUrl && persisted.pdfUrl.startsWith('https://') ? (persisted.pdfPageCount || 0) : 0,
+    uploadStatus: persisted.pdfUrl && (persisted.pdfUrl.startsWith('https://') || persisted.pdfUrl.startsWith('storage:')) ? 'success' : 'idle',
+    pageCount: persisted.pdfUrl && (persisted.pdfUrl.startsWith('https://') || persisted.pdfUrl.startsWith('storage:')) ? (persisted.pdfPageCount || 0) : 0,
   };
 }
 
@@ -344,8 +345,16 @@ function takeoffReducer(state: TakeoffState, action: TakeoffAction): TakeoffStat
     case 'SET_CURRENT_MEASUREMENT':
       return { ...state, currentMeasurement: action.payload };
 
-    case 'ADD_COST_ITEM':
-      return { ...state, costItems: [...state.costItems, action.payload] };
+    case 'ADD_COST_ITEM': {
+      const incoming = action.payload;
+      const isDuplicate = state.costItems.some((item) => {
+        if (incoming.rateId && item.rateId) return incoming.rateId === item.rateId;
+        return (item.name ?? '').toLowerCase() === (incoming.name ?? '').toLowerCase() &&
+               item.unit === incoming.unit;
+      });
+      if (isDuplicate) return state;
+      return { ...state, costItems: [...state.costItems, incoming] };
+    }
 
     case 'UPDATE_COST_ITEM':
       return {
@@ -390,21 +399,40 @@ function takeoffReducer(state: TakeoffState, action: TakeoffAction): TakeoffStat
     case 'LOAD_PERSISTED_STATE': {
       const { measurements, costItems, scales, pdfUrl, pdfName, pdfPageCount, planId } = action.payload;
       const hasScales = Object.keys(scales || {}).length > 0;
+      // Deduplicate existing costItems — prefer rateId as key, fall back to name+unit
+      const seenRateIds = new Set<string>();
+      const seenNameUnit = new Set<string>();
+      const deduped = (costItems || []).filter((item: any) => {
+        if (item.rateId) {
+          if (seenRateIds.has(item.rateId)) return false;
+          seenRateIds.add(item.rateId);
+          return true;
+        }
+        const key = `${(item.name ?? '').toLowerCase()}|${item.unit ?? ''}`;
+        if (seenNameUnit.has(key)) return false;
+        seenNameUnit.add(key);
+        return true;
+      });
+      const isCloudUrl = pdfUrl?.startsWith('https://') || pdfUrl?.startsWith('storage:');
       return {
         ...state,
         measurements: measurements || [],
-        costItems: costItems || [],
+        costItems: deduped,
         scales: scales || {},
         rotations: (action.payload as any).rotations || state.rotations,
         isCalibrated: hasScales,
         currentScale: hasScales ? (scales[state.currentPageIndex] ?? scales[0] ?? null) : null,
-        pdfFile: pdfUrl?.startsWith('https://')
-          ? { file: null as any, url: pdfUrl, name: pdfName || 'plan.pdf', pageCount: pdfPageCount || 1, planId }
+        pdfFile: isCloudUrl
+          ? { file: null as any, url: pdfUrl!, name: pdfName || 'plan.pdf', pageCount: pdfPageCount || 1, planId }
           : state.pdfFile,
-        uploadStatus: pdfUrl?.startsWith('https://') ? 'success' : state.uploadStatus,
-        pageCount: pdfUrl?.startsWith('https://') ? (pdfPageCount || 0) : state.pageCount,
+        uploadStatus: isCloudUrl ? 'success' : state.uploadStatus,
+        pageCount: isCloudUrl ? (pdfPageCount || 0) : state.pageCount,
       };
     }
+
+    case 'SET_PDF_URL':
+      if (!state.pdfFile) return state;
+      return { ...state, pdfFile: { ...state.pdfFile, url: action.payload } };
 
     case 'UNDO':
       if (state.historyIndex > 0) {
@@ -533,7 +561,7 @@ export function useTakeoffState(projectId?: string) {
         if (!session) return;
 
         const url = state.pdfFile?.url;
-        const persistableUrl = url?.startsWith('https://') ? url : null;
+        const persistableUrl = url && (url.startsWith('https://') || url.startsWith('storage:')) ? url : null;
 
         const { error } = await supabase.from('takeoff_sessions').upsert({
           project_id: projectId,
@@ -556,6 +584,25 @@ export function useTakeoffState(projectId?: string) {
 
     return () => clearTimeout(timer);
   }, [state.measurements, state.costItems, state.scales, state.pdfFile, projectId]);
+
+  // Resolve storage: paths to 1-hour signed URLs so pdf.js and Fabric.js can load them
+  useEffect(() => {
+    const url = state.pdfFile?.url;
+    if (!url?.startsWith('storage:')) return;
+
+    const withoutPrefix = url.replace('storage:', '');
+    const slashIdx = withoutPrefix.indexOf('/');
+    if (slashIdx === -1) return;
+
+    const bucket = withoutPrefix.slice(0, slashIdx);
+    const path = withoutPrefix.slice(slashIdx + 1);
+
+    supabase.storage.from(bucket).createSignedUrl(path, 3600).then(({ data, error }) => {
+      if (!error && data?.signedUrl) {
+        dispatch({ type: 'SET_PDF_URL', payload: data.signedUrl });
+      }
+    });
+  }, [state.pdfFile?.url]);
 
   return { state, dispatch };
 }

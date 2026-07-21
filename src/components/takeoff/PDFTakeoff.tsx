@@ -935,21 +935,21 @@ export const PDFTakeoff = ({ projectId, estimateId, onAddCostItems }: PDFTakeoff
   // Calibration popover — floats above canvas, always visible during manual calibration
   const calibrationBar = state.calibrationMode === 'manual' && calibInstructVisible ? (
     <div className="absolute top-3 left-1/2 -translate-x-1/2 z-40 flex flex-col gap-2
-                    bg-gray-900/97 border border-foreground/20 rounded-xl px-4 py-3
-                    shadow-2xl backdrop-blur-sm select-none pointer-events-auto min-w-[320px]">
+                    bg-gray-950 border border-white/15 rounded-xl px-4 py-3
+                    shadow-2xl select-none pointer-events-auto min-w-[320px]">
       {/* Step indicator */}
       <div className="flex items-center gap-2">
-        <Ruler className="h-3.5 w-3.5 text-foreground/70 shrink-0" />
-        <span className="text-[10px] font-semibold text-foreground/70 uppercase tracking-widest">
+        <Ruler className="h-3.5 w-3.5 text-white/60 shrink-0" />
+        <span className="text-[10px] font-semibold text-white/60 uppercase tracking-widest">
           Calibrate Scale
         </span>
         <div className="flex gap-1 ml-auto">
-          <span className={`h-1.5 w-6 rounded-full transition-colors ${!manualCalibrationPoints ? 'bg-foreground' : 'bg-foreground/20'}`} />
-          <span className={`h-1.5 w-6 rounded-full transition-colors ${manualCalibrationPoints ? 'bg-foreground' : 'bg-foreground/10'}`} />
+          <span className={`h-1.5 w-6 rounded-full transition-colors ${!manualCalibrationPoints ? 'bg-white' : 'bg-white/20'}`} />
+          <span className={`h-1.5 w-6 rounded-full transition-colors ${manualCalibrationPoints ? 'bg-white' : 'bg-white/10'}`} />
         </div>
         <button
           onClick={handleCalibrationCancel}
-          className="h-5 w-5 flex items-center justify-center rounded text-gray-500 hover:text-gray-200 hover:bg-gray-700 transition-colors ml-1"
+          className="h-5 w-5 flex items-center justify-center rounded text-white/40 hover:text-white hover:bg-white/10 transition-colors ml-1"
           title="Cancel (Esc)"
         >
           <X className="h-3.5 w-3.5" />
@@ -959,20 +959,20 @@ export const PDFTakeoff = ({ projectId, estimateId, onAddCostItems }: PDFTakeoff
       {!manualCalibrationPoints ? (
         /* Step 1 — draw line */
         <div className="flex items-start gap-2">
-          <div className="flex-shrink-0 w-5 h-5 rounded-full bg-foreground text-background text-[10px] font-bold flex items-center justify-center mt-0.5">1</div>
+          <div className="flex-shrink-0 w-5 h-5 rounded-full bg-white text-black text-[10px] font-bold flex items-center justify-center mt-0.5">1</div>
           <div>
-            <p className="text-sm text-gray-200 leading-snug">Click two points on a known dimension</p>
-            <p className="text-[11px] text-gray-500 mt-0.5">e.g. a door width, room length, or grid line</p>
+            <p className="text-sm text-white leading-snug">Click two points on a known dimension</p>
+            <p className="text-[11px] text-white/40 mt-0.5">e.g. a door width, room length, or grid line</p>
           </div>
         </div>
       ) : (
         /* Step 2 — enter distance */
         <div className="flex items-start gap-2">
-          <div className="flex-shrink-0 w-5 h-5 rounded-full bg-foreground text-background text-[10px] font-bold flex items-center justify-center mt-0.5">2</div>
+          <div className="flex-shrink-0 w-5 h-5 rounded-full bg-white text-black text-[10px] font-bold flex items-center justify-center mt-0.5">2</div>
           <div className="flex-1 space-y-2">
             <div>
-              <p className="text-sm text-gray-200 leading-snug">Enter the real-world distance</p>
-              <p className="text-[11px] text-gray-500">
+              <p className="text-sm text-white leading-snug">Enter the real-world distance</p>
+              <p className="text-[11px] text-white/40">
                 Drawn line: {Math.hypot(
                   manualCalibrationPoints[1].x - manualCalibrationPoints[0].x,
                   manualCalibrationPoints[1].y - manualCalibrationPoints[0].y
@@ -987,14 +987,14 @@ export const PDFTakeoff = ({ projectId, estimateId, onAddCostItems }: PDFTakeoff
                 value={manualDistance}
                 onChange={e => setManualDistance(e.target.value)}
                 onKeyDown={e => { if (e.key === 'Enter') applyManualCalibration(); if (e.key === 'Escape') handleCalibrationCancel(); }}
-                className="w-24 h-7 text-sm bg-gray-800 border border-gray-600 rounded px-2 text-gray-100 focus:outline-none focus:border-foreground/50"
+                className="w-24 h-7 text-sm bg-black border border-white/30 rounded px-2 text-white focus:outline-none focus:border-white/70"
                 min="0"
                 step="0.01"
               />
               <select
                 value={manualUnit}
                 onChange={e => setManualUnit(e.target.value as DistanceUnit)}
-                className="h-7 text-sm bg-gray-800 border border-gray-600 rounded px-1.5 text-gray-100 focus:outline-none focus:border-amber-500 cursor-pointer"
+                className="h-7 text-sm bg-black border border-white/30 rounded px-1.5 text-white focus:outline-none focus:border-white/70 cursor-pointer"
               >
                 <option value="m">m</option>
                 <option value="mm">mm</option>
