@@ -12,6 +12,9 @@ export interface NCCReference {
   category: string;
   estimationNotes?: string;
   keyRequirements?: string[];
+  quantityRequired?: string;
+  spacingRequirements?: string;
+  installationMethod?: string;
 }
 
 export const NCC_REFERENCES: NCCReference[] = [
@@ -61,7 +64,10 @@ export const NCC_REFERENCES: NCCReference[] = [
       "Soil classification required (A, S, M, H1, H2, E, P)",
       "Wind classification (N1-N6, C1-C4) affects bracing",
       "Engineer certification for Class H2, E, P sites"
-    ]
+    ],
+    quantityRequired: "Strip footings (Class M): 450mm deep × 300mm wide min. Pad footings: 450mm × 450mm × 450mm min. Edge beam: 450mm deep × 300mm wide. Internal beams: 300mm deep × 200mm wide. Concrete: N25 min for footings, N32 for driveways and high-traffic slabs.",
+    spacingRequirements: "Reo cover: 40mm to earth face, 25mm to formwork faces. Edge beams: min 3 N12 bars each face. Slab mesh: F82 standard, F62 for garage slabs. Pad footings: N12 bars each way, 100mm cover to ground. Internal pad spacing: as per engineer, typically 1800-3000mm.",
+    installationMethod: "1) Excavate to undisturbed soil — proof roll, no movement. 2) Place 0.2mm poly DPM with 200mm lap at joints. 3) Set formwork plumb, check diagonal. 4) Tie reo at all intersections, wire-tie min. 5) Check cover with certified spacers. 6) Pour concrete in single continuous operation — no cold joints. 7) Vibrate or rod to consolidate. 8) Cure minimum 7 days before loading, 28 days for full strength."
   },
   {
     id: "B1.4",
@@ -107,7 +113,10 @@ export const NCC_REFERENCES: NCCReference[] = [
       "Membrane turn-up 150mm minimum on walls",
       "Hob-less showers: waterproof all walls to 1800mm",
       "Licensed waterproofer required - certificate needed"
-    ]
+    ],
+    quantityRequired: "Shower floor: full area to waste + 50mm min turn-up. Hobless shower walls: all walls to 1800mm high. With hob: 150mm above hob on adjacent walls. Bathroom floor: full area + 100mm turn-up all walls. Laundry: under fixtures + 150mm turn-up.",
+    spacingRequirements: "Bond breaker tape: 75mm wide min at all internal corners and junctions, embedded in first coat. Reinforcing fabric at all corners. Turn-up: min 150mm above finished floor level everywhere. Primer: full coverage, no pinholes or holidays.",
+    installationMethod: "1) Substrate: smooth, dry, dust-free — patch any voids. 2) Prime all surfaces, allow to dry. 3) Apply bond breaker tape at all junctions. 4) First membrane coat — full coverage. 5) Embed corner reinforcing fabric into first coat while wet. 6) Second coat at 90° to first — allow 2-4hr cure between coats. 7) Minimum 24-48hr full cure before tiling. Licensed waterproofer must sign compliance certificate."
   },
 
   // SECTION C - FIRE RESISTANCE
@@ -141,7 +150,10 @@ export const NCC_REFERENCES: NCCReference[] = [
       "Photoelectric type only",
       "Located on ceiling 300mm min from walls",
       "Battery backup required for 240V units"
-    ]
+    ],
+    quantityRequired: "One in every bedroom. One in every hallway that connects bedrooms. One on every storey. Minimum quantity: 1 per level + 1 per bedroom + 1 per bedroom hallway. Ceiling-mount preferred — min 300mm from walls and corners.",
+    spacingRequirements: "300mm min from walls, corners and obstructions. 500mm min from air conditioning or heating outlet vents. Max 600mm from ceiling on wall-mount (only if ceiling not accessible). For sloped ceilings: mount within 600mm of ridge.",
+    installationMethod: "Hardwire to 240V circuit — dedicated circuit recommended for new builds. Connect to common 3-core wire for full interconnection. Install 10-year lithium battery backup. Mount to ceiling rose or plasterboard anchors (toggle bolts for retrofit). Test interconnection: trigger one alarm — all must sound within 3 seconds."
   },
   {
     id: "C3.4",
@@ -175,7 +187,10 @@ export const NCC_REFERENCES: NCCReference[] = [
       "Nosings required on closed risers",
       "Handrail graspable 30-65mm diameter",
       "Landing every 18 risers maximum"
-    ]
+    ],
+    quantityRequired: "Riser: 115-190mm (max variation ±5mm across whole stair). Going (tread): 240-355mm. Stair width: 600mm min, 850mm preferred. Headroom: 2000mm min at all points along travel. Handrail: 865-1000mm above nosing line. Both sides if stair > 1000mm wide.",
+    spacingRequirements: "Balustrade: 125mm sphere must not pass any opening. Bottom gap: 100mm max. No horizontal rails between 150-760mm height (climbable). Balusters: max 125mm centre-to-centre. Post spacing: max 1200mm for most systems. Graspable handrail: 30-65mm diameter.",
+    installationMethod: "1) Set out riser/going from bottom landing — mark full run on stringer. 2) Cut stringers, check plumb against wall stringer. 3) Fix bottom stringer to floor, top to trimmer joist. 4) Install treads bottom to top — 2 fixings per tread per stringer min (PVA + screw, or bolt). 5) Fix risers before treads on closed-riser stairs. 6) Handrail: install continuous, screw to each newel post and baluster. 7) All fixings concealed on visible faces."
   },
   {
     id: "D2.14",
@@ -191,7 +206,10 @@ export const NCC_REFERENCES: NCCReference[] = [
       "No climbable elements between 150-760mm",
       "125mm sphere test for gaps",
       "Pool fencing has additional requirements"
-    ]
+    ],
+    quantityRequired: "Height: 865mm min (floor drop < 1m), 1000mm min (drop > 1m or at balconies/landings), 1200mm within 500mm of a climbable surface. Pool fence: 1200mm min. Gaps: 125mm sphere must not pass through any opening anywhere in the system.",
+    spacingRequirements: "Bottom gap: 100mm max. No horizontal rails between 150-760mm above floor (climbable zone). Baluster spacing: 100mm max gap. Post spacing: max 1200mm for most systems, check system certification. Top rail: must be continuous and graspable (30-65mm diameter for handrails).",
+    installationMethod: "Posts: core-drill slab and epoxy anchor — resin-fill drill hole, insert post, allow 24hr cure. Bolt-down base plates: 4× M12 bolts min into slab. Glass panels: 12mm toughened or 10.38mm laminated. Set posts plumb in two planes. Top rail: screwed to each post with concealed fixings. Test: apply 0.6kN/m horizontal load — no visible deflection. Inspect all glass for chips or scratches before handover."
   },
   {
     id: "D2.21",
@@ -241,7 +259,10 @@ export const NCC_REFERENCES: NCCReference[] = [
       "Windows must open to outdoors or covered area",
       "Borrowed light acceptable from adjacent rooms",
       "Skylights count towards requirement"
-    ]
+    ],
+    quantityRequired: "Habitable rooms: glazed area ≥ 10% of floor area. Example: 16m² bedroom = 1.6m² glass area minimum. Skylights count at 100% of aperture. Borrowed light (through internal glazing) counts if room is within 3m of window. Non-habitable rooms (bathrooms, hallways, laundry): no NCC requirement.",
+    spacingRequirements: "Window head height: 2000mm+ from floor preferred for good light distribution. Sill height: 900-1000mm typical for bedrooms (safety at height). Multiple smaller windows distribute light better than one large window. North-facing orientation gives even light with less glare.",
+    installationMethod: "Calculate compliance: measure actual glazed area (glass only, not frame) and compare to 10% of floor area. For borrowed light: the glazed partition must be fully transparent glass, within 3m of primary window, with no obstruction. Skylights: measure aperture size at ceiling, not at roof. Document and provide to certifier."
   },
   {
     id: "F4.5",
@@ -257,7 +278,10 @@ export const NCC_REFERENCES: NCCReference[] = [
       "Kitchen rangehood over every cooktop",
       "Bathroom fan: min 25 L/s if no window",
       "150mm duct minimum for exhaust fans"
-    ]
+    ],
+    quantityRequired: "Habitable rooms: openable window area ≥ 5% of floor area. Bathroom/WC without window: 25 L/s mechanical exhaust. Laundry without window: 20 L/s. Kitchen rangehood: 50 L/s min (250 L/s recommended over gas cooktop). All exhaust must discharge to outside — not into roof space.",
+    spacingRequirements: "Ductwork: 150mm diameter min for bathroom fans, 200mm for kitchen range. Max equivalent duct length: 6m (add 1.5m per 90° bend). External termination: min 2m from windows, doors or openable vents. Avoid 90° bends where possible — use 2× 45° bends instead.",
+    installationMethod: "1) Size duct to fan rating — undersized duct reduces flow significantly. 2) Use rigid duct first, flexible max 1.5m at fan. 3) Slope all horizontal runs 10mm per metre (gravity drainage). 4) Seal all duct joints with foil tape — not PVC tape. 5) External cap: mesh-free for bathroom fans (lint blocks mesh in 12 months). 6) Test airflow with tissue paper after install. 7) Insulate duct in cold climates to prevent condensation."
   },
   {
     id: "F5.2",
@@ -273,7 +297,10 @@ export const NCC_REFERENCES: NCCReference[] = [
       "Seal all gaps, outlets, penetrations",
       "Double stud walls preferred over single",
       "Consider impact noise for upper floors"
-    ]
+    ],
+    quantityRequired: "Airborne (walls and floors between dwellings): Rw + Ctr ≥ 50. Impact (floors only): Ln,w + CI ≤ 62. Class 1a detached houses: no NCC acoustic requirement between rooms — this is a design choice. Class 2+ separating walls must also extend fully to underside of roof/floor above.",
+    spacingRequirements: "Double stud frame: 2 × 70mm studs at 600mm centres, 25mm air gap between frames. Acoustic batts: in one leaf only for double stud (not both — batts bridging gap reduce acoustic performance). Resilient bars: 600mm vertical spacing max. Powerpoints: offset min 300mm from opposite-side boxes.",
+    installationMethod: "Seal perimeter of every plasterboard sheet with acoustic sealant before fixing. Apply acoustic putty pads inside all electrical boxes. Seal all pipe and cable penetrations with acoustic foam or sealant. Stagger sheet joints by at least one stud bay between layers. Use resilient bars for floating layer — screw into bar only, not through to stud. Keep all fixings 10mm from sheet edge."
   },
   {
     id: "F6.2",
@@ -343,7 +370,10 @@ export const NCC_REFERENCES: NCCReference[] = [
       "Ceiling insulation is most critical",
       "No gaps or compression in insulation",
       "Vapour barriers may be required (climate dependent)"
-    ]
+    ],
+    quantityRequired: "Ceiling: R4.1 min (zones 4-5), R5.1 (zone 6), R6.3 (zones 7-8). Walls: R2.0-2.5 total installed (zones 4-6), R2.5-3.0 (zones 7-8). Suspended floor: R2.0 (zones 4-5), R2.5 (zones 6-8). Add 10-15% for compression loss when cutting batts.",
+    spacingRequirements: "Ceiling batts: butt-joined with no gaps, cut around trusses/joists, overlap joints 150mm min. Wall batts: cut to fit between studs at 450/600mm centres — no compression (compressing batts reduces R-value). No gaps at top plate or around noggings.",
+    installationMethod: "Ceiling: install from roof space before ceiling boards where possible. Retrofit: lay from one end, work toward exit point. Wall: push batts firmly into stud cavity, friction-fit, staple top flange to stud face. Seal all penetrations with foam after install. Zones 7-8: install vapour barrier (foil-faced batts or separate polyethylene sheet) on warm side of insulation."
   },
   {
     id: "J1.5",
@@ -359,7 +389,10 @@ export const NCC_REFERENCES: NCCReference[] = [
       "North glazing best, west worst for cooling",
       "Low-e coating reduces heat transfer",
       "Consider shading devices for west/north"
-    ]
+    ],
+    quantityRequired: "Max glazing per orientation (zones 4-6): North ≤ 25%, East/West ≤ 20%, South ≤ 15% of conditioned floor area. Skylights: ≤ 3% of conditioned floor area. Zones 7-8: stricter limits apply — check NatHERS report for project-specific figures.",
+    spacingRequirements: "Min 5mm edge cover in frame rebate. Rebate depth: 10mm min. Double-glazed cavity: 6-16mm (12-16mm argon optimal). Thermally-broken frames required in climate zones 6-8. Setting blocks at sill: 100mm from each corner.",
+    installationMethod: "1) Frame plumb, level and square — check diagonal. 2) Apply glazing tape or setting blocks at sill and jambs. 3) Bed glass on compatible glazing compound or tape. 4) Apply perimeter silicone sealant (UV-stable, compatible with frame). 5) Seal frame-to-wall junction with flashing tape or flexible sealant. 6) Check operation before handover — all opening sashes to move freely."
   },
   {
     id: "J1.6",

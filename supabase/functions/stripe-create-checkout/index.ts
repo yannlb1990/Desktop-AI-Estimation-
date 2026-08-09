@@ -5,6 +5,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 const ALLOWED_ORIGINS = [
   "https://www.metricore.com.au",
   "https://metricore.com.au",
+  "http://localhost:3002",
   "http://localhost:8080",
 ];
 
@@ -102,7 +103,7 @@ serve(async (req) => {
       mode: "subscription",
       payment_method_types: ["card"],
       line_items: [{ price: priceId, quantity: 1 }],
-      success_url: "https://www.metricore.com.au/checkout-success",
+      success_url: `https://www.metricore.com.au/checkout-success?plan=${plan_id}&billing=${billing_period}`,
       cancel_url: "https://www.metricore.com.au/pricing",
       allow_promotion_codes: true,
       metadata: {

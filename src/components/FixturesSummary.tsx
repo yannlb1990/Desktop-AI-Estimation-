@@ -226,13 +226,11 @@ export const FixturesSummary = ({ pdfUrl }: FixturesSummaryProps) => {
             <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
               {summary.fixtures.toilet > 0 && (
                 <div className="p-3 bg-muted/50 rounded-lg text-center">
-                  <div className="text-2xl mb-1">🚽</div>
                   <div className="text-sm font-medium">{summary.fixtures.toilet} Toilets</div>
                 </div>
               )}
               {summary.fixtures.basin > 0 && (
                 <div className="p-3 bg-muted/50 rounded-lg text-center">
-                  <div className="text-2xl mb-1">🚰</div>
                   <div className="text-sm font-medium">{summary.fixtures.basin} Basins</div>
                 </div>
               )}

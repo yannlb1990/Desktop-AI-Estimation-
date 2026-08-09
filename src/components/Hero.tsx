@@ -1,6 +1,5 @@
 import { useRef, useState, useEffect } from "react";
 import { motion, useMotionValue, useSpring, useTransform } from "framer-motion";
-import { ArrowRight } from "lucide-react";
 import { isSignedIn } from "@/lib/localAuth";
 import { MetricoreLogoMark } from "@/components/MetricoreLogoMark";
 
@@ -354,17 +353,17 @@ const Hero = () => {
             <motion.div variants={fadeIn} className="flex items-center gap-3">
               <div className="w-2 h-2 rounded-full bg-primary animate-pulse" />
               <span className="text-xs font-mono text-[#E1DCC9]/70 uppercase tracking-widest">
-                Builders · Trades · NCC Compliance · Scope Capture
+                Builders · Estimators · Contractors · Project Managers
               </span>
             </motion.div>
 
             <div className="space-y-0 -ml-1">
-              {(["MEASURE.", "PRICE.", "WIN."] as const).map((word, i) => (
+              {(["YOUR PLANS.", "YOUR PRICE.", "YOUR MARGIN."] as const).map((word, i) => (
                 <motion.h1
                   key={word}
                   variants={fadeUp}
-                  className={`font-display font-bold leading-[0.88] tracking-tight ${i === 1 ? "text-[#E1DCC9]" : "text-white"}`}
-                  style={{ fontSize: "clamp(4rem, 8.5vw, 7.5rem)" }}
+                  className={`font-display font-bold leading-[0.92] tracking-tight ${i === 2 ? "text-[#E1DCC9]" : "text-white"}`}
+                  style={{ fontSize: "clamp(2.4rem, 5.2vw, 5rem)" }}
                 >
                   <ScrambleText text={word} delay={300 + i * 180} />
                 </motion.h1>
@@ -372,7 +371,7 @@ const Hero = () => {
             </div>
 
             <motion.p variants={fadeIn} className="text-white/50 text-base sm:text-lg leading-relaxed max-w-sm">
-              Upload your blueprint and capture the full scope of works in minutes. Price every trade at NCC-embedded Australian rates and send a compliant tender the same day. No spreadsheets. No Sunday nights doing maths.
+              Measure quantities from your plans, set your own rates for every trade, and get a proper tender out the door. For builders, subcontractors, estimators and project managers across Australia.
             </motion.p>
 
             <motion.div variants={fadeIn} className="flex flex-wrap gap-4 items-center">
@@ -380,16 +379,15 @@ const Hero = () => {
                 whileHover={{ scale: 1.04 }}
                 whileTap={{ scale: 0.97 }}
                 onClick={() => window.location.href = isSignedIn() ? "/dashboard" : "/auth?mode=signup"}
-                className="inline-flex items-center gap-2.5 bg-[#E1DCC9] text-black hover:bg-[#d4cfb5] font-bold text-base px-8 py-4 rounded-full transition-colors shadow-[0_0_40px_rgba(225,220,201,0.2)]"
+                className="inline-flex items-center bg-[#E1DCC9] text-black hover:bg-[#d4cfb5] font-bold text-base px-8 py-4 rounded-full transition-colors shadow-[0_0_40px_rgba(225,220,201,0.2)]"
               >
                 Start free for 14 days
-                <ArrowRight className="h-4 w-4" />
               </motion.button>
               <button
                 className="text-white/50 hover:text-foreground/80 text-sm font-mono transition-colors flex items-center gap-2"
                 onClick={() => document.getElementById("how-it-works")?.scrollIntoView({ behavior: "smooth" })}
               >
-                See how it works <ArrowRight className="h-3.5 w-3.5" />
+                See how it works
               </button>
             </motion.div>
 

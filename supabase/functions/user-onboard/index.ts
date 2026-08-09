@@ -102,6 +102,22 @@ serve(async (req) => {
       billing_period,
     });
 
+    // Notify admin of new trial signup
+    const primaryAdmin = Deno.env.get("ADMIN_NOTIFICATION_EMAIL") ?? "yannlb1990@gmail.com";
+    const adminRecipients = [primaryAdmin, "admin@metricore.com.au"].filter(Boolean);
+    fetch(`${Deno.env.get("SUPABASE_URL")}/functions/v1/send-email`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}`,
+      },
+      body: JSON.stringify({
+        type: "admin_new_trial",
+        to: adminRecipients,
+        data: { name, email, phone, planId: plan_id, billing: billing_period, projectType: project_type },
+      }),
+    }).catch((err) => console.error("Admin trial notification failed:", err));
+
     return json({ success: true }, 200, cors);
   } catch (err) {
     console.error("user-onboard error:", err);

@@ -1,211 +1,134 @@
-# Buildamax AI Tender Tool
+# Metricore
 
-A comprehensive construction estimation and tender management platform for Australian builders.
+AI-powered PDF takeoff and cost estimation for Australian builders and construction professionals.
 
-## Features
+**Live**: https://www.metricore.com.au
 
-### PDF Takeoff Tool
-- Interactive canvas for measuring areas, lengths, and counts on PDF plans
-- Scale calibration for accurate measurements
-- Cost estimation with SOW rate linking
-- CSV export and markup calculation
+---
 
-### Market Insights
-- Labour rates by state with data freshness tracking
-- Scope of Work (SOW) rates for all Australian states
-- Supplier database with 5-7 suppliers per state
-- Price webhook system for automatic updates
+## What it does
 
-### Estimation Tools
-- Material pricing with real-time search
-- NCC compliance checking
-- Quote analyzer for subcontractor quotes
-- Revision tracking and diff viewer
-- Project templates (residential, commercial, industrial)
+Metricore lets you upload architectural plans as PDFs, measure areas and quantities directly on the plan, run AI analysis to generate trade estimates automatically, and export professional BOQs and SOWs — all in one workflow.
 
-### AI Features
-- AI chatbot for assistance
-- Plan analysis with symbol detection
-- Fixture and opening summarization
-- **PDF-Extract-Kit Integration** (New!)
-  - Automatic layout detection using DocLayout-YOLO
-  - OCR text extraction with PaddleOCR
-  - Table parsing for BOQ/schedule data
-  - Dimension extraction from drawings
+### Core features
+
+- **PDF Takeoff** — Interactive canvas (Fabric.js) for measuring areas, lengths, counts, and walls directly on PDF plans
+- **AI Plan Analyser** — Claude Sonnet reads the plans and generates 35+ trade estimates in ~45-60 seconds via 3 parallel passes
+- **Cost Estimator** — Editable cost table with SOW rate database, state multipliers, margin, GST
+- **Gantt Schedule** — Critical path method (CPM) with phase-sequential backward pass, red/amber visual accents
+- **BOQ Export** — Professional QS format (AIQS standard), CSV and Excel
+- **SOW PDF** — Scope of Works document in Watermark Constructions format
+- **Progress Claims** — SOPA-compliant PDFs with per-state act names
+- **Client Approval Portal** — Digital approve/reject via signed token link
+- **NCC Compliance** — BCA Volume 1/2 compliance checklist built into estimating workflow
+- **Market Insights** — SOW rates, labour rates, and supplier database for all 8 AU states
+
+---
 
 ## Tech Stack
 
-- **Frontend**: React + TypeScript + Vite
+- **Frontend**: React 18 + TypeScript + Vite
 - **Styling**: Tailwind CSS + shadcn/ui
-- **Backend**: Supabase (Auth, Database, Edge Functions)
-- **PDF**: PDF.js + Fabric.js for canvas
-- **AI Extraction**: FastAPI + PDF-Extract-Kit (Python)
-- **Charts**: Recharts
+- **Canvas**: Fabric.js (pinned at `^6.7.1`)
+- **PDF**: pdf.js
+- **Backend**: Supabase (Auth, Edge Functions, Storage)
+- **Email**: Resend via `send-email` edge function
+- **Billing**: Stripe
+- **AI**: Claude claude-sonnet-4-6 via `analyse-plan` edge function
+- **Deployment**: Vercel
 
-## Setup Instructions
+---
 
-### 1. Clone the Repository
+## Setup
 
-```bash
-git clone https://github.com/yannlb1990/Desktop-AI-Estimation-.git
-cd Desktop-AI-Estimation-
-```
-
-### 2. Install Node.js
-
-If you don't have Node.js installed:
-```bash
-# Using Homebrew (macOS)
-brew install node
-
-# Or using nvm
-curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.0/install.sh | bash
-nvm install 18
-nvm use 18
-```
-
-### 3. Install Dependencies
+### 1. Install dependencies
 
 ```bash
 npm install
 ```
 
-### 4. Configure Supabase
+### 2. Configure environment
 
-1. Create a Supabase project at https://supabase.com
-2. Go to **Settings** > **API** in your Supabase dashboard
-3. Copy the **Project URL** and **anon/public key**
-4. Create a `.env` file based on `.env.example`:
-
-```bash
-cp .env.example .env
-```
-
-5. Update the `.env` file with your Supabase credentials:
+Copy `.env.example` to `.env` and fill in:
 
 ```env
-VITE_SUPABASE_PROJECT_ID="your_project_id"
-VITE_SUPABASE_PUBLISHABLE_KEY="your_anon_key_here"
-VITE_SUPABASE_URL="https://your_project_id.supabase.co"
+VITE_SUPABASE_URL=https://dwimfbkwaebehxdavryg.supabase.co
+VITE_SUPABASE_PUBLISHABLE_KEY=your_anon_key
 ```
 
-### 5. Set Up Database
-
-1. Go to your Supabase dashboard
-2. Navigate to **SQL Editor**
-3. Run the migration files in order from `supabase/migrations/`:
-   - Start with `001_initial_schema.sql`
-   - Then run each numbered migration in sequence
-
-Or run all migrations at once:
-```bash
-# If you have Supabase CLI installed
-supabase db push
-```
-
-### 6. Run Development Server
+### 3. Run dev server
 
 ```bash
 npm run dev
+# Runs on http://localhost:3002
 ```
 
-The app will be available at `http://localhost:5173`
-
-### 7. Set Up PDF Extraction Backend (Optional)
-
-For AI-powered PDF analysis:
+### 4. Deploy
 
 ```bash
-cd backend
-
-# Using setup script
-./setup.sh
-
-# Or manually:
-python3 -m venv venv
-source venv/bin/activate
-pip install -r requirements.txt
-python main.py
+npm run build && npx tsc --noEmit && vercel --prod
 ```
 
-The API will run at `http://localhost:8000`.
+---
 
-Add to your `.env`:
-```env
-VITE_PDF_API_URL="http://localhost:8000"
-```
+## Supabase Edge Functions
 
-Or use Docker:
+| Function | Purpose |
+|----------|---------|
+| `analyse-plan` | AI plan analysis (Claude claude-sonnet-4-6 vision, 3-pass parallel) |
+| `send-email` | Transactional email via Resend |
+| `stripe-create-checkout` | Stripe checkout session creation |
+| `stripe-webhook` | Stripe event handling + admin notifications |
+
+Deploy a function:
 ```bash
-cd backend
-docker-compose up -d
+supabase functions deploy <function-name> --project-ref dwimfbkwaebehxdavryg
 ```
 
-### 8. Build for Production
+---
 
-```bash
-npm run build
-```
+## Critical constraints
 
-## Project Structure
+| Rule | Detail |
+|------|--------|
+| Fabric.js pinned `^6.7.1` | Never upgrade to v7 — breaks `canvas.getPointer` and all drawing tools |
+| Dev port: 3002 | Set in `vite.config.ts` — do not change |
+| `labourHours` spelling | British spelling throughout — mismatch causes silent $0 subtotals |
+| No `window.location.reload()` | Kills client-side auth session |
+| Resend FROM address | `noreply@risen-up.com` — `metricore.com.au` not verified on Resend free plan |
+
+---
+
+## Project structure
 
 ```
 src/
-├── components/        # React components
-│   ├── features/     # Feature-specific components
-│   ├── takeoff/      # PDF takeoff components
-│   └── ui/           # shadcn/ui components
-├── data/             # Static data (rates, templates)
-├── hooks/            # Custom React hooks
-├── integrations/     # Supabase client
-├── lib/              # Utilities and API clients
-│   └── api/          # API layer (including pdfExtractionApi)
-├── pages/            # Page components
-└── utils/            # Helper utilities
-
-backend/              # Python FastAPI backend
-├── main.py           # FastAPI application
-├── pdf_extractor.py  # PDF-Extract-Kit integration
-├── models.py         # Pydantic models
-├── requirements.txt  # Python dependencies
-├── Dockerfile        # Docker configuration
-└── docker-compose.yml
-
+├── components/
+│   ├── takeoff/       # PDFTakeoff, InteractiveCanvas, CostEstimator, AI panels, Gantt
+│   └── ui/            # shadcn/ui components
+├── data/              # SOW rates database, trade options
+├── hooks/             # useTakeoffState, useAIPlanAnalysis, etc.
+├── lib/
+│   ├── takeoff/       # types, export, sowGenerator, rateResolver, pdfService
+│   └── subscription.ts
+├── pages/             # ProjectDetail, MarketInsights, etc.
 supabase/
-├── functions/        # Edge functions for AI
-└── migrations/       # Database schema
+├── functions/         # analyse-plan, send-email, stripe-*
+└── migrations/        # DB schema
 ```
 
-## Key Components
+---
 
-| Component | Description |
-|-----------|-------------|
-| `PDFTakeoff` | Interactive PDF viewer with measurement tools |
-| `InteractiveCanvas` | Fabric.js canvas for drawing measurements |
-| `AIExtractionPanel` | AI-powered PDF content extraction |
-| `MarketInsights` | Labour rates, SOW rates, suppliers dashboard |
-| `CostEstimator` | Cost calculation with SOW rate linking |
-| `NCCCompliancePanel` | NCC compliance checking |
-| `QuoteAnalyzerPanel` | Analyze subcontractor quotes |
+## Subscription tiers
 
-## Environment Variables
+| Tier | Features |
+|------|---------|
+| Starter | Takeoff + manual estimation only |
+| Pro | + AI plan analyser, all exports (BOQ CSV, Excel, SOW PDF, Annotated PDF) |
+| Business | Pro + team seats |
 
-| Variable | Description |
-|----------|-------------|
-| `VITE_SUPABASE_URL` | Your Supabase project URL |
-| `VITE_SUPABASE_PUBLISHABLE_KEY` | Your Supabase anon/public key |
-| `VITE_SUPABASE_PROJECT_ID` | Your Supabase project ID |
-| `VITE_PDF_API_URL` | PDF extraction API URL (default: http://localhost:8000) |
-
-## Deployment
-
-Deploy to Vercel, Netlify, or any static hosting:
-
-```bash
-npm run build
-# Deploy the 'dist' folder
-```
+---
 
 ## License
 
-Private - Buildamax Pty Ltd
+Private — Watermark Constructions / Metricore

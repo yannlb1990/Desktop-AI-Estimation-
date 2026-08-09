@@ -22,24 +22,24 @@ const TRADE_RATE_MAP: { keywords: string[]; unit: string; rateId: string }[] = [
   { keywords: ['cornice', 'ceiling cornice'], unit: 'lm', rateId: 'carp-010' },
   { keywords: ['power point', 'gpo', 'electrical point', 'power outlet'], unit: 'ea', rateId: 'elec-001' },
   { keywords: ['data point', 'data outlet', 'ethernet point'], unit: 'ea', rateId: 'elec-002' },
-  { keywords: ['light point', 'light fixture', 'downlight', 'lighting point'], unit: 'ea', rateId: 'elec-003' },
+  { keywords: ['light point', 'light fixture', 'lighting point'], unit: 'ea', rateId: 'elec-002' },
+  { keywords: ['downlight', 'led downlight', 'recessed light'], unit: 'ea', rateId: 'elec-004' },
   { keywords: ['electrical rough-in', 'electrical rough in', 'electrical first fix'], unit: 'm²', rateId: 'elec-010' },
-  { keywords: ['switchboard', 'msp', 'main switchboard'], unit: 'ea', rateId: 'elec-004' },
-  { keywords: ['plumbing rough-in', 'plumbing rough in', 'plumbing first fix'], unit: 'ea', rateId: 'plum-001' },
+  { keywords: ['switchboard', 'msp', 'main switchboard', 'meter box'], unit: 'ea', rateId: 'elec-006' },
+  { keywords: ['plumbing rough-in', 'plumbing rough in', 'plumbing first fix', 'plumbing per m2', 'plumbing m²', 'plumbing area'], unit: 'm²', rateId: 'plum-010' },
   { keywords: ['toilet supply', 'wc supply', 'toilet installation'], unit: 'ea', rateId: 'plum-002' },
   { keywords: ['basin supply', 'hand basin', 'vanity supply'], unit: 'ea', rateId: 'plum-003' },
   { keywords: ['shower supply', 'shower install'], unit: 'ea', rateId: 'plum-004' },
   { keywords: ['bath supply', 'bath install', 'bathtub'], unit: 'ea', rateId: 'plum-005' },
-  { keywords: ['plumbing per m2', 'plumbing m²', 'plumbing area'], unit: 'm²', rateId: 'plum-010' },
   { keywords: ['concrete slab', 'slab pour', 'concrete floor slab', 'slab concrete'], unit: 'm²', rateId: 'conc-001' },
   { keywords: ['footing', 'strip footing', 'pad footing', 'foundation'], unit: 'lm', rateId: 'conc-003' },
   { keywords: ['concrete m3', 'concrete cubic', 'concrete volume'], unit: 'm³', rateId: 'conc-002' },
-  { keywords: ['plasterboard', 'plaster board', 'gyprock', 'drywall', 'lining', 'plaster m²'], unit: 'm²', rateId: 'plstr-001' },
-  { keywords: ['ceiling lining', 'ceiling plaster', 'ceiling board'], unit: 'm²', rateId: 'plstr-002' },
+  { keywords: ['plasterboard', 'plaster board', 'gyprock', 'drywall', 'wall lining', 'plaster m²'], unit: 'm²', rateId: 'plstr-001' },
+  { keywords: ['ceiling lining', 'ceiling plaster', 'ceiling board', 'ceiling plasterboard'], unit: 'm²', rateId: 'plstr-002' },
   { keywords: ['internal paint', 'painting internal', 'paint m²', 'interior paint'], unit: 'm²', rateId: 'paint-001' },
-  { keywords: ['external paint', 'exterior paint', 'painting external', 'cladding paint'], unit: 'm²', rateId: 'paint-002' },
-  { keywords: ['roof tile', 'tiled roof', 'concrete tile', 'terracotta tile roof'], unit: 'm²', rateId: 'roof-001' },
-  { keywords: ['colorbond', 'metal roof', 'corrugated roof', 'steel roof'], unit: 'm²', rateId: 'roof-002' },
+  { keywords: ['external paint', 'exterior paint', 'painting external', 'cladding paint'], unit: 'm²', rateId: 'paint-003' },
+  { keywords: ['roof tile', 'tiled roof', 'concrete tile', 'terracotta tile roof'], unit: 'm²', rateId: 'roof-002' },
+  { keywords: ['colorbond', 'metal roof', 'corrugated roof', 'steel roof'], unit: 'm²', rateId: 'roof-001' },
   { keywords: ['roofing', 'roof cover'], unit: 'm²', rateId: 'roof-001' },
   { keywords: ['floor tile', 'ceramic tile', 'porcelain tile', 'tiling m²', 'floor tiling'], unit: 'm²', rateId: 'tile-001' },
   { keywords: ['wall tile', 'wall tiling'], unit: 'm²', rateId: 'tile-002' },
@@ -105,12 +105,14 @@ export function buildCostItemsFromTrades(
 ): Partial<CostItem>[] {
   return trades.map((t) => {
     let unitCost = 0;
+    let resolvedRateId = t.rateId ?? '';
     if (t.rateId) {
       unitCost = lookupRate(t.rateId, state);
     }
     if (unitCost === 0) {
       const resolved = resolveRate(t.trade + ' ' + t.unit, t.unit, state);
       unitCost = resolved.rate;
+      if (!resolvedRateId) resolvedRateId = resolved.rateId;
     }
     const subtotal = unitCost > 0 ? Math.round(t.quantity * unitCost * 100) / 100 : 0;
     const conf = Math.round(t.confidence * 100);
@@ -120,6 +122,7 @@ export function buildCostItemsFromTrades(
       category: t.trade,
       name: t.trade,
       trade: t.trade,
+      rateId: resolvedRateId || undefined,
       description: `${t.trade}${notesPart} (AI ${conf}% confidence)`,
       quantity: t.quantity,
       unit: t.unit as CostItem['unit'],

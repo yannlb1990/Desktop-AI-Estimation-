@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { getUserStorageKey } from "@/lib/localAuth";
+import { syncProjectToSupabase } from "@/lib/db/projects";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -242,6 +243,8 @@ export const OverheadManager = ({ projectId }: OverheadManagerProps) => {
         p.id === projectId ? { ...p, overhead_total: totalOverheads } : p
       );
       localStorage.setItem(getUserStorageKey("local_projects"), JSON.stringify(updated));
+      const syncProject = updated.find((p: any) => p.id === projectId);
+      if (syncProject) syncProjectToSupabase(syncProject);
     } catch (_) {}
   }, [totalOverheads, projectId]);
 

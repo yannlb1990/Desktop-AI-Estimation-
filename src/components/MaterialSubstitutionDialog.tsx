@@ -75,9 +75,9 @@ export const MaterialSubstitutionDialog = ({
 
         <Tabs value={selectedCriteria} onValueChange={(v) => setSelectedCriteria(v as any)}>
           <TabsList className="grid grid-cols-3 w-full">
-            <TabsTrigger value="cost">💰 Cost Optimize</TabsTrigger>
-            <TabsTrigger value="quality">⭐ Quality</TabsTrigger>
-            <TabsTrigger value="sustainability">🌿 Eco-Friendly</TabsTrigger>
+            <TabsTrigger value="cost">Cost Optimize</TabsTrigger>
+            <TabsTrigger value="quality">Quality</TabsTrigger>
+            <TabsTrigger value="sustainability">Eco-Friendly</TabsTrigger>
           </TabsList>
 
           <TabsContent value={selectedCriteria} className="mt-4 space-y-3">

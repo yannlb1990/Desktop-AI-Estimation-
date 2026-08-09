@@ -31,10 +31,15 @@ export const NCCSearchBar = () => {
     setIsSearching(false);
   };
 
+  const getSearchUrl = (ref: NCCReference) => {
+    const query = encodeURIComponent(`NCC 2022 ${ref.section} ${ref.title} site:ncc.abcb.gov.au OR ABCB`);
+    return `https://www.google.com/search?q=${query}`;
+  };
+
   const openNccLink = (url?: string) => {
     const targetUrl = url || 'https://ncc.abcb.gov.au/';
     window.open(targetUrl, '_blank', 'noopener,noreferrer');
-    toast.success("Opening NCC reference in new tab");
+    toast.success("Opening NCC search in new tab");
   };
 
   const getCategoryColor = (category: string) => {
@@ -134,7 +139,7 @@ export const NCCSearchBar = () => {
                     size="sm"
                     onClick={(e) => {
                       e.stopPropagation();
-                      openNccLink(ref.url);
+                      openNccLink(getSearchUrl(ref));
                     }}
                   >
                     <ExternalLink className="h-4 w-4" />
@@ -182,6 +187,30 @@ export const NCCSearchBar = () => {
                     </div>
                   )}
 
+                  {/* Quantity Required */}
+                  {ref.quantityRequired && (
+                    <div className="bg-blue-50/10 dark:bg-blue-950/20 border border-blue-200/20 rounded-md p-3">
+                      <h5 className="font-semibold text-xs text-blue-400 mb-1 uppercase tracking-wide">Quantity Required</h5>
+                      <p className="text-sm text-foreground/80 leading-snug">{ref.quantityRequired}</p>
+                    </div>
+                  )}
+
+                  {/* Spacing Requirements */}
+                  {ref.spacingRequirements && (
+                    <div className="bg-purple-50/10 dark:bg-purple-950/20 border border-purple-200/20 rounded-md p-3">
+                      <h5 className="font-semibold text-xs text-purple-400 mb-1 uppercase tracking-wide">Spacing Requirements</h5>
+                      <p className="text-sm text-foreground/80 leading-snug">{ref.spacingRequirements}</p>
+                    </div>
+                  )}
+
+                  {/* Installation Method */}
+                  {ref.installationMethod && (
+                    <div className="bg-emerald-50/10 dark:bg-emerald-950/20 border border-emerald-200/20 rounded-md p-3">
+                      <h5 className="font-semibold text-xs text-emerald-400 mb-1 uppercase tracking-wide">Installation Method</h5>
+                      <p className="text-sm text-foreground/80 leading-snug">{ref.installationMethod}</p>
+                    </div>
+                  )}
+
                   {/* Keywords */}
                   <div className="flex flex-wrap gap-1">
                     {ref.keywords.map(keyword => (
@@ -196,10 +225,10 @@ export const NCCSearchBar = () => {
                     variant="outline"
                     size="sm"
                     className="w-full"
-                    onClick={() => openNccLink(ref.url)}
+                    onClick={() => openNccLink(getSearchUrl(ref))}
                   >
                     <ExternalLink className="h-4 w-4 mr-2" />
-                    View Full NCC Reference ({ref.section})
+                    Search NCC Online ({ref.section})
                   </Button>
                 </div>
               )}

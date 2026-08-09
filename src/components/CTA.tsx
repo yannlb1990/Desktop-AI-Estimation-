@@ -2,8 +2,8 @@ import { motion } from "framer-motion";
 import { isSignedIn } from "@/lib/localAuth";
 
 const CTA = () => {
-  const words1 = ["Price", "the", "job."];
-  const words2 = ["Get", "home", "for", "dinner."];
+  const words1 = ["Every", "job", "priced."];
+  const words2 = ["Every", "margin", "protected."];
 
   return (
     <section className="relative py-32 md:py-40 bg-background overflow-hidden">
@@ -66,8 +66,8 @@ const CTA = () => {
           transition={{ duration: 0.5, delay: 0.5 }}
           className="text-white/40 text-base max-w-sm mx-auto mb-12 leading-relaxed"
         >
-          Builders spend hours writing up quotes by hand every week.
-          Metricore turns that into 30 minutes.
+          Upload your plans, extract quantities, and produce professional
+          estimates in a fraction of the time.
         </motion.p>
 
         <motion.div

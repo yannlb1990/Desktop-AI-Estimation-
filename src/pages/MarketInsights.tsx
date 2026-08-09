@@ -479,7 +479,6 @@ const MarketInsights = () => {
                       <div className="flex items-start justify-between mb-3">
                         <div>
                           <div className="flex items-center gap-2">
-                            <span className="text-lg">{l.icon}</span>
                             <span className="font-semibold text-base">{l.trade}</span>
                           </div>
                           <p className="text-xs text-muted-foreground mt-0.5">{l.desc}</p>

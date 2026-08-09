@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { Download, ZoomIn, ZoomOut, RotateCw, RotateCcw, Maximize2, Minimize2, ChevronLeft, ChevronRight, ChevronUp, ChevronDown, Trash2, FileText, SlidersHorizontal, Combine, Ruler, X, CheckCircle, EyeOff, Lock, ScanLine } from 'lucide-react';
+import { Download, ZoomIn, ZoomOut, RotateCw, RotateCcw, Maximize2, Minimize2, ChevronLeft, ChevronRight, ChevronUp, ChevronDown, Trash2, FileText, SlidersHorizontal, Combine, Ruler, X, CheckCircle, EyeOff, Lock, ScanLine, AlertTriangle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { PDFUploadManager } from './PDFUploadManager';
@@ -103,6 +103,7 @@ export const PDFTakeoff = ({ projectId, estimateId, onAddCostItems }: PDFTakeoff
   const [modMode, setModMode] = useState<'wall' | 'door' | 'window' | 'custom' | null>(null);
   const [wallClassification, setWallClassification] = useState<'external' | 'internal'>('internal');
   const [activeFrameSectionId, setActiveFrameSectionId] = useState<string | null>(null);
+  const [showRecalibConfirm, setShowRecalibConfirm] = useState(false);
   const [wallThicknessMm, setWallThicknessMm] = useState(90);
   const [wallHatchType, setWallHatchType] = useState<string>('none');
   const [wallHatchSide, setWallHatchSide] = useState<string>('both');
@@ -515,12 +516,27 @@ export const PDFTakeoff = ({ projectId, estimateId, onAddCostItems }: PDFTakeoff
       }
       return;
     }
+    // Sanity check: warn if existing measurements would be implausibly large with this scale
+    const pageMs = state.measurements.filter((m: Measurement) => m.pageIndex === state.currentPageIndex);
+    const absurdCount = pageMs.filter((m: Measurement) => {
+      const pts = m.worldPoints;
+      if (!pts || pts.length < 2) return false;
+      let d = 0;
+      for (let i = 1; i < pts.length; i++) {
+        d += Math.hypot(pts[i].x - pts[i - 1].x, pts[i].y - pts[i - 1].y);
+      }
+      return (d / scale.unitsPerMetre) > 500;
+    }).length;
     dispatch({ type: 'SET_SCALE', payload: { pageIndex: state.currentPageIndex, scale } });
     setManualCalibrationPoints(null);
     setManualDistance('');
     dispatch({ type: 'SET_CALIBRATION_MODE', payload: null });
-    toast.success('Scale calibrated');
-  }, [manualCalibrationPoints, manualDistance, manualUnit, dispatch, state.currentPageIndex]);
+    if (absurdCount > 0) {
+      toast.warning(`${absurdCount} existing measurement(s) exceed 500m with this scale — double-check the calibration distance.`);
+    } else {
+      toast.success('Scale calibrated');
+    }
+  }, [manualCalibrationPoints, manualDistance, manualUnit, dispatch, state.currentPageIndex, state.measurements]);
 
   const handleResetScale = useCallback(() => {
     dispatch({ type: 'RESET_SCALE', payload: state.currentPageIndex });
@@ -1230,7 +1246,7 @@ export const PDFTakeoff = ({ projectId, estimateId, onAddCostItems }: PDFTakeoff
                         <CheckCircle className="h-3.5 w-3.5" />
                         {state.currentScale?.scaleFactor ? `1:${state.currentScale.scaleFactor}` : 'Calibrated'}
                       </span>
-                      <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => dispatch({ type: 'SET_CALIBRATION_MODE', payload: 'manual' })} title="Re-calibrate">
+                      <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setShowRecalibConfirm(true)} title="Re-calibrate">
                         <Ruler className="h-3.5 w-3.5" />
                       </Button>
                       <Button variant="ghost" size="icon" className="h-7 w-7" onClick={handleResetScale} title="Reset scale">
@@ -1308,6 +1324,17 @@ export const PDFTakeoff = ({ projectId, estimateId, onAddCostItems }: PDFTakeoff
                     <span>Draw a line on any labelled dimension (e.g. "2200"). Then enter the real value to correct the scale.</span>
                     <Button variant="ghost" size="sm" className="ml-auto h-7 text-amber-400 hover:text-amber-300" onClick={() => { setIsVerifyMode(false); dispatch({ type: 'SET_ACTIVE_TOOL', payload: 'pan' }); }}>
                       Cancel
+                    </Button>
+                  </div>
+                )}
+
+                {/* Uncalibrated page warning */}
+                {state.pdfFile && !state.isCalibrated && !state.calibrationMode && (
+                  <div className="flex items-center gap-3 px-4 py-2 bg-amber-500/8 border border-amber-500/30 rounded-lg text-xs text-amber-400">
+                    <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
+                    <span>Page {state.currentPageIndex + 1} is not calibrated. Measurements will be in pixels, not real units.</span>
+                    <Button variant="ghost" size="sm" className="ml-auto h-7 text-amber-400 hover:text-amber-300 text-xs" onClick={() => dispatch({ type: 'SET_CALIBRATION_MODE', payload: 'manual' })}>
+                      Set Scale
                     </Button>
                   </div>
                 )}
@@ -1557,18 +1584,7 @@ export const PDFTakeoff = ({ projectId, estimateId, onAddCostItems }: PDFTakeoff
                   )}
                 </div>
 
-                {/* Plan Intelligence — below PDF canvas, full-width within the 3-col area */}
-                <AIPlanAnalysisPanel
-                  canvasElementRef={canvasRef}
-                  planId={state.pdfFile?.planId}
-                  projectId={projectId}
-                  projectState={projectState}
-                  isCalibrated={state.isCalibrated}
-                  onAddCostItems={(items) => {
-                    items.forEach(item => dispatch({ type: 'ADD_COST_ITEM', payload: item as any }));
-                    setActiveTab('costs');
-                  }}
-                />
+
               </div>
 
               {/* Right Sidebar - Measurements */}
@@ -1683,84 +1699,71 @@ export const PDFTakeoff = ({ projectId, estimateId, onAddCostItems }: PDFTakeoff
                   />
                 </Card>
 
-                <Card className="p-4">
-                  <div className="space-y-3 max-h-[calc(100vh-300px)] overflow-y-auto">
+                <Card className="overflow-hidden">
+                  {/* Uncalibrated pages warning in measurement panel */}
+                  {filteredMeasurements.some((m) => !(state as any).scales?.[m.pageIndex]) && (
+                    <div className="flex items-center gap-2 px-3 py-1.5 bg-amber-500/8 border-b border-amber-500/20 text-[11px] text-amber-400">
+                      <AlertTriangle className="h-3 w-3 shrink-0" />
+                      <span>Some pages not calibrated — values shown in pixels</span>
+                    </div>
+                  )}
+                  {/* Compact measurement rows — no timestamps, no label inputs */}
+                  <div className="divide-y divide-border/20 max-h-[calc(100vh-380px)] overflow-y-auto">
                     {filteredMeasurements.length === 0 ? (
-                      <p className="text-sm text-muted-foreground">No measurements yet</p>
+                      <p className="text-xs text-muted-foreground p-3">No measurements yet</p>
                     ) : (
                       filteredMeasurements.map((m) => {
                         const isSelected = sidebarSelectedIds.has(m.id);
                         return (
                           <div
                             key={m.id}
-                            className={`p-3 border rounded-md space-y-2 transition-colors ${isSelected ? 'border-amber-500 bg-amber-950/20' : 'border-border/60 bg-muted/40'}`}
+                            className={`flex items-center gap-1.5 px-2 py-2 transition-colors ${isSelected ? 'bg-amber-950/20' : 'hover:bg-muted/30'}`}
                           >
-                            <div className="flex items-center justify-between text-xs text-muted-foreground">
-                              <div className="flex items-center gap-2">
-                                <Checkbox
-                                  checked={isSelected}
-                                  onCheckedChange={(checked) => {
-                                    setSidebarSelectedIds(prev => {
-                                      const next = new Set(prev);
-                                      checked ? next.add(m.id) : next.delete(m.id);
-                                      return next;
-                                    });
-                                  }}
-                                />
-                                <span className="capitalize">
-                                  {(m as any).arcControlPoint ? 'Arc Wall' : (m as any).wallThickness ? 'Wall' : m.type}
-                                </span>
-                                {/* Ext/Int classification toggle — only on wall-line measurements */}
-                                {m.wallThickness !== undefined && (
-                                  <button
-                                    onClick={() => dispatch({
-                                      type: 'UPDATE_MEASUREMENT',
-                                      payload: { id: m.id, updates: { wallClassification: m.wallClassification === 'external' ? 'internal' : 'external' } }
-                                    })}
-                                    className={`inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold border transition-colors ${
-                                      m.wallClassification === 'external'
-                                        ? 'bg-amber-900/40 text-amber-300 border-amber-700/50 hover:bg-amber-900/60'
-                                        : 'bg-stone-700/40 text-stone-300 border-stone-600/50 hover:bg-stone-700/60'
-                                    }`}
-                                    title="Click to toggle External / Internal"
-                                  >
-                                    {m.wallClassification === 'external' ? 'EXT' : 'INT'}
-                                  </button>
-                                )}
-                                {m.addedToEstimate && (
-                                  <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full bg-muted/20 dark:bg-card/50 text-[#E1DCC9]/60 dark:text-[#E1DCC9]/80 text-[10px] font-medium">
-                                    ✓ In estimate
-                                  </span>
-                                )}
-                              </div>
-                              <span className="font-medium">Page {m.pageIndex + 1}</span>
-                            </div>
-                            <Input
-                              value={m.label}
-                              onChange={(e) =>
-                                dispatch({
-                                  type: 'UPDATE_MEASUREMENT',
-                                  payload: { id: m.id, updates: { label: e.target.value } }
-                                })
-                              }
-                              placeholder="Label"
-                              className="h-8"
+                            {/* Checkbox */}
+                            <Checkbox
+                              checked={isSelected}
+                              onCheckedChange={(checked) => {
+                                setSidebarSelectedIds(prev => {
+                                  const next = new Set(prev);
+                                  checked ? next.add(m.id) : next.delete(m.id);
+                                  return next;
+                                });
+                              }}
+                              className="h-3.5 w-3.5 shrink-0"
                             />
-                            {/* Raking plate checkbox — only on external walls */}
-                            {m.wallThickness !== undefined && m.wallClassification === 'external' && (
-                              <label className="flex items-center gap-2 cursor-pointer select-none">
-                                <Checkbox
-                                  checked={m.hasRakingPlate ?? false}
-                                  onCheckedChange={(checked) =>
-                                    dispatch({
-                                      type: 'UPDATE_MEASUREMENT',
-                                      payload: { id: m.id, updates: { hasRakingPlate: !!checked } }
-                                    })
-                                  }
-                                />
-                                <span className="text-[11px] text-muted-foreground">Has raking plate</span>
-                              </label>
+
+                            {/* Type label */}
+                            <span className="text-[10px] text-muted-foreground shrink-0 w-10 truncate capitalize">
+                              {(m as any).arcControlPoint ? 'Arc' : (m as any).wallThickness ? 'Wall' : m.type}
+                            </span>
+
+                            {/* EXT/INT toggle — walls only */}
+                            {m.wallThickness !== undefined && (
+                              <button
+                                onClick={() => dispatch({
+                                  type: 'UPDATE_MEASUREMENT',
+                                  payload: { id: m.id, updates: { wallClassification: m.wallClassification === 'external' ? 'internal' : 'external' } }
+                                })}
+                                className={`inline-flex items-center px-1 py-0.5 rounded text-[9px] font-semibold border transition-colors shrink-0 ${
+                                  m.wallClassification === 'external'
+                                    ? 'bg-amber-900/40 text-amber-300 border-amber-700/50 hover:bg-amber-900/60'
+                                    : 'bg-stone-700/40 text-stone-300 border-stone-600/50 hover:bg-stone-700/60'
+                                }`}
+                                title="Toggle EXT / INT"
+                              >
+                                {m.wallClassification === 'external' ? 'EXT' : 'INT'}
+                              </button>
                             )}
+
+                            {/* Value + unit */}
+                            <span className="font-mono text-xs font-semibold shrink-0">
+                              {(m.realValue ?? 0).toFixed(2)}
+                            </span>
+                            <span className="text-[10px] text-muted-foreground/70 shrink-0">
+                              {m.unit === 'count' ? 'EA' : m.unit}
+                            </span>
+
+                            {/* Type select — compact */}
                             <Select
                               value={m.measurementType ?? ''}
                               onValueChange={(val) =>
@@ -1770,8 +1773,8 @@ export const PDFTakeoff = ({ projectId, estimateId, onAddCostItems }: PDFTakeoff
                                 })
                               }
                             >
-                              <SelectTrigger className="h-7 text-xs border-dashed">
-                                <SelectValue placeholder="Type (wall, floor…)" />
+                              <SelectTrigger className="h-6 text-[10px] border border-border/30 bg-muted/30 rounded px-1.5 flex-1 min-w-0">
+                                <SelectValue placeholder="Type..." />
                               </SelectTrigger>
                               <SelectContent>
                                 {(['Wall','Floor','Ceiling','Tiling','Roofing','Cladding','Concrete Slab','Framing','Painting','Waterproofing','Insulation','Other'] as const).map(t => (
@@ -1779,63 +1782,44 @@ export const PDFTakeoff = ({ projectId, estimateId, onAddCostItems }: PDFTakeoff
                                 ))}
                               </SelectContent>
                             </Select>
-                            <div className="flex items-center gap-2 text-sm">
-                              <span className="font-semibold">{(m.realValue ?? 0).toFixed(2)}</span>
-                              <Select
-                                value={m.unit}
-                                onValueChange={(unit: string) =>
-                                  dispatch({
-                                    type: 'UPDATE_MEASUREMENT',
-                                    payload: { id: m.id, updates: { unit } }
-                                  })
-                                }
-                              >
-                                <SelectTrigger className="w-24 h-8 text-xs">
-                                  <SelectValue />
-                                </SelectTrigger>
-                                <SelectContent>
-                                  {UNIT_GROUPS.map((group) => (
-                                    <SelectGroup key={group}>
-                                      <SelectLabel className="text-xs text-muted-foreground">{group}</SelectLabel>
-                                      {TAKEOFF_UNITS.filter((u) => u.group === group).map((u) => (
-                                        <SelectItem key={u.value} value={u.value} className="text-xs">
-                                          {u.value}
-                                        </SelectItem>
-                                      ))}
-                                    </SelectGroup>
-                                  ))}
-                                </SelectContent>
-                              </Select>
-                              <div className="ml-auto flex items-center gap-2">
-                                <span
-                                  className="inline-flex h-3 w-3 rounded-full"
-                                  style={{ backgroundColor: m.color }}
-                                />
-                                <Button
-                                  variant="ghost"
-                                  size="icon"
-                                  className="h-8 w-8"
-                                  onClick={() => {
-                                    canvasActionsRef.current?.removeObjects(m.id);
-                                    dispatch({ type: 'DELETE_MEASUREMENT', payload: m.id });
-                                  }}
-                                  aria-label="Delete measurement"
-                                >
-                                  <Trash2 className="h-4 w-4" />
-                                </Button>
-                              </div>
-                            </div>
-                            <p className="text-[11px] text-muted-foreground">
-                              {new Date(m.timestamp).toLocaleString()}
-                            </p>
+
+                            {/* Page ref */}
+                            <span className="text-[9px] text-muted-foreground/40 shrink-0 flex items-center gap-0.5">
+                              p.{m.pageIndex + 1}
+                              {!(state as any).scales?.[m.pageIndex] && (
+                                <span title="Page not calibrated" className="text-amber-400">⚠</span>
+                              )}
+                            </span>
+
+                            {/* In estimate dot */}
+                            {m.addedToEstimate && (
+                              <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 shrink-0" title="In estimate" />
+                            )}
+
+                            {/* Color dot */}
+                            <span className="h-2 w-2 rounded-full shrink-0" style={{ backgroundColor: m.color }} />
+
+                            {/* Delete */}
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-6 w-6 shrink-0 text-muted-foreground/30 hover:text-destructive hover:bg-destructive/10"
+                              onClick={() => {
+                                canvasActionsRef.current?.removeObjects(m.id);
+                                dispatch({ type: 'DELETE_MEASUREMENT', payload: m.id });
+                              }}
+                            >
+                              <Trash2 className="h-3 w-3" />
+                            </Button>
                           </div>
                         );
                       })
                     )}
                   </div>
 
+                  {/* Sticky totals + combine — always visible at card bottom */}
                   {filteredMeasurements.length > 0 && (
-                    <div className="mt-4 pt-3 border-t space-y-2 text-sm">
+                    <div className="border-t border-border/40 bg-card px-3 py-2.5 space-y-2">
                       {sidebarSelectedIds.size >= 2 && (() => {
                         const selected = filteredMeasurements.filter(m => sidebarSelectedIds.has(m.id));
                         const units = [...new Set(selected.map(m => m.unit))];
@@ -1845,7 +1829,7 @@ export const PDFTakeoff = ({ projectId, estimateId, onAddCostItems }: PDFTakeoff
                           <Button
                             variant="outline"
                             size="sm"
-                            className={`w-full ${mixedUnits ? 'border-amber-400 text-amber-400 opacity-70 cursor-not-allowed' : 'border-amber-500 text-amber-400 hover:bg-amber-950/20'}`}
+                            className={`w-full h-7 text-xs ${mixedUnits ? 'border-amber-400/50 text-amber-400/60 cursor-not-allowed' : 'border-amber-500/60 text-amber-400 hover:bg-amber-950/20'}`}
                             disabled={mixedUnits}
                             onClick={() => {
                               if (mixedUnits) return;
@@ -1868,22 +1852,20 @@ export const PDFTakeoff = ({ projectId, estimateId, onAddCostItems }: PDFTakeoff
                               toast.success(`Combined ${selected.length} measurements → ${total.toFixed(2)} ${units[0]}`);
                             }}
                           >
-                            <Combine className="h-4 w-4 mr-2" />
-                            {mixedUnits
-                              ? `Mixed units (${units.join(' + ')}). Select the same unit.`
-                              : `Combine ${sidebarSelectedIds.size} selected (${total.toFixed(2)} ${units[0]})`}
+                            <Combine className="h-3 w-3 mr-1.5" />
+                            {mixedUnits ? 'Mixed units' : `Combine ${sidebarSelectedIds.size} (${total.toFixed(2)} ${units[0]})`}
                           </Button>
                         );
                       })()}
-                      <div className="flex justify-between">
-                        <span>Total measurements</span>
+                      <div className="flex items-center justify-between text-xs">
+                        <span className="text-muted-foreground">Total</span>
                         <span className="font-semibold">{filteredMeasurements.length}</span>
                       </div>
-                      <div className="grid grid-cols-2 gap-2 text-xs text-muted-foreground">
-                        <span>LM: {totalsByUnit.LM.toFixed(2)}</span>
-                        <span>M²: {totalsByUnit.M2.toFixed(2)}</span>
-                        <span>M³: {totalsByUnit.M3.toFixed(2)}</span>
-                        <span>Count: {totalsByUnit.count.toFixed(0)}</span>
+                      <div className="grid grid-cols-2 gap-x-3 gap-y-0.5 text-[10px]">
+                        {totalsByUnit.LM > 0 && <span className="text-muted-foreground">LM: <span className="text-foreground font-mono">{totalsByUnit.LM.toFixed(2)}</span></span>}
+                        {totalsByUnit.M2 > 0 && <span className="text-muted-foreground">M²: <span className="text-foreground font-mono">{totalsByUnit.M2.toFixed(2)}</span></span>}
+                        {totalsByUnit.M3 > 0 && <span className="text-muted-foreground">M³: <span className="text-foreground font-mono">{totalsByUnit.M3.toFixed(2)}</span></span>}
+                        {totalsByUnit.count > 0 && <span className="text-muted-foreground">EA: <span className="text-foreground font-mono">{totalsByUnit.count.toFixed(0)}</span></span>}
                       </div>
                     </div>
                   )}
@@ -1903,6 +1885,18 @@ export const PDFTakeoff = ({ projectId, estimateId, onAddCostItems }: PDFTakeoff
                   onUpdateMeasurement={(id, updates) => dispatch({ type: 'UPDATE_MEASUREMENT', payload: { id, updates } })}
                 />
 
+                <AIPlanAnalysisPanel
+                  canvasElementRef={canvasRef}
+                  planId={state.pdfFile?.planId}
+                  projectId={projectId}
+                  projectState={projectState}
+                  isCalibrated={state.isCalibrated}
+                  onAddCostItems={(items) => {
+                    items.forEach(item => dispatch({ type: 'ADD_COST_ITEM', payload: item as any }));
+                    setActiveTab('costs');
+                  }}
+                />
+
               </div>
             </div>
           )}
@@ -1916,7 +1910,6 @@ export const PDFTakeoff = ({ projectId, estimateId, onAddCostItems }: PDFTakeoff
                 className="bg-primary text-primary-foreground hover:bg-primary/90"
               >
                 Done Measuring
-                <span className="ml-2">→</span>
               </Button>
             </div>
           )}
@@ -1977,6 +1970,34 @@ export const PDFTakeoff = ({ projectId, estimateId, onAddCostItems }: PDFTakeoff
         onClose={() => setUpgradeModal({ open: false, feature: '' })}
         feature={upgradeModal.feature}
       />
+
+      {/* Recalibration safety confirmation */}
+      <Dialog open={showRecalibConfirm} onOpenChange={setShowRecalibConfirm}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <AlertTriangle className="h-5 w-5 text-amber-400 shrink-0" />
+              Page already calibrated
+            </DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-muted-foreground">
+            Page {state.currentPageIndex + 1} is calibrated at{' '}
+            <span className="font-medium text-foreground">
+              {state.currentScale?.scaleFactor ? `1:${state.currentScale.scaleFactor}` : 'custom scale'}
+            </span>.
+            Recalibrating will update all measurements on this page.
+          </p>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowRecalibConfirm(false)}>Cancel</Button>
+            <Button onClick={() => {
+              setShowRecalibConfirm(false);
+              dispatch({ type: 'SET_CALIBRATION_MODE', payload: 'manual' });
+            }}>
+              Recalibrate
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
 
     {pendingModMeasurement && modMode && modMode !== 'custom' && (

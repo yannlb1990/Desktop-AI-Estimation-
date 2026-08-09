@@ -90,26 +90,30 @@ export default function JobCostTracker({ projectId }: JobCostTrackerProps) {
   // ─── Load ────────────────────────────────────────────────────────────────
 
   useEffect(() => {
-    const projectsRaw = localStorage.getItem(getUserStorageKey("local_projects"));
-    const projects: any[] = projectsRaw ? JSON.parse(projectsRaw) : [];
-    const project = projects.find((p: any) => p.id === projectId);
-    const items = project?.estimate_items || [];
-    setEstimateItems(items);
+    try {
+      const projectsRaw = localStorage.getItem(getUserStorageKey("local_projects"));
+      const projects: any[] = projectsRaw ? JSON.parse(projectsRaw) : [];
+      const project = projects.find((p: any) => p.id === projectId);
+      const items = project?.estimate_items || [];
+      setEstimateItems(items);
 
-    const saved = localStorage.getItem(getUserStorageKey(BUDGET_LS_KEY(projectId)));
-    if (saved) {
-      setManualBudgets(JSON.parse(saved));
-    } else if (project?.trade_budgets && Object.keys(project.trade_budgets).length > 0) {
-      // Restored from Supabase — write back to standalone key for future fast reads
-      setManualBudgets(project.trade_budgets);
-      localStorage.setItem(getUserStorageKey(BUDGET_LS_KEY(projectId)), JSON.stringify(project.trade_budgets));
-    } else if (items.length > 0) {
-      // Pre-fill from estimate items on first open
-      const init: Record<string, number> = {};
-      items.forEach((item: any) => {
-        if (item.trade) init[item.trade] = (init[item.trade] || 0) + computeItemPrice(item);
-      });
-      setManualBudgets(init);
+      const saved = localStorage.getItem(getUserStorageKey(BUDGET_LS_KEY(projectId)));
+      if (saved) {
+        setManualBudgets(JSON.parse(saved));
+      } else if (project?.trade_budgets && Object.keys(project.trade_budgets).length > 0) {
+        // Restored from Supabase — write back to standalone key for future fast reads
+        setManualBudgets(project.trade_budgets);
+        localStorage.setItem(getUserStorageKey(BUDGET_LS_KEY(projectId)), JSON.stringify(project.trade_budgets));
+      } else if (items.length > 0) {
+        // Pre-fill from estimate items on first open
+        const init: Record<string, number> = {};
+        items.forEach((item: any) => {
+          if (item.trade) init[item.trade] = (init[item.trade] || 0) + computeItemPrice(item);
+        });
+        setManualBudgets(init);
+      }
+    } catch {
+      // Corrupted localStorage — start with empty state
     }
 
     loadJobCostsMerged(projectId).then(setEntries);

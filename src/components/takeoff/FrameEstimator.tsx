@@ -16,6 +16,7 @@ import {
   CeilingHeight, TimberSize, SteelSize, extractWallSegments, calculateFramingBOM,
 } from '@/lib/takeoff/framingCalculations';
 import { detectWallsFromPDF, DetectedWall, DetectionResult } from '@/lib/takeoff/wallDetection';
+import { getUserStorageKey } from '@/lib/localAuth';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -431,7 +432,7 @@ export function FrameEstimator({
   measurements, isCalibrated, unitsPerMetre, onAddCostItems,
   pdfUrl, pageIndex, projectId, onWallDetected, onActiveSectionChange, onUpdateMeasurement,
 }: FrameEstimatorProps) {
-  const storageKey = projectId ? `frame_sections_${projectId}` : null;
+  const storageKey = projectId ? getUserStorageKey(`frame_sections_${projectId}`) : null;
 
   const [open, setOpen] = useState(true);
   const [mode, setMode] = useState<'auto' | 'manual'>('manual');

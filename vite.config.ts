@@ -13,4 +13,11 @@ export default defineConfig(() => ({
       "@": path.resolve(__dirname, "./src"),
     },
   },
+  build: {
+    // Strip all console.* calls from production bundle
+    minify: "esbuild",
+  },
+  esbuild: {
+    drop: ["console", "debugger"],
+  },
 }));

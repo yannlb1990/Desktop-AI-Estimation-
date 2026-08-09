@@ -4,7 +4,7 @@ import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import {
-  Check, X, ArrowRight, Shield, Zap, Users,
+  Check, X, Shield, Zap, Users,
   FileText, BarChart3, Package, Upload, Calculator,
   Download, ChevronDown, ChevronUp, Loader2,
 } from "lucide-react";
@@ -115,12 +115,54 @@ const FEATURE_LABELS: Record<FeatureKey, { label: string; icon: React.ReactNode;
 };
 
 const FAQ = [
-  { q: "Is a credit card required for the trial?", a: "No. You get 14 days of full access with no card required." },
-  { q: "What happens when the trial ends?", a: "You move onto the plan you selected. If you don't upgrade, your account switches to read-only until you choose a plan." },
-  { q: "Can I switch plans?", a: "Yes, upgrade or downgrade any time. Upgrades apply immediately; downgrades apply at the next billing cycle." },
-  { q: "Are prices in AUD?", a: "Yes. All prices are in Australian dollars and include GST." },
-  { q: "What counts as a 'project'?", a: "One construction job with plans, measurements and an estimate. Archived projects don't count toward your limit." },
-  { q: "Do you offer refunds?", a: "All payments are final. If you have a billing question contact us at support@metricore.com.au and we'll do our best to help." },
+  {
+    q: "How does the quantity takeoff work?",
+    a: "Upload your PDF architectural plans, set the drawing scale (e.g. 1:100), then draw directly over the plan to measure areas, lengths, and item counts. Metricore also includes automated extraction that reads your plans and identifies quantities across trades, from concrete footings to roof framing, which you can review and push directly into your cost estimate with one click.",
+  },
+  {
+    q: "What types of plans does Metricore support?",
+    a: "Any PDF: DA drawings, construction drawings, or concept plans. Plans with a text layer or vector-based content work with automated extraction. Scanned image-only PDFs can still be measured manually by drawing over them. Multi-page plans are fully supported; you can navigate between pages and annotate each one independently.",
+  },
+  {
+    q: "How accurate are the cost estimates?",
+    a: "Metricore uses an Australian cost rate database covering 26 trades, with state-based pricing multipliers for QLD, NSW, VIC, WA, SA, ACT, TAS, and NT. Every rate can be overridden with your own figures. Accuracy depends on the precision of your measured quantities. The platform calculates from what you give it, so the closer your takeoff, the closer your estimate.",
+  },
+  {
+    q: "Can I use my own supplier rates?",
+    a: "Yes. The Materials Library (Pro plan) lets you save preferred suppliers and materials with your own unit rates. These auto-fill in estimates when you select matching line items, so your pricing reflects your actual cost base rather than industry benchmarks. You can also manually override any rate line by line within an estimate.",
+  },
+  {
+    q: "What does Metricore export?",
+    a: "Completed estimates export as a Bill of Quantities in CSV format, professional PDF tender documents ready to send to clients, and Scope of Work PDFs formatted to your business details. All formats include trade breakdowns, quantities, unit rates, labour hours, and totals. Annotated plan PDFs with your measurements marked are also available on the Pro plan.",
+  },
+  {
+    q: "Does it cover all Australian states?",
+    a: "Yes. State-based cost multipliers apply to all trade rates, reflecting real market variation between each state and territory. Select your state in the estimate settings and every rate adjusts automatically. You can also set different states on individual projects if you work across multiple markets.",
+  },
+  {
+    q: "What project types does it cover?",
+    a: "Residential construction is the primary focus: new homes, extensions, renovations, and fitouts across 26 trades from earthworks and concrete to electrical, plumbing, and landscaping. Custom trades and rates can be added manually for specialist or commercial work. The rate database is calibrated to Australian residential build costs.",
+  },
+  {
+    q: "Is a credit card required for the trial?",
+    a: "No. You get 14 days of full access with no card required. Every feature, every export, no restrictions. At the end of the trial you choose a plan to continue, or your account switches to read-only.",
+  },
+  {
+    q: "Can I switch plans?",
+    a: "Yes, upgrade or downgrade any time from your account settings. Upgrades take effect immediately. Downgrades apply at the start of your next billing cycle so you keep full access until then.",
+  },
+  {
+    q: "Are prices in AUD?",
+    a: "Yes. All prices are in Australian dollars and include GST. Your Stripe invoice will reflect AUD and show the GST component separately.",
+  },
+  {
+    q: "What counts as a project?",
+    a: "One construction job — plans, measurements, and an estimate all in one place. Archived projects do not count toward your plan limit. You can archive and unarchive at any time without losing any data.",
+  },
+  {
+    q: "Do you offer refunds?",
+    a: "All payments are final. If you have a billing question or issue, contact us at support@metricore.com.au and we will do our best to resolve it.",
+  },
 ];
 
 // ── Component ─────────────────────────────────────────────────────────────────
@@ -131,20 +173,34 @@ const Pricing = () => {
   const [selected, setSelected] = useState<PlanId>('pro');
   const [openFaq, setOpenFaq] = useState<number | null>(null);
   const [checkingOut, setCheckingOut] = useState(false);
+  const [syncing, setSyncing] = useState(isSignedIn());
 
   const signedIn = isSignedIn();
   const { isTrialExpired, isTrialing, subscription } = getSubscriptionStatus();
   const alreadyPaid = subscription?.activePlan !== 'trial' && !!subscription?.subscribedAt;
 
-  // Re-sync on mount — if user has full access (e.g. admin), redirect away from pricing immediately
+  // Re-sync on mount: signed-in users with active subscriptions redirect to dashboard.
+  // Hold render until sync completes to prevent flash of pricing page.
   useEffect(() => {
-    if (!signedIn) return;
+    if (!signedIn) { setSyncing(false); return; }
     syncSubscriptionFromDB().then(() => {
       const { isTrialExpired: expired } = getSubscriptionStatus();
-      if (!expired) navigate('/dashboard', { replace: true });
-    });
+      if (!expired) { navigate('/dashboard', { replace: true }); return; }
+      setSyncing(false);
+    }).catch(() => setSyncing(false));
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  if (syncing) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-background">
+        <div className="flex flex-col items-center gap-3">
+          <div className="h-8 w-8 rounded-full border-2 border-primary border-t-transparent animate-spin" />
+          <p className="text-sm text-muted-foreground">Loading…</p>
+        </div>
+      </div>
+    );
+  }
 
   const selectedPlan = PLANS.find(p => p.id === selected)!;
 
@@ -156,6 +212,7 @@ const Pricing = () => {
       navigate(`/auth?plan=${planId}&billing=${billing}&mode=signup`);
       return;
     }
+    if (checkingOut) return;
     setCheckingOut(true);
     try {
       await redirectToStripeCheckout(planId, billing);
@@ -167,6 +224,7 @@ const Pricing = () => {
 
   const handleDirectSubscribe = async (planId: PlanId) => {
     if (signedIn) {
+      if (checkingOut) return;
       setCheckingOut(true);
       try {
         await redirectToStripeCheckout(planId, billing);
@@ -191,6 +249,60 @@ const Pricing = () => {
         <meta property="og:title" content="Construction Estimation Software Pricing | Metricore" />
         <meta property="og:description" content="Simple, transparent pricing for Metricore. Free trial available, no credit card required. Plans for sole traders to mid-size construction firms." />
         <meta property="og:url" content="https://metricore.com.au/pricing" />
+        <script type="application/ld+json">{JSON.stringify({
+          "@context": "https://schema.org",
+          "@type": "FAQPage",
+          "mainEntity": [
+            {
+              "@type": "Question",
+              "name": "Is there a free trial?",
+              "acceptedAnswer": {
+                "@type": "Answer",
+                "text": "Yes. Every new account includes a 14-day free trial with no credit card required. You get full access to the plan you select during signup."
+              }
+            },
+            {
+              "@type": "Question",
+              "name": "Can I cancel my subscription at any time?",
+              "acceptedAnswer": {
+                "@type": "Answer",
+                "text": "Yes. You can cancel at any time from your account settings. Your access continues until the end of the current billing period."
+              }
+            },
+            {
+              "@type": "Question",
+              "name": "What is included in the Starter plan?",
+              "acceptedAnswer": {
+                "@type": "Answer",
+                "text": "The Starter plan ($79 AUD/month) includes up to 3 active projects, PDF plan upload, manual quantity measurements, and cost estimation across all trades."
+              }
+            },
+            {
+              "@type": "Question",
+              "name": "What does the Professional plan include?",
+              "acceptedAnswer": {
+                "@type": "Answer",
+                "text": "The Professional plan ($149 AUD/month) includes unlimited projects, BOQ CSV export, SOW PDF generation, AI Plan Analyser, Market Insights, Materials Library, and full takeoff PDF reports."
+              }
+            },
+            {
+              "@type": "Question",
+              "name": "Is Metricore available for Australian builders?",
+              "acceptedAnswer": {
+                "@type": "Answer",
+                "text": "Yes. Metricore is built specifically for the Australian construction industry. All rates, trades, and NCC compliance references are tailored for Australian builders, subcontractors, and quantity surveyors."
+              }
+            },
+            {
+              "@type": "Question",
+              "name": "What file types can I upload?",
+              "acceptedAnswer": {
+                "@type": "Answer",
+                "text": "You can upload PDF plan sets directly. Metricore renders each page and lets you measure areas, lengths, and counts directly on the plan."
+              }
+            }
+          ]
+        })}</script>
       </Helmet>
     <div className="min-h-screen bg-background">
       <Navigation />
@@ -199,8 +311,8 @@ const Pricing = () => {
 
         {/* ── Signed-in status banners ── */}
         {alreadyPaid && (
-          <div className="mb-8 bg-muted/100/10 border border-[#E1DCC9]/20 rounded-xl px-5 py-4 text-center text-sm text-[#E1DCC9]/60 dark:text-[#E1DCC9]/80">
-            You have an active <strong>{PLAN_NAMES[subscription!.activePlan as PlanId]}</strong> subscription. To change your plan, please contact support.
+          <div className="mb-8 bg-muted/10 border border-[#E1DCC9]/20 rounded-xl px-5 py-4 text-center text-sm text-[#E1DCC9]/60 dark:text-[#E1DCC9]/80">
+            You have an active <strong>{PLAN_NAMES[subscription?.activePlan as PlanId] ?? subscription?.activePlan ?? 'your plan'}</strong> subscription. To change your plan, please contact support.
           </div>
         )}
         {!alreadyPaid && isTrialExpired && signedIn && (
@@ -244,7 +356,7 @@ const Pricing = () => {
               }`}
             >
               Annual
-              <span className="bg-muted/100/15 text-[#E1DCC9]/70 text-xs rounded-full px-2 py-0.5 font-semibold">
+              <span className="bg-muted/15 text-[#E1DCC9]/70 text-xs rounded-full px-2 py-0.5 font-semibold">
                 Save 20%
               </span>
             </button>
@@ -259,8 +371,10 @@ const Pricing = () => {
             return (
               <div
                 key={plan.id}
-                onClick={() => { setSelected(plan.id); handleCTA(plan.id); }}
-                className={`relative text-left rounded-2xl border-2 p-6 transition-all cursor-pointer ${
+                onClick={() => { if (checkingOut) return; setSelected(plan.id); handleCTA(plan.id); }}
+                className={`relative text-left rounded-2xl border-2 p-6 transition-all ${
+                  checkingOut ? 'cursor-default opacity-70' : 'cursor-pointer'
+                } ${
                   isSelected
                     ? 'border-primary bg-primary/5 shadow-lg ring-2 ring-primary/20'
                     : 'border-border bg-card hover:border-primary/40 hover:shadow-md'
@@ -322,7 +436,6 @@ const Pricing = () => {
                   onClick={(e) => { e.stopPropagation(); handleCTA(plan.id); }}
                 >
                   {alreadyPaid ? 'Already Subscribed' : 'Start Free Trial'}
-                  {!alreadyPaid && <ArrowRight className="ml-2 h-4 w-4" />}
                 </Button>
 
                 {!alreadyPaid && (
@@ -369,9 +482,9 @@ const Pricing = () => {
                 ) : alreadyPaid ? (
                   "Already Subscribed"
                 ) : signedIn ? (
-                  <>Subscribe to {PLAN_NAMES[selected]} <ArrowRight className="ml-2 h-5 w-5" /></>
+                  <>Subscribe to {PLAN_NAMES[selected]}</>
                 ) : (
-                  <>Get Started with {PLAN_NAMES[selected]} <ArrowRight className="ml-2 h-5 w-5" /></>
+                  <>Get Started with {PLAN_NAMES[selected]}</>
                 )}
               </Button>
               {!alreadyPaid && (
@@ -517,9 +630,9 @@ const Pricing = () => {
               ) : alreadyPaid ? (
                 "Already Subscribed"
               ) : signedIn ? (
-                <>Subscribe to {PLAN_NAMES[selected]} <ArrowRight className="ml-2 h-5 w-5" /></>
+                <>Subscribe to {PLAN_NAMES[selected]}</>
               ) : (
-                <>Start Free Trial with {PLAN_NAMES[selected]} <ArrowRight className="ml-2 h-5 w-5" /></>
+                <>Start Free Trial with {PLAN_NAMES[selected]}</>
               )}
             </Button>
             {!signedIn && (

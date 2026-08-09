@@ -23,7 +23,7 @@ export async function redirectToStripeCheckout(
     {
       plan_id: planId,
       billing_period: billingPeriod,
-      success_url: `${window.location.origin}/checkout-success`,
+      success_url: `${window.location.origin}/checkout-success?plan=${planId}&billing=${billingPeriod}`,
       cancel_url: `${window.location.origin}/pricing`,
     },
   );

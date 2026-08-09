@@ -6,7 +6,23 @@ import { FFERoomSection } from './FFERoomSection';
 import { loadFFESheet, saveFFESheet, sheetTotal } from '@/lib/ffe/storage';
 import { exportFFEtoPDF } from '@/lib/ffe/pdfExport';
 import type { FFESheet, FFEItem, FFERoom } from '@/lib/ffe/types';
+import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
+
+async function fetchAsBase64(url: string): Promise<string | null> {
+  try {
+    const resp = await fetch(url);
+    const blob = await resp.blob();
+    return new Promise<string>((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onloadend = () => resolve(reader.result as string);
+      reader.onerror = reject;
+      reader.readAsDataURL(blob);
+    });
+  } catch {
+    return null;
+  }
+}
 
 function newId() {
   return `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
@@ -73,7 +89,33 @@ export const FFEModule: React.FC<FFEModuleProps> = ({ projectId, projectName }) 
   const handleExportPDF = async () => {
     setExporting(true);
     try {
-      await exportFFEtoPDF(sheet, projectName || 'Project');
+      // Resolve all photo URLs to base64 data URLs so jsPDF can embed them
+      const resolvedUrls: Record<string, string> = {};
+      for (const room of sheet.rooms) {
+        for (const item of room.items) {
+          for (const photo of item.photos) {
+            // Local base64 — already usable
+            if (photo.localUrl?.startsWith('data:')) {
+              resolvedUrls[photo.id] = photo.localUrl;
+              continue;
+            }
+            // Supabase storage path — get signed URL then convert to base64
+            const su = photo.supabaseUrl ?? '';
+            if (su.startsWith('storage:ffe-photos/')) {
+              const path = su.replace('storage:ffe-photos/', '');
+              const { data } = await supabase.storage.from('ffe-photos').createSignedUrl(path, 3600);
+              if (data?.signedUrl) {
+                const b64 = await fetchAsBase64(data.signedUrl);
+                if (b64) resolvedUrls[photo.id] = b64;
+              }
+            } else if (su.startsWith('https://')) {
+              const b64 = await fetchAsBase64(su);
+              if (b64) resolvedUrls[photo.id] = b64;
+            }
+          }
+        }
+      }
+      await exportFFEtoPDF(sheet, projectName || 'Project', resolvedUrls);
       toast.success('FF&E schedule downloaded');
     } catch (e) {
       console.error(e);

@@ -2,7 +2,7 @@ import { useNavigate } from 'react-router-dom';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Lock, Zap, ArrowRight } from 'lucide-react';
+import { Lock, Zap } from 'lucide-react';
 
 interface UpgradeModalProps {
   open: boolean;
@@ -44,7 +44,6 @@ export const UpgradeModal = ({ open, onClose, feature, requiredPlan = 'Professio
             onClick={() => { navigate('/pricing'); onClose(); }}
           >
             View Plans
-            <ArrowRight className="ml-2 h-4 w-4" />
           </Button>
           <Button variant="ghost" className="w-full" onClick={onClose}>
             Maybe later

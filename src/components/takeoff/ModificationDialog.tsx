@@ -563,20 +563,20 @@ export const ModificationDialog: React.FC<ModificationDialogProps> = ({
     insulation: false,
   });
 
-  // Default door form
+  // Default door form — width seeded from measured line on plan
   const [doorForm, setDoorForm] = useState<DoorForm>({
     doorType: 'Hinged',
-    widthMm: 820,
+    widthMm: Math.min(2400, Math.max(600, Math.round(measurement.realValue * 1000))),
     heightMm: 2040,
     core: 'Hollow',
     architrave: true,
     hardware: true,
   });
 
-  // Default window form
+  // Default window form — width seeded from measured line on plan
   const [windowForm, setWindowForm] = useState<WindowForm>({
     windowType: 'Sliding',
-    widthMm: 1200,
+    widthMm: Math.min(3000, Math.max(300, Math.round(measurement.realValue * 1000))),
     heightMm: 1200,
     glazing: 'Single',
     sill: true,
@@ -605,7 +605,7 @@ export const ModificationDialog: React.FC<ModificationDialogProps> = ({
   const title = mode === 'wall' ? 'New Wall' : mode === 'door' ? 'New Door' : 'New Window';
   const subtitle = mode === 'wall'
     ? `Wall length: ${wallLength.toFixed(2)} m (from plan)`
-    : undefined;
+    : `Opening width from plan: ${measurement.realValue.toFixed(2)} m`;
 
   const handleConfirm = () => {
     // Build updated measurement with appropriate metadata

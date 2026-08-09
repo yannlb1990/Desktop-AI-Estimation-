@@ -89,14 +89,18 @@ export async function syncProjectToSupabase(project: any, retries = 3): Promise<
   }
 }
 
-/** Delete a project from Supabase. Never throws. */
+/** Soft-delete a project (sets deleted_at). Never hard-deletes. Never throws. */
 export async function deleteProjectFromSupabase(projectId: string): Promise<void> {
   const userId = await getAuthUserId();
   if (!userId) return;
   try {
-    await (supabase as any).from('projects').delete().eq('id', projectId).eq('user_id', userId);
+    await (supabase as any)
+      .from('projects')
+      .update({ deleted_at: new Date().toISOString() })
+      .eq('id', projectId)
+      .eq('user_id', userId);
   } catch (e) {
-    console.error('[deleteProject] Supabase delete failed:', e instanceof Error ? e.message : e);
+    console.error('[deleteProject] Supabase soft-delete failed:', e instanceof Error ? e.message : e);
   }
 }
 

@@ -15,6 +15,7 @@ import { saveQuoteToLibrary } from "@/components/DocumentLibrary"
 interface QuoteGeneratorProps {
   project: any
   estimate?: any
+  listenForOpen?: boolean
 }
 
 interface QuoteLine {
@@ -71,7 +72,7 @@ const LOAD_BRAND = () => {
 
 const au$ = (n: number) => "$" + n.toLocaleString("en-AU", { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 
-export const QuoteGenerator = ({ project, estimate }: QuoteGeneratorProps) => {
+export const QuoteGenerator = ({ project, estimate, listenForOpen }: QuoteGeneratorProps) => {
   const [open, setOpen] = useState(false)
   const [activeTab, setActiveTab] = useState("details")
   const logoInputRef = useRef<HTMLInputElement>(null)
@@ -82,6 +83,22 @@ export const QuoteGenerator = ({ project, estimate }: QuoteGeneratorProps) => {
   useEffect(() => {
     if (open) autoLoadEstimateLines()
   }, [open, absorbOverheads])
+
+  // Auto-refresh when CostEstimator transfers new items while the dialog is open
+  useEffect(() => {
+    if (!open) return;
+    const handler = () => autoLoadEstimateLines();
+    window.addEventListener('estimate-updated', handler);
+    return () => window.removeEventListener('estimate-updated', handler);
+  }, [open]);
+
+  // Auto-open when CostEstimator fires open-quote-generator (header instance only)
+  useEffect(() => {
+    if (!listenForOpen) return;
+    const handler = () => setOpen(true);
+    window.addEventListener('open-quote-generator', handler);
+    return () => window.removeEventListener('open-quote-generator', handler);
+  }, [listenForOpen]);
 
   // Brand
   const brand = LOAD_BRAND()
@@ -129,6 +146,90 @@ export const QuoteGenerator = ({ project, estimate }: QuoteGeneratorProps) => {
     const projects: any[] = JSON.parse(localStorage.getItem(getUserStorageKey("local_projects")) || "[]")
     const proj = projects.find((p: any) => p.id === project?.id)
     const estimateItems: any[] = proj?.estimate_items || estimate?.estimate_items || []
+
+    // Fallback: no estimate items yet — read raw CostItems from the takeoff state so
+    // the Quote Generator works without requiring the "Transfer to Estimate" step first.
+    if (estimateItems.length === 0 && project?.id) {
+      try {
+        const takeoffRaw = localStorage.getItem(`takeoff_${project.id}`)
+        if (takeoffRaw) {
+          const takeoffState = JSON.parse(takeoffRaw)
+          const costItems: any[] = takeoffState.costItems || []
+          if (costItems.length > 0) {
+            const fallbackLines: QuoteLine[] = []
+            let fallbackBase = 0
+
+            costItems.forEach((item: any) => {
+              const matTotal = (item.quantity || 0) * (item.unitCost || 0) * (1 + ((item.materialWastePercent ?? 5) / 100))
+              const labourCost = (item.labourHours || 0) * (item.hourlyRate ?? 65) * (1 + ((item.labourWastePercent ?? 10) / 100))
+              const fixingsCost = (item.relatedMaterials || [])
+                .filter((rm: any) => rm.isAccepted || rm.confirmed)
+                .reduce((s: number, rm: any) => s + (rm.quantity || 0) * (rm.unitCost || rm.unit_price || 0), 0)
+              const lineTotal = matTotal + labourCost + fixingsCost
+              const qty = Math.max(item.quantity || 1, 1)
+              fallbackBase += lineTotal
+              fallbackLines.push({
+                id: item.id,
+                description: item.name || item.trade || item.category || "Item",
+                qty,
+                unit: item.unit || "m²",
+                unitPrice: Math.round((lineTotal / qty) * 100) / 100,
+                included: true,
+                fromEstimate: true,
+                trade: item.trade || item.category || "General",
+              } as QuoteLine)
+            })
+
+            // Consumables from CostEstimator's own storage key
+            let fallbackConsumables = 0
+            try {
+              const consRaw = localStorage.getItem(getUserStorageKey(`cost_estimator_consumables_${project.id}`))
+              const takeoffCons: any[] = consRaw ? JSON.parse(consRaw) : []
+              takeoffCons.forEach((c: any) => {
+                const lineTotal = (c.quantity || 0) * (c.unitCost || 0)
+                if (lineTotal > 0) {
+                  fallbackConsumables += lineTotal
+                  fallbackLines.push({
+                    id: c.id || crypto.randomUUID(),
+                    description: `Consumables — ${c.name}`,
+                    qty: c.quantity || 1,
+                    unit: c.unit || "ea",
+                    unitPrice: Math.round((c.unitCost || 0) * 100) / 100,
+                    included: true,
+                    fromEstimate: true,
+                    trade: "Site Consumables",
+                  } as QuoteLine)
+                }
+              })
+            } catch { /* non-fatal */ }
+
+            // Margin bridge using saved CostEstimator prefs
+            let _prefs: any = {}
+            try { _prefs = JSON.parse(localStorage.getItem(getUserStorageKey(`cost_estimator_prefs_${project.id}`)) || '{}') } catch {}
+            const _marginPct: number = _prefs.marginPercent ?? 15
+            const allBase = fallbackBase + fallbackConsumables
+            if (_marginPct > 0 && allBase > 0) {
+              const bridgeAmount = Math.round(allBase * (_marginPct / 100) * 100) / 100
+              if (bridgeAmount > 0.01) {
+                fallbackLines.push({
+                  id: "overhead-margin-bridge",
+                  description: "Project Management, Site Overheads & Margin",
+                  qty: 1,
+                  unit: "item",
+                  unitPrice: bridgeAmount,
+                  included: true,
+                  fromEstimate: true,
+                  trade: "Project Costs",
+                } as QuoteLine)
+              }
+            }
+
+            return fallbackLines
+          }
+        }
+      } catch { /* corrupted takeoff state — continue with empty lines */ }
+    }
+
     // Use current labour rates saved by EstimateTemplate (falls back to stored item rate)
     const cfgRates: Record<string, number> = proj?.estimate_config?.labourRates || {}
     const cfgDefaultRate: number = proj?.estimate_config?.defaultLabourRate || 65
@@ -140,7 +241,7 @@ export const QuoteGenerator = ({ project, estimate }: QuoteGeneratorProps) => {
       const qty = parseFloat(item.quantity) || 1
       const unitPrice = parseFloat(item.unit_price) || 0
       const labourHours = parseFloat(item.labour_hours) || 0
-      const labourRate = cfgRates[item.trade] || cfgDefaultRate || parseFloat(item.labour_rate) || 65
+      const labourRate = cfgRates[item.trade] || parseFloat(item.labour_rate) || cfgDefaultRate || 65
       const matWaste = (item.material_wastage_pct ?? 5) / 100
       const labWaste = (item.labour_wastage_pct ?? 10) / 100
       const markup = (item.markup_pct ?? 0) / 100
@@ -149,7 +250,7 @@ export const QuoteGenerator = ({ project, estimate }: QuoteGeneratorProps) => {
       // Include confirmed related materials in this line's cost
       if (Array.isArray(item.relatedMaterials)) {
         item.relatedMaterials.forEach((rm: any) => {
-          if (rm.confirmed) matTotal += (rm.quantity || 0) * (rm.unit_price || 0)
+          if (rm.isAccepted || rm.confirmed) matTotal += (rm.quantity || 0) * (rm.unit_price || 0)
         })
       }
 

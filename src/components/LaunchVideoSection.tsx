@@ -1,5 +1,5 @@
 import { useRef, useState } from "react";
-import { ArrowRight, Play } from "lucide-react";
+import { Play } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { isSignedIn } from "@/lib/localAuth";
 
@@ -44,13 +44,13 @@ const LaunchVideoSection = () => {
             </span>
           </div>
           <h2 className="font-display text-3xl sm:text-4xl md:text-5xl font-bold text-white mb-4 leading-tight">
-            From plans to tender,
+            From plans to quote,
             <span className="block mt-1 bg-gradient-to-r from-primary via-[#E1DCC9]/80 to-primary/60 bg-clip-text text-transparent">
               in minutes.
             </span>
           </h2>
           <p className="text-white/60 text-base md:text-lg max-w-xl mx-auto">
-            Watch Metricore turn a PDF floor plan into a priced tender.
+            Watch Metricore turn a PDF floor plan into a priced quote.
             Upload, calibrate, measure, estimate, schedule, send.
           </p>
         </div>
@@ -116,7 +116,6 @@ const LaunchVideoSection = () => {
             className="bg-primary text-primary-foreground hover:bg-primary/90 shadow-glow text-base md:text-lg px-8 py-6 h-auto font-semibold w-full sm:w-auto"
           >
             Start Free Trial
-            <ArrowRight className="ml-2 h-5 w-5" />
           </Button>
           <p className="text-white/35 text-xs sm:text-sm mt-3 font-mono">
             Plans from $79/month · No credit card required

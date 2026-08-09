@@ -93,6 +93,16 @@ function computeSnapPoint(
   return null;
 }
 
+/**
+ * Returns the CSS-pixel pointer position relative to the canvas, bypassing
+ * Fabric's getElementOffset which adds scrollLeft (document-relative) while
+ * clientX/clientY are viewport-relative — causing drift when the page scrolls.
+ */
+function getCSSPointer(canvas: any, e: { clientX: number; clientY: number }): { x: number; y: number } {
+  const rect = (canvas.upperCanvasEl as HTMLCanvasElement).getBoundingClientRect();
+  return { x: e.clientX - rect.left, y: e.clientY - rect.top };
+}
+
 /** In-place update of a Fabric Line's world endpoints (no scale/skew accumulation). */
 function setFabricLineCoords(line: any, x1: number, y1: number, x2: number, y2: number) {
   line.set({
@@ -1436,9 +1446,8 @@ export const InteractiveCanvas = ({
         const dx = x2 - x1, dy = y2 - y1;
         const len = Math.sqrt(dx * dx + dy * dy);
         if (len < 1) return;
-        // Cap symbol size so overlapping doors don't create a starburst.
-        // symR ≤ 22 CSS px keeps the indicator compact at any zoom/door width.
-        const symR = Math.min(len, 22 * dpr);
+        // Arc radius = full door opening width on screen, matching the plan's door symbol.
+        const symR = len;
         const lineAngle = Math.atan2(dy, dx);
         ctx.save();
         ctx.strokeStyle = color + 'cc';
@@ -3383,10 +3392,9 @@ export const InteractiveCanvas = ({
     const canvas = fabricCanvasRef.current;
     if (!canvas || !viewport) return;
 
-    // CRITICAL FIX: Use getPointer(e.e, true) to get raw canvas pixel coordinates
-    // Then manually convert to world coordinates using viewToWorld
-    // This is more reliable than getPointer(false) across Fabric.js versions
-    const pointer = canvas.getPointer(e.e, true);
+    // Use getCSSPointer: getBoundingClientRect is viewport-relative, matching clientX/clientY.
+    // Fabric's getPointer adds scrollLeft to the offset (document-relative) which causes drift.
+    const pointer = getCSSPointer(canvas, e.e);
     const viewPoint: ViewPoint = { x: pointer.x, y: pointer.y };
 
     // Convert to world coordinates for storage (applies inverse transform)
@@ -3434,8 +3442,8 @@ export const InteractiveCanvas = ({
 
     // Handle eraser — click the specific shape you want to remove
     if (activeTool === 'eraser') {
-      // World-space pointer — getPointer(e, true) gives raw canvas px; viewToWorld converts to world coords
-      const rawPtr = canvas.getPointer(e.e, true);
+      // World-space pointer — getCSSPointer gives viewport-relative CSS coords; viewToWorld converts to world coords
+      const rawPtr = getCSSPointer(canvas, e.e);
       const worldPtr = viewToWorld(rawPtr, transform, viewport!);
       const hitThreshold = 20 / transform.zoom; // 20 screen-px expressed in world units
 
@@ -3767,7 +3775,7 @@ export const InteractiveCanvas = ({
 
     // Handle calibration drag preview (use refs to avoid stale closure)
     if (calibrationMode === 'manual' && isCalibrationDraggingRef.current && calibrationStartPointRef.current) {
-      const pointer = canvas.getPointer(e.e, true);
+      const pointer = getCSSPointer(canvas, e.e);
       const currentWorld = viewToWorld({ x: pointer.x, y: pointer.y }, transform, viewport);
       handleCalibrationMouseMove(currentWorld);
       return;
@@ -3789,7 +3797,7 @@ export const InteractiveCanvas = ({
 
     // Feature 2: Arc drag in select mode
     if (activeTool === 'select' && arcDragRef.current) {
-      const arcPtr = canvas.getPointer(e.e, true);
+      const arcPtr = getCSSPointer(canvas, e.e);
       const newCtrl: WorldPoint = viewToWorld({ x: arcPtr.x, y: arcPtr.y }, transform, viewport);
       const { id, p1, p2 } = arcDragRef.current;
       arcDragRef.current.ctrl = newCtrl;
@@ -3824,7 +3832,7 @@ export const InteractiveCanvas = ({
 
     // Polygon: close-snap indicator + wall-endpoint snap + live cursor tracking
     if (activeTool === 'polygon') {
-      const snapPointer = canvas.getPointer(e.e, true);
+      const snapPointer = getCSSPointer(canvas, e.e);
       let snapWorld: WorldPoint = viewToWorld({ x: snapPointer.x, y: snapPointer.y }, transform, viewport);
       const snapThreshold = 15 / transform.zoom;
 
@@ -3882,8 +3890,7 @@ export const InteractiveCanvas = ({
     // Allow preview even without calibration
     if (!isDrawing || !startPoint) return;
 
-    // CRITICAL FIX: Use getPointer(e.e, true) for raw canvas coordinates
-    const pointer = canvas.getPointer(e.e, true);
+    const pointer = getCSSPointer(canvas, e.e);
     let currentWorldPoint: WorldPoint = viewToWorld(
       { x: pointer.x, y: pointer.y },
       transform,
@@ -4157,7 +4164,7 @@ export const InteractiveCanvas = ({
 
     // Handle calibration drag end (use refs to avoid stale closure)
     if (calibrationMode === 'manual' && isCalibrationDraggingRef.current && calibrationStartPointRef.current) {
-      const pointer = canvas.getPointer(e.e, true);
+      const pointer = getCSSPointer(canvas, e.e);
       const worldEnd = viewToWorld({ x: pointer.x, y: pointer.y }, transform, viewport);
       handleCalibrationMouseUp(worldEnd);
       return;
@@ -4182,8 +4189,7 @@ export const InteractiveCanvas = ({
 
     if (!isDrawing || !startPoint || !viewport) return;
 
-    // CRITICAL FIX: Use getPointer(e.e, true) for raw canvas coordinates
-    const pointer = canvas.getPointer(e.e, true);
+    const pointer = getCSSPointer(canvas, e.e);
     let worldEndPoint = viewToWorld({ x: pointer.x, y: pointer.y }, transform, viewport);
 
     // Shift-snap: commit the same snap applied during preview

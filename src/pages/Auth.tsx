@@ -376,16 +376,10 @@ const Auth = () => {
               <div className="flex justify-center mb-5">
                 <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-primary/10 border border-primary/20 text-xs font-medium text-primary">
                   <Check className="h-3 w-3" />
-                  {PLAN_NAMES[selectedPlan]} plan selected · ${PLAN_PRICES[selectedPlan][billing]} AUD/mo after trial
+                  {PLAN_NAMES[selectedPlan]} plan selected · ${PLAN_PRICES[selectedPlan][billing]} AUD/mo{billing === 'annual' ? ' · billed annually' : ''} after trial
                 </span>
               </div>
             )}
-
-            <div className="flex items-center gap-3 mb-4">
-              <div className="flex-1 h-px bg-border" />
-              <span className="text-xs text-muted-foreground">or continue with email</span>
-              <div className="flex-1 h-px bg-border" />
-            </div>
 
             {/* Needs verification reminder */}
             {needsVerification && (
@@ -642,7 +636,7 @@ const Auth = () => {
                 >
                   {isLoading
                     ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Creating your account…</>
-                    : <><CreditCard className="h-4 w-4" />Subscribe to {PLAN_NAMES[selectedPlan]} · ${price}/mo</>}
+                    : <><CreditCard className="h-4 w-4" />Subscribe to {PLAN_NAMES[selectedPlan]} · ${price}/mo{billing === 'annual' ? ' billed annually' : ''}</>}
                 </Button>
 
                 {/* What happens next */}
@@ -660,6 +654,7 @@ const Auth = () => {
               <button
                 type="button"
                 onClick={() => {
+                  navigatedRef.current = false;
                   setIsLogin(!isLogin);
                   setEmail(""); setPassword(""); setName(""); setPhone(""); setProjectType(""); setMarketingConsent(false);
                   setSignupPassword(""); setSignupConfirmPassword(""); setShowSignupPassword(false);

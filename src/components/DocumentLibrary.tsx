@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react"
 import { getUserStorageKey } from "@/lib/localAuth"
+import { syncProjectToSupabase } from "@/lib/db/projects"
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
@@ -82,6 +83,7 @@ function updateProjectData(projectId: string, patch: Record<string, any>) {
     if (idx === -1) return
     projects[idx] = { ...projects[idx], ...patch }
     localStorage.setItem(getUserStorageKey("local_projects"), JSON.stringify(projects))
+    syncProjectToSupabase(projects[idx])
   } catch { /* non-fatal */ }
 }
 
@@ -556,6 +558,7 @@ export function saveQuoteToLibrary(projectId: string, snapshot: Omit<SavedQuoteS
     }
     projects[idx].saved_quotes = [...existing, entry]
     localStorage.setItem(getUserStorageKey("local_projects"), JSON.stringify(projects))
+    syncProjectToSupabase(projects[idx])
     return entry
   } catch { return null }
 }
@@ -570,5 +573,6 @@ export function savePlanToLibrary(projectId: string, plan: SavedPlanRecord) {
     if (existing.some(p => p.planId === plan.planId)) return
     projects[idx].saved_plans = [...existing, plan]
     localStorage.setItem(getUserStorageKey("local_projects"), JSON.stringify(projects))
+    syncProjectToSupabase(projects[idx])
   } catch { /* non-fatal */ }
 }

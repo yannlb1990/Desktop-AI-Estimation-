@@ -1,11 +1,13 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
-import { DollarSign, Plus, Trash2 } from "lucide-react";
+import { Plus, Trash2 } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
+import { loadUserPreferencesFromSupabase, syncUserPreferencesToSupabase } from "@/lib/db/userPreferences";
+import { getUserStorageKey } from "@/lib/localAuth";
 
 const AU_TRADES = [
   "Carpenter", "Plumber", "Electrician", "Bricklayer", "Plasterer",
@@ -25,9 +27,9 @@ const DEFAULT_RATES: Record<string, number> = {
   Landscaper: 80
 };
 
-// LocalStorage keys
-const LABOUR_RATES_KEY = 'user_labour_rates';
-const CUSTOM_TRADES_KEY = 'user_custom_trades';
+// LocalStorage keys — user-scoped so data doesn't bleed between accounts
+const LABOUR_RATES_KEY = () => getUserStorageKey('user_labour_rates');
+const CUSTOM_TRADES_KEY = () => getUserStorageKey('user_custom_trades');
 
 interface CustomTrade {
   trade_name: string;
@@ -47,15 +49,42 @@ export const LabourRatesSection = ({ rates, onRatesChange }: LabourRatesSectionP
   const [newTradeRate, setNewTradeRate] = useState("90");
   const { toast } = useToast();
 
+  // Keep a ref so the async Supabase callback always calls the latest onRatesChange,
+  // even if the parent re-renders between mount and promise resolution.
+  const onRatesChangeRef = useRef(onRatesChange);
+  useEffect(() => { onRatesChangeRef.current = onRatesChange; }, [onRatesChange]);
+
   useEffect(() => {
     loadCustomTrades();
     loadUserLabourRates();
+    // Cross-browser: hydrate from Supabase if localStorage has no data
+    loadUserPreferencesFromSupabase().then((prefs) => {
+      if (!prefs) return;
+      const hasLocalRates = !!localStorage.getItem(LABOUR_RATES_KEY());
+      const hasLocalTrades = !!localStorage.getItem(CUSTOM_TRADES_KEY());
+      if (prefs.labour_rates && !hasLocalRates) {
+        localStorage.setItem(LABOUR_RATES_KEY(), JSON.stringify(prefs.labour_rates));
+        onRatesChangeRef.current({ ...DEFAULT_RATES, ...(prefs.labour_rates as Record<string, number>) });
+      }
+      if (prefs.custom_trades && !hasLocalTrades) {
+        const trades = prefs.custom_trades as { trade_name: string; default_rate: number }[];
+        localStorage.setItem(CUSTOM_TRADES_KEY(), JSON.stringify(trades));
+        const tradeNames = trades.map(t => t.trade_name);
+        setCustomTrades(tradeNames);
+        setAllTrades([...AU_TRADES, ...tradeNames]);
+        const customRates: Record<string, number> = {};
+        trades.forEach(t => { customRates[t.trade_name] = t.default_rate; });
+        const storedRates = localStorage.getItem(LABOUR_RATES_KEY());
+        const existingRates = storedRates ? JSON.parse(storedRates) : {};
+        onRatesChangeRef.current({ ...DEFAULT_RATES, ...customRates, ...existingRates });
+      }
+    });
   }, []);
 
   // Load labour rates from localStorage
   const loadUserLabourRates = () => {
     try {
-      const storedRates = localStorage.getItem(LABOUR_RATES_KEY);
+      const storedRates = localStorage.getItem(LABOUR_RATES_KEY());
       if (storedRates) {
         const loadedRates: Record<string, number> = JSON.parse(storedRates);
         onRatesChange({ ...DEFAULT_RATES, ...loadedRates });
@@ -72,7 +101,7 @@ export const LabourRatesSection = ({ rates, onRatesChange }: LabourRatesSectionP
   // Load custom trades from localStorage
   const loadCustomTrades = () => {
     try {
-      const storedTrades = localStorage.getItem(CUSTOM_TRADES_KEY);
+      const storedTrades = localStorage.getItem(CUSTOM_TRADES_KEY());
       if (storedTrades) {
         const trades: CustomTrade[] = JSON.parse(storedTrades);
         const tradeNames = trades.map(t => t.trade_name);
@@ -86,7 +115,7 @@ export const LabourRatesSection = ({ rates, onRatesChange }: LabourRatesSectionP
         });
 
         // Merge with existing rates
-        const storedRates = localStorage.getItem(LABOUR_RATES_KEY);
+        const storedRates = localStorage.getItem(LABOUR_RATES_KEY());
         const existingRates = storedRates ? JSON.parse(storedRates) : {};
         onRatesChange({ ...DEFAULT_RATES, ...customRates, ...existingRates });
       }
@@ -104,9 +133,10 @@ export const LabourRatesSection = ({ rates, onRatesChange }: LabourRatesSectionP
     };
     onRatesChange(newRates);
 
-    // Save to localStorage
+    // Save to localStorage and sync to Supabase
     try {
-      localStorage.setItem(LABOUR_RATES_KEY, JSON.stringify(newRates));
+      localStorage.setItem(LABOUR_RATES_KEY(), JSON.stringify(newRates));
+      syncUserPreferencesToSupabase({ labour_rates: newRates });
       toast({
         title: "Rate saved",
         description: `${trade} rate updated to $${numValue}/hr`,
@@ -144,7 +174,7 @@ export const LabourRatesSection = ({ rates, onRatesChange }: LabourRatesSectionP
 
     try {
       // Load existing custom trades
-      const storedTrades = localStorage.getItem(CUSTOM_TRADES_KEY);
+      const storedTrades = localStorage.getItem(CUSTOM_TRADES_KEY());
       const trades: CustomTrade[] = storedTrades ? JSON.parse(storedTrades) : [];
 
       // Add new trade
@@ -154,16 +184,17 @@ export const LabourRatesSection = ({ rates, onRatesChange }: LabourRatesSectionP
       };
       trades.push(newTrade);
 
-      // Save to localStorage
-      localStorage.setItem(CUSTOM_TRADES_KEY, JSON.stringify(trades));
+      // Save to localStorage and sync to Supabase
+      localStorage.setItem(CUSTOM_TRADES_KEY(), JSON.stringify(trades));
 
       // Update rates
       const newRates = {
         ...rates,
         [newTradeName.trim()]: parseFloat(newTradeRate) || 90
       };
-      localStorage.setItem(LABOUR_RATES_KEY, JSON.stringify(newRates));
+      localStorage.setItem(LABOUR_RATES_KEY(), JSON.stringify(newRates));
       onRatesChange(newRates);
+      syncUserPreferencesToSupabase({ custom_trades: trades, labour_rates: newRates });
 
       toast({
         title: "Success",
@@ -187,18 +218,19 @@ export const LabourRatesSection = ({ rates, onRatesChange }: LabourRatesSectionP
   const deleteCustomTrade = (tradeName: string) => {
     try {
       // Load existing custom trades
-      const storedTrades = localStorage.getItem(CUSTOM_TRADES_KEY);
+      const storedTrades = localStorage.getItem(CUSTOM_TRADES_KEY());
       const trades: CustomTrade[] = storedTrades ? JSON.parse(storedTrades) : [];
 
       // Remove the trade
       const updatedTrades = trades.filter(t => t.trade_name !== tradeName);
-      localStorage.setItem(CUSTOM_TRADES_KEY, JSON.stringify(updatedTrades));
+      localStorage.setItem(CUSTOM_TRADES_KEY(), JSON.stringify(updatedTrades));
 
       // Remove from rates
       const newRates = { ...rates };
       delete newRates[tradeName];
-      localStorage.setItem(LABOUR_RATES_KEY, JSON.stringify(newRates));
+      localStorage.setItem(LABOUR_RATES_KEY(), JSON.stringify(newRates));
       onRatesChange(newRates);
+      syncUserPreferencesToSupabase({ custom_trades: updatedTrades, labour_rates: newRates });
 
       toast({
         title: "Success",
@@ -219,10 +251,7 @@ export const LabourRatesSection = ({ rates, onRatesChange }: LabourRatesSectionP
     <>
       <Card className="p-6">
         <div className="flex items-center justify-between mb-4">
-          <div className="flex items-center gap-2">
-            <DollarSign className="h-5 w-5 text-accent" />
-            <h3 className="font-display text-xl font-bold">Labour Hourly Rates by Trade</h3>
-          </div>
+          <h3 className="font-display text-xl font-bold">Labour Hourly Rates by Trade</h3>
           <Button onClick={() => setShowAddDialog(true)} size="sm">
             <Plus className="h-4 w-4 mr-2" />
             Add Custom Trade

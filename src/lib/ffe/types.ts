@@ -3,9 +3,17 @@ export type FFEStatus = 'Specified' | 'Allowance' | 'TBC' | 'Client Supply';
 
 export interface FFEPhoto {
   id: string;
-  localUrl: string;
+  localUrl: string;   // base64 data URL — persists in localStorage
   supabaseUrl?: string;
   fileName: string;
+  uploading?: boolean;
+}
+
+export interface FFEQuoteDoc {
+  fileName: string;
+  fileType: string;
+  localUrl?: string;  // base64 data URL for small files
+  supabaseUrl?: string;
   uploading?: boolean;
 }
 
@@ -22,6 +30,7 @@ export interface FFEItem {
   notes: string;
   status: FFEStatus;
   photos: FFEPhoto[];
+  quoteDoc?: FFEQuoteDoc;
   createdAt: string;
   updatedAt: string;
 }

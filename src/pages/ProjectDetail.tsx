@@ -30,7 +30,7 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "sonner";
-import { ArrowLeft, FileText, DollarSign, Ruler, Loader2, Settings, Calculator, TrendingUp, ShieldCheck, MapPin, User, Calendar as CalendarIcon, Clock, Bell, Package, ChevronDown, ChevronUp, ChevronLeft, ChevronRight, Users, FolderOpen, Sofa, BookOpen, BarChart2, GitBranch, PlusCircle, Check, Monitor, Share2, ClipboardList } from "lucide-react";
+import { ArrowLeft, FileText, DollarSign, Ruler, Loader2, Settings, Calculator, TrendingUp, ShieldCheck, MapPin, User, Calendar as CalendarIcon, Clock, Bell, Package, ChevronDown, ChevronUp, ChevronLeft, ChevronRight, Users, FolderOpen, Sofa, BookOpen, BarChart2, GitBranch, PlusCircle, Check, Monitor, ClipboardList } from "lucide-react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { SubcontractorComparison } from "@/components/SubcontractorComparison";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
@@ -46,7 +46,6 @@ import { QuoteGenerator } from "@/components/QuoteGenerator";
 import { FullTenderGenerator } from "@/components/FullTenderGenerator";
 import { ProjectInsightsTab } from "@/components/ProjectInsightsTab";
 import { NCCComplianceCard } from "@/components/NCCComplianceCard";
-import { PlanAnalysisWizard } from "@/components/PlanAnalysisWizard";
 import { AIPlanAnalyzerEnhanced } from "@/components/AIPlanAnalyzerEnhanced";
 import { DocumentLibrary } from "@/components/DocumentLibrary";
 import { FFEModule } from "@/components/ffe/FFEModule";
@@ -77,73 +76,258 @@ const ProjectDetail = () => {
     catch { return []; }
   })();
 
-  const handleExportCSV = () => {
+  const handleExportExcel = async () => {
     if (!project) return;
-    const items = estimate?.estimate_items || [];
-    const rows = [
-      ["Project", project.name],
-      ["Client", project.client_name || ""],
-      ["Address", project.site_address || project.address || ""],
-      ["Status", project.status || ""],
-      ["Exported", new Date().toLocaleDateString("en-AU")],
-      [],
-      ["Category", "Description", "Unit", "Qty", "Unit Price", "Total"],
-      ...items.map((item: any) => [
-        item.category || item.trade || "",
-        item.description || item.name || "",
-        item.unit || "",
-        item.quantity || "",
-        item.unit_price || item.unitCost || "",
-        item.total_price || item.subtotal || "",
-      ]),
-    ];
-    const csv = rows.map(r => r.map((c: any) => `"${String(c ?? "").replace(/"/g, '""')}"`).join(",")).join("\n");
-    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `${project.name.replace(/\s+/g, "_")}_estimate.csv`;
-    a.click();
-    URL.revokeObjectURL(url);
-    toast.success("Exported as CSV. Open in Excel or Google Sheets.");
+
+    const projects: any[] = (() => { try { return JSON.parse(localStorage.getItem(getUserStorageKey("local_projects")) || "[]"); } catch { return []; } })();
+    const lsProject = projects.find((p: any) => p.id === projectId) || {};
+    const items: any[] = lsProject.estimate_items || [];
+    const consumables: any[] = (() => { try { return JSON.parse(localStorage.getItem(getUserStorageKey(`cost_estimator_consumables_${projectId}`)) || "[]"); } catch { return []; } })();
+    const prefs: any = (() => { try { return JSON.parse(localStorage.getItem(getUserStorageKey(`cost_estimator_prefs_${projectId}`)) || "{}"); } catch { return {}; } })();
+    const brand: any = (() => { try { return JSON.parse(localStorage.getItem(getUserStorageKey("quote_brand")) || "{}"); } catch { return {}; } })();
+
+    const marginPercent: number = prefs.marginPercent ?? 15;
+    const gstEnabled: boolean   = prefs.gstEnabled ?? true;
+    const selectedState: string = prefs.selectedState ?? "QLD";
+
+    let totMat = 0, totLab = 0, totFixings = 0;
+    const calcItem = (item: any) => {
+      const mw = (item.material_wastage_pct ?? 5) / 100;
+      const lw = (item.labour_wastage_pct ?? 10) / 100;
+      const mat = (item.quantity || 0) * (item.unit_price || 0) * (1 + mw);
+      const lab = (item.labour_hours || 0) * (item.labour_rate || 65) * (1 + lw);
+      return { mat, lab, line: (mat + lab) * (1 + (item.markup_pct ?? 0) / 100) };
+    };
+    items.forEach((item: any) => {
+      const { mat, lab } = calcItem(item);
+      totMat += mat;
+      totLab += lab;
+      (item.relatedMaterials || []).forEach((rm: any) => { totFixings += (rm.quantity || 0) * (rm.unit_price || rm.unitCost || 0); });
+    });
+    const totConsumables = consumables.reduce((s: number, c: any) => s + (c.total || 0), 0);
+    const subtotal   = totMat + totLab + totFixings + totConsumables;
+    const margin     = subtotal * (marginPercent / 100);
+    const gst        = (subtotal + margin) * 0.1;
+    const grandTotal = subtotal + margin + (gstEnabled ? gst : 0);
+
+    try {
+      const ExcelJS = (await import("exceljs")).default;
+      const wb = new ExcelJS.Workbook();
+      wb.creator = brand.companyName || "Metricore";
+      wb.created = new Date();
+
+      const ws = wb.addWorksheet("Estimate", { pageSetup: { paperSize: 9, orientation: "landscape" } });
+
+      // 9 columns: # | Description | Area | Unit | Qty | Unit Rate | Mat Total | Lab Total | Line Total
+      ws.columns = [
+        { key: "num",      width: 4  },
+        { key: "desc",     width: 44 },
+        { key: "area",     width: 10 },
+        { key: "unit",     width: 8  },
+        { key: "qty",      width: 8  },
+        { key: "unitrate", width: 12 },
+        { key: "mattot",   width: 14 },
+        { key: "labtot",   width: 14 },
+        { key: "linetot",  width: 14 },
+      ];
+
+      // Logo — taller placement for better visual weight
+      let logoRow = 1;
+      if (brand.logo) {
+        try {
+          const base64 = brand.logo.split(",")[1];
+          const ext    = brand.logo.startsWith("data:image/png") ? "png" : "jpeg";
+          const imgId  = wb.addImage({ base64, extension: ext as any });
+          ws.addImage(imgId, { tl: { col: 0, row: 0 }, br: { col: 2, row: 7 }, editAs: "oneCell" });
+          for (let r = 1; r <= 7; r++) ws.getRow(r).height = 22;
+          logoRow = 8;
+        } catch { logoRow = 1; }
+      }
+
+      // Project header block — label in B, value merged C:I
+      const addHdr = (label: string, value: string, row: number) => {
+        ws.getRow(row).height = 18;
+        ws.getCell(`B${row}`).value = label;
+        ws.getCell(`B${row}`).font  = { bold: true, size: 10, color: { argb: "FF64748B" } };
+        ws.mergeCells(`C${row}:I${row}`);
+        ws.getCell(`C${row}`).value = value;
+        ws.getCell(`C${row}`).font  = { size: 11, bold: row === logoRow };
+      };
+      addHdr("Company:",   brand.companyName || "—",                               logoRow);
+      addHdr("Project:",   project.name,                                            logoRow + 1);
+      addHdr("Client:",    project.client_name || "—",                              logoRow + 2);
+      addHdr("Address:",   project.site_address || project.address || "—",         logoRow + 3);
+      addHdr("State:",     selectedState,                                            logoRow + 4);
+      addHdr("Generated:", new Date().toLocaleDateString("en-AU"),                  logoRow + 5);
+
+      const dataStartRow = logoRow + 7;
+
+      // Column header row
+      const hdr = ws.getRow(dataStartRow);
+      hdr.height = 20;
+      ["#", "Description", "Area", "Unit", "Qty", "Unit Rate", "Mat Total", "Lab Total", "Line Total"].forEach((h, i) => {
+        const cell = hdr.getCell(i + 1);
+        cell.value = h;
+        cell.font      = { bold: true, color: { argb: "FFFFFFFF" }, size: 10 };
+        cell.fill      = { type: "pattern", pattern: "solid", fgColor: { argb: "FF1E293B" } };
+        const align = i === 0 || i === 3 || i === 4 ? "center" : i <= 2 ? "left" : "right";
+        cell.alignment = { vertical: "middle", horizontal: align };
+      });
+
+      let dataRow = dataStartRow + 1;
+
+      // Group by trade
+      const tradeGroups = new Map<string, any[]>();
+      items.forEach((item: any) => {
+        const t = item.trade || "General";
+        if (!tradeGroups.has(t)) tradeGroups.set(t, []);
+        tradeGroups.get(t)!.push(item);
+      });
+
+      let rowNum = 1;
+      tradeGroups.forEach((tradeItems, trade) => {
+        // Trade section header
+        const tRow = ws.getRow(dataRow);
+        tRow.height = 15;
+        ws.mergeCells(`A${dataRow}:I${dataRow}`);
+        const tCell = tRow.getCell(1);
+        tCell.value     = trade.toUpperCase();
+        tCell.font      = { bold: true, size: 9, italic: true, color: { argb: "FF334155" } };
+        tCell.fill      = { type: "pattern", pattern: "solid", fgColor: { argb: "FFE2E8F0" } };
+        tCell.alignment = { vertical: "middle", horizontal: "left", indent: 2 };
+        tCell.border    = { left: { style: "medium", color: { argb: "FF64748B" } }, bottom: { style: "thin", color: { argb: "FFCBD5E1" } } };
+        dataRow++;
+
+        // Item rows — no explicit fill so Excel renders default white (explicit FFFFFFFF was producing black via ExcelJS bug)
+        tradeItems.forEach((item: any) => {
+          const { mat, lab, line } = calcItem(item);
+          const row = ws.getRow(dataRow);
+          row.height = 17;
+          // # | Description | Area | Unit | Qty | Unit Rate | Mat Total | Lab Total | Line Total
+          const vals: (string | number)[] = [
+            rowNum++,
+            item.scope_of_work || "",
+            item.area || "",
+            item.unit || "",
+            item.quantity || 0,
+            item.unit_price || 0,
+            Math.round(mat * 100) / 100,
+            Math.round(lab * 100) / 100,
+            Math.round(line * 100) / 100,
+          ];
+          vals.forEach((v, ci) => {
+            const cell = row.getCell(ci + 1);
+            cell.value     = v;
+            cell.font      = { size: 10, color: { argb: "FF1E293B" } };
+            const align = ci === 0 || ci === 3 || ci === 4 ? "center" : ci <= 2 ? "left" : "right";
+            cell.alignment = { vertical: "middle", horizontal: align };
+            cell.border    = { bottom: { style: "hair", color: { argb: "FFCBD5E1" } } };
+            if (ci >= 5) cell.numFmt = '"$"#,##0.00';
+          });
+          dataRow++;
+        });
+
+        // Gap row between trade groups
+        ws.getRow(dataRow).height = 6;
+        dataRow++;
+      });
+
+      // Consumables section
+      if (consumables.length > 0) {
+        const cHdrRow = ws.getRow(dataRow);
+        cHdrRow.height = 15;
+        ws.mergeCells(`A${dataRow}:I${dataRow}`);
+        const cHdr = cHdrRow.getCell(1);
+        cHdr.value     = "CONSUMABLES";
+        cHdr.font      = { bold: true, size: 9, italic: true, color: { argb: "FF334155" } };
+        cHdr.fill      = { type: "pattern", pattern: "solid", fgColor: { argb: "FFE2E8F0" } };
+        cHdr.alignment = { vertical: "middle", horizontal: "left", indent: 2 };
+        cHdr.border    = { left: { style: "medium", color: { argb: "FF64748B" } }, bottom: { style: "thin", color: { argb: "FFCBD5E1" } } };
+        dataRow++;
+
+        consumables.forEach((c: any) => {
+          const row = ws.getRow(dataRow);
+          row.height = 17;
+          ws.mergeCells(`B${dataRow}:C${dataRow}`);
+          // Map: A=#empty, B=name(merged B:C), skip C, D=unit, E=qty, F=unitCost, G=0, H=0, I=total
+          const colData: [number, string | number][] = [
+            [1, ""],
+            [2, c.name || ""],
+            [4, c.unit || ""],
+            [5, c.quantity || 0],
+            [6, c.unitCost || 0],
+            [7, 0],
+            [8, 0],
+            [9, c.total || 0],
+          ];
+          colData.forEach(([colNum, v]) => {
+            const cell = row.getCell(colNum);
+            cell.value     = v;
+            cell.font      = { size: 10, color: { argb: "FF1E293B" } };
+            const align = colNum === 1 || colNum === 4 || colNum === 5 ? "center" : colNum === 2 ? "left" : "right";
+            cell.alignment = { vertical: "middle", horizontal: align };
+            cell.border    = { bottom: { style: "hair", color: { argb: "FFCBD5E1" } } };
+            if (colNum >= 6) cell.numFmt = '"$"#,##0.00';
+          });
+          dataRow++;
+        });
+
+        ws.getRow(dataRow).height = 6;
+        dataRow++;
+      }
+
+      // Summary section
+      dataRow++;
+      const summaryRows: [string, number][] = [
+        ["Materials",                    totMat],
+        ["Labour",                       totLab],
+        ["Fixings",                      totFixings],
+        ["Consumables",                  totConsumables],
+        ["Subtotal",                     subtotal],
+        [`Margin (${marginPercent}%)`,   margin],
+        ...(gstEnabled ? [["GST (10%)", gst] as [string, number]] : []),
+        ["GRAND TOTAL",                  grandTotal],
+      ];
+
+      summaryRows.forEach(([label, value]) => {
+        const isGrand    = label === "GRAND TOTAL";
+        const isSubtotal = label === "Subtotal";
+        const bgArgb  = isGrand ? "FF1E293B" : isSubtotal ? "FFE2E8F0" : "FFFFFFFF";
+        const fgArgb  = isGrand ? "FFFFFFFF" : "FF1E293B";
+        ws.mergeCells(`A${dataRow}:G${dataRow}`);
+        const lCell = ws.getCell(`A${dataRow}`);
+        lCell.value     = label;
+        lCell.font      = { bold: isGrand || isSubtotal, size: isGrand ? 12 : 10, color: { argb: fgArgb } };
+        lCell.fill      = { type: "pattern", pattern: "solid", fgColor: { argb: bgArgb } };
+        lCell.alignment = { vertical: "middle", horizontal: "right" };
+        ws.mergeCells(`H${dataRow}:I${dataRow}`);
+        const vCell = ws.getCell(`H${dataRow}`);
+        vCell.value     = Math.round(value * 100) / 100;
+        vCell.numFmt    = '"$"#,##0.00';
+        vCell.font      = { bold: isGrand || isSubtotal, size: isGrand ? 12 : 10, color: { argb: fgArgb } };
+        vCell.fill      = { type: "pattern", pattern: "solid", fgColor: { argb: bgArgb } };
+        vCell.alignment = { vertical: "middle", horizontal: "right" };
+        ws.getRow(dataRow).height = isGrand ? 22 : 17;
+        dataRow++;
+      });
+
+      ws.views = [{ state: "frozen", xSplit: 0, ySplit: dataStartRow, activeCell: `A${dataStartRow + 1}` }];
+
+      const buffer = await wb.xlsx.writeBuffer();
+      const blob   = new Blob([buffer], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
+      const url    = URL.createObjectURL(blob);
+      const a      = document.createElement("a");
+      a.href       = url;
+      a.download   = `${project.name.replace(/\s+/g, "_")}_Estimate_${new Date().toISOString().split("T")[0]}.xlsx`;
+      a.click();
+      URL.revokeObjectURL(url);
+      toast.success("Estimate exported to Excel");
+    } catch (err) {
+      console.error("Excel export failed:", err);
+      toast.error("Excel export failed");
+    }
   };
 
-  const handleShareQuote = () => {
-    if (!project) return;
-    const token = btoa(project.id + ':' + Date.now()).replace(/[^a-zA-Z0-9]/g, '').slice(0, 24);
-    const items = estimate?.estimate_items || [];
-    const grandTotal = items.reduce((sum: number, i: any) => sum + (i.total_price ?? i.subtotal ?? i.total ?? 0), 0);
-    const now = new Date();
-    const expires = new Date(now);
-    expires.setDate(expires.getDate() + 30);
-    const payload = {
-      token,
-      projectId: project.id,
-      projectName: project.name,
-      clientName: project.client_name || '',
-      siteAddress: project.site_address || project.address || '',
-      grandTotal,
-      estimateItems: items.map((i: any) => ({
-        id: i.id,
-        category: i.category || i.trade || 'General',
-        name: i.description || i.name || '',
-        quantity: i.quantity ?? 1,
-        unit: i.unit || 'Item',
-        unitCost: i.unit_price ?? i.unitCost ?? 0,
-        total: i.total_price ?? i.subtotal ?? i.total ?? 0,
-      })),
-      generatedAt: now.toISOString(),
-      expiresAt: expires.toISOString(),
-      status: 'pending',
-    };
-    localStorage.setItem(`quote_share_${token}`, JSON.stringify(payload));
-    const url = `${window.location.origin}/quote/${token}`;
-    navigator.clipboard.writeText(url).then(() => {
-      toast.success('Link copied — valid for 30 days', { description: url });
-    }).catch(() => {
-      toast.info('Share link generated', { description: url });
-    });
-  };
 
   useEffect(() => {
     if (!isSignedIn()) {
@@ -326,13 +510,14 @@ const ProjectDetail = () => {
                 </Button>
               </TourTip>
               <TourTip text="Generate a branded PDF quote: a 2-page proposal with your logo, scope summary, pricing breakdown and signature block." position="bottom">
-                <QuoteGenerator project={project} estimate={estimate} />
+                <QuoteGenerator project={project} estimate={estimate} listenForOpen={true} />
               </TourTip>
               <TourTip text="Create a full corporate tender document including company profile, methodology, NCC compliance, programme and legal terms." position="bottom">
                 <FullTenderGenerator project={project} estimate={estimate} />
               </TourTip>
-              <TourTip text="Download the complete estimate as a CSV file. Open it in Excel or Google Sheets for further review or sharing." position="bottom">
-                <Button size="sm" variant="outline" onClick={handleExportCSV} className="shrink-0" title="Export to Excel">
+              <TourTip text="Download the full estimate as a formatted Excel workbook — trade groupings, material and labour totals, margin, and GST." position="bottom">
+                <Button size="sm" variant="outline" onClick={handleExportExcel} className="shrink-0" title="Export to Excel">
+                  <FileText className="h-4 w-4 md:mr-2" />
                   <span className="hidden md:inline">Export to Excel</span>
                   <span className="md:hidden">Export</span>
                 </Button>
@@ -391,15 +576,6 @@ const ProjectDetail = () => {
                     </SelectContent>
                   </Select>
                 </TourTip>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="h-7 px-2.5 text-xs border rounded-full border-border bg-muted text-muted-foreground hover:text-foreground"
-                  onClick={handleShareQuote}
-                >
-                  <Share2 className="h-3 w-3 mr-1.5" />
-                  Share Quote
-                </Button>
               <div className="text-muted-foreground space-y-1.5 mt-1">
                 {project.site_address && (
                   <div className="flex items-center gap-2 min-w-0">
@@ -486,7 +662,7 @@ const ProjectDetail = () => {
           {[
             { key: "takeoff",  label: "Takeoff",  icon: Ruler,      tour: "Upload your PDF plans here. AI measures quantities automatically. Review and adjust each item, then send everything to Estimate." },
             { key: "estimate", label: "Estimate", icon: Calculator,  tour: "Review and price all takeoff items. Add labour, materials, margins and overheads. This is your full cost build-up before generating the client document." },
-            { key: "tender",   label: "Tender",   icon: FileText,    tour: "Generate the final client document. Choose a Quote (fast 2-page branded proposal) or a full Tender with compliance, programme and legal terms." },
+            { key: "tender",   label: "Pricing",  icon: FileText,    tour: "Generate the final client document. Choose a Quote (fast 2-page branded proposal) or a full Tender with compliance, programme and legal terms." },
           ].map((step, i) => {
             const isActive = activeMainTab === step.key;
             const isPast =
@@ -599,12 +775,10 @@ const ProjectDetail = () => {
             <TabsTrigger value="subbies" />
             <TabsTrigger value="ffe" />
             <TabsTrigger value="documents" />
-            <TabsTrigger value="pricing" />
             <TabsTrigger value="schedule" />
             <TabsTrigger value="jobcost" />
             <TabsTrigger value="variations" />
             <TabsTrigger value="progressclaim" />
-            {project.plan_file_url && <TabsTrigger value="plans" />}
           </TabsList>
 
           {/* Step 1 — PDF Takeoff — forceMount keeps PDF alive when switching to Estimate/Tender */}
@@ -616,15 +790,6 @@ const ProjectDetail = () => {
             <TakeoffErrorBoundary>
               <AIPlanAnalyzerEnhanced key={projectId} projectId={projectId!} estimateId={estimate?.id} />
             </TakeoffErrorBoundary>
-            <div className="flex justify-end">
-              <Button
-                onClick={() => setActiveMainTab("estimate")}
-                className="bg-primary text-primary-foreground hover:bg-primary/90"
-              >
-                View Estimate
-                <ArrowLeft className="h-4 w-4 ml-2 rotate-180" />
-              </Button>
-            </div>
           </TabsContent>
 
           {/* Step 2 — Estimate */}
@@ -634,17 +799,11 @@ const ProjectDetail = () => {
                 <ArrowLeft className="h-4 w-4 mr-1" />
                 Back to Takeoff
               </Button>
-              <Button
-                onClick={() => setActiveMainTab("tender")}
-                className="bg-primary text-primary-foreground hover:bg-primary/90"
-                size="sm"
-              >
-                Generate Tender
-                <ArrowLeft className="h-4 w-4 ml-2 rotate-180" />
-              </Button>
             </div>
             {estimate ? (
-              <EstimateTemplate projectId={projectId!} estimateId={estimate.id} />
+              <TakeoffErrorBoundary>
+                <EstimateTemplate projectId={projectId!} estimateId={estimate.id} />
+              </TakeoffErrorBoundary>
             ) : (
               <Card className="p-6">
                 <div className="text-center py-12">
@@ -661,13 +820,6 @@ const ProjectDetail = () => {
               >
                 <FileText className="h-4 w-4 mr-2" />
                 Generate Quote
-              </Button>
-              <Button
-                onClick={() => setActiveMainTab("tender")}
-                className="bg-primary text-primary-foreground hover:bg-primary/90"
-              >
-                Generate Tender
-                <ArrowLeft className="h-4 w-4 ml-2 rotate-180" />
               </Button>
             </div>
           </TabsContent>
@@ -747,6 +899,8 @@ const ProjectDetail = () => {
                   projects.push({ id: projectId, estimate_items: [newItem] });
                 }
                 localStorage.setItem(getUserStorageKey('local_projects'), JSON.stringify(projects));
+                const syncTarget = idx !== -1 ? projects[idx] : projects[projects.length - 1];
+                if (syncTarget) syncProjectToSupabase(syncTarget);
                 window.dispatchEvent(new CustomEvent('estimate-updated', { detail: { projectId } }));
               }}
             />
@@ -761,18 +915,6 @@ const ProjectDetail = () => {
             />
           </TabsContent>
 
-          <TabsContent value="pricing">
-            <Card className="p-6">
-              <h2 className="font-display text-2xl font-bold mb-4">AI Pricing</h2>
-              <p className="text-muted-foreground">AI pricing analysis in progress...</p>
-            </Card>
-          </TabsContent>
-
-          {project.plan_file_url && (
-            <TabsContent value="plans">
-              <PlanAnalysisWizard planUrl={project.plan_file_url} projectId={projectId!} />
-            </TabsContent>
-          )}
 
           <TabsContent value="schedule">
             <GanttSchedule projectId={projectId!} />

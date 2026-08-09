@@ -8,7 +8,7 @@ const TermsOfService = () => {
     <>
       <Helmet>
         <title>Terms of Service | Metricore</title>
-        <meta name="description" content="Metricore Terms of Service — AI-powered construction estimation platform operated by Buildamax Pty Ltd." />
+        <meta name="description" content="Metricore Terms of Service — construction estimating software operated by Buildamax Pty Ltd." />
         <link rel="canonical" href="https://metricore.com.au/terms" />
       </Helmet>
       <div className="min-h-screen">

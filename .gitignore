@@ -31,3 +31,7 @@ dist-ssr
 # Vercel
 .vercel
 supabase/.temp/
+
+# Local asset archives (screenshots, exports — not source code)
+Metricore-Assets/
+Metricore-Fullstack-*/

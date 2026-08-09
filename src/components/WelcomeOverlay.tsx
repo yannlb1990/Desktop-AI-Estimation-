@@ -1,6 +1,5 @@
 import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
-import { ArrowRight, Upload, Ruler, FileText, CheckCircle } from "lucide-react";
 import { MetricoreLogoMark } from "@/components/MetricoreLogoMark";
 
 interface Props {
@@ -8,30 +7,6 @@ interface Props {
   trialDays: number;
   onDismiss: () => void;
 }
-
-const steps = [
-  {
-    icon: Upload,
-    label: "Upload your plan",
-    desc: "PDF plans, any scale",
-    color: "text-primary",
-    bg: "bg-primary/10",
-  },
-  {
-    icon: Ruler,
-    label: "Take measurements",
-    desc: "Line, area, wall, count tools",
-    color: "text-violet-400",
-    bg: "bg-violet-400/10",
-  },
-  {
-    icon: FileText,
-    label: "Send your tender",
-    desc: "PDF or Excel, one click",
-    color: "text-[#E1DCC9]/80",
-    bg: "bg-[#E1DCC9]/8",
-  },
-];
 
 const WelcomeOverlay = ({ firstName, trialDays, onDismiss }: Props) => {
   const navigate = useNavigate();
@@ -42,67 +17,47 @@ const WelcomeOverlay = ({ firstName, trialDays, onDismiss }: Props) => {
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/90 backdrop-blur-sm px-4">
-      <div className="w-full max-w-lg bg-card border border-border rounded-2xl shadow-2xl overflow-hidden">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 backdrop-blur-sm px-4">
+      <div className="w-full max-w-md bg-card border border-border rounded-2xl shadow-2xl overflow-hidden">
 
-        {/* Top accent bar */}
-        <div className="h-1 w-full bg-gradient-to-r from-[#412D15] via-primary to-[#412D15]/60" />
+        {/* Cyan top line */}
+        <div className="h-[2px] w-full bg-primary" />
 
-        <div className="p-8 space-y-7">
+        <div className="p-10 flex flex-col gap-8">
 
-          {/* Logo + heading */}
-          <div className="text-center space-y-3">
-            <div className="flex items-center justify-center gap-2 mb-4">
-              <MetricoreLogoMark height={32} />
-              <span className="font-display text-xl font-bold">Metricore</span>
-            </div>
-            <h1 className="font-display text-3xl font-bold">
-              Welcome{firstName ? `, ${firstName}` : ""}!
+          {/* Logo */}
+          <div className="flex items-center gap-2.5">
+            <MetricoreLogoMark height={28} />
+            <span className="font-display text-lg font-bold tracking-tight">Metricore</span>
+          </div>
+
+          {/* Heading block */}
+          <div className="space-y-3">
+            <h1 className="font-display text-[2rem] font-bold leading-tight">
+              {firstName ? `You're in, ${firstName}.` : "You're in."}
             </h1>
-            <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-primary/10 border border-primary/30">
-              <CheckCircle className="h-4 w-4 text-primary" />
-              <span className="text-sm font-medium text-primary">
-                Your {trialDays}-day free trial is now active
-              </span>
-            </div>
-            <p className="text-sm text-muted-foreground">
-              Here's how to get your first estimate in minutes.
+            <p className="text-base text-muted-foreground leading-relaxed">
+              Upload a PDF plan and start measuring. Your {trialDays}-day trial gives you full access — no limits.
             </p>
           </div>
 
-          {/* 3-step flow */}
-          <div className="flex items-start gap-3">
-            {steps.map((step, i) => (
-              <div key={step.label} className="flex-1 flex flex-col items-center text-center gap-2 relative">
-                <div className={`w-11 h-11 rounded-xl ${step.bg} flex items-center justify-center`}>
-                  <step.icon className={`h-5 w-5 ${step.color}`} />
-                </div>
-                <div>
-                  <p className="text-xs font-semibold text-foreground leading-tight">{step.label}</p>
-                  <p className="text-[11px] text-muted-foreground mt-0.5">{step.desc}</p>
-                </div>
-                {i < steps.length - 1 && (
-                  <ArrowRight className="absolute top-3 -right-2 h-3.5 w-3.5 text-muted-foreground/40" />
-                )}
-              </div>
-            ))}
-          </div>
+          {/* Divider */}
+          <div className="border-t border-border" />
 
-          {/* CTAs */}
-          <div className="space-y-3 pt-1">
+          {/* Actions */}
+          <div className="flex flex-col gap-3">
             <Button
               onClick={handleStart}
-              className="w-full bg-primary text-primary-foreground hover:bg-primary/90 text-base py-6 h-auto font-semibold shadow-glow"
+              className="w-full bg-primary text-primary-foreground hover:bg-primary/90 font-semibold py-5 h-auto text-sm tracking-wide shadow-glow"
             >
-              Upload Your First Plan
-              <ArrowRight className="ml-2 h-5 w-5" />
+              Upload your first plan
             </Button>
             <button
               type="button"
               onClick={onDismiss}
-              className="w-full text-sm text-muted-foreground hover:text-foreground transition-colors py-1"
+              className="text-sm text-muted-foreground hover:text-foreground transition-colors py-1"
             >
-              I'll explore on my own
+              Skip for now
             </button>
           </div>
 

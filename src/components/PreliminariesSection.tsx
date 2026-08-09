@@ -78,11 +78,9 @@ export const PreliminariesSection = () => {
 
   return (
     <Card className="p-6">
-      <h3 className="font-display text-xl font-bold mb-4">Preliminaries</h3>
-      
       {/* Add Item Form */}
-      <div className="grid grid-cols-1 md:grid-cols-6 gap-4 mb-6">
-        <div>
+      <div className="grid grid-cols-12 gap-3 mb-6 items-end">
+        <div className="col-span-3">
           <Label>Category *</Label>
           <Select
             value={newItem.category}
@@ -105,10 +103,10 @@ export const PreliminariesSection = () => {
             </SelectContent>
           </Select>
         </div>
-        
+
         {newItem.category === "__custom__" ? (
           <>
-            <div>
+            <div className="col-span-3">
               <Label>Custom Category Name *</Label>
               <Input
                 value={customCategory}
@@ -116,7 +114,7 @@ export const PreliminariesSection = () => {
                 placeholder="Enter category name"
               />
             </div>
-            <div>
+            <div className="col-span-3">
               <Label>Custom Item Name *</Label>
               <Input
                 value={customItem}
@@ -126,7 +124,7 @@ export const PreliminariesSection = () => {
             </div>
           </>
         ) : (
-          <div>
+          <div className="col-span-3">
             <Label>Item *</Label>
             <Select
               value={newItem.item}
@@ -145,7 +143,7 @@ export const PreliminariesSection = () => {
           </div>
         )}
 
-        <div>
+        <div className="col-span-1">
           <Label>Qty</Label>
           <Input
             type="number"
@@ -156,7 +154,7 @@ export const PreliminariesSection = () => {
           />
         </div>
 
-        <div>
+        <div className="col-span-2">
           <Label>Unit</Label>
           <Select
             value={newItem.unit}
@@ -166,15 +164,15 @@ export const PreliminariesSection = () => {
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="ea">ea (each)</SelectItem>
+              <SelectItem value="ea">ea</SelectItem>
               <SelectItem value="week">week</SelectItem>
               <SelectItem value="month">month</SelectItem>
-              <SelectItem value="ls">ls (lump sum)</SelectItem>
+              <SelectItem value="ls">ls</SelectItem>
             </SelectContent>
           </Select>
         </div>
 
-        <div>
+        <div className="col-span-2">
           <Label>Unit Price ($)</Label>
           <Input
             type="number"
@@ -185,26 +183,25 @@ export const PreliminariesSection = () => {
           />
         </div>
 
-        <div className="flex items-end">
+        <div className="col-span-1">
           <Button onClick={addItem} className="w-full">
-            <Plus className="h-4 w-4 mr-2" />
-            Add
+            <Plus className="h-4 w-4" />
           </Button>
         </div>
       </div>
 
       {/* Items Table */}
       <div className="overflow-x-auto">
-        <Table>
+        <Table className="table-fixed">
           <TableHeader>
             <TableRow>
               <TableHead>Category</TableHead>
               <TableHead>Item</TableHead>
-              <TableHead className="text-right">Qty</TableHead>
-              <TableHead>Unit</TableHead>
-              <TableHead className="text-right">$/Unit</TableHead>
-              <TableHead className="text-right">Total</TableHead>
-              <TableHead></TableHead>
+              <TableHead className="w-14 text-right">Qty</TableHead>
+              <TableHead className="w-16">Unit</TableHead>
+              <TableHead className="w-24 text-right">$/Unit</TableHead>
+              <TableHead className="w-28 text-right">Total</TableHead>
+              <TableHead className="w-10"></TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -212,13 +209,13 @@ export const PreliminariesSection = () => {
               <TableRow key={item.id}>
                 <TableCell>{item.category}</TableCell>
                 <TableCell>{item.item}</TableCell>
-                <TableCell className="text-right font-mono">{item.quantity}</TableCell>
-                <TableCell>{item.unit}</TableCell>
-                <TableCell className="text-right font-mono">${item.unitPrice.toFixed(2)}</TableCell>
-                <TableCell className="text-right font-mono font-bold">
+                <TableCell className="w-14 text-right font-mono">{item.quantity}</TableCell>
+                <TableCell className="w-16">{item.unit}</TableCell>
+                <TableCell className="w-24 text-right font-mono">${item.unitPrice.toFixed(2)}</TableCell>
+                <TableCell className="w-28 text-right font-mono font-bold">
                   ${(item.quantity * item.unitPrice).toFixed(2)}
                 </TableCell>
-                <TableCell>
+                <TableCell className="w-10">
                   <Button
                     variant="ghost"
                     size="icon"

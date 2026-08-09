@@ -12,6 +12,7 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { Calculator, DollarSign, Plus, Trash2, FileDown, Percent, Clock, ExternalLink, ChevronDown, ChevronRight, Wrench, CheckCircle2, Package, Link2, Unlink, Combine, BookmarkPlus, BookOpen, RotateCcw, Mail } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { getUserStorageKey } from '@/lib/localAuth';
+import { syncProjectToSupabase } from '@/lib/db/projects';
 import { Measurement, CostItem, MeasurementArea, TRADE_OPTIONS, RelatedMaterial, ConsumableItem } from '@/lib/takeoff/types';
 import { cn } from '@/lib/utils';
 import { SCOPE_OF_WORK_RATES, RATES_LAST_UPDATED, SOW_METADATA, type AustralianState } from '@/data/scopeOfWorkRates';
@@ -81,7 +82,7 @@ const DEFAULT_CONSUMABLES: Omit<ConsumableItem, 'id' | 'total'>[] = [
 const SYSTEM_TEMPLATES: Array<{ id: string; name: string; description: string; items: CostItem[] }> = [
   {
     id: 'system-suspended-ceiling',
-    name: 'Suspended Ceiling — Mineral Fibre 600×600',
+    name: 'Suspended Ceiling: Mineral Fibre 600×600',
     description: 'Full suspended ceiling system: grid, tiles, perimeter, hangers + labour',
     items: [
       { id: 'sc-1', category: 'General', name: 'Main Tee Runners 3600mm', description: 'Primary grid members @ 1200mm centres', unit: 'LM', unitCost: 6.50, quantity: 0, linkedMeasurements: [], wasteFactor: 1.05, subtotal: 0, trade: 'Joinery', materialWastePercent: 5, labourWastePercent: 10 },
@@ -90,13 +91,129 @@ const SYSTEM_TEMPLATES: Array<{ id: string; name: string; description: string; i
       { id: 'sc-4', category: 'General', name: 'Mineral Fibre Tiles 600×600', description: '15mm mineral fibre acoustic ceiling tiles', unit: 'M2', unitCost: 28.00, quantity: 0, linkedMeasurements: [], wasteFactor: 1.10, subtotal: 0, trade: 'Joinery', materialWastePercent: 10, labourWastePercent: 10 },
       { id: 'sc-5', category: 'General', name: 'Perimeter Angle / L-Bead', description: 'Wall angle perimeter fixing, 25×25mm galvanised', unit: 'LM', unitCost: 2.20, quantity: 0, linkedMeasurements: [], wasteFactor: 1.05, subtotal: 0, trade: 'Joinery', materialWastePercent: 5, labourWastePercent: 10 },
       { id: 'sc-6', category: 'General', name: 'Hanger Wire + Toggle Bolts', description: 'Galv wire hangers @ 1200mm grid, toggle-bolt fixed to soffit', unit: 'count', unitCost: 4.50, quantity: 0, linkedMeasurements: [], wasteFactor: 1.0, subtotal: 0, trade: 'Joinery', materialWastePercent: 0, labourWastePercent: 10 },
-      { id: 'sc-7', category: 'General', name: 'Labour — Suspended Ceiling Install', description: 'Installation @ 2.5 m²/hr — enter area as qty, set hours = qty ÷ 2.5', unit: 'M2', unitCost: 0, quantity: 0, linkedMeasurements: [], wasteFactor: 1.0, subtotal: 0, trade: 'Joinery', labourHours: 0, hourlyRate: 65, materialWastePercent: 0, labourWastePercent: 10 },
+      { id: 'sc-7', category: 'General', name: 'Labour: Suspended Ceiling Install', description: 'Installation at 2.5 m²/hr. Enter area as qty, set hours = qty / 2.5', unit: 'M2', unitCost: 0, quantity: 0, linkedMeasurements: [], wasteFactor: 1.0, subtotal: 0, trade: 'Joinery', labourHours: 0, hourlyRate: 65, materialWastePercent: 0, labourWastePercent: 10 },
+    ],
+  },
+
+  // ── Single-trade subcontractor templates ─────────────────────────────────
+
+  {
+    id: 'system-interior-painting',
+    name: 'Interior Painting',
+    description: 'Prep, primer, walls, ceilings, skirtings and door faces',
+    items: [
+      { id: 'ip-1', category: 'Painting', name: 'Surface Prep: Sugar Soap & Fill', description: 'Wash, fill holes, sand back ready for prime', unit: 'M2', unitCost: 2.50, quantity: 0, linkedMeasurements: [], wasteFactor: 1.05, subtotal: 0, trade: 'Painter', materialWastePercent: 5, labourWastePercent: 5 },
+      { id: 'ip-2', category: 'Painting', name: 'Primer / Sealer — 1 Coat', description: 'Dulux Prepcoat or Zinsser Bullseye', unit: 'M2', unitCost: 3.80, quantity: 0, linkedMeasurements: [], wasteFactor: 1.10, subtotal: 0, trade: 'Painter', materialWastePercent: 10, labourWastePercent: 5 },
+      { id: 'ip-3', category: 'Painting', name: 'Walls: Low Sheen Acrylic 2 Coats', description: 'Dulux Wash & Wear low sheen acrylic', unit: 'M2', unitCost: 5.00, quantity: 0, linkedMeasurements: [], wasteFactor: 1.10, subtotal: 0, trade: 'Painter', materialWastePercent: 10, labourWastePercent: 5 },
+      { id: 'ip-4', category: 'Painting', name: 'Ceilings: Flat White 2 Coats', description: 'Dulux Ceiling White flat acrylic', unit: 'M2', unitCost: 5.50, quantity: 0, linkedMeasurements: [], wasteFactor: 1.10, subtotal: 0, trade: 'Painter', materialWastePercent: 10, labourWastePercent: 5 },
+      { id: 'ip-5', category: 'Painting', name: 'Skirtings & Architraves: Semi-Gloss 2 Coats', description: 'Dulux Aquanamel semi-gloss enamel', unit: 'LM', unitCost: 8.00, quantity: 0, linkedMeasurements: [], wasteFactor: 1.08, subtotal: 0, trade: 'Painter', materialWastePercent: 8, labourWastePercent: 5 },
+      { id: 'ip-6', category: 'Painting', name: 'Door Faces: Semi-Gloss 2 Coats', description: 'Dulux Aquanamel, both faces per door', unit: 'EA', unitCost: 85.00, quantity: 0, linkedMeasurements: [], wasteFactor: 1.0, subtotal: 0, trade: 'Painter', materialWastePercent: 5, labourWastePercent: 5 },
+      { id: 'ip-7', category: 'Painting', name: 'Labour: Interior Painting', description: 'Painter rate. Walls ~4.5 m²/hr, ceilings ~3.5 m²/hr, trims ~20 lm/hr', unit: 'HR', unitCost: 0, quantity: 0, linkedMeasurements: [], wasteFactor: 1.0, subtotal: 0, trade: 'Painter', labourHours: 0, hourlyRate: 65, materialWastePercent: 0, labourWastePercent: 10 },
+    ],
+  },
+  {
+    id: 'system-floor-wall-tiling',
+    name: 'Floor & Wall Tiling',
+    description: 'Waterproofing, floor tiles, wall tiles, trims and floor waste',
+    items: [
+      { id: 'ti-1', category: 'Waterproofing', name: 'Waterproofing: Floor Membrane 2 Coats (AS3740)', description: 'Laticrete 9235 or Sika Topseal', unit: 'M2', unitCost: 22.00, quantity: 0, linkedMeasurements: [], wasteFactor: 1.05, subtotal: 0, trade: 'Tiler', materialWastePercent: 5, labourWastePercent: 5 },
+      { id: 'ti-2', category: 'Waterproofing', name: 'Waterproofing: Wall Upturns 2 Coats', description: 'Laticrete 9235 — wall upturns to 1800mm', unit: 'M2', unitCost: 22.00, quantity: 0, linkedMeasurements: [], wasteFactor: 1.05, subtotal: 0, trade: 'Tiler', materialWastePercent: 5, labourWastePercent: 5 },
+      { id: 'ti-3', category: 'Waterproofing', name: 'Bond Breaker Tape: All Joints & Corners', description: '50mm fabric reinforcing tape per AS3740', unit: 'LM', unitCost: 7.50, quantity: 0, linkedMeasurements: [], wasteFactor: 1.0, subtotal: 0, trade: 'Tiler', materialWastePercent: 0, labourWastePercent: 5 },
+      { id: 'ti-4', category: 'Flooring', name: 'Floor Tiles: 600x600 Porcelain', description: 'Supply & lay incl. adhesive + grout', unit: 'M2', unitCost: 55.00, quantity: 0, linkedMeasurements: [], wasteFactor: 1.12, subtotal: 0, trade: 'Tiler', materialWastePercent: 12, labourWastePercent: 5 },
+      { id: 'ti-5', category: 'Flooring', name: 'Wall Tiles: 300x600 Ceramic', description: 'Supply & lay incl. adhesive + grout', unit: 'M2', unitCost: 45.00, quantity: 0, linkedMeasurements: [], wasteFactor: 1.12, subtotal: 0, trade: 'Tiler', materialWastePercent: 12, labourWastePercent: 5 },
+      { id: 'ti-6', category: 'Flooring', name: 'Tile Trim: Aluminium Schluter JOLLY', description: 'Edge trim at step transitions and exposed edges', unit: 'LM', unitCost: 18.00, quantity: 0, linkedMeasurements: [], wasteFactor: 1.05, subtotal: 0, trade: 'Tiler', materialWastePercent: 5, labourWastePercent: 5 },
+      { id: 'ti-7', category: 'Flooring', name: 'Floor Waste & Shower Grate', description: 'Stainless floor waste + linear grate — supply & fix', unit: 'EA', unitCost: 280.00, quantity: 0, linkedMeasurements: [], wasteFactor: 1.0, subtotal: 0, trade: 'Tiler', materialWastePercent: 0, labourWastePercent: 5 },
+      { id: 'ti-8', category: 'Flooring', name: 'Labour: Tiling', description: 'Tiler rate. Floor ~0.8 m²/hr, wall ~0.65 m²/hr', unit: 'HR', unitCost: 0, quantity: 0, linkedMeasurements: [], wasteFactor: 1.0, subtotal: 0, trade: 'Tiler', labourHours: 0, hourlyRate: 70, materialWastePercent: 0, labourWastePercent: 10 },
+    ],
+  },
+  {
+    id: 'system-plasterboard-lining',
+    name: 'Plasterboard Lining',
+    description: 'Board, set and cornice — walls, ceilings and wet areas',
+    items: [
+      { id: 'pl-1', category: 'Lining', name: 'Wall Boarding: 10mm Plasterboard', description: '2400x1200x10mm standard plasterboard — fix to studs', unit: 'M2', unitCost: 6.50, quantity: 0, linkedMeasurements: [], wasteFactor: 1.10, subtotal: 0, trade: 'Plasterer', materialWastePercent: 10, labourWastePercent: 5 },
+      { id: 'pl-2', category: 'Lining', name: 'Ceiling Boarding: 10mm Plasterboard', description: '2400x1200x10mm standard plasterboard — fix to ceiling joists', unit: 'M2', unitCost: 6.50, quantity: 0, linkedMeasurements: [], wasteFactor: 1.10, subtotal: 0, trade: 'Plasterer', materialWastePercent: 10, labourWastePercent: 5 },
+      { id: 'pl-3', category: 'Lining', name: 'Wet Area Lining: 9mm Villaboard', description: 'James Hardie Villaboard 2400x1200x9mm', unit: 'M2', unitCost: 14.00, quantity: 0, linkedMeasurements: [], wasteFactor: 1.10, subtotal: 0, trade: 'Plasterer', materialWastePercent: 10, labourWastePercent: 5 },
+      { id: 'pl-4', category: 'Lining', name: 'Setting: 3-Coat Set & Sand', description: 'Joints, screws, internal corners, final skim', unit: 'M2', unitCost: 14.00, quantity: 0, linkedMeasurements: [], wasteFactor: 1.05, subtotal: 0, trade: 'Plasterer', materialWastePercent: 5, labourWastePercent: 5 },
+      { id: 'pl-5', category: 'Lining', name: 'Cornice: 90mm Cove — Fix & Set', description: 'Gyprock 90mm cove cornice, fixed and set at wall/ceiling junction', unit: 'LM', unitCost: 4.50, quantity: 0, linkedMeasurements: [], wasteFactor: 1.08, subtotal: 0, trade: 'Plasterer', materialWastePercent: 8, labourWastePercent: 5 },
+      { id: 'pl-6', category: 'Lining', name: 'Labour: Plastering', description: 'Plasterer rate. Boarding ~2 m²/hr, setting ~3 m²/hr, cornice ~8 lm/hr', unit: 'HR', unitCost: 0, quantity: 0, linkedMeasurements: [], wasteFactor: 1.0, subtotal: 0, trade: 'Plasterer', labourHours: 0, hourlyRate: 68, materialWastePercent: 0, labourWastePercent: 10 },
+    ],
+  },
+  {
+    id: 'system-waterproofing-wet-areas',
+    name: 'Waterproofing — Wet Areas',
+    description: 'AS 3740 compliant waterproofing — showers, bathrooms, laundries',
+    items: [
+      { id: 'wp-1', category: 'Waterproofing', name: 'Surface Prep & Primer', description: 'Laticrete Primer 254 or equivalent — prime all surfaces', unit: 'M2', unitCost: 6.50, quantity: 0, linkedMeasurements: [], wasteFactor: 1.05, subtotal: 0, trade: 'Tiler', materialWastePercent: 5, labourWastePercent: 5 },
+      { id: 'wp-2', category: 'Waterproofing', name: 'Waterproof Membrane: Floor 2 Coats', description: 'Laticrete 9235 liquid membrane — minimum 2 coats', unit: 'M2', unitCost: 18.00, quantity: 0, linkedMeasurements: [], wasteFactor: 1.05, subtotal: 0, trade: 'Tiler', materialWastePercent: 5, labourWastePercent: 5 },
+      { id: 'wp-3', category: 'Waterproofing', name: 'Waterproof Membrane: Wall Upturns 2 Coats', description: 'Laticrete 9235 — walls to required height per AS3740', unit: 'M2', unitCost: 18.00, quantity: 0, linkedMeasurements: [], wasteFactor: 1.05, subtotal: 0, trade: 'Tiler', materialWastePercent: 5, labourWastePercent: 5 },
+      { id: 'wp-4', category: 'Waterproofing', name: 'Bond Breaker Tape: All Junctions & Corners', description: '50mm fabric reinforcing tape at all plane changes', unit: 'LM', unitCost: 7.50, quantity: 0, linkedMeasurements: [], wasteFactor: 1.0, subtotal: 0, trade: 'Tiler', materialWastePercent: 0, labourWastePercent: 5 },
+      { id: 'wp-5', category: 'Waterproofing', name: 'Flood Test & AS3740 Certificate', description: '24hr flood test + waterproofing compliance certificate', unit: 'ITEM', unitCost: 350.00, quantity: 0, linkedMeasurements: [], wasteFactor: 1.0, subtotal: 0, trade: 'Tiler', materialWastePercent: 0, labourWastePercent: 0 },
+      { id: 'wp-6', category: 'Waterproofing', name: 'Labour: Waterproofing', description: 'Waterproofer rate. Membrane ~2.5 m²/hr including cure time allowance', unit: 'HR', unitCost: 0, quantity: 0, linkedMeasurements: [], wasteFactor: 1.0, subtotal: 0, trade: 'Tiler', labourHours: 0, hourlyRate: 70, materialWastePercent: 0, labourWastePercent: 10 },
+    ],
+  },
+  {
+    id: 'system-concreting-slab',
+    name: 'Concreting — Paths & Slabs',
+    description: 'Formwork, mesh, 100mm 25MPa slab, broom finish and seal',
+    items: [
+      { id: 'co-1', category: 'Concrete', name: 'Formwork: Timber Perimeter', description: 'Timber formwork, pegs and bracing', unit: 'LM', unitCost: 18.00, quantity: 0, linkedMeasurements: [], wasteFactor: 1.10, subtotal: 0, trade: 'Concreter', materialWastePercent: 10, labourWastePercent: 5 },
+      { id: 'co-2', category: 'Concrete', name: 'Subgrade Prep & 200µm Poly Underlay', description: 'Level, compact and lay polyethylene underlay', unit: 'M2', unitCost: 8.00, quantity: 0, linkedMeasurements: [], wasteFactor: 1.05, subtotal: 0, trade: 'Concreter', materialWastePercent: 5, labourWastePercent: 5 },
+      { id: 'co-3', category: 'Concrete', name: 'SL72 Mesh Reinforcement', description: 'SL72 mesh sheets, lapped 225mm, on bar chairs', unit: 'M2', unitCost: 8.50, quantity: 0, linkedMeasurements: [], wasteFactor: 1.08, subtotal: 0, trade: 'Concreter', materialWastePercent: 8, labourWastePercent: 5 },
+      { id: 'co-4', category: 'Concrete', name: 'Concrete: 100mm Slab 25MPa', description: 'Ready-mix 25MPa incl. pump hire', unit: 'M2', unitCost: 85.00, quantity: 0, linkedMeasurements: [], wasteFactor: 1.05, subtotal: 0, trade: 'Concreter', materialWastePercent: 5, labourWastePercent: 5 },
+      { id: 'co-5', category: 'Concrete', name: 'Finish: Broom or Power Trowel', description: 'Broom, exposed aggregate or trowel finish as specified', unit: 'M2', unitCost: 12.00, quantity: 0, linkedMeasurements: [], wasteFactor: 1.0, subtotal: 0, trade: 'Concreter', materialWastePercent: 0, labourWastePercent: 5 },
+      { id: 'co-6', category: 'Concrete', name: 'Control Joints & Acrylic Sealer', description: 'Sawn joints at 3m centres + penetrating sealer coat', unit: 'M2', unitCost: 6.00, quantity: 0, linkedMeasurements: [], wasteFactor: 1.05, subtotal: 0, trade: 'Concreter', materialWastePercent: 5, labourWastePercent: 5 },
+      { id: 'co-7', category: 'Concrete', name: 'Labour: Concreting', description: 'Concreter rate. Slab ~1.5 m²/hr incl. pour and finish', unit: 'HR', unitCost: 0, quantity: 0, linkedMeasurements: [], wasteFactor: 1.0, subtotal: 0, trade: 'Concreter', labourHours: 0, hourlyRate: 75, materialWastePercent: 0, labourWastePercent: 10 },
+    ],
+  },
+  {
+    id: 'system-landscaping',
+    name: 'Landscaping',
+    description: 'Sleeper retaining wall, turf, garden soil, mow-strip and pebble path',
+    items: [
+      { id: 'la-1', category: 'Landscaping', name: 'Sleeper Retaining Wall: 200x75 Hardwood', description: '200x75mm CCA hardwood sleepers + galvanised posts', unit: 'LM', unitCost: 220.00, quantity: 0, linkedMeasurements: [], wasteFactor: 1.05, subtotal: 0, trade: 'Landscaper', materialWastePercent: 5, labourWastePercent: 5 },
+      { id: 'la-2', category: 'Landscaping', name: 'Subgrade Excavation & Grading', description: 'Machine excavation, level and compact to falls', unit: 'M2', unitCost: 12.00, quantity: 0, linkedMeasurements: [], wasteFactor: 1.0, subtotal: 0, trade: 'Landscaper', materialWastePercent: 0, labourWastePercent: 5 },
+      { id: 'la-3', category: 'Landscaping', name: 'Garden Soil: 100mm Top-Dress', description: 'Premium garden soil / sandy loam blend', unit: 'M2', unitCost: 18.00, quantity: 0, linkedMeasurements: [], wasteFactor: 1.05, subtotal: 0, trade: 'Landscaper', materialWastePercent: 5, labourWastePercent: 5 },
+      { id: 'la-4', category: 'Landscaping', name: 'Turf: Sir Walter DNA Certified', description: 'Supply and lay incl. top-dress and roll', unit: 'M2', unitCost: 28.00, quantity: 0, linkedMeasurements: [], wasteFactor: 1.05, subtotal: 0, trade: 'Landscaper', materialWastePercent: 5, labourWastePercent: 5 },
+      { id: 'la-5', category: 'Landscaping', name: 'Concrete Mow-Strip Edging 150x50mm', description: 'Concrete mow-strip, formwork, broom finish', unit: 'LM', unitCost: 42.00, quantity: 0, linkedMeasurements: [], wasteFactor: 1.05, subtotal: 0, trade: 'Landscaper', materialWastePercent: 5, labourWastePercent: 5 },
+      { id: 'la-6', category: 'Landscaping', name: 'Pebble Path / Mulch 60mm Deep', description: 'Pea gravel 10mm or pine mulch 75mm deep', unit: 'M2', unitCost: 35.00, quantity: 0, linkedMeasurements: [], wasteFactor: 1.10, subtotal: 0, trade: 'Landscaper', materialWastePercent: 10, labourWastePercent: 5 },
+      { id: 'la-7', category: 'Landscaping', name: 'Labour: Landscaping', description: 'Landscaper rate. Turf ~15 m²/hr, sleepers ~3 lm/hr', unit: 'HR', unitCost: 0, quantity: 0, linkedMeasurements: [], wasteFactor: 1.0, subtotal: 0, trade: 'Landscaper', labourHours: 0, hourlyRate: 65, materialWastePercent: 0, labourWastePercent: 10 },
+    ],
+  },
+  {
+    id: 'system-carpentry-fitout',
+    name: 'Carpentry Fix-out',
+    description: 'Door sets, skirtings, architraves, wardrobes and window reveals',
+    items: [
+      { id: 'cf-1', category: 'Framing', name: 'Door Sets: Supply & Hang', description: '2040x820 Hume hollow core + hinges + latch + door stop', unit: 'EA', unitCost: 280.00, quantity: 0, linkedMeasurements: [], wasteFactor: 1.02, subtotal: 0, trade: 'Carpenter', materialWastePercent: 2, labourWastePercent: 5 },
+      { id: 'cf-2', category: 'Framing', name: 'Skirtings 67mm: Supply & Fix', description: '67x18mm MDF primed skirting — nailed and caulked', unit: 'LM', unitCost: 6.50, quantity: 0, linkedMeasurements: [], wasteFactor: 1.10, subtotal: 0, trade: 'Carpenter', materialWastePercent: 10, labourWastePercent: 5 },
+      { id: 'cf-3', category: 'Framing', name: 'Architraves 42mm: Supply & Fix', description: '42x18mm MDF primed architrave — both sides per door', unit: 'LM', unitCost: 5.50, quantity: 0, linkedMeasurements: [], wasteFactor: 1.10, subtotal: 0, trade: 'Carpenter', materialWastePercent: 10, labourWastePercent: 5 },
+      { id: 'cf-4', category: 'Framing', name: 'Built-in Wardrobe: Melamine & Sliders', description: 'Melamine shelving, hanging rail and sliding door set per wardrobe bay', unit: 'EA', unitCost: 1100.00, quantity: 0, linkedMeasurements: [], wasteFactor: 1.05, subtotal: 0, trade: 'Carpenter', materialWastePercent: 5, labourWastePercent: 5 },
+      { id: 'cf-5', category: 'Framing', name: 'Window Reveals & Stool: MDF', description: 'MDF reveals + painted stool — set and nail per window', unit: 'EA', unitCost: 85.00, quantity: 0, linkedMeasurements: [], wasteFactor: 1.08, subtotal: 0, trade: 'Carpenter', materialWastePercent: 8, labourWastePercent: 5 },
+      { id: 'cf-6', category: 'General', name: 'Linen Shelving & Misc Fix-out', description: 'MDF shelving, brackets and miscellaneous joinery items — lump sum', unit: 'ITEM', unitCost: 850.00, quantity: 0, linkedMeasurements: [], wasteFactor: 1.05, subtotal: 0, trade: 'Carpenter', materialWastePercent: 5, labourWastePercent: 5 },
+      { id: 'cf-7', category: 'Framing', name: 'Labour: Carpentry Fix-out', description: 'Carpenter rate. Doors ~2.5 hr/ea, skirting ~20 lm/hr, wardrobe ~8 hr/ea', unit: 'HR', unitCost: 0, quantity: 0, linkedMeasurements: [], wasteFactor: 1.0, subtotal: 0, trade: 'Carpenter', labourHours: 0, hourlyRate: 75, materialWastePercent: 0, labourWastePercent: 10 },
+    ],
+  },
+  {
+    id: 'system-roofing-metal',
+    name: 'Roofing — Metal (Colorbond)',
+    description: 'Battens, Anticon, Custom Orb, ridge, gutters and downpipes',
+    items: [
+      { id: 'ro-1', category: 'Roofing', name: 'Roof Battens 50x25 CCA: Supply & Fix', description: '50x25mm CCA pine battens at 900mm centres', unit: 'LM', unitCost: 3.20, quantity: 0, linkedMeasurements: [], wasteFactor: 1.10, subtotal: 0, trade: 'Roofer', materialWastePercent: 10, labourWastePercent: 5 },
+      { id: 'ro-2', category: 'Roofing', name: 'Sarking: Anticon Reflective Sisalation', description: 'Anticon foil sarking — lay over battens before sheeting', unit: 'M2', unitCost: 5.50, quantity: 0, linkedMeasurements: [], wasteFactor: 1.05, subtotal: 0, trade: 'Roofer', materialWastePercent: 5, labourWastePercent: 5 },
+      { id: 'ro-3', category: 'Roofing', name: 'Colorbond Custom Orb 0.42bmt: Supply & Fix', description: 'Colorbond steel roofing sheet, corrugated profile', unit: 'M2', unitCost: 38.00, quantity: 0, linkedMeasurements: [], wasteFactor: 1.08, subtotal: 0, trade: 'Roofer', materialWastePercent: 8, labourWastePercent: 5 },
+      { id: 'ro-4', category: 'Roofing', name: 'Ridge Cap & Hip Cap', description: 'Colorbond ridge / hip flashing + hex head screws', unit: 'LM', unitCost: 28.00, quantity: 0, linkedMeasurements: [], wasteFactor: 1.05, subtotal: 0, trade: 'Roofer', materialWastePercent: 5, labourWastePercent: 5 },
+      { id: 'ro-5', category: 'Roofing', name: 'Gutters: Colorbond Quad 125mm', description: 'Colorbond 125mm quad gutter + brackets + stop ends', unit: 'LM', unitCost: 32.00, quantity: 0, linkedMeasurements: [], wasteFactor: 1.05, subtotal: 0, trade: 'Roofer', materialWastePercent: 5, labourWastePercent: 5 },
+      { id: 'ro-6', category: 'Roofing', name: 'Downpipes: Colorbond 90mm Round', description: 'Colorbond 90mm round downpipe + clips + shoe', unit: 'LM', unitCost: 28.00, quantity: 0, linkedMeasurements: [], wasteFactor: 1.05, subtotal: 0, trade: 'Roofer', materialWastePercent: 5, labourWastePercent: 5 },
+      { id: 'ro-7', category: 'Roofing', name: 'Roof Screws, Sealant & Flashings', description: 'Hex head screws, silicone sealant and valley flashing per m²', unit: 'M2', unitCost: 3.50, quantity: 0, linkedMeasurements: [], wasteFactor: 1.05, subtotal: 0, trade: 'Roofer', materialWastePercent: 5, labourWastePercent: 5 },
+      { id: 'ro-8', category: 'Roofing', name: 'Labour: Metal Roofing', description: 'Roofer rate. Sheeting ~3 m²/hr, gutters ~6 lm/hr, downpipes ~4 lm/hr', unit: 'HR', unitCost: 0, quantity: 0, linkedMeasurements: [], wasteFactor: 1.0, subtotal: 0, trade: 'Roofer', labourHours: 0, hourlyRate: 78, materialWastePercent: 0, labourWastePercent: 10 },
     ],
   },
 ];
 
 interface CostEstimatorProps {
   projectId: string;
+  projectName?: string;
   measurements: Measurement[];
   costItems: CostItem[];
   enabledTrades?: string[];
@@ -187,7 +304,7 @@ const LabourRateCell = ({ item, selectedState, onUpdateCostItem }: LabourRateCel
 
   return (
     <div className="space-y-0.5">
-      {/* Trade picker — shows profile rate for each trade */}
+      {/* Trade picker */}
       <Select value={currentLabourTrade} onValueChange={handleLabourTradeChange}>
         <SelectTrigger className="h-6 text-[10px] px-1.5 w-full border-dashed">
           <span className="truncate text-[10px]">{currentLabourTrade}</span>
@@ -209,22 +326,33 @@ const LabourRateCell = ({ item, selectedState, onUpdateCostItem }: LabourRateCel
         </SelectContent>
       </Select>
 
-      {/* Rate input — amber when overriding profile default */}
+      {/* Rate input — amber border + inline reset icon when overriding profile default */}
       <Popover open={open} onOpenChange={handleOpenChange}>
-        <PopoverTrigger asChild>
-          <Input
-            type="number"
-            value={currentRate}
-            onChange={(e) => onUpdateCostItem(item.id, { hourlyRate: Number(e.target.value) })}
-            className={cn(
-              "h-7 text-xs text-right font-mono px-2 w-full",
-              isOverride
-                ? "border-amber-400 bg-amber-50/40 dark:bg-amber-950/20 text-amber-700 dark:text-amber-400"
-                : "border-border"
-            )}
-            onFocus={() => setOpen(true)}
-          />
-        </PopoverTrigger>
+        <div className="relative">
+          <PopoverTrigger asChild>
+            <Input
+              type="number"
+              value={currentRate}
+              onChange={(e) => onUpdateCostItem(item.id, { hourlyRate: Number(e.target.value) })}
+              className={cn(
+                "h-7 text-xs text-right font-mono w-full",
+                isOverride
+                  ? "pl-2 pr-6 border-amber-400 bg-amber-50/40 dark:bg-amber-950/20 text-amber-700 dark:text-amber-400"
+                  : "px-2 border-border"
+              )}
+              onFocus={() => setOpen(true)}
+            />
+          </PopoverTrigger>
+          {isOverride && (
+            <button
+              className="absolute right-1 top-1/2 -translate-y-1/2 text-amber-600 hover:text-amber-800 z-10"
+              onMouseDown={(e) => { e.preventDefault(); resetToProfile(); }}
+              title={`Reset to profile ($${profileRate}/hr)`}
+            >
+              <RotateCcw className="h-2.5 w-2.5" />
+            </button>
+          )}
+        </div>
         <PopoverContent className="w-72 p-3" align="end" side="top">
           {!rateInfo ? (
             <p className="text-xs text-muted-foreground">No benchmark data for "{currentLabourTrade}"</p>
@@ -234,7 +362,6 @@ const LabourRateCell = ({ item, selectedState, onUpdateCostItem }: LabourRateCel
                 <p className="text-sm font-semibold">{rateInfo.trade}</p>
                 <p className="text-xs text-muted-foreground">{rateInfo.desc}</p>
               </div>
-              {/* Profile default reference row */}
               <div className="flex items-center justify-between text-xs bg-muted/50 rounded px-2 py-1.5">
                 <span className="text-muted-foreground">Profile default ({selectedState})</span>
                 <span className="font-mono font-semibold">${profileRate}/hr</span>
@@ -276,23 +403,6 @@ const LabourRateCell = ({ item, selectedState, onUpdateCostItem }: LabourRateCel
           )}
         </PopoverContent>
       </Popover>
-
-      {/* Override indicator / profile label */}
-      {isOverride ? (
-        <div className="flex items-center justify-between">
-          <span className="text-[9px] text-amber-600 font-semibold uppercase tracking-wide">override</span>
-          <button
-            className="flex items-center gap-0.5 text-[9px] text-amber-600 hover:text-amber-800"
-            onClick={resetToProfile}
-            title={`Reset to profile rate ($${profileRate}/hr)`}
-          >
-            <RotateCcw className="h-2.5 w-2.5" />
-            <span>${profileRate}</span>
-          </button>
-        </div>
-      ) : (
-        <p className="text-[9px] text-muted-foreground text-center leading-none">from profile</p>
-      )}
     </div>
   );
 };
@@ -308,6 +418,7 @@ const saveTransferred = (projectId: string, ids: Set<string>) =>
 
 export const CostEstimator = ({
   projectId,
+  projectName,
   measurements,
   costItems,
   enabledTrades,
@@ -415,6 +526,20 @@ export const CostEstimator = ({
   });
   const [transferredIds, setTransferredIds] = useState<Set<string>>(() => getTransferred(projectId));
   const [recentlyTransferredIds, setRecentlyTransferredIds] = useState<Set<string>>(new Set());
+
+  // On mount: remove stale transferredIds for items no longer in estimate_items
+  useEffect(() => {
+    const projects: any[] = JSON.parse(localStorage.getItem(getUserStorageKey('local_projects')) || '[]');
+    const proj = projects.find((p: any) => p.id === projectId);
+    const estimateItems: any[] = proj?.estimate_items || [];
+    const validCostItemIds = new Set(estimateItems.map((e: any) => e._costItemId).filter(Boolean));
+    const stored = getTransferred(projectId);
+    const cleaned = new Set([...stored].filter(id => validCostItemIds.has(id)));
+    if (cleaned.size !== stored.size) {
+      saveTransferred(projectId, cleaned);
+      setTransferredIds(cleaned);
+    }
+  }, [projectId]);
   const [selectedCostIds, setSelectedCostIds] = useState<Set<string>>(new Set());
   const [quoteDialogItems, setQuoteDialogItems] = useState<CostItem[] | null>(null);
   // Inline custom material form state: itemId → form fields
@@ -578,6 +703,49 @@ export const CostEstimator = ({
 
     projects[projectIndex].estimate_items = [...existing, ...newEstimateItems];
 
+    // Write a snapshot estimate_totals so QuoteGenerator can show totals immediately
+    // after transfer without needing EstimateTemplate to open first.
+    // EstimateTemplate will overwrite this with the full calculation the first time opened.
+    {
+      const allEI: any[] = projects[projectIndex].estimate_items;
+      let _totMat = 0, _totLab = 0, _fixingsCost = 0;
+      allEI.forEach((ei: any) => {
+        const mw = (ei.material_wastage_pct ?? 5) / 100;
+        _totMat += (ei.quantity || 1) * (ei.unit_price || 0) * (1 + mw);
+        const lw = (ei.labour_wastage_pct ?? 10) / 100;
+        _totLab += (ei.labour_hours || 0) * (ei.labour_rate || 65) * (1 + lw);
+        // relatedMaterials here are pre-filtered to accepted-only by transferItems above
+        if (Array.isArray(ei.relatedMaterials)) {
+          ei.relatedMaterials.forEach((rm: any) => {
+            _fixingsCost += (rm.quantity || 0) * (rm.unit_price || rm.unitCost || 0);
+          });
+        }
+      });
+      // Include consumables from the CostEstimator state (same items being merged below)
+      const _consumablesTotal = consumables.reduce((sum, c) => sum + c.total, 0);
+      const _subtotal = _totMat + _totLab + _fixingsCost + _consumablesTotal;
+      const _margin = _subtotal * (marginPercent / 100);
+      const _taxable = _subtotal + _margin;
+      const _gst = gstEnabled ? _taxable * 0.10 : 0;
+      projects[projectIndex].estimate_totals = {
+        taxable: _taxable,
+        gst: _gst,
+        totalPrice: _taxable + _gst,
+        totalMaterials: _totMat,
+        totalLabour: _totLab,
+        totalMarkup: 0,
+        baseSubtotal: _subtotal,
+        supervision: 0,
+        overheadsPct: 0,
+        overheadTotal: 0,
+        totalOverheads: 0,
+        preMargin: _subtotal,
+        contingency: 0,
+        margin: _margin,
+        customConfigsTotal: 0,
+      };
+    }
+
     // Merge consumables into EstimateTemplate's list, deduped by name
     const existingConsumables: any[] = projects[projectIndex].consumables || [];
     const existingNames = new Set(existingConsumables.map((c: any) => c.name));
@@ -589,18 +757,19 @@ export const CostEstimator = ({
     }
 
     localStorage.setItem(getUserStorageKey('local_projects'), JSON.stringify(projects));
+    syncProjectToSupabase(projects[projectIndex]);
     saveTransferred(projectId, newTransferred);
     setTransferredIds(new Set(newTransferred));
 
     setRecentlyTransferredIds(new Set(newEstimateItems.map((e: any) => e._costItemId)));
     setTimeout(() => setRecentlyTransferredIds(new Set()), 2500);
 
-    // Notify EstimateTemplate to reload and switch to Estimate tab
+    // Notify EstimateTemplate to reload, then open the quote generator directly
     window.dispatchEvent(new CustomEvent('estimate-updated', { detail: { projectId } }));
-    window.dispatchEvent(new CustomEvent('go-to-estimate-tab'));
+    window.dispatchEvent(new CustomEvent('open-quote-generator'));
 
     const transferredItemIds = newEstimateItems.map((e: any) => e.id);
-    toast.success(`${newEstimateItems.length} item${newEstimateItems.length > 1 ? 's' : ''} sent to Estimate. Click "View Estimate" above to review.`, {
+    toast.success(`${newEstimateItems.length} item${newEstimateItems.length > 1 ? 's' : ''} added to quote.`, {
       action: {
         label: 'Undo',
         onClick: () => {
@@ -611,6 +780,7 @@ export const CostEstimator = ({
               (e: any) => !transferredItemIds.includes(e.id)
             );
             localStorage.setItem(getUserStorageKey('local_projects'), JSON.stringify(ps));
+            syncProjectToSupabase(ps[pi]);
             // Remove from transferred set so they can be re-transferred
             const undoSet = new Set(newTransferred);
             newEstimateItems.forEach((e: any) => undoSet.delete(e._costItemId));
@@ -900,7 +1070,7 @@ export const CostEstimator = ({
   // Export in professional BOQ format (matches TCA/Rawlinsons QS structure)
   const exportToBOQ = () => {
     const csv = exportToBOQCsv({
-      projectName: 'Project',
+      projectName: projectName || 'Project',
       projectLocation: '',
       state: selectedState,
       costItems,
@@ -921,13 +1091,13 @@ export const CostEstimator = ({
   const realMargin = marginPercent / (100 + marginPercent) * 100;
   const requiredMarkup = targetMargin < 100 ? targetMargin / (100 - targetMargin) * 100 : 999;
 
-  if (measurements.length === 0) {
+  if (measurements.length === 0 && costItems.length === 0) {
     return (
       <Card className="p-8 text-center">
         <Calculator className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
-        <h3 className="font-semibold text-lg mb-2">No Measurements Yet</h3>
+        <h3 className="font-semibold text-lg mb-2">No Items Yet</h3>
         <p className="text-muted-foreground text-sm">
-          Add measurements from the PDF to start building your cost estimate.
+          Add measurements from the PDF or use the Plan Analyser to push trade quantities directly into your estimate.
         </p>
       </Card>
     );
@@ -987,19 +1157,24 @@ export const CostEstimator = ({
       </Card>
 
       {/* Action Buttons */}
-      <div className="flex flex-wrap items-center gap-3">
-        <div className="flex gap-2">
-          <Button variant="outline" size="sm" onClick={() => { if (!sub.caps.boqExport) { setUpgradeOpen(true); return; } exportToCSV(); }}>
-            <FileDown className="h-4 w-4 mr-1" />
+      <div className="flex flex-wrap items-center gap-2">
+
+        {/* Export group — compact, secondary */}
+        <div className="flex items-center gap-px rounded-md border border-border/40 overflow-hidden">
+          <Button variant="ghost" size="sm" className="h-8 px-3 rounded-none text-xs font-normal" onClick={() => { if (!sub.caps.boqExport) { setUpgradeOpen(true); return; } exportToCSV(); }}>
+            <FileDown className="h-3.5 w-3.5 mr-1.5" />
             CSV
           </Button>
-          <Button variant="outline" size="sm" onClick={() => { if (!sub.caps.boqExport) { setUpgradeOpen(true); return; } exportToBOQ(); }} disabled={costItems.length === 0}>
-            <FileDown className="h-4 w-4 mr-1" />
+          <div className="w-px h-5 bg-border/40" />
+          <Button variant="ghost" size="sm" className="h-8 px-3 rounded-none text-xs font-normal" onClick={() => { if (!sub.caps.boqExport) { setUpgradeOpen(true); return; } exportToBOQ(); }} disabled={costItems.length === 0}>
+            <FileDown className="h-3.5 w-3.5 mr-1.5" />
             BOQ
           </Button>
+          <div className="w-px h-5 bg-border/40" />
           <Button
-            variant="outline"
+            variant="ghost"
             size="sm"
+            className="h-8 px-3 rounded-none text-xs font-normal"
             disabled={costItems.length === 0}
             onClick={() => {
               const toQuote = selectedCostIds.size > 0
@@ -1009,17 +1184,56 @@ export const CostEstimator = ({
             }}
             title="Request a supplier quote for selected items (or all items)"
           >
-            <Mail className="h-4 w-4 mr-1" />
+            <Mail className="h-3.5 w-3.5 mr-1.5" />
             Quote Supplier
           </Button>
+          <div className="w-px h-5 bg-border/40" />
+          <Button variant="ghost" size="sm" className="h-8 px-3 rounded-none text-xs font-normal" onClick={() => setSaveTemplateOpen(true)} disabled={costItems.length === 0}>
+            <BookmarkPlus className="h-3.5 w-3.5 mr-1.5" />
+            Save
+          </Button>
+        </div>
+
+        {/* Vertical separator */}
+        <div className="w-px h-6 bg-border/40 mx-0.5" />
+
+        {/* Add-from group */}
+        <div className="flex items-center gap-1.5">
+          <Button variant="outline" size="sm" className="h-8 text-xs" onClick={() => setShowLibraryPicker(true)}>
+            <Package className="h-3.5 w-3.5 mr-1.5" />
+            Library
+          </Button>
+          <Button variant="outline" size="sm" className="h-8 text-xs" onClick={() => setShowRecipePicker(true)}>
+            <BookOpen className="h-3.5 w-3.5 mr-1.5" />
+            Recipe
+          </Button>
+          <Button variant="outline" size="sm" className="h-8 text-xs" onClick={() => { refreshTemplates(); setLoadTemplateOpen(true); }}>
+            <BookOpen className="h-3.5 w-3.5 mr-1.5" />
+            Template
+          </Button>
+        </div>
+
+        {/* Primary CTAs — pushed right */}
+        <div className="ml-auto flex items-center gap-2">
+          {selectedCostIds.size >= 2 && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleMergeSelected}
+              className="h-8 text-xs border-foreground/25 text-foreground/70"
+            >
+              <Combine className="h-3.5 w-3.5 mr-1.5" />
+              Combine {selectedCostIds.size}
+            </Button>
+          )}
           {costItems.length > 0 && (
             <Button
               size="sm"
-              className="bg-primary text-primary-foreground hover:bg-primary/90 font-semibold"
+              className="h-8 bg-primary text-primary-foreground hover:bg-primary/90 font-semibold text-xs"
               onClick={() => transferItems(costItems.filter(i => !transferredIds.has(i.id)))}
               disabled={costItems.filter(i => !transferredIds.has(i.id)).length === 0}
             >
-              <CheckCircle2 className="h-4 w-4 mr-1" />
+              <CheckCircle2 className="h-3.5 w-3.5 mr-1.5" />
               Send to Estimate
               {costItems.filter(i => !transferredIds.has(i.id)).length > 0 && (
                 <span className="ml-1.5 bg-white/20 text-white text-xs px-1.5 py-0.5 rounded-full">
@@ -1028,38 +1242,12 @@ export const CostEstimator = ({
               )}
             </Button>
           )}
-          {selectedCostIds.size >= 2 && (
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={handleMergeSelected}
-              className="border-foreground/25 text-foreground/70 hover:bg-muted/10 dark:hover:bg-background"
-            >
-              <Combine className="h-4 w-4 mr-1" />
-              Combine {selectedCostIds.size}
-            </Button>
-          )}
-          <Button variant="outline" size="sm" onClick={() => setShowLibraryPicker(true)}>
-            <Package className="h-4 w-4 mr-1" />
-            From Library
-          </Button>
-          <Button variant="outline" size="sm" onClick={() => setShowRecipePicker(true)}>
-            <BookOpen className="h-4 w-4 mr-1" />
-            From Recipe
-          </Button>
-          <Button variant="outline" size="sm" onClick={() => { refreshTemplates(); setLoadTemplateOpen(true); }}>
-            <BookOpen className="h-4 w-4 mr-1" />
-            Templates
-          </Button>
-          <Button variant="outline" size="sm" onClick={() => setSaveTemplateOpen(true)} disabled={costItems.length === 0}>
-            <BookmarkPlus className="h-4 w-4 mr-1" />
-            Save
-          </Button>
-          <Button size="sm" onClick={() => setShowAddDialog(!showAddDialog)}>
-            <Plus className="h-4 w-4 mr-1" />
+          <Button size="sm" className="h-8 text-xs font-semibold" onClick={() => setShowAddDialog(!showAddDialog)}>
+            <Plus className="h-3.5 w-3.5 mr-1.5" />
             Add Item
           </Button>
         </div>
+
       </div>
 
       <MaterialPickerDialog
@@ -1142,7 +1330,7 @@ export const CostEstimator = ({
       {costItems.length > 0 && (
         <Card className="overflow-hidden">
           <div className="overflow-x-auto">
-            <Table className="table-fixed min-w-[1320px]">
+            <Table className="table-fixed min-w-[1376px]">
               <TableHeader>
                 <TableRow className="text-xs bg-muted/50">
                   <TableHead className="w-8 px-1">
@@ -1157,20 +1345,20 @@ export const CostEstimator = ({
                     />
                   </TableHead>
                   <TableHead className="w-8 px-1"></TableHead>
-                  <TableHead className="w-20 px-1 whitespace-nowrap">Category</TableHead>
-                  <TableHead className="w-24 px-1 whitespace-nowrap">Trade</TableHead>
-                  <TableHead className="px-1 whitespace-nowrap">Item</TableHead>
-                  <TableHead className="w-20 px-1 whitespace-nowrap">Area</TableHead>
-                  <TableHead className="w-16 px-1 text-right whitespace-nowrap">Qty</TableHead>
-                  <TableHead className="w-14 px-1 whitespace-nowrap">Unit</TableHead>
-                  <TableHead className="w-20 px-1 text-right whitespace-nowrap">$/Unit</TableHead>
-                  <TableHead className="w-32 px-1 whitespace-nowrap">Material</TableHead>
-                  <TableHead className="w-14 px-1 text-right whitespace-nowrap">Mat%</TableHead>
-                  <TableHead className="w-16 px-1 text-right whitespace-nowrap">Hrs</TableHead>
-                  <TableHead className="w-36 px-1 whitespace-nowrap">$/Hr</TableHead>
-                  <TableHead className="w-14 px-1 text-right whitespace-nowrap">Lab%</TableHead>
-                  <TableHead className="w-14 px-1 text-right whitespace-nowrap">Mkp%</TableHead>
-                  <TableHead className="w-28 px-1 text-right whitespace-nowrap">Total</TableHead>
+                  <TableHead className="w-20 px-1 text-center whitespace-nowrap">Category</TableHead>
+                  <TableHead className="w-24 px-1 text-center whitespace-nowrap">Trade</TableHead>
+                  <TableHead className="px-1 text-center whitespace-nowrap">Item</TableHead>
+                  <TableHead className="w-28 px-1 text-center whitespace-nowrap">Area</TableHead>
+                  <TableHead className="w-20 px-1 text-center whitespace-nowrap">Qty</TableHead>
+                  <TableHead className="w-16 px-1 text-center whitespace-nowrap">Unit</TableHead>
+                  <TableHead className="w-20 px-1 text-center whitespace-nowrap">$/Unit</TableHead>
+                  <TableHead className="w-32 px-1 text-center whitespace-nowrap">Material</TableHead>
+                  <TableHead className="w-14 px-1 text-center whitespace-nowrap">Mat%</TableHead>
+                  <TableHead className="w-16 px-1 text-center whitespace-nowrap">Hrs</TableHead>
+                  <TableHead className="w-36 px-1 text-center whitespace-nowrap">$/Hr</TableHead>
+                  <TableHead className="w-14 px-1 text-center whitespace-nowrap">Lab%</TableHead>
+                  <TableHead className="w-14 px-1 text-center whitespace-nowrap">Mkp%</TableHead>
+                  <TableHead className="w-28 px-1 text-center whitespace-nowrap">Total</TableHead>
                   <TableHead className="w-14 px-1"></TableHead>
                 </TableRow>
               </TableHeader>
@@ -1185,8 +1373,8 @@ export const CostEstimator = ({
                     <React.Fragment key={item.id}>
                       <TableRow className={cn(
                           "text-xs",
-                          selectedCostIds.has(item.id) && "bg-muted/10/40 dark:bg-background/60",
-                          recentlyTransferredIds.has(item.id) && "bg-muted/10/60 dark:bg-card/40 transition-colors duration-700",
+                          selectedCostIds.has(item.id) && "bg-muted/40 dark:bg-background/60",
+                          recentlyTransferredIds.has(item.id) && "bg-muted/60 dark:bg-card/40 transition-colors duration-700",
                           needsPrice && "border-l-2 border-l-amber-400"
                         )}>
                         {/* Select checkbox */}
@@ -1244,9 +1432,9 @@ export const CostEstimator = ({
                         </TableCell>
 
                         {/* Area */}
-                        <TableCell className="px-1 w-20">
+                        <TableCell className="px-1 w-28">
                           <Select value={item.area || ''} onValueChange={(v: MeasurementArea) => onUpdateCostItem(item.id, { area: v })}>
-                            <SelectTrigger className="h-8 text-xs px-2">
+                            <SelectTrigger className="h-8 text-xs px-2 w-full">
                               <SelectValue placeholder="Area" />
                             </SelectTrigger>
                             <SelectContent className="bg-popover max-h-48">
@@ -1256,7 +1444,7 @@ export const CostEstimator = ({
                         </TableCell>
 
                         {/* Qty */}
-                        <TableCell className="px-1 w-16">
+                        <TableCell className="px-1 w-20">
                           <Input
                             type="number"
                             value={item.quantity || ''}
@@ -1266,7 +1454,7 @@ export const CostEstimator = ({
                         </TableCell>
 
                         {/* Unit */}
-                        <TableCell className="px-1 w-14">
+                        <TableCell className="px-1 w-16">
                           <Select value={item.unit} onValueChange={(v: typeof UNIT_OPTIONS[number]) => onUpdateCostItem(item.id, { unit: v })}>
                             <SelectTrigger className="h-8 text-xs w-full px-2">
                               <SelectValue />
@@ -1364,7 +1552,7 @@ export const CostEstimator = ({
                         {/* Line Total */}
                         <TableCell className="px-1 w-28 text-right">
                           {needsPrice ? (
-                            <div className="text-[10px] text-amber-500 font-semibold">Enter price ↑</div>
+                            <div className="text-[10px] text-amber-500 font-semibold">Set price</div>
                           ) : (
                             <>
                               <div className="font-mono font-semibold text-sm">${lineTotal.toFixed(0)}</div>
@@ -1377,7 +1565,7 @@ export const CostEstimator = ({
                         </TableCell>
 
                         {/* Transfer + Delete */}
-                        <TableCell className="px-1 w-10">
+                        <TableCell className="px-1 w-14">
                           <div className="flex items-center gap-1">
                             {transferredIds.has(item.id) ? (
                               <TooltipProvider>
@@ -1660,34 +1848,61 @@ export const CostEstimator = ({
             <Plus className="h-3 w-3 mr-1" /> Add
           </Button>
         </div>
-        <Table>
+        <Table className="table-fixed">
           <TableHeader>
             <TableRow className="text-xs">
-              <TableHead className="w-32">Item</TableHead>
+              <TableHead>Item</TableHead>
               <TableHead className="w-16 text-right">Qty</TableHead>
-              <TableHead className="w-12">Unit</TableHead>
-              <TableHead className="w-16 text-right">$/Unit</TableHead>
-              <TableHead className="w-20 text-right">Total</TableHead>
-              <TableHead className="w-6"></TableHead>
+              <TableHead className="w-14">Unit</TableHead>
+              <TableHead className="w-20 text-right">$/Unit</TableHead>
+              <TableHead className="w-24 text-right">Total</TableHead>
+              <TableHead className="w-8"></TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {consumables.map(c => (
               <TableRow key={c.id} className="text-xs">
-                <TableCell>
-                  <Input value={c.name} onChange={(e) => updateConsumable(c.id, { name: e.target.value })} className="h-8 text-xs" />
+                <TableCell className="pr-1">
+                  <div className="flex items-center gap-1">
+                    <Input value={c.name} onChange={(e) => updateConsumable(c.id, { name: e.target.value })} className="h-8 text-xs w-full min-w-0" />
+                    <Popover>
+                      <PopoverTrigger asChild>
+                        <Button variant="ghost" size="icon" className={cn("h-7 w-7 shrink-0", c.url ? "text-primary" : "text-muted-foreground/40")}>
+                          <ExternalLink className="h-3.5 w-3.5" />
+                        </Button>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-72 p-3" side="top" align="start">
+                        <div className="space-y-2">
+                          <Label className="text-xs">Product URL</Label>
+                          <div className="flex gap-1">
+                            <Input
+                              value={c.url || ""}
+                              onChange={(e) => updateConsumable(c.id, { url: e.target.value })}
+                              placeholder="https://..."
+                              className="h-8 text-xs flex-1"
+                            />
+                            {c.url && (
+                              <Button size="sm" variant="outline" className="h-8 w-8 p-0 shrink-0" onClick={() => window.open(c.url, '_blank')}>
+                                <ExternalLink className="h-3 w-3" />
+                              </Button>
+                            )}
+                          </div>
+                        </div>
+                      </PopoverContent>
+                    </Popover>
+                  </div>
                 </TableCell>
-                <TableCell>
-                  <Input type="number" value={c.quantity} onChange={(e) => updateConsumable(c.id, { quantity: Number(e.target.value) })} className="w-16 h-8 text-xs text-right" />
+                <TableCell className="w-16 px-1">
+                  <Input type="number" value={c.quantity} onChange={(e) => updateConsumable(c.id, { quantity: Number(e.target.value) })} className="h-8 text-xs text-right w-full" />
                 </TableCell>
-                <TableCell>
-                  <Input value={c.unit} onChange={(e) => updateConsumable(c.id, { unit: e.target.value })} className="w-14 h-8 text-xs" />
+                <TableCell className="w-14 px-1">
+                  <Input value={c.unit} onChange={(e) => updateConsumable(c.id, { unit: e.target.value })} className="h-8 text-xs w-full" />
                 </TableCell>
-                <TableCell>
-                  <Input type="number" value={c.unitCost} onChange={(e) => updateConsumable(c.id, { unitCost: Number(e.target.value) })} className="w-16 h-8 text-xs text-right font-mono" />
+                <TableCell className="w-20 px-1">
+                  <Input type="number" value={c.unitCost} onChange={(e) => updateConsumable(c.id, { unitCost: Number(e.target.value) })} className="h-8 text-xs text-right font-mono w-full" />
                 </TableCell>
-                <TableCell className="text-right font-mono font-medium text-sm">${c.total.toFixed(2)}</TableCell>
-                <TableCell>
+                <TableCell className="w-24 text-right font-mono font-medium text-sm">${c.total.toFixed(2)}</TableCell>
+                <TableCell className="w-8 p-1">
                   <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive" onClick={() => deleteConsumable(c.id)}>
                     <Trash2 className="h-4 w-4" />
                   </Button>
@@ -1773,7 +1988,7 @@ export const CostEstimator = ({
           </div>
           {/* Right: target margin reverse calculator */}
           <div className="space-y-2">
-            <p className="text-xs font-medium text-muted-foreground">Reverse Calculator — set your target</p>
+            <p className="text-xs font-medium text-muted-foreground">Reverse Calculator: set your target</p>
             <div className="flex items-center gap-2">
               <Label className="text-xs whitespace-nowrap">I want</Label>
               <Input
@@ -1813,7 +2028,7 @@ export const CostEstimator = ({
 
       {/* Estimation disclaimer */}
       <p className="text-[11px] text-muted-foreground text-center leading-snug px-2">
-        Indicative estimate only — not a substitute for a certified quantity surveyor. Rates updated {RATES_LAST_UPDATED}. Market conditions vary by region and project specifics. Metricore accepts no liability for loss arising from reliance on these figures.
+        Indicative estimate only. Not a substitute for a certified quantity surveyor. Rates updated {RATES_LAST_UPDATED}. Market conditions vary by region and project specifics. Metricore accepts no liability for loss arising from reliance on these figures.
       </p>
 
       <UpgradeModal open={upgradeOpen} onClose={() => setUpgradeOpen(false)} feature="BOQ Export" />

@@ -157,7 +157,7 @@ export const FullTenderGenerator = ({ project, estimate }: FullTenderProps) => {
   const [companyTagline, setCompanyTagline] = useState(brand.tagline || "")
   const [yearsExp, setYearsExp] = useState("10+")
   const [projectsCompleted, setProjectsCompleted] = useState("150+")
-  const [companyProfile, setCompanyProfile] = useState(`${brand.companyName || "Our company"} is a fully licensed and insured building contractor delivering high-quality construction solutions across residential, commercial and industrial sectors. Founded on the principles of integrity, quality and partnership, we work collaboratively with clients, designers and subcontractors to deliver projects that exceed expectations.\n\nOur experienced team brings together expertise across all trade disciplines, supported by robust project management systems and a commitment to workplace safety.`)
+  const [companyProfile, setCompanyProfile] = useState(brand.companyProfile || "")
   const tenderSettings = (() => { try { return JSON.parse(localStorage.getItem(getUserStorageKey("quote_settings")) || "{}") } catch { return {} } })()
   const tenderPrefix = tenderSettings.prefix ? `${tenderSettings.prefix}T` : "TND"
   const [tenderNumber, setTenderNumber] = useState(`${tenderPrefix}-${Date.now().toString().slice(-6)}`)
@@ -499,7 +499,7 @@ ${clone.outerHTML}
                   ))}
 
                   <p className="text-xs text-muted-foreground font-medium uppercase tracking-wide pt-2">Company Profile</p>
-                  <Textarea value={companyProfile} onChange={e => setCompanyProfile(e.target.value)} className="text-xs min-h-[90px]" />
+                  <Textarea value={companyProfile} onChange={e => setCompanyProfile(e.target.value)} placeholder="Describe your company: years of experience, licence types, specialisations and what clients can expect working with you." className="text-xs min-h-[90px]" />
 
                   <p className="text-xs text-muted-foreground font-medium uppercase tracking-wide pt-2">Tender Details</p>
                   {[

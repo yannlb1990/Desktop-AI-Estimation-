@@ -48,18 +48,24 @@ export async function uploadFFEPhoto(
     return null;
   }
 
-  const { data } = supabase.storage.from('ffe-photos').getPublicUrl(path);
-  return data.publicUrl;
+  // Return the storage path — display uses base64 localUrl which never expires.
+  // This path can be used to generate a fresh signed URL if needed in future.
+  return `storage:ffe-photos/${path}`;
 }
 
 export async function deleteFFEPhoto(supabaseUrl: string): Promise<void> {
   const { data: { session } } = await supabase.auth.getSession();
   if (!session) return;
 
-  // Extract path from public URL
-  const parts = supabaseUrl.split('/ffe-photos/');
-  if (parts.length < 2) return;
-  const path = parts[1];
+  let path: string | null = null;
+  if (supabaseUrl.startsWith('storage:ffe-photos/')) {
+    path = supabaseUrl.replace('storage:ffe-photos/', '');
+  } else {
+    // Legacy: extract path from old public/signed URL
+    const parts = supabaseUrl.split('/ffe-photos/');
+    if (parts.length >= 2) path = parts[1].split('?')[0];
+  }
+  if (!path) return;
 
   await supabase.storage.from('ffe-photos').remove([path]);
 }

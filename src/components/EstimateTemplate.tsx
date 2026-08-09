@@ -22,9 +22,8 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { toast } from "sonner";
-import { Plus, Trash2, ChevronDown, ChevronRight, DollarSign, Edit2, Save, X, Link, Copy, CheckCircle, BookOpen, Home, Droplets, Utensils, TreePine, Building2, LayoutTemplate, Percent } from "lucide-react";
+import { Plus, Trash2, ChevronDown, ChevronRight, Edit2, Save, X, Link, Copy, CheckCircle, BookOpen } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { Textarea } from "@/components/ui/textarea";
 import { PreliminariesSection } from "./PreliminariesSection";
 import { NCCSearchBar } from "./NCCSearchBar";
@@ -32,16 +31,25 @@ import { LabourRatesSection } from "./LabourRatesSection";
 import { PricingHistory } from "./PricingHistory";
 import { CustomMaterialDialog } from "./CustomMaterialDialog";
 import { TourTip } from "@/components/TourTip";
+import { MaterialTypeCombobox } from "./MaterialTypeCombobox";
 
-// ── Template icon + colour mapping (by template id) ───────────────────────────
-const TEMPLATE_STYLES: Record<string, { Icon: React.ElementType; bg: string; text: string }> = {
-  'new-build':         { Icon: Home,           bg: 'bg-muted/15',   text: 'text-foreground/60' },
-  'bathroom-reno':     { Icon: Droplets,        bg: 'bg-[#412D15]/20',  text: 'text-[#E1DCC9]/70' },
-  'kitchen-reno':      { Icon: Utensils,        bg: 'bg-amber-400/10',  text: 'text-amber-400' },
-  'deck-outdoor':      { Icon: TreePine,        bg: 'bg-[#E1DCC9]/8',  text: 'text-[#E1DCC9]/80' },
-  'commercial-fitout': { Icon: Building2,       bg: 'bg-muted/20', text: 'text-muted-foreground' },
+// ── Template accent colour (left border stripe, by template id) ───────────────
+const TEMPLATE_STYLES: Record<string, { accent: string }> = {
+  'new-build':              { accent: 'border-l-amber-500' },
+  'bathroom-reno':          { accent: 'border-l-blue-400' },
+  'kitchen-reno':           { accent: 'border-l-orange-400' },
+  'deck-outdoor':           { accent: 'border-l-green-500' },
+  'commercial-fitout':      { accent: 'border-l-slate-400' },
+  'interior-painting':      { accent: 'border-l-blue-500' },
+  'floor-wall-tiling':      { accent: 'border-l-stone-400' },
+  'plasterboard-lining':    { accent: 'border-l-slate-300' },
+  'waterproofing-wet-areas':{ accent: 'border-l-cyan-400' },
+  'concreting-slab':        { accent: 'border-l-zinc-400' },
+  'landscaping':            { accent: 'border-l-green-400' },
+  'carpentry-fitout':       { accent: 'border-l-orange-500' },
+  'roofing-metal':          { accent: 'border-l-red-400' },
 };
-const CUSTOM_STYLE = { Icon: LayoutTemplate, bg: 'bg-primary/10', text: 'text-primary' };
+const CUSTOM_STYLE = { accent: 'border-l-primary' };
 
 function getTemplateStyle(id: string) {
   return TEMPLATE_STYLES[id] ?? CUSTOM_STYLE;
@@ -175,6 +183,7 @@ export const EstimateTemplate = ({ projectId, estimateId }: EstimateTemplateProp
   const [consumables, setConsumables] = useState<ConsumableItem[]>([]);
   const [overheadTotal, setOverheadTotal] = useState(0);
   const [recentlyTransferred, setRecentlyTransferred] = useState<EstimateItem[]>([]);
+  const [takeoffCount, setTakeoffCount] = useState(0);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editValues, setEditValues] = useState<Partial<EstimateItem>>({});
   const [showCustomMaterialDialog, setShowCustomMaterialDialog] = useState(false);
@@ -215,6 +224,20 @@ export const EstimateTemplate = ({ projectId, estimateId }: EstimateTemplateProp
   const [showSaveModal, setShowSaveModal] = useState(false);
   const [newTplName, setNewTplName] = useState('');
   const [targetMarginEst, setTargetMarginEst] = useState<number>(25);
+  const [openSections, setOpenSections] = useState<Record<string, boolean>>({
+    nccSearch: false,
+    config: false,
+    marginCalc: false,
+    prelims: false,
+    labourRates: false,
+    pricingAid: false,
+    addItem: true,
+    lineItems: true,
+    consumables: false,
+    costSummary: false,
+  });
+  const toggleSection = (key: string) =>
+    setOpenSections(prev => ({ ...prev, [key]: !prev[key] }));
 
   useEffect(() => {
     loadOverheads();
@@ -222,11 +245,13 @@ export const EstimateTemplate = ({ projectId, estimateId }: EstimateTemplateProp
   }, [projectId]);
 
   const loadOverheads = () => {
-    const projects = JSON.parse(localStorage.getItem(getUserStorageKey('local_projects')) || '[]');
-    const project = projects.find((p: any) => p.id === projectId);
-    if (project && project.overhead_total) {
-      setOverheadTotal(project.overhead_total);
-    }
+    try {
+      const projects = JSON.parse(localStorage.getItem(getUserStorageKey('local_projects')) || '[]');
+      const project = projects.find((p: any) => p.id === projectId);
+      if (project && project.overhead_total) {
+        setOverheadTotal(project.overhead_total);
+      }
+    } catch { /* corrupted data — skip overhead load */ }
   };
 
   const loadUserRateSettings = () => {
@@ -292,6 +317,7 @@ export const EstimateTemplate = ({ projectId, estimateId }: EstimateTemplateProp
   }, []);
 
   const loadItems = () => {
+    try {
     // Load from localStorage — also ensure project entry exists so Takeoff can push items
     const projects = JSON.parse(localStorage.getItem(getUserStorageKey('local_projects')) || '[]');
     let project = projects.find((p: any) => p.id === projectId);
@@ -303,11 +329,12 @@ export const EstimateTemplate = ({ projectId, estimateId }: EstimateTemplateProp
       localStorage.setItem(getUserStorageKey('local_projects'), JSON.stringify(projects));
     }
 
-    if (project.estimate_items && project.estimate_items.length > 0) {
-      setItems(project.estimate_items);
-      // Items transferred within the last 60 seconds get the highlight banner
+    // Always sync items from storage so transfers are reflected immediately
+    const estimateItems = project.estimate_items || [];
+    setItems(estimateItems);
+    if (estimateItems.length > 0) {
       const cutoff = Date.now() - 60_000;
-      const fresh = project.estimate_items.filter((i: any) => i._costItemId && i._transferredAt > cutoff);
+      const fresh = estimateItems.filter((i: any) => i._costItemId && i._transferredAt > cutoff);
       setRecentlyTransferred(fresh);
     }
     if (project.consumables && project.consumables.length > 0) {
@@ -316,6 +343,20 @@ export const EstimateTemplate = ({ projectId, estimateId }: EstimateTemplateProp
     if (project.estimate_config?.groupingMode) {
       setGroupingMode(project.estimate_config.groupingMode as 'none' | 'trade' | 'room');
     }
+
+    // If no estimate items, check whether the Costs tab has untransferred items
+    if (!project.estimate_items || project.estimate_items.length === 0) {
+      try {
+        const takeoffRaw = localStorage.getItem(`takeoff_${projectId}`)
+        if (takeoffRaw) {
+          const ts = JSON.parse(takeoffRaw)
+          setTakeoffCount((ts.costItems || []).length)
+        }
+      } catch { /* non-fatal */ }
+    } else {
+      setTakeoffCount(0)
+    }
+    } catch { /* corrupted data — skip item load */ }
   };
 
   const addItem = () => {
@@ -680,7 +721,9 @@ export const EstimateTemplate = ({ projectId, estimateId }: EstimateTemplateProp
     };
   };
 
-  const totals = calculateTotals();
+  let totals = { totalMaterials: 0, totalLabour: 0, totalMarkup: 0, baseSubtotal: 0, supervision: 0, overheadsPct: 0, overheadTotal: 0, totalOverheads: 0, preMargin: 0, contingency: 0, customConfigsTotal: 0, margin: 0, taxable: 0, gst: 0, totalPrice: 0 };
+  try { totals = calculateTotals(); } catch { /* corrupted item data — show zeros */ }
+  const realMarginEst = config.marginPct / (100 + config.marginPct) * 100;
 
   // Sync estimate_config, consumables, and estimate_totals to the project record so
   // QuoteGenerator and FullTenderGenerator always read current rates and percentages.
@@ -783,6 +826,7 @@ export const EstimateTemplate = ({ projectId, estimateId }: EstimateTemplateProp
     if (projectIndex !== -1) {
       projects[projectIndex].estimate_items = newItems;
       localStorage.setItem(getUserStorageKey('local_projects'), JSON.stringify(projects));
+      syncProjectToSupabase(projects[projectIndex]);
     }
     setShowTemplateModal(false);
     toast.success(`${template.items.length} items loaded from "${template.name}"`);
@@ -932,16 +976,6 @@ export const EstimateTemplate = ({ projectId, estimateId }: EstimateTemplateProp
               />
             ) : <span className="font-mono">${item.unit_price.toFixed(2)}</span>}
           </TableCell>
-          <TableCell className="text-center">
-            <Button
-              variant="ghost"
-              size="icon"
-              className="h-8 w-8"
-              onClick={() => openUrlDialog('item', item.id)}
-            >
-              <Link className="h-4 w-4" />
-            </Button>
-          </TableCell>
           <TableCell className="text-right">
             {isEditing ? (
               <Input
@@ -964,20 +998,12 @@ export const EstimateTemplate = ({ projectId, estimateId }: EstimateTemplateProp
             <div>
               <span className="font-mono text-sm">${matTotalWithRelated.toFixed(2)}</span>
               {relatedMatsTotal > 0 && (
-                <div className="text-xs text-muted-foreground mt-0.5">incl. +${relatedMatsTotal.toFixed(2)} related</div>
+                <div className="text-[10px] text-muted-foreground mt-0.5">+${relatedMatsTotal.toFixed(0)} rel.</div>
               )}
-              <div className="text-xs text-muted-foreground mt-0.5">
-                {lineTotal > 0 ? ((matTotalWithRelated / lineTotal) * 100).toFixed(0) : '0'}%
-              </div>
             </div>
           </TableCell>
           <TableCell className="text-right">
-            <div>
-              <span className="font-mono text-sm">${labTotal.toFixed(2)}</span>
-              <div className="text-xs text-muted-foreground mt-0.5">
-                {lineTotal > 0 ? ((labTotal / lineTotal) * 100).toFixed(0) : '0'}%
-              </div>
-            </div>
+            <span className="font-mono text-sm">${labTotal.toFixed(2)}</span>
           </TableCell>
           <TableCell className="text-right">
             {isEditing ? (
@@ -1023,6 +1049,15 @@ export const EstimateTemplate = ({ projectId, estimateId }: EstimateTemplateProp
                   <Button
                     variant="ghost"
                     size="icon"
+                    className="h-8 w-8"
+                    onClick={() => openUrlDialog('item', item.id)}
+                    title="Product URL"
+                  >
+                    <Link className="h-4 w-4" />
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="icon"
                     onClick={() => startEditing(item)}
                     className="h-8 w-8"
                   >
@@ -1043,7 +1078,7 @@ export const EstimateTemplate = ({ projectId, estimateId }: EstimateTemplateProp
         </TableRow>
         {item.expanded && relatedMats.length > 0 && (
           <TableRow className="bg-muted/30">
-            <TableCell colSpan={14} className="py-0">
+            <TableCell colSpan={13} className="py-0">
               <div className="p-4 space-y-3">
                 <div className="flex items-center justify-between">
                   <p className="text-sm font-semibold text-muted-foreground">Related Materials for {item.scope_of_work}:</p>
@@ -1220,13 +1255,51 @@ export const EstimateTemplate = ({ projectId, estimateId }: EstimateTemplateProp
         </div>
       )}
 
+      {/* Nudge banner — shown when Costs tab has items but nothing has been transferred here */}
+      {takeoffCount > 0 && items.length === 0 && (
+        <div className="flex items-center justify-between gap-3 px-4 py-3 rounded-lg bg-primary/10 border border-primary/20 text-sm">
+          <div className="flex items-center gap-2 text-muted-foreground">
+            <Link className="h-4 w-4 text-primary shrink-0" />
+            Your Costs tab has {takeoffCount} item{takeoffCount !== 1 ? 's' : ''} — use "Transfer to Estimate" in the Costs tab to import them here for full margin analysis.
+          </div>
+          <button onClick={() => setTakeoffCount(0)} className="text-muted-foreground hover:text-foreground shrink-0" aria-label="Dismiss">
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+      )}
+
       {/* 1. NCC Standards Research */}
-      <NCCSearchBar />
+      <div className="rounded-xl border border-border overflow-hidden">
+        <button
+          onClick={() => toggleSection('nccSearch')}
+          className="w-full flex items-center justify-between px-6 py-4 bg-card hover:bg-muted/20 transition-colors text-left"
+        >
+          <span className="font-semibold text-base">NCC Standards Research</span>
+          <div className="flex items-center gap-3">
+            {!openSections.nccSearch && <span className="text-sm text-muted-foreground">NCC code lookup</span>}
+            <ChevronDown className={`h-4 w-4 transition-transform duration-200 ${openSections.nccSearch ? 'rotate-180' : ''}`} />
+          </div>
+        </button>
+        {openSections.nccSearch && <NCCSearchBar />}
+      </div>
       
       {/* 2. Estimate Configuration */}
-      <Card className="p-6">
-        <h3 className="text-lg font-semibold mb-4">Estimate Configuration</h3>
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+      <Card className="overflow-hidden">
+        <button
+          onClick={() => toggleSection('config')}
+          className="w-full flex items-center justify-between px-6 py-4 hover:bg-muted/20 transition-colors text-left"
+        >
+          <span className="font-semibold text-base">Estimate Configuration</span>
+          <div className="flex items-center gap-3">
+            {!openSections.config && (
+              <span className="text-sm text-muted-foreground">{config.overheadPct}% overhead · {config.marginPct}% markup · GST {config.gstPct}%</span>
+            )}
+            <ChevronDown className={`h-4 w-4 transition-transform duration-200 ${openSections.config ? 'rotate-180' : ''}`} />
+          </div>
+        </button>
+        {openSections.config && (
+        <div className="px-6 pb-6 border-t border-border">
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-4 items-start">
           <div>
             <Label htmlFor="overhead">Overhead %</Label>
             <Input
@@ -1239,7 +1312,7 @@ export const EstimateTemplate = ({ projectId, estimateId }: EstimateTemplateProp
             />
           </div>
           <div>
-            <Label htmlFor="margin">Margin % <span className="text-[10px] text-muted-foreground font-normal">(applied as markup)</span></Label>
+            <Label htmlFor="margin">Margin %</Label>
             <Input
               id="margin"
               type="number"
@@ -1365,8 +1438,10 @@ export const EstimateTemplate = ({ projectId, estimateId }: EstimateTemplateProp
             Add Custom
           </Button>
         </div>
+        </div>
+        )}
       </Card>
-      
+
       {/* 3. Price Summary */}
       <Card className="p-6 bg-gradient-to-br from-primary/5 to-accent/5 border-accent/20">
         <div className="grid grid-cols-2 sm:grid-cols-4 xl:grid-cols-8 gap-4 text-center">
@@ -1398,27 +1473,33 @@ export const EstimateTemplate = ({ projectId, estimateId }: EstimateTemplateProp
             <p className="text-sm text-muted-foreground mb-1">GST (10%)</p>
             <p className="text-lg font-bold">${totals.gst.toFixed(2)}</p>
           </div>
-          <div className="bg-accent/10 rounded-lg p-3">
-            <p className="text-sm text-muted-foreground mb-1 font-medium">TOTAL PRICE</p>
-            <p className="text-2xl font-bold text-accent">${totals.totalPrice.toFixed(2)}</p>
+          <div className="bg-primary/10 rounded-lg p-3 border border-primary/20">
+            <p className="text-sm text-primary/80 mb-1 font-semibold tracking-wide">TOTAL PRICE</p>
+            <p className="text-2xl font-bold text-primary">${totals.totalPrice.toFixed(2)}</p>
           </div>
         </div>
       </Card>
 
       {/* Margin vs Markup Calculator */}
       {(() => {
-        const realMarginEst = config.marginPct / (100 + config.marginPct) * 100;
         const reqMarkup = targetMarginEst < 100 ? targetMarginEst / (100 - targetMarginEst) * 100 : 999;
         return (
-          <Card className="p-4">
-            <div className="flex items-center gap-2 mb-3">
-              <Percent className="h-4 w-4 text-amber-600" />
-              <span className="text-sm font-semibold">Margin vs Markup</span>
-              <span className="text-xs text-muted-foreground ml-1">
-                — your {config.marginPct}% markup earns only {realMarginEst.toFixed(1)}¢ per revenue dollar, not {config.marginPct}¢
-              </span>
-            </div>
-            <div className="grid grid-cols-2 gap-6">
+          <Card className="overflow-hidden">
+            <button
+              onClick={() => toggleSection('marginCalc')}
+              className="w-full flex items-center justify-between px-6 py-4 hover:bg-muted/20 transition-colors text-left"
+            >
+              <span className="font-semibold text-base">Margin vs Markup</span>
+              <div className="flex items-center gap-3">
+                {!openSections.marginCalc && (
+                  <span className="text-sm text-muted-foreground">{realMarginEst.toFixed(1)}% real margin on revenue</span>
+                )}
+                <ChevronDown className={`h-4 w-4 transition-transform duration-200 ${openSections.marginCalc ? 'rotate-180' : ''}`} />
+              </div>
+            </button>
+            {openSections.marginCalc && (
+            <div className="px-4 pb-4 border-t border-border">
+            <div className="grid grid-cols-2 gap-6 mt-3">
               {/* Left: actual breakdown */}
               <div className="space-y-2">
                 <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Current Markup Applied</p>
@@ -1478,37 +1559,92 @@ export const EstimateTemplate = ({ projectId, estimateId }: EstimateTemplateProp
                 </p>
               </div>
             </div>
+            </div>
+            )}
           </Card>
         );
       })()}
 
       {/* 5. Preliminaries */}
-      <PreliminariesSection />
-      
-      {/* 6. Labour Hourly Rates by Trade */}
-      <LabourRatesSection
-        rates={labourRates}
-        onRatesChange={handleRatesChange}
-      />
-      
-      {/* 7. Pricing Aid (Collapsible) */}
-      <Collapsible defaultOpen={false}>
-        <Card className="p-4">
-          <CollapsibleTrigger className="flex items-center justify-between w-full">
-            <h3 className="text-lg font-semibold">Pricing Aid</h3>
-            <ChevronDown className="h-4 w-4 transition-transform" />
-          </CollapsibleTrigger>
-          <CollapsibleContent className="pt-4">
+      <div className="rounded-xl border border-border overflow-hidden">
+        <button
+          onClick={() => toggleSection('prelims')}
+          className="w-full flex items-center justify-between px-6 py-4 bg-card hover:bg-muted/20 transition-colors text-left"
+        >
+          <span className="font-semibold text-base">Preliminaries</span>
+          <div className="flex items-center gap-3">
+            {!openSections.prelims && <span className="text-sm text-muted-foreground">Allowances &amp; site costs</span>}
+            <ChevronDown className={`h-4 w-4 transition-transform duration-200 ${openSections.prelims ? 'rotate-180' : ''}`} />
+          </div>
+        </button>
+        {openSections.prelims && (
+          <div className="border-t border-border">
+            <PreliminariesSection />
+          </div>
+        )}
+      </div>
+
+      {/* 6. Labour Hourly Rates */}
+      <div className="rounded-xl border border-border overflow-hidden">
+        <button
+          onClick={() => toggleSection('labourRates')}
+          className="w-full flex items-center justify-between px-6 py-4 bg-card hover:bg-muted/20 transition-colors text-left"
+        >
+          <span className="font-semibold text-base">Labour Hourly Rates</span>
+          <div className="flex items-center gap-3">
+            {!openSections.labourRates && (
+              <span className="text-sm text-muted-foreground">
+                {Object.entries(labourRates).slice(0, 2).map(([t, r]) => `${t} $${r}`).join(' · ')}
+              </span>
+            )}
+            <ChevronDown className={`h-4 w-4 transition-transform duration-200 ${openSections.labourRates ? 'rotate-180' : ''}`} />
+          </div>
+        </button>
+        {openSections.labourRates && (
+          <div className="border-t border-border">
+            <LabourRatesSection
+              rates={labourRates}
+              onRatesChange={handleRatesChange}
+            />
+          </div>
+        )}
+      </div>
+
+      {/* 7. Pricing Aid */}
+      <div className="rounded-xl border border-border overflow-hidden">
+        <button
+          onClick={() => toggleSection('pricingAid')}
+          className="w-full flex items-center justify-between px-6 py-4 bg-card hover:bg-muted/20 transition-colors text-left"
+        >
+          <span className="font-semibold text-base">Pricing Aid</span>
+          <div className="flex items-center gap-3">
+            {!openSections.pricingAid && <span className="text-sm text-muted-foreground">Historical pricing data</span>}
+            <ChevronDown className={`h-4 w-4 transition-transform duration-200 ${openSections.pricingAid ? 'rotate-180' : ''}`} />
+          </div>
+        </button>
+        {openSections.pricingAid && (
+          <div className="border-t border-border p-4">
             <PricingHistory projectId={projectId} />
-          </CollapsibleContent>
-        </Card>
-      </Collapsible>
+          </div>
+        )}
+      </div>
 
       {/* 8. Add Line Item */}
-      <Card className="p-6">
-        <h3 className="text-lg font-semibold mb-4">Add Line Item</h3>
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-          <div>
+      <Card className="overflow-hidden">
+        <button
+          onClick={() => toggleSection('addItem')}
+          className="w-full flex items-center justify-between px-6 py-4 hover:bg-muted/20 transition-colors text-left"
+        >
+          <span className="font-semibold text-base">Add Line Item</span>
+          <div className="flex items-center gap-3">
+            {!openSections.addItem && <span className="text-sm text-muted-foreground">Add items manually</span>}
+            <ChevronDown className={`h-4 w-4 transition-transform duration-200 ${openSections.addItem ? 'rotate-180' : ''}`} />
+          </div>
+        </button>
+        {openSections.addItem && (
+        <div className="px-6 pb-6 border-t border-border">
+        <div className="grid grid-cols-12 gap-3 mt-4">
+          <div className="col-span-2">
             <Label>Area *</Label>
             <Select
               value={newItem.area}
@@ -1524,7 +1660,7 @@ export const EstimateTemplate = ({ projectId, estimateId }: EstimateTemplateProp
               </SelectContent>
             </Select>
           </div>
-          <div>
+          <div className="col-span-2">
             <Label>Trade *</Label>
             <Select
               value={newItem.trade}
@@ -1540,7 +1676,7 @@ export const EstimateTemplate = ({ projectId, estimateId }: EstimateTemplateProp
               </SelectContent>
             </Select>
           </div>
-          <div>
+          <div className="col-span-4">
             <Label>Scope of Work *</Label>
             <Select
               value={newItem.scope_of_work}
@@ -1557,15 +1693,23 @@ export const EstimateTemplate = ({ projectId, estimateId }: EstimateTemplateProp
               </SelectContent>
             </Select>
           </div>
-          <div>
+          <div className="col-span-4">
             <Label>Material Type *</Label>
-            <Input
+            <MaterialTypeCombobox
               value={newItem.material_type}
-              onChange={(e) => setNewItem({ ...newItem, material_type: e.target.value })}
-              placeholder="e.g., MGP12 90x45"
+              onChange={(v) => setNewItem({ ...newItem, material_type: v })}
+              onSelect={(hit) =>
+                setNewItem((prev) => ({
+                  ...prev,
+                  material_type: hit.name,
+                  unit: hit.unit,
+                  unit_price: hit.avgPrice.toFixed(2),
+                }))
+              }
+              placeholder="Type to search or enter anything"
             />
           </div>
-          <div>
+          <div className="col-span-1">
             <Label>Qty *</Label>
             <Input
               type="number"
@@ -1574,7 +1718,7 @@ export const EstimateTemplate = ({ projectId, estimateId }: EstimateTemplateProp
               onChange={(e) => setNewItem({ ...newItem, quantity: e.target.value })}
             />
           </div>
-          <div>
+          <div className="col-span-2">
             <Label>Unit</Label>
             <Select
               value={newItem.unit}
@@ -1584,15 +1728,15 @@ export const EstimateTemplate = ({ projectId, estimateId }: EstimateTemplateProp
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="m²">m² (square metres)</SelectItem>
-                <SelectItem value="lm">lm (linear metres)</SelectItem>
-                <SelectItem value="m³">m³ (cubic metres)</SelectItem>
-                <SelectItem value="ea">ea (each)</SelectItem>
+                <SelectItem value="m²">m²</SelectItem>
+                <SelectItem value="lm">lm</SelectItem>
+                <SelectItem value="m³">m³</SelectItem>
+                <SelectItem value="ea">ea</SelectItem>
                 <SelectItem value="sets">sets</SelectItem>
               </SelectContent>
             </Select>
           </div>
-          <div>
+          <div className="col-span-2">
             <Label>Unit Cost ($) *</Label>
             <Input
               type="number"
@@ -1601,7 +1745,7 @@ export const EstimateTemplate = ({ projectId, estimateId }: EstimateTemplateProp
               onChange={(e) => setNewItem({ ...newItem, unit_price: e.target.value })}
             />
           </div>
-          <div>
+          <div className="col-span-2">
             <Label>Labour Hrs</Label>
             <Input
               type="number"
@@ -1648,17 +1792,37 @@ export const EstimateTemplate = ({ projectId, estimateId }: EstimateTemplateProp
               Line Total: <span className="text-accent">${calculateLineTotal().total.toFixed(2)}</span>
             </div>
           </div>
-          <Button onClick={addItem} className="bg-accent text-accent-foreground hover:bg-accent/90">
+          <Button
+            onClick={addItem}
+            disabled={!newItem.area || !newItem.trade || !newItem.material_type}
+            className="bg-accent text-accent-foreground hover:bg-accent/90 disabled:opacity-40 disabled:cursor-not-allowed"
+          >
             <CheckCircle className="h-4 w-4 mr-2" />
             Confirm & Add to Estimate
           </Button>
         </div>
+        </div>
+        )}
       </Card>
 
-      {/* 9. Project Price Per Item */}
-      <Card className="p-6">
-        <div className="flex items-center justify-between mb-4">
-          <h3 className="text-lg font-semibold">Project Price Per Item</h3>
+      {/* 9. Line Items table */}
+      <Card className="overflow-hidden">
+        <button
+          onClick={() => toggleSection('lineItems')}
+          className="w-full flex items-center justify-between px-6 py-4 hover:bg-muted/20 transition-colors text-left"
+        >
+          <span className="font-semibold text-base">Line Items</span>
+          <div className="flex items-center gap-3">
+            {!openSections.lineItems && (
+              <span className="text-sm text-muted-foreground">{items.length} item{items.length !== 1 ? 's' : ''} · ${totals.baseSubtotal.toFixed(0)}</span>
+            )}
+            <ChevronDown className={`h-4 w-4 transition-transform duration-200 ${openSections.lineItems ? 'rotate-180' : ''}`} />
+          </div>
+        </button>
+        {openSections.lineItems && (
+        <div className="px-6 pb-6 border-t border-border">
+        <div className="flex items-center justify-between mb-4 mt-2">
+          <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">Project Price Per Item</h3>
           <div className="flex items-center gap-3">
             <div className="flex items-center rounded-lg border border-border overflow-hidden text-sm">
               {(['none', 'trade', 'room'] as const).map((mode) => (
@@ -1699,14 +1863,13 @@ export const EstimateTemplate = ({ projectId, estimateId }: EstimateTemplateProp
                 <span className="text-sm font-semibold">Start from a template</span>
                 <span className="text-xs text-muted-foreground">— or add items manually using the form above</span>
               </div>
-              <div className="grid grid-cols-2 md:grid-cols-5 gap-2">
+              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-2">
                 {/* Custom templates first */}
                 {customTemplates.map(t => {
-                  const { Icon, bg, text } = getTemplateStyle(t.id);
+                  const { accent } = getTemplateStyle(t.id);
                   return (
                     <button key={t.id} onClick={() => loadTemplate(t)}
-                      className="flex flex-col items-start gap-1.5 p-3 rounded-lg border border-primary/30 bg-background hover:border-primary/60 hover:bg-primary/5 transition-all text-left group">
-                      <div className={`p-1.5 rounded-md ${bg}`}><Icon className={`h-4 w-4 ${text}`} /></div>
+                      className={`flex flex-col items-start gap-1 p-3 rounded-lg border border-primary/30 border-l-2 ${accent} bg-background hover:border-primary/60 hover:bg-primary/5 transition-all text-left group`}>
                       <span className="text-xs font-semibold leading-tight group-hover:text-primary transition-colors">{t.name}</span>
                       <span className="text-[10px] text-muted-foreground">{t.items.length} items</span>
                     </button>
@@ -1714,11 +1877,10 @@ export const EstimateTemplate = ({ projectId, estimateId }: EstimateTemplateProp
                 })}
                 {/* Built-in templates */}
                 {ESTIMATE_TEMPLATES.map(t => {
-                  const { Icon, bg, text } = getTemplateStyle(t.id);
+                  const { accent } = getTemplateStyle(t.id);
                   return (
                     <button key={t.id} onClick={() => loadTemplate(t)}
-                      className="flex flex-col items-start gap-1.5 p-3 rounded-lg border border-border bg-background hover:border-primary/50 hover:bg-primary/5 transition-all text-left group">
-                      <div className={`p-1.5 rounded-md ${bg}`}><Icon className={`h-4 w-4 ${text}`} /></div>
+                      className={`flex flex-col items-start gap-1 p-3 rounded-lg border border-border border-l-2 ${accent} bg-background hover:border-primary/50 hover:bg-primary/5 transition-all text-left group`}>
                       <span className="text-xs font-semibold leading-tight group-hover:text-primary transition-colors">{t.name}</span>
                       <span className="text-[10px] text-muted-foreground">{t.items.length} items</span>
                     </button>
@@ -1734,21 +1896,20 @@ export const EstimateTemplate = ({ projectId, estimateId }: EstimateTemplateProp
             <TableHeader>
               <TableRow>
                 <TableHead className="w-10"></TableHead>
-                <TableHead className="w-16">Item #</TableHead>
-                <TableHead className="min-w-[100px]">Area</TableHead>
-                <TableHead className="min-w-[100px]">Trade</TableHead>
-                <TableHead className="min-w-[120px]">Scope of Work</TableHead>
-                <TableHead className="min-w-[140px]">Material</TableHead>
-                <TableHead className="text-right w-20">Qty</TableHead>
-                <TableHead className="w-16">Unit</TableHead>
-                <TableHead className="text-right w-24">$/Unit</TableHead>
-                <TableHead className="text-center w-12">URL</TableHead>
-                <TableHead className="text-right w-24">Labour Hrs</TableHead>
-                <TableHead className="text-right w-28">Mat $</TableHead>
-                <TableHead className="text-right w-28">Labour $</TableHead>
-                <TableHead className="text-right w-24">Markup %</TableHead>
-                <TableHead className="text-right w-28">Line Total</TableHead>
-                <TableHead className="w-20"></TableHead>
+                <TableHead className="w-14">Item #</TableHead>
+                <TableHead className="min-w-[90px]">Area</TableHead>
+                <TableHead className="min-w-[90px]">Trade</TableHead>
+                <TableHead className="min-w-[100px]">Scope</TableHead>
+                <TableHead className="min-w-[120px]">Material</TableHead>
+                <TableHead className="text-right w-16">Qty</TableHead>
+                <TableHead className="w-14">Unit</TableHead>
+                <TableHead className="text-right w-20">$/Unit</TableHead>
+                <TableHead className="text-right w-20">Hrs</TableHead>
+                <TableHead className="text-right w-24">Mat $</TableHead>
+                <TableHead className="text-right w-24">Labour $</TableHead>
+                <TableHead className="text-right w-20">Markup %</TableHead>
+                <TableHead className="text-right w-24">Total</TableHead>
+                <TableHead className="w-28"></TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -1773,7 +1934,7 @@ export const EstimateTemplate = ({ projectId, estimateId }: EstimateTemplateProp
                             className="bg-primary/5 hover:bg-primary/8 cursor-pointer select-none border-t-2 border-primary/10"
                             onClick={() => toggleGroup(groupName)}
                           >
-                            <TableCell colSpan={16} className="py-2.5 px-4">
+                            <TableCell colSpan={15} className="py-2.5 px-4">
                               <div className="flex items-center justify-between">
                                 <div className="flex items-center gap-2">
                                   {isCollapsed
@@ -1798,6 +1959,8 @@ export const EstimateTemplate = ({ projectId, estimateId }: EstimateTemplateProp
             </TableBody>
           </Table>
         </div>
+        </div>
+        )}
       </Card>
 
       {/* URL Dialog */}
@@ -1831,9 +1994,24 @@ export const EstimateTemplate = ({ projectId, estimateId }: EstimateTemplateProp
 
 
       {/* Consumables Section */}
-      <Card className="p-6">
-        <h3 className="font-display text-xl font-bold mb-4">Consumables</h3>
-        <div className="grid grid-cols-1 md:grid-cols-5 gap-4 mb-4">
+      <Card className="overflow-hidden">
+        <button
+          onClick={() => toggleSection('consumables')}
+          className="w-full flex items-center justify-between px-6 py-4 hover:bg-muted/20 transition-colors text-left"
+        >
+          <span className="font-semibold text-base">Consumables</span>
+          <div className="flex items-center gap-3">
+            {!openSections.consumables && (
+              <span className="text-sm text-muted-foreground">
+                {consumables.length} item{consumables.length !== 1 ? 's' : ''} · ${consumables.reduce((s, c) => s + c.quantity * c.unit_price, 0).toFixed(0)}
+              </span>
+            )}
+            <ChevronDown className={`h-4 w-4 transition-transform duration-200 ${openSections.consumables ? 'rotate-180' : ''}`} />
+          </div>
+        </button>
+        {openSections.consumables && (
+        <div className="px-6 pb-6 border-t border-border">
+        <div className="grid grid-cols-1 md:grid-cols-5 gap-4 mb-4 mt-4">
           <div className="md:col-span-2">
             <Label>Consumable Item</Label>
             <Select
@@ -1938,15 +2116,27 @@ export const EstimateTemplate = ({ projectId, estimateId }: EstimateTemplateProp
             </TableBody>
           </Table>
         )}
+        </div>
+        )}
       </Card>
 
       {/* Comprehensive Totals Summary Table */}
-      <Card className="p-6 bg-gradient-to-br from-primary/10 via-secondary/10 to-accent/10">
-        <h3 className="font-display text-2xl font-bold mb-6">
-          Project Cost Summary
-        </h3>
-        
-        <div className="grid gap-6">
+      <Card className="overflow-hidden bg-gradient-to-br from-primary/10 via-secondary/10 to-accent/10">
+        <button
+          onClick={() => toggleSection('costSummary')}
+          className="w-full flex items-center justify-between px-6 py-4 hover:bg-muted/20 transition-colors text-left"
+        >
+          <span className="font-display text-base font-bold">Project Cost Summary</span>
+          <div className="flex items-center gap-3">
+            {!openSections.costSummary && (
+              <span className="text-sm text-muted-foreground">${totals.totalPrice.toFixed(2)} incl. GST</span>
+            )}
+            <ChevronDown className={`h-4 w-4 transition-transform duration-200 ${openSections.costSummary ? 'rotate-180' : ''}`} />
+          </div>
+        </button>
+        {openSections.costSummary && (
+        <div className="px-6 pb-6 border-t border-border">
+        <div className="grid gap-6 mt-4">
           {/* Breakdown by Section */}
           <div className="grid md:grid-cols-3 gap-4">
             <div className="bg-card p-4 rounded-lg border border-border">
@@ -1990,7 +2180,7 @@ export const EstimateTemplate = ({ projectId, estimateId }: EstimateTemplateProp
 
             <div className="bg-card p-4 rounded-lg border border-border">
               <p className="text-sm text-muted-foreground mb-1">Consumables</p>
-              <p className="text-xl font-mono font-bold text-accent">
+              <p className="text-xl font-mono font-bold text-primary">
                 ${consumables.reduce((sum, c) => sum + (c.quantity * c.unit_price), 0).toFixed(2)}
               </p>
               <p className="text-xs text-muted-foreground mt-1">{consumables.length} items</p>
@@ -2195,6 +2385,8 @@ export const EstimateTemplate = ({ projectId, estimateId }: EstimateTemplateProp
             </div>
           </div>
         </div>
+        </div>
+        )}
       </Card>
 
       {/* Template Library Modal */}
@@ -2216,10 +2408,9 @@ export const EstimateTemplate = ({ projectId, estimateId }: EstimateTemplateProp
               <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-2">My Templates</p>
               <div className="grid gap-2">
                 {customTemplates.map(t => {
-                  const { Icon, bg, text } = getTemplateStyle(t.id);
+                  const { accent } = getTemplateStyle(t.id);
                   return (
-                    <div key={t.id} className="flex items-center gap-3 p-3 rounded-lg border border-primary/20 bg-primary/5 hover:border-primary/40 transition-colors">
-                      <div className={`p-2 rounded-lg flex-shrink-0 ${bg}`}><Icon className={`h-5 w-5 ${text}`} /></div>
+                    <div key={t.id} className={`flex items-center gap-3 p-3 rounded-lg border border-primary/20 border-l-2 ${accent} bg-primary/5 hover:border-primary/40 transition-colors`}>
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2">
                           <span className="font-semibold text-sm">{t.name}</span>
@@ -2244,10 +2435,9 @@ export const EstimateTemplate = ({ projectId, estimateId }: EstimateTemplateProp
           <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-2">Standard Templates</p>
           <div className="grid gap-2">
             {ESTIMATE_TEMPLATES.map(t => {
-              const { Icon, bg, text } = getTemplateStyle(t.id);
+              const { accent } = getTemplateStyle(t.id);
               return (
-                <div key={t.id} className="flex items-center gap-3 p-3 rounded-lg border border-border hover:border-primary/40 hover:bg-primary/5 transition-colors">
-                  <div className={`p-2 rounded-lg flex-shrink-0 ${bg}`}><Icon className={`h-5 w-5 ${text}`} /></div>
+                <div key={t.id} className={`flex items-center gap-3 p-3 rounded-lg border border-border border-l-2 ${accent} hover:border-primary/40 hover:bg-primary/5 transition-colors`}>
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2">
                       <span className="font-semibold text-sm">{t.name}</span>

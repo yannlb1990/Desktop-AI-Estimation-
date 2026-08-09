@@ -143,11 +143,32 @@ export function migrateUnscopedData(userEmail: string): void {
   }
 }
 
+// Unscoped keys that are never prefixed with the user email — must be wiped on logout
+const UNSCOPED_FIXED_KEYS = [
+  'user_labour_rates',
+  'user_custom_trades',
+  'gantt_workDays',
+  'gantt_exclHolidays',
+  'gantt_holidayState',
+] as const;
+
+const UNSCOPED_KEY_PREFIXES = ['gantt_customHols_', 'planAnalysis_', 'frame_sections_'];
+
 export async function localSignOut(): Promise<void> {
   for (const key of LEGACY_KEYS) {
     localStorage.removeItem(key);
   }
+  for (const key of UNSCOPED_FIXED_KEYS) {
+    localStorage.removeItem(key);
+  }
+  // Remove pattern-based keys (project-scoped but not user-scoped)
+  for (const key of Object.keys(localStorage)) {
+    if (UNSCOPED_KEY_PREFIXES.some(prefix => key.startsWith(prefix))) {
+      localStorage.removeItem(key);
+    }
+  }
   await supabase.auth.signOut();
+  window.dispatchEvent(new Event('metricore:auth'));
 }
 
 export function isSignedIn(): boolean {

@@ -187,11 +187,13 @@ export const PlanViewer = ({ planUrl, projectId, planPageId: propPlanPageId, wiz
 
   const loadMeasurements = () => {
     if (!planPageId) return;
-    const data: any[] = JSON.parse(localStorage.getItem(getUserStorageKey(`plan_measurements_${planPageId}`)) || '[]');
-    setMeasurements(data);
-    if (fabricCanvas && data.length > 0) {
-      redrawMeasurementsOnCanvas(data);
-    }
+    try {
+      const data: any[] = JSON.parse(localStorage.getItem(getUserStorageKey(`plan_measurements_${planPageId}`)) || '[]');
+      setMeasurements(data);
+      if (fabricCanvas && data.length > 0) {
+        redrawMeasurementsOnCanvas(data);
+      }
+    } catch { /* corrupted measurement data — start fresh */ }
   };
 
   const loadScaleFactor = () => {

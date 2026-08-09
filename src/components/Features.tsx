@@ -202,9 +202,9 @@ const features = [
   {
     num: "03",
     icon: FileOutput,
-    title: "One-click tender, ready to send",
+    title: "One-click quote, ready to send",
     description:
-      "Generate a professional BOQ and tender in PDF or Excel. Your logo, your rates, your client's name. Hit export and it is ready to go.",
+      "Generate a professional BOQ and quote in PDF or Excel. Your logo, your rates, your client's name. Hit export and it is ready to go.",
     visual: <TenderPreview />,
   },
 ];

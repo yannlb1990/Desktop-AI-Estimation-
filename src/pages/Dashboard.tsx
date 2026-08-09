@@ -9,7 +9,7 @@ import {
   Plus, FileText, DollarSign, TrendingUp, BarChart3,
   Upload, Zap, Settings, Package, ChevronRight,
   ArrowRight, Clock, User, ExternalLink, AlertTriangle, X, LogOut, Trash2, BookOpen,
-  Send, Trophy, XCircle, Users
+  Send, Trophy, XCircle, Users, RefreshCcw
 } from "lucide-react";
 import { useSubscription } from "@/hooks/useSubscription";
 import { PLAN_NAMES } from "@/lib/subscription";
@@ -121,6 +121,7 @@ const Dashboard = () => {
   const navigate = useNavigate();
   const [projects, setProjects] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [loadError, setLoadError] = useState(false);
   const [showAll, setShowAll] = useState(false);
   const [stageFilter, setStageFilter] = useState<Stage | null>(null);
   const [bannerDismissed, setBannerDismissed] = useState(false);
@@ -153,6 +154,8 @@ const Dashboard = () => {
     loadProjectsMerged().then(loaded => {
       setProjects(loaded);
       lsSaveProjects(loaded);
+    }).catch(() => {
+      setLoadError(true);
     }).finally(() => {
       setIsLoading(false);
     });
@@ -217,7 +220,7 @@ const Dashboard = () => {
 
   // ── render ─────────────────────────────────────────────────────────────────
   const firstName = (localUser?.displayName ?? localUser?.email ?? "").split(/[\s@]/)[0];
-  const trialDaysLeft = sub.daysLeftInTrial > 0 ? sub.daysLeftInTrial : 14;
+  const trialDaysLeft = Math.max(0, sub.daysLeftInTrial ?? 0);
 
   return (
     <div className="min-h-screen bg-muted/30">
@@ -380,7 +383,7 @@ const Dashboard = () => {
                 </Card>
               ))
             : [
-                { label: 'Active Projects', value: String(projects.length),               sub: 'all projects',                                                                                icon: <FileText className="h-4 w-4" />,   accent: 'text-primary' },
+                { label: 'Active Projects', value: String(projects.filter(p => p.quoteStatus !== 'won' && p.quoteStatus !== 'lost').length), sub: 'in progress',                                                                          icon: <FileText className="h-4 w-4" />,   accent: 'text-primary' },
                 { label: 'Pipeline Value',  value: fmtCurrency(pipelineValue),            sub: 'across all estimates',                                                                        icon: <DollarSign className="h-4 w-4" />, accent: 'text-[#E1DCC9]/80' },
                 { label: 'Target Margin',   value: targetMargin ? `${targetMargin}%` : '—', sub: 'set in Settings',                                                                          icon: <TrendingUp className="h-4 w-4" />, accent: 'text-amber-400' },
                 { label: 'Win Rate',        value: winRate !== null ? `${winRate}%` : '—', sub: winRate !== null ? `${wonProjects.length} won · ${lostProjects.length} lost` : 'mark quotes as Won/Lost', icon: <BarChart3 className="h-4 w-4" />,  accent: 'text-[#E1DCC9]/80' },
@@ -396,6 +399,20 @@ const Dashboard = () => {
               ))
           }
         </div>
+
+        {/* Load error banner */}
+        {loadError && (
+          <div className="flex items-center gap-3 p-3 rounded-lg border border-destructive/30 bg-destructive/10 text-sm text-destructive">
+            <AlertTriangle className="h-4 w-4 shrink-0" />
+            <span>Could not load projects from the server. Showing locally-saved data.</span>
+            <button
+              onClick={() => { setLoadError(false); setIsLoading(true); loadProjectsMerged().then(loaded => { setProjects(loaded); lsSaveProjects(loaded); }).catch(() => setLoadError(true)).finally(() => setIsLoading(false)); }}
+              className="ml-auto flex items-center gap-1 text-xs underline hover:no-underline shrink-0"
+            >
+              <RefreshCcw className="h-3 w-3" /> Retry
+            </button>
+          </div>
+        )}
 
         {/* Pipeline funnel — only shown when there are projects to display */}
         {projects.length > 0 && <Card className="p-4 sm:p-5 bg-background">
@@ -666,42 +683,42 @@ const Dashboard = () => {
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           {[
             {
-              icon: <Upload className="h-5 w-5 text-primary" />,
+              num: '01',
               title: 'New Project',
               desc: atProjectLimit ? `Limit reached (${projects.length}/${sub.caps.maxProjects}). Upgrade to add more.` : 'Upload plans & start measuring',
               action: handleNewProject,
               primary: true,
-              tour: 'Upload a PDF plan and let AI detect your takeoff quantities, or start a manual estimate from scratch.',
+              tour: 'Upload a PDF plan to extract quantities automatically, or start a manual estimate from scratch.',
             },
             {
-              icon: <Zap className="h-5 w-5 text-amber-400" />,
+              num: '02',
               title: 'Quick Estimate',
               desc: 'Manual estimate, no plan needed',
               action: () => atProjectLimit ? navigate('/pricing') : navigate('/project/new?mode=manual'),
               tour: 'Skip the PDF. Enter rooms and items directly. Great for fast ballpark quotes.',
             },
             {
-              icon: <BarChart3 className="h-5 w-5 text-amber-400" />,
+              num: '03',
               title: 'Market Insights',
               desc: sub.caps.marketInsights ? 'Current Australian build rates' : 'Pro plan. Upgrade to access.',
               action: () => sub.caps.marketInsights ? navigate('/insights') : navigate('/pricing'),
               tour: 'Live Australian construction cost benchmarks. Compare your rates against current market data.',
             },
             {
-              icon: <Package className="h-5 w-5 text-[#E1DCC9]/80" />,
+              num: '04',
               title: 'Materials Library',
-              desc: 'Supplier catalogue & pricing',
-              action: () => navigate('/materials'),
-              tour: 'Save your favourite suppliers and materials with custom unit rates so they auto-fill in estimates.',
+              desc: sub.caps.materialsLibrary ? 'Supplier catalogue & pricing' : 'Pro plan. Upgrade to access.',
+              action: () => sub.caps.materialsLibrary ? navigate('/materials') : navigate('/pricing'),
+              tour: 'Save your preferred suppliers and materials with custom unit rates so they auto-fill in estimates.',
             },
-          ].map(({ icon, title, desc, action, primary, tour }) => (
+          ].map(({ num, title, desc, action, primary, tour }) => (
             <TourTip key={title} text={tour} position="top">
               <Card
                 onClick={action}
                 className={`p-4 cursor-pointer hover:shadow-md transition-all group w-full ${primary ? 'border-primary/40 bg-primary/5' : 'bg-background'}`}
               >
                 <div className="flex items-start justify-between mb-3">
-                  <div className="p-2 bg-muted rounded-lg">{icon}</div>
+                  <span className="font-mono text-xs font-semibold text-muted-foreground/50 tracking-widest">{num}</span>
                   <ChevronRight className="h-4 w-4 text-muted-foreground/40 group-hover:text-muted-foreground group-hover:translate-x-0.5 transition-all" />
                 </div>
                 <div className="font-semibold text-sm mb-1">{title}</div>

@@ -57,6 +57,16 @@ serve(async (req) => {
           break;
         }
 
+        // Check idempotency: was this subscription already active for this session?
+        const { data: existing } = await supabase
+          .from("subscriptions")
+          .select("status, stripe_subscription_id")
+          .eq("user_id", userId)
+          .maybeSingle();
+        const wasAlreadyActive =
+          existing?.status === "active" &&
+          existing?.stripe_subscription_id === subscriptionId;
+
         const sub = await stripe.subscriptions.retrieve(subscriptionId);
         const periodEnd = new Date(sub.current_period_end * 1000).toISOString();
 
@@ -75,33 +85,56 @@ serve(async (req) => {
         );
 
         if (error) {
+          // Return 500 so Stripe retries — do NOT return 200 or the subscription is silently lost
           console.error("upsert failed:", error);
-        } else {
-          console.log(`Activated ${planId}/${billingPeriod} for user ${userId}`);
-          // Send payment receipt email
-          const { data: profile } = await supabase.from("profiles").select("display_name, email").eq("id", userId).single();
+          throw new Error(`Subscription DB write failed: ${error.message}`);
+        }
+
+        console.log(`Activated ${planId}/${billingPeriod} for user ${userId}`);
+
+        // Only send receipt on first activation — skip on Stripe replay of same session
+        if (!wasAlreadyActive) {
+          const { data: profile } = await supabase.from("profiles").select("name, email").eq("id", userId).single();
           const userEmail = profile?.email ?? session.customer_details?.email;
+          const amountTotal = session.amount_total ? `$${(session.amount_total / 100).toFixed(0)}` : '';
+          const nextDate = new Date(sub.current_period_end * 1000).toLocaleDateString('en-AU', { day: 'numeric', month: 'long', year: 'numeric' });
+          const planNames: Record<string, string> = { starter: 'Starter', pro: 'Professional', business: 'Business' };
+          const planName = planNames[planId] ?? planId;
+          const billing = billingPeriod === 'annual' ? 'Annual' : 'Monthly';
+
+          // Send receipt to user
           if (userEmail) {
-            const amountTotal = session.amount_total ? `$${(session.amount_total / 100).toFixed(0)}` : '';
-            const nextDate = new Date(sub.current_period_end * 1000).toLocaleDateString('en-AU', { day: 'numeric', month: 'long', year: 'numeric' });
-            const planNames: Record<string, string> = { starter: 'Starter', pro: 'Professional', business: 'Business' };
-            await fetch(`${Deno.env.get("SUPABASE_URL")}/functions/v1/send-email`, {
+            fetch(`${Deno.env.get("SUPABASE_URL")}/functions/v1/send-email`, {
               method: "POST",
               headers: { "Content-Type": "application/json", "Authorization": `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}` },
               body: JSON.stringify({
                 type: "payment_receipt",
                 to: userEmail,
-                name: profile?.display_name ?? userEmail,
-                data: {
-                  planName: planNames[planId] ?? planId,
-                  billing: billingPeriod === 'annual' ? 'Annual' : 'Monthly',
-                  amount: amountTotal,
-                  nextDate,
-                  invoiceId: session.invoice as string ?? '',
-                },
+                name: profile?.name ?? userEmail,
+                data: { planName, billing, amount: amountTotal, nextDate, invoiceId: session.invoice as string ?? '' },
               }),
             }).catch(console.error);
           }
+
+          // Notify admin of new paid subscription
+          const primaryAdmin = Deno.env.get("ADMIN_NOTIFICATION_EMAIL") ?? "yannlb1990@gmail.com";
+          const adminRecipients = [primaryAdmin, "admin@metricore.com.au"].filter(Boolean);
+          fetch(`${Deno.env.get("SUPABASE_URL")}/functions/v1/send-email`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json", "Authorization": `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}` },
+            body: JSON.stringify({
+              type: "admin_new_payment",
+              to: adminRecipients,
+              data: {
+                name: profile?.name ?? userEmail ?? userId,
+                email: userEmail ?? '',
+                planName,
+                billing,
+                amount: amountTotal,
+                nextDate,
+              },
+            }),
+          }).catch(console.error);
         }
         break;
       }

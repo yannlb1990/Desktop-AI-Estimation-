@@ -16,8 +16,9 @@ interface PDFUploadManagerProps {
   onError: (error: string) => void;
 }
 
-/** Upload a blob/file to Supabase Storage and return its permanent public URL.
- *  Falls back gracefully if the bucket doesn't exist or the user is not signed in. */
+/** Upload a blob/file to Supabase Storage.
+ *  Stores the storage PATH in the DB (not the public URL) and returns a 1-hour signed URL
+ *  for immediate display. Falls back gracefully if the bucket doesn't exist or user is not signed in. */
 async function uploadToCloud(
   blob: Blob,
   planId: string,
@@ -26,7 +27,7 @@ async function uploadToCloud(
 ): Promise<string | null> {
   try {
     const { data: { session } } = await supabase.auth.getSession();
-    if (!session) return null; // not signed in — skip cloud upload
+    if (!session) return null;
 
     const uid = session.user.id;
     const fileId = crypto.randomUUID();
@@ -45,8 +46,9 @@ async function uploadToCloud(
 
     onProgress?.(80);
 
-    const { data } = (supabase as any).storage.from('plan-pdfs').getPublicUrl(path);
-    return data?.publicUrl ?? null;
+    // Return the storage path prefixed with "storage:" so the state layer can
+    // distinguish cloud paths from local blob URLs and generate signed URLs on demand.
+    return `storage:plan-pdfs/${path}`;
   } catch (err) {
     console.warn('[PDFUpload] Cloud upload error:', err);
     return null;

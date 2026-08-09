@@ -10,16 +10,20 @@ export interface ExtractedPage {
   heightPx: number;
 }
 
-const MAX_WIDTH_PX = 1500;
-const JPEG_QUALITY = 0.88;
+// 1200px keeps A3/A1 construction plans readable for Claude while halving
+// payload vs 1500px. Each image is ~80-150 KB at quality 0.80.
+const MAX_WIDTH_PX = 1200;
+// Per-batch 4.5 MB base64 ceiling — leaves headroom before Supabase's 6 MB limit.
+const MAX_BATCH_BYTES = 4_500_000;
 
 async function renderPage(
   doc: pdfjs.PDFDocumentProxy,
-  pageIndex: number
+  pageIndex: number,
+  quality: number
 ): Promise<ExtractedPage> {
   const page = await doc.getPage(pageIndex + 1);
   const naturalViewport = page.getViewport({ scale: 1 });
-  const scale = Math.min(MAX_WIDTH_PX / naturalViewport.width, 2.5);
+  const scale = Math.min(MAX_WIDTH_PX / naturalViewport.width, 2.0);
   const viewport = page.getViewport({ scale });
 
   const offscreen = document.createElement('canvas');
@@ -30,10 +34,9 @@ async function renderPage(
   // White background for scanned PDFs with transparency
   ctx.fillStyle = '#ffffff';
   ctx.fillRect(0, 0, offscreen.width, offscreen.height);
-
   await page.render({ canvasContext: ctx, viewport }).promise;
 
-  const dataUrl = offscreen.toDataURL('image/jpeg', JPEG_QUALITY);
+  const dataUrl = offscreen.toDataURL('image/jpeg', quality);
   const imageBase64 = dataUrl.replace(/^data:image\/jpeg;base64,/, '');
 
   return {
@@ -46,31 +49,44 @@ async function renderPage(
 }
 
 /**
- * Renders selected pages from a File as clean JPEG images (no canvas overlays).
- * Selects up to maxPages most analysis-relevant pages:
- *   - For ≤ maxPages pages: all pages
- *   - For > maxPages pages: first 8 pages + last 2 (schedules often at the end)
+ * Selects page indices prioritising floor plans (front) and schedules (back).
+ */
+function selectPageIndices(total: number, maxPages: number): number[] {
+  if (total <= maxPages) {
+    return Array.from({ length: total }, (_, i) => i);
+  }
+  // Take most of the budget from the front (floor plans, elevations)
+  // and 3 from the end (door/window/finish schedules).
+  const frontCount = Math.max(maxPages - 3, Math.ceil(maxPages * 0.85));
+  const front = Array.from({ length: frontCount }, (_, i) => i);
+  const back = [total - 3, total - 2, total - 1].filter(i => i >= frontCount);
+  return [...new Set([...front, ...back])].slice(0, maxPages);
+}
+
+/**
+ * Renders up to maxPages pages from a PDF for AI analysis.
+ *
+ * Default is 50 pages — the chunked caller in useAIPlanAnalysis splits these
+ * into batches of CHUNK_SIZE before sending to the edge function.
+ *
+ * Automatically reduces JPEG quality if a rendered set exceeds MAX_BATCH_BYTES,
+ * so individual batches stay under the Supabase 6 MB request limit.
  */
 export async function extractAnalysisPages(
   file: File,
-  maxPages = 12
+  maxPages = 50
 ): Promise<ExtractedPage[]> {
   const arrayBuffer = await file.arrayBuffer();
   const doc = await pdfjs.getDocument({ data: arrayBuffer }).promise;
-  const total = doc.numPages;
+  const indices = selectPageIndices(doc.numPages, maxPages);
 
-  let indices: number[];
+  let pages = await Promise.all(indices.map(i => renderPage(doc, i, 0.80)));
 
-  if (total <= maxPages) {
-    indices = Array.from({ length: total }, (_, i) => i);
-  } else {
-    // First 8 pages cover ground floor, upper floor, elevations, site plan
-    const firstBatch = Array.from({ length: Math.min(8, maxPages - 2) }, (_, i) => i);
-    // Last 2 pages often contain door/window schedules or finish schedules
-    const lastBatch = [total - 2, total - 1].filter(i => i >= 8);
-    indices = [...new Set([...firstBatch, ...lastBatch])].slice(0, maxPages);
+  // If a full render is too large, drop quality — line drawings compress well at 0.62.
+  const totalBytes = pages.reduce((sum, p) => sum + p.imageBase64.length, 0);
+  if (totalBytes > MAX_BATCH_BYTES) {
+    pages = await Promise.all(indices.map(i => renderPage(doc, i, 0.62)));
   }
 
-  const pages = await Promise.all(indices.map((i) => renderPage(doc, i)));
   return pages;
 }

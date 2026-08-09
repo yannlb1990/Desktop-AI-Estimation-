@@ -191,6 +191,9 @@ export interface CostItem {
   materials?: string[];
   drawingNumber?: string;
 
+  // Rate ID — maps to SCOPE_OF_WORK_RATES (used for deduplication)
+  rateId?: string;
+
   // Trade and material specification
   trade?: string;
   material?: string;
@@ -233,6 +236,7 @@ export interface ConsumableItem {
   unit: string;
   unitCost: number;
   total: number;
+  url?: string;
 }
 
 // Trade options for construction - matching UI dropdown
@@ -376,4 +380,5 @@ export type TakeoffAction =
   | { type: 'UNDO' }
   | { type: 'REDO' }
   | { type: 'DELETE_LAST_MEASUREMENT' }
-  | { type: 'CALCULATE_ESTIMATE' };
+  | { type: 'CALCULATE_ESTIMATE' }
+  | { type: 'SET_PDF_URL'; payload: string };

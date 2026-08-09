@@ -8,8 +8,8 @@ const About = () => {
   return (
     <>
       <Helmet>
-        <title>About Metricore | AI Construction Estimation for Australia</title>
-        <meta name="description" content="Australian AI platform for construction estimation. We help builders and contractors generate accurate takeoffs and professional tenders from uploaded plans." />
+        <title>About Metricore | Construction Estimating Software for Australian Builders</title>
+        <meta name="description" content="Metricore helps builders and contractors generate accurate takeoffs and professional tenders from uploaded plans. Built in Australia for Australian construction." />
         <link rel="canonical" href="https://metricore.com.au/about" />
       </Helmet>
       <div className="min-h-screen">

@@ -182,9 +182,9 @@ const steps = [
   {
     num: "03",
     icon: FileCheck,
-    title: "Export your tender and quote",
-    body: "Metricore prices everything at current Australian trade rates, adds your margin, and generates every document your project needs: tender, Gantt schedule, FF\&E and more.",
-    detail: "Tender · BOQ · Gantt · FF&E · Quotes · Claims",
+    title: "Submit your quote and pricing",
+    body: "Metricore prices everything at current Australian trade rates, adds your margin, and generates every document your project needs: quote, Gantt schedule, FF\&E and more.",
+    detail: "Quote · BOQ · Gantt · FF&E · Pricing · Claims",
     visual: <ExportVisual />,
   },
 ];

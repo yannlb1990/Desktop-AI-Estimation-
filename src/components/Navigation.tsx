@@ -9,12 +9,22 @@ const Navigation = () => {
   const navigate = useNavigate();
   const [mobileOpen, setMobileOpen] = useState(false);
   const [scrolled, setScrolled] = useState(false);
-  const signedIn = isSignedIn();
+  const [signedIn, setSignedIn] = useState(isSignedIn());
 
   useEffect(() => {
     const onScroll = () => setScrolled(window.scrollY > 60);
     window.addEventListener("scroll", onScroll, { passive: true });
     return () => window.removeEventListener("scroll", onScroll);
+  }, []);
+
+  useEffect(() => {
+    const sync = () => setSignedIn(isSignedIn());
+    window.addEventListener("storage", sync);
+    window.addEventListener("metricore:auth", sync);
+    return () => {
+      window.removeEventListener("storage", sync);
+      window.removeEventListener("metricore:auth", sync);
+    };
   }, []);
 
   const handleSignOut = async () => {

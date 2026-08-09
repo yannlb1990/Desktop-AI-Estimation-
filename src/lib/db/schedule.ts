@@ -11,26 +11,34 @@ export interface ScheduleTask {
   durationDays: number;
   progress: number;
   notes: string;
+  sowRef?: string;
 }
+
+// ─── localStorage helpers (migration only — not used for primary reads/writes) ─
 
 const LS_PREFIX = 'schedule_';
 
-export function lsLoadSchedule(projectId: string): ScheduleTask[] {
+function lsLoad(projectId: string): ScheduleTask[] {
   try {
     return JSON.parse(localStorage.getItem(getUserStorageKey(`${LS_PREFIX}${projectId}`)) || 'null') ?? [];
   } catch { return []; }
 }
 
-export function lsSaveSchedule(projectId: string, tasks: ScheduleTask[]): void {
-  localStorage.setItem(getUserStorageKey(`${LS_PREFIX}${projectId}`), JSON.stringify(tasks));
+function lsClear(projectId: string): void {
+  localStorage.removeItem(getUserStorageKey(`${LS_PREFIX}${projectId}`));
 }
+
+// Keep exported for any legacy callers that still reference it — safe no-op
+export function lsSaveSchedule(_projectId: string, _tasks: ScheduleTask[]): void {}
+
+// ─── Row mapping ──────────────────────────────────────────────────────────────
 
 async function getUserId(): Promise<string | null> {
   const { data: { session } } = await supabase.auth.getSession();
   return session?.user?.id ?? null;
 }
 
-function toRow(task: ScheduleTask, projectId: string, userId: string) {
+function toRow(task: ScheduleTask, projectId: string, userId: string, sortOrder: number) {
   return {
     id: task.id,
     project_id: projectId,
@@ -43,6 +51,8 @@ function toRow(task: ScheduleTask, projectId: string, userId: string) {
     duration_days: task.durationDays,
     progress: task.progress,
     notes: task.notes,
+    sow_ref: task.sowRef ?? null,
+    sort_order: sortOrder,
     updated_at: new Date().toISOString(),
   };
 }
@@ -58,23 +68,47 @@ function fromRow(row: any): ScheduleTask {
     durationDays: row.duration_days,
     progress: row.progress,
     notes: row.notes,
+    sowRef: row.sow_ref ?? undefined,
   };
 }
+
+// ─── Supabase read/write ──────────────────────────────────────────────────────
 
 export async function syncScheduleToSupabase(projectId: string, tasks: ScheduleTask[]): Promise<void> {
   const userId = await getUserId();
   if (!userId) return;
   try {
-    const { error: delErr } = await supabase
+    if (tasks.length === 0) {
+      const { error } = await supabase
+        .from('schedule_tasks')
+        .delete()
+        .eq('project_id', projectId)
+        .eq('user_id', userId);
+      if (error) console.error('[syncSchedule] delete-all failed:', error.message);
+      return;
+    }
+
+    const { error: upsertErr } = await supabase
+      .from('schedule_tasks')
+      .upsert(
+        tasks.map((t, i) => toRow(t, projectId, userId, i)),
+        { onConflict: 'id' }
+      );
+    if (upsertErr) {
+      console.error('[syncSchedule] upsert failed:', upsertErr.message);
+      return;
+    }
+
+    // Remove rows no longer in the task list
+    const { error: pruneErr } = await supabase
       .from('schedule_tasks')
       .delete()
       .eq('project_id', projectId)
-      .eq('user_id', userId);
-    if (delErr) return;
-    if (tasks.length === 0) return;
-    await supabase.from('schedule_tasks').insert(tasks.map(t => toRow(t, projectId, userId)));
+      .eq('user_id', userId)
+      .not('id', 'in', `(${tasks.map(t => t.id).join(',')})`);
+    if (pruneErr) console.error('[syncSchedule] prune failed:', pruneErr.message);
   } catch (e) {
-    console.error('[syncSchedule] Supabase sync failed:', e instanceof Error ? e.message : e);
+    console.error('[syncSchedule] failed:', e instanceof Error ? e.message : e);
   }
 }
 
@@ -93,19 +127,23 @@ export async function loadScheduleFromSupabase(projectId: string): Promise<Sched
   } catch { return null; }
 }
 
+// ─── Primary load: Supabase first, one-time localStorage migration ────────────
+
 export async function loadScheduleMerged(projectId: string): Promise<ScheduleTask[] | null> {
-  const [dbTasks, lsTasks] = await Promise.all([
-    loadScheduleFromSupabase(projectId),
-    Promise.resolve(lsLoadSchedule(projectId)),
-  ]);
-  if (dbTasks === null) return lsTasks.length > 0 ? lsTasks : null;
-  if (dbTasks.length > 0) {
-    lsSaveSchedule(projectId, dbTasks);
-    return dbTasks;
-  }
+  const dbTasks = await loadScheduleFromSupabase(projectId);
+
+  // Supabase has data — use it as source of truth
+  if (dbTasks !== null && dbTasks.length > 0) return dbTasks;
+
+  // Supabase empty — check localStorage for legacy data to migrate
+  const lsTasks = lsLoad(projectId);
   if (lsTasks.length > 0) {
+    // One-time migration: push to Supabase, wipe localStorage entry
     syncScheduleToSupabase(projectId, lsTasks);
+    lsClear(projectId);
     return lsTasks;
   }
-  return null;
+
+  // Genuinely no data yet
+  return dbTasks; // null if Supabase errored, [] if it returned empty
 }

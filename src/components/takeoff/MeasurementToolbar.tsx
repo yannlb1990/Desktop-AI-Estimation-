@@ -38,6 +38,16 @@ interface MeasurementToolbarProps {
   onCountItemSizeChange?: (size: string) => void;
 }
 
+const TOOL_BADGE_COLOR: Record<string, string> = {
+  line: 'text-red-400',
+  rectangle: 'text-foreground/50',
+  polygon: 'text-foreground/50',
+  circle: 'text-foreground/50',
+  count: 'text-orange-400',
+  'wall-line': 'text-amber-500',
+  'arc-wall': 'text-orange-400',
+};
+
 const WALL_PRESETS = [64, 70, 90, 92, 110, 150];
 
 // Mini pattern previews via CSS gradients
@@ -159,15 +169,15 @@ export const MeasurementToolbar = ({
   ];
 
   const measurementTools = [
-    { id: 'line' as const, icon: Minus, label: 'Line (L)', color: 'bg-red-500' },
-    { id: 'rectangle' as const, icon: Square, label: 'Rectangle (R)', color: 'bg-muted/100' },
-    { id: 'polygon' as const, icon: Pentagon, label: 'Polygon (P)', color: 'bg-muted/100' },
-    { id: 'circle' as const, icon: Circle, label: 'Circle (C)', color: 'bg-muted/100' },
-    { id: 'count' as const, icon: Hash, label: 'Count (N)', color: 'bg-orange-500' },
-    { id: 'wall-line' as const, icon: Columns3, label: 'Wall Line (T)', color: 'bg-amber-700' },
-    { id: 'arc-wall' as const, icon: Spline, label: 'Arc Wall (A) — 3 clicks: start → end → curve', color: 'bg-orange-500' },
-    { id: 'offset' as const, icon: Crosshair, label: 'Reference Line (G)', color: 'bg-sky-400' },
-    { id: 'text' as const, icon: Type, label: 'Text Annotation (X)', color: 'bg-yellow-500' },
+    { id: 'line' as const, icon: Minus, label: 'Line', shortcut: 'L', color: 'bg-red-500', unit: 'LM', desc: 'Skirtings, rails, gutters, pipes' },
+    { id: 'rectangle' as const, icon: Square, label: 'Rectangle', shortcut: 'R', color: 'bg-muted/100', unit: 'm²', desc: 'Floor slabs, ceilings, feature walls' },
+    { id: 'polygon' as const, icon: Pentagon, label: 'Polygon', shortcut: 'P', color: 'bg-muted/100', unit: 'm²', desc: 'Irregular rooms, odd-shaped slabs' },
+    { id: 'circle' as const, icon: Circle, label: 'Circle', shortcut: 'C', color: 'bg-muted/100', unit: 'm²', desc: 'Circular columns, domes, curved slabs' },
+    { id: 'count' as const, icon: Hash, label: 'Count', shortcut: 'N', color: 'bg-orange-500', unit: 'EA', desc: 'Doors, windows, posts, fittings' },
+    { id: 'wall-line' as const, icon: Columns3, label: 'Wall Line', shortcut: 'T', color: 'bg-amber-700', unit: 'LM', desc: 'Straight walls with thickness' },
+    { id: 'arc-wall' as const, icon: Spline, label: 'Arc Wall', shortcut: 'A', color: 'bg-orange-500', unit: 'LM', desc: 'Curved walls — start, end, curve point' },
+    { id: 'offset' as const, icon: Crosshair, label: 'Ref. Line', shortcut: 'G', color: 'bg-sky-400', unit: null as null, desc: 'Guide line, not measured' },
+    { id: 'text' as const, icon: Type, label: 'Annotation', shortcut: 'X', color: 'bg-yellow-500', unit: null as null, desc: 'Notes and callout labels' },
   ];
 
   const modTools: Array<{ id: ModId; icon: React.ComponentType<{ className?: string }>; label: string; color: string; ring: string }> = [
@@ -200,22 +210,22 @@ export const MeasurementToolbar = ({
 
           <Tooltip>
             <TooltipTrigger asChild>
-              <Button aria-label="Eraser — click a measurement to delete (E)" variant={activeTool === 'eraser' ? 'destructive' : 'ghost'} size="icon" className="h-9 w-9 shrink-0" onClick={() => onToolSelect('eraser')}>
+              <Button aria-label="Eraser: click a measurement to delete (E)" variant={activeTool === 'eraser' ? 'destructive' : 'ghost'} size="icon" className="h-9 w-9 shrink-0" onClick={() => onToolSelect('eraser')}>
                 <Eraser className="h-4 w-4" />
               </Button>
             </TooltipTrigger>
-            <TooltipContent>Eraser — click a measurement to delete (E)</TooltipContent>
+            <TooltipContent>Eraser: click a measurement to delete (E)</TooltipContent>
           </Tooltip>
 
           <Separator orientation="vertical" className="h-6 mx-1 shrink-0" />
 
-          {measurementTools.map(({ id, icon: Icon, label, color }) => {
+          {measurementTools.map(({ id, icon: Icon, label, shortcut, color, unit, desc }) => {
             const isActive = modMode === null && activeTool === id;
             return (
               <Tooltip key={id}>
                 <TooltipTrigger asChild>
                   <Button
-                    aria-label={label}
+                    aria-label={`${label} (${shortcut})${unit ? ` — ${unit}` : ''}`}
                     aria-pressed={isActive}
                     variant={isActive ? 'default' : 'ghost'}
                     size="icon"
@@ -224,10 +234,20 @@ export const MeasurementToolbar = ({
                     disabled={disabled}
                   >
                     <Icon className="h-4 w-4" />
-                    <span aria-hidden="true" className={cn('absolute bottom-1 right-1 h-2 w-2 rounded-full', color)} />
+                    {unit ? (
+                      <span aria-hidden="true" className={cn('absolute bottom-0.5 right-0.5 text-[8px] font-bold leading-none', TOOL_BADGE_COLOR[id] ?? 'text-foreground/50')}>
+                        {unit}
+                      </span>
+                    ) : (
+                      <span aria-hidden="true" className={cn('absolute bottom-1 right-1 h-2 w-2 rounded-full', color)} />
+                    )}
                   </Button>
                 </TooltipTrigger>
-                <TooltipContent>{label}</TooltipContent>
+                <TooltipContent side="bottom" className="text-left max-w-[180px]">
+                  <p className="font-semibold">{label} <span className="text-primary">{unit ? `· ${unit}` : ''}</span></p>
+                  <p className="text-xs text-muted-foreground">{desc}</p>
+                  <p className="text-[10px] text-muted-foreground/60 mt-0.5">Shortcut: {shortcut}</p>
+                </TooltipContent>
               </Tooltip>
             );
           })}
@@ -461,7 +481,7 @@ export const MeasurementToolbar = ({
             <div className="w-px bg-orange-900/30 self-stretch shrink-0" />
             <input
               type="text"
-              placeholder="Category name (e.g. Door — Internal)"
+              placeholder="Category name (e.g. Door: Internal)"
               value={countName}
               onChange={e => onCountNameChange?.(e.target.value)}
               className="flex-1 bg-transparent text-xs text-foreground placeholder:text-muted-foreground/40 outline-none border-b border-muted/20 pb-0.5"
@@ -559,12 +579,12 @@ export const MeasurementToolbar = ({
             ))}
             {modMode && modMode !== 'custom' && (
               <span className="text-xs text-muted-foreground ml-1 italic">
-                Draw on the plan — click the line to add to estimate
+                Draw on the plan. Click the line to add to estimate.
               </span>
             )}
             {modMode === 'custom' && (
               <span className="text-xs text-muted-foreground ml-1 italic">
-                Draw any line — you'll be asked to add it to the estimate
+                Draw any line. You'll be asked to add it to the estimate.
               </span>
             )}
           </div>

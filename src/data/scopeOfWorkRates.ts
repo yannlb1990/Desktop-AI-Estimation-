@@ -35,7 +35,7 @@ export interface SOWMetadata {
 
 export const SOW_METADATA: SOWMetadata = {
   lastUpdated: '2025-12-01',
-  nextUpdate: '2026-03-01', // Quarterly updates
+  nextUpdate: '2027-01-01', // Quarterly updates
   dataSource: 'Rawlinsons Construction Cost Guide, MBA, Cordell Housing Building Cost Guide',
   version: '2025.4'
 };
@@ -183,8 +183,61 @@ export const SCOPE_OF_WORK_RATES: SOWRate[] = [
   { id: "land-007", trade: "Landscaping", sow: "Garden Soil Removal & Reinstate", unit: "m³", NSW: 85.00, VIC: 81.00, QLD: 77.00, SA: 74.00, WA: 90.00, TAS: 71.00, NT: 96.00, ACT: 82.00, description: "Remove garden soil, retain/reinstate after works", category: "Landscaping", lastUpdated: "2026-01-01", source: "Market" },
   { id: "land-008", trade: "Landscaping", sow: "Tree / Large Plant Removal", unit: "ea", NSW: 850.00, VIC: 810.00, QLD: 775.00, SA: 740.00, WA: 900.00, TAS: 720.00, NT: 960.00, ACT: 825.00, description: "Remove & dispose tree or large plant, stump grinding", category: "Landscaping", lastUpdated: "2026-01-01", source: "Market" },
 
+  // COMMERCIAL / INDUSTRIAL — SUSPENDED CEILINGS
+  { id: "susc-001", trade: "Suspended Ceilings", sow: "Grid & Tile Suspended Ceiling 600x600", unit: "m²", NSW: 95.00, VIC: 90.00, QLD: 86.00, SA: 82.00, WA: 100.00, TAS: 79.00, NT: 108.00, ACT: 92.00, description: "Supply & install 600x600mm exposed tee grid system with mineral fibre tile, includes perimeter trim", category: "Commercial", lastUpdated: "2026-01-01", source: "Market" },
+  { id: "susc-002", trade: "Suspended Ceilings", sow: "Plasterboard Suspended Ceiling", unit: "m²", NSW: 120.00, VIC: 114.00, QLD: 109.00, SA: 104.00, WA: 127.00, TAS: 100.00, NT: 136.00, ACT: 116.00, description: "Supply & install metal furring channel system with 13mm plasterboard, stopping & set", category: "Commercial", lastUpdated: "2026-01-01", source: "Market" },
+
+  // COMMERCIAL / INDUSTRIAL — MECHANICAL (HVAC)
+  { id: "mech-001", trade: "Mechanical", sow: "Ducted HVAC System Supply & Install", unit: "m²", NSW: 185.00, VIC: 175.00, QLD: 167.00, SA: 160.00, WA: 195.00, TAS: 154.00, NT: 210.00, ACT: 179.00, description: "Supply & install reverse cycle ducted air conditioning system, per m² of conditioned floor area", category: "Commercial", lastUpdated: "2026-01-01", source: "Market" },
+  { id: "mech-002", trade: "Mechanical", sow: "Split System Air Con Supply & Install", unit: "ea", NSW: 2200.00, VIC: 2090.00, QLD: 1990.00, SA: 1910.00, WA: 2320.00, TAS: 1840.00, NT: 2500.00, ACT: 2135.00, description: "Supply & install wall-split system, up to 7kW, includes wiring & drainage", category: "Commercial", lastUpdated: "2026-01-01", source: "Market" },
+
+  // COMMERCIAL / INDUSTRIAL — STRUCTURAL STEEL
+  { id: "steel-001", trade: "Structural Steel", sow: "Structural Steel Portal Frame Supply & Erect", unit: "m²", NSW: 220.00, VIC: 209.00, QLD: 199.00, SA: 191.00, WA: 232.00, TAS: 184.00, NT: 250.00, ACT: 213.00, description: "Supply, fabricate & erect portal frame steel structure per m² of building footprint, includes purlins & girts", category: "Industrial", lastUpdated: "2026-01-01", source: "Market" },
+  { id: "steel-002", trade: "Structural Steel", sow: "Structural Steel Columns & Beams", unit: "tonne", NSW: 4800.00, VIC: 4560.00, QLD: 4340.00, SA: 4165.00, WA: 5050.00, TAS: 4000.00, NT: 5450.00, ACT: 4650.00, description: "Supply, fabricate & erect structural steel columns and beams per tonne installed", category: "Industrial", lastUpdated: "2026-01-01", source: "Market" },
+
+  // COMMERCIAL / INDUSTRIAL — FIRE SERVICES
+  { id: "fire-001", trade: "Fire Services", sow: "Wet Pipe Sprinkler System", unit: "m²", NSW: 65.00, VIC: 62.00, QLD: 59.00, SA: 56.00, WA: 68.00, TAS: 54.00, NT: 74.00, ACT: 63.00, description: "Supply & install AS 2118 compliant wet pipe sprinkler system per m² of protected area", category: "Commercial", lastUpdated: "2026-01-01", source: "Market" },
+  { id: "fire-002", trade: "Fire Services", sow: "Fire Detection & Alarm Addressable", unit: "m²", NSW: 28.00, VIC: 27.00, QLD: 25.00, SA: 24.00, WA: 30.00, TAS: 23.00, NT: 32.00, ACT: 27.00, description: "Supply & install AS 1670 addressable smoke detection and alarm system per m²", category: "Commercial", lastUpdated: "2026-01-01", source: "Market" },
+  { id: "fire-003", trade: "Fire Services", sow: "Fire Hose Reel Install", unit: "ea", NSW: 2800.00, VIC: 2660.00, QLD: 2530.00, SA: 2430.00, WA: 2950.00, TAS: 2360.00, NT: 3185.00, ACT: 2715.00, description: "Supply & install AS 2441 compliant fire hose reel, includes pipe work connection", category: "Commercial", lastUpdated: "2026-01-01", source: "Market" },
+  { id: "fire-004", trade: "Fire Services", sow: "Portable Fire Extinguisher", unit: "ea", NSW: 380.00, VIC: 360.00, QLD: 345.00, SA: 330.00, WA: 400.00, TAS: 320.00, NT: 432.00, ACT: 368.00, description: "Supply & install AS 2444 portable fire extinguisher with bracket and signage", category: "Commercial", lastUpdated: "2026-01-01", source: "Market" },
+
+  // COMMERCIAL / INDUSTRIAL — CONCRETE
+  { id: "conc-005", trade: "Concreter", sow: "Industrial Hardstand Slab 150mm Heavy Duty", unit: "m²", NSW: 145.00, VIC: 138.00, QLD: 131.00, SA: 126.00, WA: 153.00, TAS: 122.00, NT: 165.00, ACT: 140.00, description: "150mm reinforced concrete hardstand on 200mm compacted base, SL92 mesh, saw-cut joints, for forklift traffic", category: "Industrial", lastUpdated: "2026-01-01", source: "Market" },
+  { id: "conc-006", trade: "Concreter", sow: "Tilt-Up Concrete Panel", unit: "m²", NSW: 680.00, VIC: 646.00, QLD: 615.00, SA: 590.00, WA: 715.00, TAS: 573.00, NT: 775.00, ACT: 659.00, description: "Cast, tilt & brace concrete tilt panel per m² of panel face area, includes hardware", category: "Industrial", lastUpdated: "2026-01-01", source: "Market" },
+
+  // COMMERCIAL — GLAZING
+  { id: "glazing-001", trade: "Glazier", sow: "Commercial Aluminium Framed Glazing", unit: "m²", NSW: 820.00, VIC: 779.00, QLD: 741.00, SA: 711.00, WA: 863.00, TAS: 690.00, NT: 934.00, ACT: 795.00, description: "Supply & install commercial aluminium framed double glazed units, standard commercial office facade", category: "Commercial", lastUpdated: "2026-01-01", source: "Market" },
+  { id: "glazing-002", trade: "Glazier", sow: "Shopfront Aluminium Glazing", unit: "m²", NSW: 680.00, VIC: 646.00, QLD: 615.00, SA: 590.00, WA: 715.00, TAS: 573.00, NT: 775.00, ACT: 659.00, description: "Supply & install shopfront aluminium framed single/double glazing, includes door frames", category: "Commercial", lastUpdated: "2026-01-01", source: "Market" },
+
+  // COMMERCIAL — ACCESS CONTROL
+  { id: "access-001", trade: "Security", sow: "Access Control Door Set Swipe Card", unit: "ea", NSW: 2600.00, VIC: 2470.00, QLD: 2350.00, SA: 2255.00, WA: 2735.00, TAS: 2195.00, NT: 2965.00, ACT: 2520.00, description: "Supply & install electronic access control card reader, electric strike, controller, wiring per door", category: "Commercial", lastUpdated: "2026-01-01", source: "Market" },
+
   // CRANE / LIFTING
   { id: "crane-001", trade: "Crane / Lifting", sow: "Crane PS Allowance", unit: "lsum", NSW: 3500.00, VIC: 3300.00, QLD: 3150.00, SA: 3020.00, WA: 3700.00, TAS: 2940.00, NT: 3920.00, ACT: 3380.00, description: "PS: Crane hire for tree/large item removal and skip bin placement", category: "Preliminaries", lastUpdated: "2026-01-01", source: "Market" },
+
+  // FLOOR FINISHES
+  { id: "floor-001", trade: "Flooring Installer", sow: "Carpet Supply & Lay", unit: "m²", NSW: 75.00, VIC: 71.00, QLD: 68.00, SA: 65.00, WA: 79.00, TAS: 63.00, NT: 85.00, ACT: 73.00, description: "Supply & install broadloom carpet with underlay", category: "Finishing", lastUpdated: "2026-07-07", source: "Market" },
+  { id: "floor-002", trade: "Flooring Installer", sow: "Floating Floor Supply & Lay", unit: "m²", NSW: 95.00, VIC: 90.00, QLD: 86.00, SA: 82.00, WA: 100.00, TAS: 79.00, NT: 108.00, ACT: 92.00, description: "Supply & install hybrid/laminate floating floor", category: "Finishing", lastUpdated: "2026-07-07", source: "Market" },
+
+  // SITE WORKS
+  { id: "site-001", trade: "Excavation", sow: "Excavation & Earthworks", unit: "m³", NSW: 85.00, VIC: 81.00, QLD: 77.00, SA: 74.00, WA: 90.00, TAS: 71.00, NT: 96.00, ACT: 82.00, description: "Machine excavation, cart away, per m³", category: "Site", lastUpdated: "2026-07-07", source: "Market" },
+
+  // JOINERY (shorthand IDs referenced by AI — alias to cab-* entries)
+  { id: "join-001", trade: "Cabinetmaker", sow: "Kitchen Joinery", unit: "lsum", NSW: 18500.00, VIC: 17500.00, QLD: 16500.00, SA: 15800.00, WA: 19500.00, TAS: 15500.00, NT: 21000.00, ACT: 18000.00, description: "Kitchen joinery supply & install, lump sum allowance", category: "Fit Out", lastUpdated: "2026-07-07", source: "Market" },
+  { id: "join-002", trade: "Cabinetmaker", sow: "Vanity Unit Supply & Install", unit: "ea", NSW: 1450.00, VIC: 1350.00, QLD: 1300.00, SA: 1250.00, WA: 1530.00, TAS: 1220.00, NT: 1640.00, ACT: 1400.00, description: "Supply & install bathroom vanity unit", category: "Fit Out", lastUpdated: "2026-07-07", source: "Market" },
+
+  // HVAC (shorthand ID referenced by AI)
+  { id: "hvac-001", trade: "Mechanical", sow: "Split System Air Conditioning", unit: "ea", NSW: 2200.00, VIC: 2090.00, QLD: 1990.00, SA: 1910.00, WA: 2320.00, TAS: 1840.00, NT: 2500.00, ACT: 2135.00, description: "Supply & install wall-split system, up to 7kW, includes wiring & drainage", category: "Fit Out", lastUpdated: "2026-07-07", source: "Market" },
+
+  // PLASTERBOARD (shorthand IDs referenced by AI)
+  { id: "plstr-001", trade: "Plasterer", sow: "Plasterboard Wall Lining", unit: "m²", NSW: 25.00, VIC: 23.00, QLD: 22.00, SA: 21.00, WA: 26.50, TAS: 20.00, NT: 28.00, ACT: 24.00, description: "Supply & install plasterboard wall sheets", category: "Lining", lastUpdated: "2026-07-07", source: "Market" },
+  { id: "plstr-002", trade: "Plasterer", sow: "Plasterboard Ceiling Lining", unit: "m²", NSW: 28.50, VIC: 26.00, QLD: 25.00, SA: 24.00, WA: 30.00, TAS: 23.00, NT: 32.00, ACT: 27.50, description: "Supply & install plasterboard ceiling sheets", category: "Lining", lastUpdated: "2026-07-07", source: "Market" },
+
+  // ELECTRICAL (shorthand IDs referenced by AI)
+  { id: "elec-010", trade: "Electrician", sow: "Electrical Rough-In per m²", unit: "m²", NSW: 55.00, VIC: 52.00, QLD: 50.00, SA: 48.00, WA: 58.00, TAS: 46.00, NT: 63.00, ACT: 53.00, description: "First-fix electrical rough-in per m² of floor area", category: "First Fix", lastUpdated: "2026-07-07", source: "Market" },
+
+  // PLUMBING (shorthand ID referenced by AI)
+  { id: "plum-010", trade: "Plumber", sow: "Plumbing Rough-In per m²", unit: "m²", NSW: 89.90, VIC: 85.00, QLD: 80.00, SA: 77.00, WA: 95.00, TAS: 75.00, NT: 102.00, ACT: 87.00, description: "Complete plumbing rough-in per m² of floor area", category: "First Fix", lastUpdated: "2026-07-07", source: "Market" },
 ];
 
 // Helper functions

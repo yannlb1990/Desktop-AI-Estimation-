@@ -6,7 +6,6 @@ import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route, Navigate, useNavigate } from "react-router-dom";
-import { AIChatbot } from "@/components/AIChatbot";
 import { TourProvider } from "@/context/TourContext";
 import { isSignedIn, getLocalUser, localSignOut } from "@/lib/localAuth";
 import { getSubscriptionStatus } from "@/lib/subscription";
@@ -31,27 +30,37 @@ const IdleGuard = () => {
   }, [navigate])
   return null
 }
-import Index from "./pages/Index";
-import Auth from "./pages/Auth";
-import Dashboard from "./pages/Dashboard";
-import NewProject from "./pages/NewProject";
-import ProjectDetail from "./pages/ProjectDetail";
-import MarketInsights from "./pages/MarketInsights";
-import Pricing from "./pages/Pricing";
-import Clients from "./pages/Clients";
-import Settings from "./pages/Settings";
-import MaterialsLibrary from "./pages/MaterialsLibrary";
-import CheckoutSuccess from "./pages/CheckoutSuccess";
-import AcceptInvite from "./pages/AcceptInvite";
-import SetupPassword from "./pages/SetupPassword";
-import ResetPassword from "./pages/ResetPassword";
-import NotFound from "./pages/NotFound";
-import AdminRates from "./pages/AdminRates";
-import QuoteApproval from "./pages/QuoteApproval";
-import PrivacyPolicy from "./pages/PrivacyPolicy";
-import TermsOfService from "./pages/TermsOfService";
-import About from "./pages/About";
-import Support from "./pages/Support";
+import { Suspense, lazy } from "react";
+
+// Route-level code splitting — each page loads only when first visited
+const Index           = lazy(() => import("./pages/Index"));
+const Auth            = lazy(() => import("./pages/Auth"));
+const Dashboard       = lazy(() => import("./pages/Dashboard"));
+const NewProject      = lazy(() => import("./pages/NewProject"));
+const ProjectDetail   = lazy(() => import("./pages/ProjectDetail"));
+const MarketInsights  = lazy(() => import("./pages/MarketInsights"));
+const Pricing         = lazy(() => import("./pages/Pricing"));
+const Clients         = lazy(() => import("./pages/Clients"));
+const Settings        = lazy(() => import("./pages/Settings"));
+const MaterialsLibrary = lazy(() => import("./pages/MaterialsLibrary"));
+const CheckoutSuccess = lazy(() => import("./pages/CheckoutSuccess"));
+const AcceptInvite    = lazy(() => import("./pages/AcceptInvite"));
+const SetupPassword   = lazy(() => import("./pages/SetupPassword"));
+const ResetPassword   = lazy(() => import("./pages/ResetPassword"));
+const NotFound        = lazy(() => import("./pages/NotFound"));
+const AdminRates      = lazy(() => import("./pages/AdminRates"));
+const QuoteApproval   = lazy(() => import("./pages/QuoteApproval"));
+const PrivacyPolicy   = lazy(() => import("./pages/PrivacyPolicy"));
+const TermsOfService  = lazy(() => import("./pages/TermsOfService"));
+const About           = lazy(() => import("./pages/About"));
+const Support         = lazy(() => import("./pages/Support"));
+const FAQ             = lazy(() => import("./pages/FAQ"));
+
+const PageFallback = () => (
+  <div className="min-h-screen flex items-center justify-center bg-background">
+    <div className="h-8 w-8 rounded-full border-2 border-primary border-t-transparent animate-spin" />
+  </div>
+);
 
 const queryClient = new QueryClient();
 
@@ -103,7 +112,7 @@ const App = () => {
         <Sonner />
         <BrowserRouter>
           <IdleGuard />
-          <AIChatbot />
+          <Suspense fallback={<PageFallback />}>
           <Routes>
             <Route path="/" element={<Index />} />
             <Route path="/auth" element={<Auth />} />
@@ -116,7 +125,8 @@ const App = () => {
             <Route path="/terms" element={<TermsOfService />} />
             <Route path="/about" element={<About />} />
             <Route path="/support" element={<Support />} />
-            <Route path="/app" element={<ProtectedRoute syncReady={syncReady}><Dashboard /></ProtectedRoute>} />
+            <Route path="/faq" element={<FAQ />} />
+            <Route path="/app" element={<Navigate to="/dashboard" replace />} />
             <Route path="/dashboard" element={<ProtectedRoute syncReady={syncReady}><Dashboard /></ProtectedRoute>} />
             <Route path="/project/new" element={<ProtectedRoute syncReady={syncReady}><NewProject /></ProtectedRoute>} />
             <Route path="/project/:projectId" element={<ProtectedRoute syncReady={syncReady}><ProjectDetail /></ProtectedRoute>} />
@@ -129,6 +139,7 @@ const App = () => {
             {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
             <Route path="*" element={<NotFound />} />
           </Routes>
+          </Suspense>
         </BrowserRouter>
       </TooltipProvider>
       </TourProvider>

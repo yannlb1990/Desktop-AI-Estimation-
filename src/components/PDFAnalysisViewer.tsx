@@ -979,12 +979,12 @@ export function PDFAnalysisViewer({
 
   const mainContent = (
     <div className={isFullscreen
-      ? 'fixed inset-0 z-[9999] flex flex-col bg-gray-950 text-white'
+      ? 'fixed inset-0 z-[9999] flex flex-col bg-[#09111f] text-white'
       : 'flex flex-col w-full'
     }>
       {/* Toolbar */}
       <div className={`flex items-center justify-between p-3 border-b flex-wrap gap-2 ${
-        isFullscreen ? 'bg-gray-900 border-gray-700' : 'bg-muted/30'
+        isFullscreen ? 'bg-[#0d1b2e] border-[#1e2d45]' : 'bg-muted/30'
       }`}>
         <div className="flex items-center gap-2 flex-wrap">
           {/* Page Navigation */}
@@ -1297,7 +1297,7 @@ export function PDFAnalysisViewer({
       <div
         ref={containerRef}
         className={`relative overflow-auto ${
-          isFullscreen ? 'flex-1 bg-gray-900' : 'bg-gray-200 dark:bg-gray-800'
+          isFullscreen ? 'flex-1 bg-[#09111f]' : 'bg-gray-200 dark:bg-gray-800'
         } ${measurementMode === 'pan' ? (isPanning ? 'cursor-grabbing' : 'cursor-grab') : ''}`}
         style={isFullscreen ? undefined : { maxHeight: '70vh' }}
         onMouseDown={handlePanStart}
@@ -1307,14 +1307,14 @@ export function PDFAnalysisViewer({
       >
         {/* ── FULLSCREEN FLOATING TOOL PALETTE ── */}
         {isFullscreen && (
-          <div className="absolute left-3 top-1/2 -translate-y-1/2 flex flex-col gap-1 bg-gray-800/95 backdrop-blur-sm rounded-2xl p-2 shadow-2xl border border-white/10 z-30 select-none">
+          <div className="absolute left-3 top-1/2 -translate-y-1/2 flex flex-col gap-1 bg-[#0d1b2e]/95 backdrop-blur-sm rounded-2xl p-2 shadow-2xl border border-white/10 z-30 select-none">
             {/* Pointer */}
             <Tooltip>
               <TooltipTrigger asChild>
                 <button
                   onClick={() => setMeasurementMode('none')}
                   className={`w-10 h-10 rounded-xl flex items-center justify-center transition-all ${
-                    measurementMode === 'none' ? 'bg-muted/70 text-white shadow-lg' : 'text-gray-300 hover:bg-gray-700 hover:text-foreground'
+                    measurementMode === 'none' ? 'bg-muted/70 text-white shadow-lg' : 'text-gray-300 hover:bg-[#1a2d45] hover:text-foreground'
                   }`}
                 >
                   <MousePointer2 className="h-5 w-5" />
@@ -1329,7 +1329,7 @@ export function PDFAnalysisViewer({
                 <button
                   onClick={() => setMeasurementMode(measurementMode === 'pan' ? 'none' : 'pan')}
                   className={`w-10 h-10 rounded-xl flex items-center justify-center transition-all ${
-                    measurementMode === 'pan' ? 'bg-muted/70 text-white shadow-lg' : 'text-gray-300 hover:bg-gray-700 hover:text-foreground'
+                    measurementMode === 'pan' ? 'bg-muted/70 text-white shadow-lg' : 'text-gray-300 hover:bg-[#1a2d45] hover:text-foreground'
                   }`}
                 >
                   <Hand className="h-5 w-5" />
@@ -1347,12 +1347,12 @@ export function PDFAnalysisViewer({
                   onClick={() => setMeasurementMode(measurementMode === 'calibrate' ? 'none' : 'calibrate')}
                   className={`w-10 h-10 rounded-xl flex items-center justify-center transition-all relative ${
                     measurementMode === 'calibrate' ? 'bg-amber-500 text-white shadow-lg' :
-                    currentCalibration ? 'text-[#E1DCC9]/80 hover:bg-gray-700' : 'text-amber-400 hover:bg-gray-700 hover:text-amber-300'
+                    currentCalibration ? 'text-[#E1DCC9]/80 hover:bg-[#1a2d45]' : 'text-amber-400 hover:bg-[#1a2d45] hover:text-amber-300'
                   }`}
                 >
                   <Ruler className="h-5 w-5" />
                   {!currentCalibration && (
-                    <span className="absolute -top-1 -right-1 w-3 h-3 bg-amber-500 rounded-full border border-gray-800" />
+                    <span className="absolute -top-1 -right-1 w-3 h-3 bg-amber-500 rounded-full border border-[#09111f]" />
                   )}
                 </button>
               </TooltipTrigger>
@@ -1369,7 +1369,7 @@ export function PDFAnalysisViewer({
                   disabled={!currentCalibration}
                   className={`w-10 h-10 rounded-xl flex items-center justify-center transition-all ${
                     measurementMode === 'distance' ? 'bg-muted/70 text-white shadow-lg' :
-                    currentCalibration ? 'text-gray-300 hover:bg-gray-700 hover:text-foreground' : 'text-gray-600 cursor-not-allowed'
+                    currentCalibration ? 'text-gray-300 hover:bg-[#1a2d45] hover:text-foreground' : 'text-gray-600 cursor-not-allowed'
                   }`}
                 >
                   <Move className="h-5 w-5" />
@@ -1386,7 +1386,7 @@ export function PDFAnalysisViewer({
                   disabled={!currentCalibration}
                   className={`w-10 h-10 rounded-xl flex items-center justify-center transition-all ${
                     measurementMode === 'area' ? 'bg-[#412D15]/70 text-white shadow-lg' :
-                    currentCalibration ? 'text-gray-300 hover:bg-gray-700 hover:text-foreground' : 'text-gray-600 cursor-not-allowed'
+                    currentCalibration ? 'text-gray-300 hover:bg-[#1a2d45] hover:text-foreground' : 'text-gray-600 cursor-not-allowed'
                   }`}
                 >
                   <PenTool className="h-5 w-5" />
@@ -1400,7 +1400,7 @@ export function PDFAnalysisViewer({
             {/* Zoom In */}
             <Tooltip>
               <TooltipTrigger asChild>
-                <button onClick={zoomIn} className="w-10 h-10 rounded-xl flex items-center justify-center text-gray-300 hover:bg-gray-700 hover:text-foreground transition-all">
+                <button onClick={zoomIn} className="w-10 h-10 rounded-xl flex items-center justify-center text-gray-300 hover:bg-[#1a2d45] hover:text-foreground transition-all">
                   <ZoomIn className="h-5 w-5" />
                 </button>
               </TooltipTrigger>
@@ -1410,7 +1410,7 @@ export function PDFAnalysisViewer({
             {/* Zoom Out */}
             <Tooltip>
               <TooltipTrigger asChild>
-                <button onClick={zoomOut} className="w-10 h-10 rounded-xl flex items-center justify-center text-gray-300 hover:bg-gray-700 hover:text-foreground transition-all">
+                <button onClick={zoomOut} className="w-10 h-10 rounded-xl flex items-center justify-center text-gray-300 hover:bg-[#1a2d45] hover:text-foreground transition-all">
                   <ZoomOut className="h-5 w-5" />
                 </button>
               </TooltipTrigger>
@@ -1420,7 +1420,7 @@ export function PDFAnalysisViewer({
             {/* Reset zoom */}
             <Tooltip>
               <TooltipTrigger asChild>
-                <button onClick={resetZoom} className="w-10 h-10 rounded-xl flex items-center justify-center text-gray-300 hover:bg-gray-700 hover:text-foreground transition-all text-[10px] font-bold">
+                <button onClick={resetZoom} className="w-10 h-10 rounded-xl flex items-center justify-center text-gray-300 hover:bg-[#1a2d45] hover:text-foreground transition-all text-[10px] font-bold">
                   {Math.round(zoom * 100)}%
                 </button>
               </TooltipTrigger>
@@ -1435,7 +1435,7 @@ export function PDFAnalysisViewer({
             measurementMode === 'calibrate' ? 'bg-amber-600/90 border-amber-400 text-white' :
             measurementMode === 'distance' ? 'bg-muted/70/90 border-foreground/25 text-white' :
             measurementMode === 'area' ? 'bg-primary/20 border-[#E1DCC9]/25 text-white' :
-            'bg-gray-800/90 border-gray-600 text-gray-200'
+            'bg-[#0d1b2e]/90 border-[#1e2d45] text-gray-200'
           }`}>
             {measurementMode === 'calibrate' && <><Ruler className="h-4 w-4" />{calibrationPoints.length === 0 ? 'Click first point' : calibrationPoints.length === 1 ? 'Click second point' : 'Enter distance'}</>}
             {measurementMode === 'distance' && <><Move className="h-4 w-4" />{isDragging ? 'Release to complete' : 'Click and drag to measure'}</>}
@@ -1449,8 +1449,8 @@ export function PDFAnalysisViewer({
 
         {/* ── FULLSCREEN PAGE NAV (bottom-right) ── */}
         {isFullscreen && (
-          <div className="absolute bottom-4 right-4 z-30 flex items-center gap-1 bg-gray-800/95 backdrop-blur-sm rounded-full px-2 py-1 shadow-xl border border-white/10">
-            <button onClick={() => goToPage(currentPage - 1)} disabled={currentPage <= 1} className="w-7 h-7 flex items-center justify-center rounded-full text-gray-300 hover:bg-gray-700 disabled:opacity-30 transition-all">
+          <div className="absolute bottom-4 right-4 z-30 flex items-center gap-1 bg-[#0d1b2e]/90 backdrop-blur-sm rounded-full px-2 py-1 shadow-xl border border-white/10">
+            <button onClick={() => goToPage(currentPage - 1)} disabled={currentPage <= 1} className="w-7 h-7 flex items-center justify-center rounded-full text-gray-300 hover:bg-[#1a2d45] disabled:opacity-30 transition-all">
               <ChevronLeft className="h-4 w-4" />
             </button>
             <select
@@ -1459,12 +1459,12 @@ export function PDFAnalysisViewer({
               className="bg-transparent text-xs text-gray-200 font-medium text-center cursor-pointer outline-none min-w-[80px] appearance-none"
             >
               {Array.from({ length: totalPages }, (_, i) => i + 1).map(p => (
-                <option key={p} value={p} className="bg-gray-800 text-gray-200">
+                <option key={p} value={p} className="bg-[#09111f] text-gray-200">
                   Page {p} / {totalPages}
                 </option>
               ))}
             </select>
-            <button onClick={() => goToPage(currentPage + 1)} disabled={currentPage >= totalPages} className="w-7 h-7 flex items-center justify-center rounded-full text-gray-300 hover:bg-gray-700 disabled:opacity-30 transition-all">
+            <button onClick={() => goToPage(currentPage + 1)} disabled={currentPage >= totalPages} className="w-7 h-7 flex items-center justify-center rounded-full text-gray-300 hover:bg-[#1a2d45] disabled:opacity-30 transition-all">
               <ChevronRight className="h-4 w-4" />
             </button>
           </div>

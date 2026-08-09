@@ -347,12 +347,28 @@ function takeoffReducer(state: TakeoffState, action: TakeoffAction): TakeoffStat
 
     case 'ADD_COST_ITEM': {
       const incoming = action.payload;
-      const isDuplicate = state.costItems.some((item) => {
-        if (incoming.rateId && item.rateId) return incoming.rateId === item.rateId;
-        return (item.name ?? '').toLowerCase() === (incoming.name ?? '').toLowerCase() &&
-               item.unit === incoming.unit;
-      });
-      if (isDuplicate) return state;
+      // rateId match: upsert quantity/subtotal so re-analysis updates existing AI items
+      if (incoming.rateId) {
+        const existingIdx = state.costItems.findIndex(item => item.rateId === incoming.rateId);
+        if (existingIdx !== -1) {
+          const newItems = [...state.costItems];
+          newItems[existingIdx] = { ...newItems[existingIdx], quantity: incoming.quantity, subtotal: incoming.subtotal };
+          return { ...state, costItems: newItems };
+        }
+      }
+      // linkedMeasurement dedup: block re-adding the exact same measurement
+      const linkedId = incoming.linkedMeasurements?.[0];
+      if (linkedId && state.costItems.some(item => item.linkedMeasurements?.includes(linkedId))) {
+        return state;
+      }
+      // name+unit fallback: only for items with no rateId and no linkedMeasurement (e.g. manual entries)
+      if (!incoming.rateId && !linkedId) {
+        const isDuplicate = state.costItems.some((item) =>
+          (item.name ?? '').toLowerCase() === (incoming.name ?? '').toLowerCase() &&
+          item.unit === incoming.unit
+        );
+        if (isDuplicate) return state;
+      }
       return { ...state, costItems: [...state.costItems, incoming] };
     }
 
