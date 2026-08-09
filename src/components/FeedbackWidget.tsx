@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import { MessageCircle, X, Star } from "lucide-react";
-import supabase from "@/integrations/supabase/client";
+import { supabase } from "@/integrations/supabase/client";
 
 export default function FeedbackWidget() {
   const [open, setOpen] = useState(false);
