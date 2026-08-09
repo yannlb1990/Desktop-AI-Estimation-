@@ -9,8 +9,11 @@ import {
   Plus, FileText, DollarSign, TrendingUp, BarChart3,
   Upload, Zap, Settings, Package, ChevronRight,
   ArrowRight, Clock, User, ExternalLink, AlertTriangle, X, LogOut, Trash2, BookOpen,
-  Send, Trophy, XCircle, Users, RefreshCcw
+  Send, Trophy, XCircle, Users, RefreshCcw, FolderOpen
 } from "lucide-react";
+import { getMyTeam, getSharedProjects } from "@/lib/db/teams";
+import type { Team, SharedProject } from "@/lib/db/teams";
+import { getUserStorageKey } from "@/lib/localAuth";
 import { useSubscription } from "@/hooks/useSubscription";
 import { PLAN_NAMES } from "@/lib/subscription";
 import { MetricoreLogoMark } from "@/components/MetricoreLogoMark";
@@ -19,6 +22,7 @@ import { loadProjectsMerged, deleteProjectFromSupabase, lsSaveProjects, migrateL
 import { useTour } from "@/context/TourContext";
 import { TourTip } from "@/components/TourTip";
 import WelcomeOverlay from "@/components/WelcomeOverlay";
+import OnboardingChecklist from "@/components/OnboardingChecklist";
 
 // ── helpers ─────────────────────────────────────────────────────────────────
 
@@ -134,6 +138,10 @@ const Dashboard = () => {
   const localUser = getLocalUser();
   const { tourEnabled, toggleTour } = useTour();
 
+  const [myTeam, setMyTeam] = useState<Team | null>(null);
+  const [sharedProjects, setSharedProjects] = useState<SharedProject[]>([]);
+  const [teamLoading, setTeamLoading] = useState(false);
+
   const handleSignOut = async () => {
     await localSignOut();
     navigate("/");
@@ -160,6 +168,22 @@ const Dashboard = () => {
       setIsLoading(false);
     });
   }, [navigate]);
+
+  // Load team projects if user is on Business plan
+  useEffect(() => {
+    if (sub.effectivePlan !== 'business') return;
+    setTeamLoading(true);
+    getMyTeam()
+      .then(async (team) => {
+        setMyTeam(team);
+        if (team) {
+          const shared = await getSharedProjects(team.id);
+          setSharedProjects(shared);
+        }
+      })
+      .catch(() => { /* silently ignore — team section just won't render */ })
+      .finally(() => setTeamLoading(false));
+  }, [sub.effectivePlan]);
 
   // ── derived stats ──────────────────────────────────────────────────────────
   const defaultRates = (() => { try { return JSON.parse(localStorage.getItem(getUserStorageKey('default_rates')) || "{}"); } catch { return {}; } })();
@@ -207,6 +231,23 @@ const Dashboard = () => {
     const user = getLocalUser();
     if (user) localStorage.removeItem(`${user.email}:show_welcome`);
     setShowWelcome(false);
+  };
+
+  // Import a shared project as a new local project
+  const handleOpenSharedProject = (sp: SharedProject) => {
+    const newId = `proj_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
+    const now = new Date().toISOString();
+    const imported = {
+      ...(sp.project_data as Record<string, unknown>),
+      id: newId,
+      name: `${sp.project_name} (copy)`,
+      created_at: now,
+      updated_at: now,
+    };
+    const key = getUserStorageKey('local_projects');
+    const existing: any[] = JSON.parse(localStorage.getItem(key) || '[]');
+    localStorage.setItem(key, JSON.stringify([imported, ...existing]));
+    navigate(`/project/${newId}`);
   };
 
   // Trial banner: show from day 1 of trial through expiry
@@ -399,6 +440,9 @@ const Dashboard = () => {
               ))
           }
         </div>
+
+        {/* Onboarding checklist — localStorage only, safe if unavailable */}
+        {(() => { try { return <OnboardingChecklist />; } catch { return null; } })()}
 
         {/* Load error banner */}
         {loadError && (
@@ -678,6 +722,65 @@ const Dashboard = () => {
             </>
           )}
         </Card>
+
+        {/* Team Projects — Business plan only */}
+        {sub.effectivePlan === 'business' && myTeam && (
+          <Card className="bg-background">
+            <div className="flex items-center justify-between px-4 md:px-6 py-4 border-b border-border">
+              <div className="flex items-center gap-2">
+                <Users className="h-4 w-4 text-amber-400" />
+                <h2 className="font-display text-lg font-bold">Team projects</h2>
+                <span className="text-xs text-muted-foreground font-medium">{myTeam.name ?? ''}</span>
+              </div>
+              <Button variant="ghost" size="sm" onClick={() => navigate('/settings/team')} className="text-xs text-muted-foreground">
+                Manage team
+              </Button>
+            </div>
+            {teamLoading ? (
+              <div className="divide-y divide-border">
+                {[1, 2].map((i) => (
+                  <div key={i} className="flex items-center justify-between px-6 py-4">
+                    <Skeleton className="h-4 w-48" />
+                    <Skeleton className="h-7 w-24 rounded" />
+                  </div>
+                ))}
+              </div>
+            ) : sharedProjects.length === 0 ? (
+              <div className="flex flex-col items-center justify-center py-12 px-4 text-center gap-3">
+                <div className="w-12 h-12 rounded-xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center">
+                  <FolderOpen className="h-6 w-6 text-amber-400/60" />
+                </div>
+                <p className="text-sm text-muted-foreground max-w-xs">
+                  No shared projects yet. Share a project from your estimating workspace.
+                </p>
+              </div>
+            ) : (
+              <div className="divide-y divide-border">
+                {sharedProjects.map((sp) => (
+                  <div key={sp.id} className="flex items-center justify-between px-4 md:px-6 py-3.5 hover:bg-muted/30 transition-colors">
+                    <div>
+                      <div className="font-medium text-sm">{sp.project_name}</div>
+                      <div className="text-xs text-muted-foreground mt-0.5 flex items-center gap-2">
+                        <User className="h-3 w-3" />
+                        <span>{sp.created_by.slice(0, 8)}&hellip;</span>
+                        <Clock className="h-3 w-3 ml-1" />
+                        <span>{fmtDate(sp.created_at)}</span>
+                      </div>
+                    </div>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => handleOpenSharedProject(sp)}
+                      className="border-border text-xs hover:bg-muted/30"
+                    >
+                      Open copy
+                    </Button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </Card>
+        )}
 
         {/* Quick Actions */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">

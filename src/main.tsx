@@ -2,6 +2,24 @@ import { createRoot } from "react-dom/client";
 import React from "react";
 import App from "./App.tsx";
 import "./index.css";
+import * as Sentry from "@sentry/react";
+import posthog from "posthog-js";
+
+if (import.meta.env.VITE_SENTRY_DSN) {
+  Sentry.init({
+    dsn: import.meta.env.VITE_SENTRY_DSN,
+    integrations: [Sentry.browserTracingIntegration()],
+    tracesSampleRate: 0.1,
+  });
+}
+
+if (import.meta.env.VITE_POSTHOG_KEY) {
+  posthog.init(import.meta.env.VITE_POSTHOG_KEY, {
+    api_host: import.meta.env.VITE_POSTHOG_HOST || "https://app.posthog.com",
+    person_profiles: "identified_only",
+  });
+  (window as Window & { posthog?: typeof posthog }).posthog = posthog;
+}
 
 function isStaleChunkError(msg: string) {
   return msg.includes('Failed to fetch dynamically imported module') ||

@@ -497,6 +497,7 @@ export function PlanAnalyserModal({
   const { analysePages, loading, result, error, reset, setResult } = useAIPlanAnalysis();
   const [statusMsg, setStatusMsg] = useState('');
   const [pageCount, setPageCount] = useState<number | null>(null);
+  const [isScannedPlan, setIsScannedPlan] = useState(false);
   const [cachedAt, setCachedAt] = useState<number | null>(null);
   const [pushedIds, setPushedIds] = useState<Set<string>>(new Set());
   const [roomsOpen, setRoomsOpen] = useState(true);
@@ -589,15 +590,17 @@ export function PlanAnalyserModal({
 
     try {
       setStatusMsg('Rendering pages…');
-      const pages = await extractAnalysisPages(file, 50);
+      const { pages, isScanned } = await extractAnalysisPages(file, 50);
       setPageCount(pages.length);
+      setIsScannedPlan(isScanned);
       setStatusMsg(`Analysing ${pages.length} page${pages.length > 1 ? 's' : ''} across 3 parallel passes…`);
       const newResult = await analysePages(
         pages,
         { state, projectType: 'residential' },
         (done, total) => {
           setStatusMsg(`${done} of ${total} analysis passes complete…`);
-        }
+        },
+        isScanned
       );
       if (newResult && projectId) {
         saveAnalysisCache(projectId, newResult);
@@ -847,6 +850,16 @@ export function PlanAnalyserModal({
           {/* Results */}
           {!isAnalysing && !displayError && result && (
             <div className="p-5 space-y-5">
+
+              {/* Scanned plan notice */}
+              {isScannedPlan && (
+                <div className="flex items-start gap-3 rounded-lg border border-white/10 bg-white/[0.04] px-4 py-3 text-sm">
+                  <Info className="h-4 w-4 shrink-0 text-amber-400 mt-0.5" />
+                  <p className="text-white/60 leading-snug">
+                    Scanned plan detected. AI analysis will use visual recognition only.
+                  </p>
+                </div>
+              )}
 
               {/* Stats row */}
               <div className="flex gap-3 overflow-x-auto pb-1 scrollbar-none">

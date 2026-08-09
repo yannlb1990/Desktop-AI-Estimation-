@@ -270,7 +270,8 @@ async function extractServerMessage(fnError: unknown): Promise<string> {
 async function invokePass(
   pages: ExtractedPage[],
   focusCategory: FocusCategory,
-  projectContext?: object
+  projectContext?: object,
+  isScanned?: boolean
 ): Promise<AnalysisResult> {
   const { data, error: fnError } = await supabase.functions.invoke('analyse-plan', {
     body: {
@@ -281,6 +282,7 @@ async function invokePass(
       })),
       projectContext: projectContext ?? {},
       focusCategory,
+      isScanned: isScanned ?? false,
     },
   });
 
@@ -325,7 +327,8 @@ export function useAIPlanAnalysis() {
   const analysePages = async (
     allPages: ExtractedPage[],
     projectContext?: object,
-    onProgress?: (done: number, total: number) => void
+    onProgress?: (done: number, total: number) => void,
+    isScanned?: boolean
   ): Promise<AnalysisResult | null> => {
     setLoading(true);
     setError(null);
@@ -335,9 +338,9 @@ export function useAIPlanAnalysis() {
       const inc = () => { done++; onProgress?.(done, 3); };
 
       const [baseResult, interiorResult, servicesResult] = await Promise.all([
-        invokePass(allPages, 'base', projectContext).then(r => { inc(); return r; }),
-        invokePass(allPages, 'interior', projectContext).then(r => { inc(); return r; }),
-        invokePass(allPages, 'services', projectContext).then(r => { inc(); return r; }),
+        invokePass(allPages, 'base', projectContext, isScanned).then(r => { inc(); return r; }),
+        invokePass(allPages, 'interior', projectContext, isScanned).then(r => { inc(); return r; }),
+        invokePass(allPages, 'services', projectContext, isScanned).then(r => { inc(); return r; }),
       ]);
 
       const merged = mergePassResults([baseResult, interiorResult, servicesResult]);

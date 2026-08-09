@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { ScanLine, ChevronDown, ChevronRight, Plus, CheckCheck, Lock, Clock, Layers, Home, Thermometer, TreePine, Droplets, Building2 } from 'lucide-react';
+import { ScanLine, ChevronDown, ChevronRight, Plus, CheckCheck, Lock, Clock, Layers, Home, Thermometer, TreePine, Droplets, Building2, Info } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -276,6 +276,7 @@ export function AIPlanAnalysisPanel({
   const [pushedIds, setPushedIds] = useState<Set<string>>(new Set());
   const [expandedTrades, setExpandedTrades] = useState<Set<number>>(new Set());
   const [activeTab, setActiveTab] = useState<'quantities' | 'elements'>('quantities');
+  const [isScannedPlan, setIsScannedPlan] = useState(false);
   const { caps, isTrialing, effectivePlan } = getSubscriptionStatus();
   const locked = !caps.planAnalysis;
   const state = (projectState as AustralianState) ?? 'QLD';
@@ -308,10 +309,11 @@ export function AIPlanAnalysisPanel({
         if (!cached) throw new Error('PDF not found in cache. Please reload the plan.');
         const file = new File([cached.data], cached.name, { type: 'application/pdf' });
         setStatusMsg(`Rendering pages…`);
-        const pages = await extractAnalysisPages(file, 12);
+        const { pages, isScanned } = await extractAnalysisPages(file, 12);
         setPageCount(pages.length);
+        setIsScannedPlan(isScanned);
         setStatusMsg(`Analysing ${pages.length} page${pages.length > 1 ? 's' : ''}…`);
-        const newResult = await analysePages(pages, { state, projectType: 'residential' });
+        const newResult = await analysePages(pages, { state, projectType: 'residential' }, undefined, isScanned);
         if (newResult && projectId) {
           saveCache(projectId, newResult);
           setCachedAt(Date.now());
@@ -497,6 +499,16 @@ export function AIPlanAnalysisPanel({
 
           {!locked && result && (
             <div className="space-y-3">
+              {/* Scanned plan notice */}
+              {isScannedPlan && (
+                <div className="flex items-start gap-2 rounded-md border border-amber-400/20 bg-amber-400/5 px-2.5 py-2">
+                  <Info className="h-3.5 w-3.5 shrink-0 text-amber-400 mt-0.5" />
+                  <p className="text-[11px] text-muted-foreground leading-snug">
+                    Scanned plan detected. AI analysis will use visual recognition only.
+                  </p>
+                </div>
+              )}
+
               {/* Project type + construction overview */}
               {(result.projectType || result.constructionOverview) && (
                 <div className="rounded-md bg-muted/20 border border-border/20 px-2.5 py-2 space-y-1">

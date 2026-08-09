@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from "react";
+import MobileBlocker from "@/components/MobileBlocker";
 import { Analytics } from "@vercel/analytics/react";
 import { HelmetProvider } from "react-helmet-async";
 import { Toaster } from "@/components/ui/toaster";
@@ -8,6 +9,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route, Navigate, useNavigate } from "react-router-dom";
 import { TourProvider } from "@/context/TourContext";
 import { isSignedIn, getLocalUser, localSignOut } from "@/lib/localAuth";
+import FeedbackWidget from "@/components/FeedbackWidget";
 import { getSubscriptionStatus } from "@/lib/subscription";
 import { syncSubscriptionFromDB } from "@/lib/stripeCheckout";
 
@@ -55,6 +57,7 @@ const TermsOfService  = lazy(() => import("./pages/TermsOfService"));
 const About           = lazy(() => import("./pages/About"));
 const Support         = lazy(() => import("./pages/Support"));
 const FAQ             = lazy(() => import("./pages/FAQ"));
+const TeamSettings    = lazy(() => import("./pages/TeamSettings"));
 
 const PageFallback = () => (
   <div className="min-h-screen flex items-center justify-center bg-background">
@@ -103,6 +106,8 @@ const App = () => {
   const syncReady = useAuthSync();
 
   return (
+    <>
+    <MobileBlocker />
     <HelmetProvider>
     <QueryClientProvider client={queryClient}>
       <TourProvider>
@@ -112,6 +117,7 @@ const App = () => {
         <Sonner />
         <BrowserRouter>
           <IdleGuard />
+          {isSignedIn() && <FeedbackWidget />}
           <Suspense fallback={<PageFallback />}>
           <Routes>
             <Route path="/" element={<Index />} />
@@ -133,6 +139,7 @@ const App = () => {
             <Route path="/insights" element={<ProtectedRoute syncReady={syncReady}><MarketInsights /></ProtectedRoute>} />
             <Route path="/clients" element={<ProtectedRoute syncReady={syncReady}><Clients /></ProtectedRoute>} />
             <Route path="/settings" element={<ProtectedRoute syncReady={syncReady}><Settings /></ProtectedRoute>} />
+            <Route path="/settings/team" element={<ProtectedRoute syncReady={syncReady}><TeamSettings /></ProtectedRoute>} />
             <Route path="/materials" element={<ProtectedRoute syncReady={syncReady}><MaterialsLibrary /></ProtectedRoute>} />
             <Route path="/admin/rates" element={<ProtectedRoute syncReady={syncReady}><AdminRates /></ProtectedRoute>} />
             <Route path="/quote/:token" element={<QuoteApproval />} />
@@ -145,6 +152,7 @@ const App = () => {
       </TourProvider>
     </QueryClientProvider>
     </HelmetProvider>
+    </>
   );
 };
 

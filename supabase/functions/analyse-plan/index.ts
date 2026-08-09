@@ -879,12 +879,17 @@ serve(async (req) => {
     if (!anthropicKey) throw new Error("ANTHROPIC_API_KEY is not configured");
 
     const body = await req.json();
-    const { pages, imageBase64, projectContext, focusCategory } = body as {
+    const { pages, imageBase64, projectContext, focusCategory, isScanned } = body as {
       pages?: PageInput[];
       imageBase64?: string;
       projectContext?: object;
       focusCategory?: 'base' | 'interior' | 'services';
+      isScanned?: boolean;
     };
+
+    const scannedNote = isScanned
+      ? "Note: this is a scanned plan with no text layer — rely entirely on visual recognition of drawn elements, dimensions, room labels, and annotations. Do not expect machine-readable text. Estimate all quantities from visual geometry and standard construction conventions.\n\n"
+      : "";
 
     const contextNote = projectContext
       ? `\n\nProject context: ${JSON.stringify(projectContext)}`
@@ -944,23 +949,23 @@ serve(async (req) => {
 
     if (focusCategory === 'base') {
       selectedTool = BASE_TOOL;
-      systemPrompt = BASE_PROMPT;
+      systemPrompt = scannedNote + BASE_PROMPT;
       maxTokens = 8000;
       toolName = 'submit_base';
     } else if (focusCategory === 'interior') {
       selectedTool = TRADES_TOOL;
-      systemPrompt = INTERIOR_PROMPT;
+      systemPrompt = scannedNote + INTERIOR_PROMPT;
       maxTokens = 6000;
       toolName = 'submit_trades';
     } else if (focusCategory === 'services') {
       selectedTool = TRADES_TOOL;
-      systemPrompt = SERVICES_PROMPT;
+      systemPrompt = scannedNote + SERVICES_PROMPT;
       maxTokens = 6000;
       toolName = 'submit_trades';
     } else {
       // Legacy full-analysis path — no focusCategory supplied
       selectedTool = ANALYSIS_TOOL;
-      systemPrompt = SYSTEM_PROMPT;
+      systemPrompt = scannedNote + SYSTEM_PROMPT;
       maxTokens = 16000;
       toolName = 'submit_analysis';
     }

@@ -10,6 +10,12 @@ export interface ExtractedPage {
   heightPx: number;
 }
 
+export interface ExtractionResult {
+  pages: ExtractedPage[];
+  /** True when the PDF has no meaningful text layer (total chars < 100 across all pages). */
+  isScanned: boolean;
+}
+
 // 1200px keeps A3/A1 construction plans readable for Claude while halving
 // payload vs 1500px. Each image is ~80-150 KB at quality 0.80.
 const MAX_WIDTH_PX = 1200;
@@ -71,11 +77,14 @@ function selectPageIndices(total: number, maxPages: number): number[] {
  *
  * Automatically reduces JPEG quality if a rendered set exceeds MAX_BATCH_BYTES,
  * so individual batches stay under the Supabase 6 MB request limit.
+ *
+ * Returns an ExtractionResult that includes an isScanned flag — true when the
+ * PDF has no meaningful text layer (total chars < 100 across sampled pages).
  */
 export async function extractAnalysisPages(
   file: File,
   maxPages = 50
-): Promise<ExtractedPage[]> {
+): Promise<ExtractionResult> {
   const arrayBuffer = await file.arrayBuffer();
   const doc = await pdfjs.getDocument({ data: arrayBuffer }).promise;
   const indices = selectPageIndices(doc.numPages, maxPages);
@@ -88,5 +97,24 @@ export async function extractAnalysisPages(
     pages = await Promise.all(indices.map(i => renderPage(doc, i, 0.62)));
   }
 
-  return pages;
+  // Detect scanned PDFs by sampling text content from up to 5 pages.
+  // If the total character count across sampled pages is < 100, the PDF has
+  // no meaningful text layer and is treated as scanned/image-only.
+  const sampleIndices = indices.slice(0, 5);
+  let totalChars = 0;
+  for (const i of sampleIndices) {
+    try {
+      const page = await doc.getPage(i + 1);
+      const textContent = await page.getTextContent();
+      totalChars += textContent.items.reduce(
+        (sum, item) => sum + ((item as { str?: string }).str?.length ?? 0),
+        0
+      );
+    } catch {
+      // Ignore errors on individual pages — treat as no text
+    }
+  }
+  const isScanned = totalChars < 100;
+
+  return { pages, isScanned };
 }
