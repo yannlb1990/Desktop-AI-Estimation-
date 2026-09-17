@@ -1963,54 +1963,84 @@ export type Database = {
       }
       supplier_quote_requests: {
         Row: {
+          contractor_email: string | null
+          contractor_name: string | null
           created_at: string
-          delivery_address: string
+          delivery_address: string | null
           estimate_id: string | null
           id: string
           items: Json
+          message: string | null
           notes: string | null
           project_id: string | null
+          project_name: string | null
           quoted_total: number | null
           received_at: string | null
           required_by_date: string | null
+          resend_id: string | null
           sent_at: string | null
+          site_address: string | null
           status: string
+          supplier_email: string | null
           supplier_id: string | null
+          supplier_name: string | null
+          trades: string[] | null
           updated_at: string
+          user_id: string | null
           valid_until: string | null
         }
         Insert: {
+          contractor_email?: string | null
+          contractor_name?: string | null
           created_at?: string
-          delivery_address: string
+          delivery_address?: string | null
           estimate_id?: string | null
           id?: string
           items?: Json
+          message?: string | null
           notes?: string | null
           project_id?: string | null
+          project_name?: string | null
           quoted_total?: number | null
           received_at?: string | null
           required_by_date?: string | null
+          resend_id?: string | null
           sent_at?: string | null
+          site_address?: string | null
           status?: string
+          supplier_email?: string | null
           supplier_id?: string | null
+          supplier_name?: string | null
+          trades?: string[] | null
           updated_at?: string
+          user_id?: string | null
           valid_until?: string | null
         }
         Update: {
+          contractor_email?: string | null
+          contractor_name?: string | null
           created_at?: string
-          delivery_address?: string
+          delivery_address?: string | null
           estimate_id?: string | null
           id?: string
           items?: Json
+          message?: string | null
           notes?: string | null
           project_id?: string | null
+          project_name?: string | null
           quoted_total?: number | null
           received_at?: string | null
           required_by_date?: string | null
+          resend_id?: string | null
           sent_at?: string | null
+          site_address?: string | null
           status?: string
+          supplier_email?: string | null
           supplier_id?: string | null
+          supplier_name?: string | null
+          trades?: string[] | null
           updated_at?: string
+          user_id?: string | null
           valid_until?: string | null
         }
         Relationships: [
@@ -2062,6 +2092,7 @@ export type Database = {
           suburb: string | null
           trading_name: string | null
           updated_at: string
+          user_id: string | null
           website: string | null
         }
         Insert: {
@@ -2088,6 +2119,7 @@ export type Database = {
           suburb?: string | null
           trading_name?: string | null
           updated_at?: string
+          user_id?: string | null
           website?: string | null
         }
         Update: {
@@ -2114,6 +2146,7 @@ export type Database = {
           suburb?: string | null
           trading_name?: string | null
           updated_at?: string
+          user_id?: string | null
           website?: string | null
         }
         Relationships: []

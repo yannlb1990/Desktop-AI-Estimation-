@@ -79,7 +79,7 @@ Cards: `rounded-xl border border-border bg-card`, icons `h-4 w-4`
 
 ### Email — send-email edge function
 - File: `supabase/functions/send-email/index.ts`
-- FROM: `Metricore <noreply@risen-up.com>` (metricore.com.au not verified on Resend free plan)
+- FROM: `Metricore <noreply@metricore.com.au>` (metricore.com.au verified in Resend 2026-08-27)
 - Templates: welcome, trial_ending, trial_expired, payment_receipt, payment_failed, quote_sent, admin_new_trial, admin_new_payment
 - Admin notifications: `user-onboard` → admin_new_trial; `stripe-webhook` → admin_new_payment
 - Admin recipients: `yannlb1990@gmail.com` + `admin@metricore.com.au`

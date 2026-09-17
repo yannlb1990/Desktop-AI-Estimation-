@@ -60,7 +60,7 @@ serve(async (req) => {
     let userId: string;
 
     if (password) {
-      // Self-serve: create user with password, Supabase sends confirmation email
+      // Self-serve: create user with password, then send confirmation email via Resend
       const { data, error } = await supabaseAdmin.auth.admin.createUser({
         email,
         password,
@@ -75,6 +75,33 @@ serve(async (req) => {
         return json({ error: error.message }, 400, cors);
       }
       userId = data.user.id;
+
+      // admin.createUser does NOT send a confirmation email automatically —
+      // generate the link ourselves and deliver it via our own Resend-backed sender.
+      const appUrl = Deno.env.get("APP_URL") ?? "https://www.metricore.com.au";
+      const { data: linkData, error: linkError } = await supabaseAdmin.auth.admin.generateLink({
+        type: "signup",
+        email,
+        options: { redirectTo: `${appUrl}/auth` },
+      });
+
+      if (linkError) {
+        console.error("Failed to generate confirmation link:", linkError.message);
+      } else if (linkData?.properties?.action_link) {
+        await fetch(`${Deno.env.get("SUPABASE_URL")}/functions/v1/send-email`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "Authorization": `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}`,
+          },
+          body: JSON.stringify({
+            type: "email_verification",
+            to: [email],
+            name,
+            data: { verificationUrl: linkData.properties.action_link, trialDays: 14 },
+          }),
+        }).catch((err) => console.error("Verification email send failed:", err));
+      }
     } else {
       // Invite flow: send setup-password email
       const appUrl = Deno.env.get("APP_URL") ?? "https://www.metricore.com.au";

@@ -23,6 +23,8 @@ import {
 } from "@/components/ui/table";
 import { toast } from "sonner";
 import { Plus, Trash2, ChevronDown, ChevronRight, Edit2, Save, X, Link, Copy, CheckCircle, BookOpen } from "lucide-react";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { cn } from "@/lib/utils";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
 import { PreliminariesSection } from "./PreliminariesSection";
@@ -69,10 +71,162 @@ function persistCustomTemplates(list: EstimateTemplateData[]) {
   localStorage.setItem(getUserStorageKey(CUSTOM_TPL_KEY), JSON.stringify(list));
 }
 
-const AU_TRADES = [
+const AU_TRADES_BASE = [
   "Carpenter", "Plumber", "Electrician", "Bricklayer", "Plasterer",
-  "Painter", "Tiler", "Concreter", "Roofer", "Landscaper"
+  "Painter", "Tiler", "Concreter", "Roofer", "Landscaper",
+  "Demolition",
 ];
+
+function getAllTrades(): string[] {
+  try {
+    const raw = localStorage.getItem(getUserStorageKey('user_custom_trades'));
+    const custom: string[] = raw
+      ? (JSON.parse(raw) as Array<{ trade_name: string }>).map(c => c.trade_name).filter(Boolean)
+      : [];
+    const combined = [...AU_TRADES_BASE];
+    for (const c of custom) {
+      if (!combined.includes(c)) combined.push(c);
+    }
+    return combined;
+  } catch {
+    return AU_TRADES_BASE;
+  }
+}
+
+// Searchable trade combobox — allows free-text custom trade
+function TradeCombobox({ value, onChange }: { value: string; onChange: (v: string) => void }) {
+  const [open, setOpen] = React.useState(false);
+  const [search, setSearch] = React.useState('');
+  const trades = React.useMemo(() => getAllTrades(), [open]);
+  const filtered = trades.filter(t => t.toLowerCase().includes(search.toLowerCase()));
+  const isNew = search.trim() !== '' && !trades.some(t => t.toLowerCase() === search.trim().toLowerCase());
+
+  return (
+    <Popover open={open} onOpenChange={(o) => { setOpen(o); if (!o) setSearch(''); }}>
+      <PopoverTrigger asChild>
+        <button type="button" className="h-10 w-full px-3 text-sm flex items-center justify-between gap-1 rounded-md border border-input bg-background hover:bg-accent transition-colors">
+          <span className={cn('truncate text-left', !value && 'text-muted-foreground')}>{value || 'Select trade'}</span>
+          <ChevronDown className="h-4 w-4 shrink-0 opacity-50" />
+        </button>
+      </PopoverTrigger>
+      <PopoverContent className="w-56 p-0" align="start" side="bottom">
+        <div className="p-2 border-b border-border">
+          <Input
+            className="h-8 text-sm"
+            placeholder="Search or type custom…"
+            value={search}
+            onChange={e => setSearch(e.target.value)}
+            onKeyDown={e => {
+              if (e.key === 'Enter' && search.trim()) {
+                onChange(search.trim());
+                // Persist custom trade
+                try {
+                  const key = getUserStorageKey('user_custom_trades');
+                  const ex = JSON.parse(localStorage.getItem(key) || '[]') as Array<{ trade_name: string; default_rate: number }>;
+                  if (!AU_TRADES_BASE.includes(search.trim()) && !ex.some(e => e.trade_name === search.trim())) {
+                    localStorage.setItem(key, JSON.stringify([...ex, { trade_name: search.trim(), default_rate: 0 }]));
+                  }
+                } catch {}
+                setSearch('');
+                setOpen(false);
+              }
+              if (e.key === 'Escape') setOpen(false);
+            }}
+            autoFocus
+          />
+        </div>
+        <div className="max-h-52 overflow-y-auto py-1">
+          {filtered.map(t => (
+            <button key={t} type="button"
+              className={cn('w-full text-left px-3 py-2 text-sm hover:bg-accent transition-colors', value === t && 'bg-accent font-medium')}
+              onClick={() => { onChange(t); setOpen(false); setSearch(''); }}
+            >{t}</button>
+          ))}
+          {isNew && (
+            <button type="button"
+              className="w-full text-left px-3 py-2 text-sm text-primary hover:bg-accent border-t border-border flex items-center gap-1.5"
+              onClick={() => {
+                onChange(search.trim());
+                try {
+                  const key = getUserStorageKey('user_custom_trades');
+                  const ex = JSON.parse(localStorage.getItem(key) || '[]') as Array<{ trade_name: string; default_rate: number }>;
+                  if (!AU_TRADES_BASE.includes(search.trim()) && !ex.some(e => e.trade_name === search.trim())) {
+                    localStorage.setItem(key, JSON.stringify([...ex, { trade_name: search.trim(), default_rate: 0 }]));
+                  }
+                } catch {}
+                setOpen(false);
+                setSearch('');
+              }}
+            >
+              <Plus className="h-3.5 w-3.5 shrink-0" />
+              Use &ldquo;{search.trim()}&rdquo;
+            </button>
+          )}
+        </div>
+      </PopoverContent>
+    </Popover>
+  );
+}
+
+// Keep backwards-compat alias for places that still reference AU_TRADES directly
+const AU_TRADES = AU_TRADES_BASE;
+
+// Scope of work combobox — shows predefined scopes for the trade + accepts free-text
+function ScopeCombobox({ value, onChange, trade }: { value: string; onChange: (v: string) => void; trade: string }) {
+  const [open, setOpen] = React.useState(false);
+  const [search, setSearch] = React.useState('');
+  const presets: string[] = (SCOPE_OF_WORK as Record<string, string[]>)[trade] ?? [];
+  const filtered = presets.filter(s => s.toLowerCase().includes(search.toLowerCase()));
+  const isNew = search.trim() !== '' && !presets.some(s => s.toLowerCase() === search.trim().toLowerCase());
+
+  return (
+    <Popover open={open} onOpenChange={(o) => { setOpen(o); if (!o) setSearch(''); }}>
+      <PopoverTrigger asChild>
+        <button type="button" disabled={!trade}
+          className={cn('h-10 w-full px-3 text-sm flex items-center justify-between gap-1 rounded-md border border-input bg-background hover:bg-accent transition-colors', !trade && 'opacity-50 cursor-not-allowed')}
+        >
+          <span className={cn('truncate text-left', !value && 'text-muted-foreground')}>{value || 'Select scope'}</span>
+          <ChevronDown className="h-4 w-4 shrink-0 opacity-50" />
+        </button>
+      </PopoverTrigger>
+      <PopoverContent className="w-64 p-0" align="start" side="bottom">
+        <div className="p-2 border-b border-border">
+          <Input
+            className="h-8 text-sm"
+            placeholder="Search or type custom scope…"
+            value={search}
+            onChange={e => setSearch(e.target.value)}
+            onKeyDown={e => {
+              if (e.key === 'Enter' && search.trim()) { onChange(search.trim()); setSearch(''); setOpen(false); }
+              if (e.key === 'Escape') setOpen(false);
+            }}
+            autoFocus
+          />
+        </div>
+        <div className="max-h-52 overflow-y-auto py-1">
+          {filtered.map(s => (
+            <button key={s} type="button"
+              className={cn('w-full text-left px-3 py-2 text-sm hover:bg-accent transition-colors', value === s && 'bg-accent font-medium')}
+              onClick={() => { onChange(s); setOpen(false); setSearch(''); }}
+            >{s}</button>
+          ))}
+          {isNew && (
+            <button type="button"
+              className="w-full text-left px-3 py-2 text-sm text-primary hover:bg-accent border-t border-border flex items-center gap-1.5"
+              onClick={() => { onChange(search.trim()); setOpen(false); setSearch(''); }}
+            >
+              <Plus className="h-3.5 w-3.5 shrink-0" />
+              Use &ldquo;{search.trim()}&rdquo;
+            </button>
+          )}
+          {presets.length === 0 && !search && (
+            <p className="px-3 py-2 text-xs text-muted-foreground">Type to enter a custom scope</p>
+          )}
+        </div>
+      </PopoverContent>
+    </Popover>
+  );
+}
 
 const ESTIMATE_AREAS = [
   'Site', 'Structure', 'Envelope', 'Roof', 'Internal', 'Wet Areas',
@@ -89,7 +243,8 @@ const SCOPE_OF_WORK = {
   Tiler: ["Floor tiling", "Wall tiling", "Splashbacks"],
   Concreter: ["Footings", "Slab", "Driveway", "Paths"],
   Roofer: ["Roof frame", "Tiles/Metal", "Gutters", "Flashings"],
-  Landscaper: ["Retaining walls", "Fencing", "Gardens", "Paving"]
+  Landscaper: ["Retaining walls", "Fencing", "Gardens", "Paving"],
+  Demolition: ["Strip out", "Partial demolition", "Full demolition", "Skip bin removal", "Asbestos removal", "Site clearance", "Concrete breaking"],
 };
 
 // Related materials for each scope of work
@@ -180,8 +335,25 @@ interface EstimateTemplateProps {
 
 export const EstimateTemplate = ({ projectId, estimateId }: EstimateTemplateProps) => {
   const [items, setItems] = useState<EstimateItem[]>([]);
-  const [consumables, setConsumables] = useState<ConsumableItem[]>([]);
+  const [consumables, setConsumables] = useState<ConsumableItem[]>(() => {
+    try {
+      const projects: any[] = JSON.parse(localStorage.getItem(getUserStorageKey('local_projects')) || '[]');
+      const project = projects.find((p: any) => p.id === projectId);
+      return Array.isArray(project?.consumables) ? project.consumables : [];
+    } catch {
+      return [];
+    }
+  });
   const [overheadTotal, setOverheadTotal] = useState(0);
+  const [prelimItems, setPrelimItems] = useState<import('./PreliminariesSection').PreliminaryItem[]>(() => {
+    try {
+      const projects: any[] = JSON.parse(localStorage.getItem(getUserStorageKey('local_projects')) || '[]');
+      const project = projects.find((p: any) => p.id === projectId);
+      return Array.isArray(project?.prelim_items) ? project.prelim_items : [];
+    } catch {
+      return [];
+    }
+  });
   const [recentlyTransferred, setRecentlyTransferred] = useState<EstimateItem[]>([]);
   const [takeoffCount, setTakeoffCount] = useState(0);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -289,6 +461,7 @@ export const EstimateTemplate = ({ projectId, estimateId }: EstimateTemplateProp
     unit: "m²",
     unit_price: "",
     labour_hours: "",
+    labour_rate: "",
   });
 
   useEffect(() => {
@@ -340,6 +513,9 @@ export const EstimateTemplate = ({ projectId, estimateId }: EstimateTemplateProp
     if (project.consumables && project.consumables.length > 0) {
       setConsumables(project.consumables);
     }
+    if (project.prelim_items) {
+      setPrelimItems(project.prelim_items);
+    }
     if (project.estimate_config?.groupingMode) {
       setGroupingMode(project.estimate_config.groupingMode as 'none' | 'trade' | 'room');
     }
@@ -385,7 +561,7 @@ export const EstimateTemplate = ({ projectId, estimateId }: EstimateTemplateProp
       unit: newItem.unit,
       unit_price: unitPrice,
       labour_hours: labourHrs,
-      labour_rate: labourRates[newItem.trade] || config.defaultLabourRate,
+      labour_rate: parseFloat(newItem.labour_rate) || labourRates[newItem.trade] || config.defaultLabourRate,
       material_wastage_pct: config.materialWastage,
       labour_wastage_pct: config.labourWastage,
       markup_pct: config.defaultMarkup,
@@ -420,6 +596,7 @@ export const EstimateTemplate = ({ projectId, estimateId }: EstimateTemplateProp
       unit: "m²",
       unit_price: "",
       labour_hours: "",
+      labour_rate: "",
     });
   };
 
@@ -645,6 +822,9 @@ export const EstimateTemplate = ({ projectId, estimateId }: EstimateTemplateProp
     toast.success("Consumable removed");
   };
 
+  // Must be declared before calculateTotals to avoid temporal dead zone
+  const prelimsTotal = prelimItems.reduce((sum, i) => sum + (i.quantity || 0) * (i.unitPrice || 0), 0);
+
   const calculateTotals = () => {
     let totalMaterials = 0;
     let totalLabour = 0;
@@ -688,15 +868,15 @@ export const EstimateTemplate = ({ projectId, estimateId }: EstimateTemplateProp
     const overheadsPct = (baseSubtotal + supervision) * (config.overheadPct / 100);
     const totalOverheads = overheadsPct + overheadTotal;
     // totalMarkup is added to preMargin so contingency and overall margin apply on top
-    const preMargin = baseSubtotal + totalMarkup + supervision + totalOverheads;
+    const preMargin = baseSubtotal + totalMarkup + supervision + totalOverheads + prelimsTotal;
     const contingency = preMargin * (config.contingencyPct / 100);
-    
+
     // Add custom configs
     let customConfigsTotal = 0;
     customConfigs.forEach(cc => {
       customConfigsTotal += preMargin * (cc.value / 100);
     });
-    
+
     const margin = preMargin * (config.marginPct / 100);
     const taxable = preMargin + contingency + customConfigsTotal + margin;
     const gst = taxable * (config.gstPct / 100);
@@ -711,6 +891,7 @@ export const EstimateTemplate = ({ projectId, estimateId }: EstimateTemplateProp
       overheadsPct,
       overheadTotal,
       totalOverheads,
+      prelimsTotal,
       preMargin,
       contingency,
       customConfigsTotal,
@@ -721,12 +902,12 @@ export const EstimateTemplate = ({ projectId, estimateId }: EstimateTemplateProp
     };
   };
 
-  let totals = { totalMaterials: 0, totalLabour: 0, totalMarkup: 0, baseSubtotal: 0, supervision: 0, overheadsPct: 0, overheadTotal: 0, totalOverheads: 0, preMargin: 0, contingency: 0, customConfigsTotal: 0, margin: 0, taxable: 0, gst: 0, totalPrice: 0 };
+  let totals = { totalMaterials: 0, totalLabour: 0, totalMarkup: 0, baseSubtotal: 0, supervision: 0, overheadsPct: 0, overheadTotal: 0, totalOverheads: 0, prelimsTotal: 0, preMargin: 0, contingency: 0, customConfigsTotal: 0, margin: 0, taxable: 0, gst: 0, totalPrice: 0 };
   try { totals = calculateTotals(); } catch { /* corrupted item data — show zeros */ }
   const realMarginEst = config.marginPct / (100 + config.marginPct) * 100;
 
-  // Sync estimate_config, consumables, and estimate_totals to the project record so
-  // QuoteGenerator and FullTenderGenerator always read current rates and percentages.
+  // Single save effect — writes all estimate data in one shot to avoid
+  // two simultaneous Supabase writes racing each other and overwriting data.
   useEffect(() => {
     if (!projectId) return;
     const projects: any[] = JSON.parse(localStorage.getItem(getUserStorageKey('local_projects')) || '[]');
@@ -734,10 +915,11 @@ export const EstimateTemplate = ({ projectId, estimateId }: EstimateTemplateProp
     if (idx === -1) return;
     projects[idx].estimate_config = { ...config, labourRates, customConfigs, groupingMode };
     projects[idx].consumables = consumables;
+    projects[idx].prelim_items = prelimItems;
     projects[idx].estimate_totals = calculateTotals();
     localStorage.setItem(getUserStorageKey('local_projects'), JSON.stringify(projects));
     syncProjectToSupabase(projects[idx]);
-  }, [items, config, consumables, labourRates, overheadTotal, customConfigs, groupingMode, projectId]);
+  }, [items, config, consumables, labourRates, overheadTotal, prelimItems, customConfigs, groupingMode, projectId]);
 
   const handleAIItems = (aiItems: any[]) => {
     aiItems.forEach(item => {
@@ -764,8 +946,8 @@ export const EstimateTemplate = ({ projectId, estimateId }: EstimateTemplateProp
     const matBase = qty * unitPrice;
     const matWithWaste = matBase * (1 + config.materialWastage / 100);
 
-    // Labour with wastage — use the selected trade's rate, fall back to default
-    const tradeRate = labourRates[newItem.trade] || config.defaultLabourRate;
+    // Labour with wastage — use custom rate if set, otherwise trade preset, then global default
+    const tradeRate = parseFloat(newItem.labour_rate) || labourRates[newItem.trade] || config.defaultLabourRate;
     const labBase = labourHrs * tradeRate;
     const labWithWaste = labBase * (1 + config.labourWastage / 100);
 
@@ -918,30 +1100,23 @@ export const EstimateTemplate = ({ projectId, estimateId }: EstimateTemplateProp
           </TableCell>
           <TableCell>
             {isEditing ? (
-              <Select
-                value={editValues.trade ?? item.trade}
-                onValueChange={(v) => setEditValues({ ...editValues, trade: v, scope_of_work: '' })}
-              >
-                <SelectTrigger className="h-8 min-w-[100px]"><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  {AU_TRADES.map(t => <SelectItem key={t} value={t}>{t}</SelectItem>)}
-                </SelectContent>
-              </Select>
+              <div className="min-w-[120px]">
+                <TradeCombobox
+                  value={editValues.trade ?? item.trade}
+                  onChange={(v) => setEditValues({ ...editValues, trade: v, scope_of_work: '' })}
+                />
+              </div>
             ) : item.trade}
           </TableCell>
           <TableCell>
             {isEditing ? (
-              <Select
-                value={editValues.scope_of_work ?? item.scope_of_work ?? ''}
-                onValueChange={(v) => setEditValues({ ...editValues, scope_of_work: v })}
-              >
-                <SelectTrigger className="h-8 min-w-[110px]"><SelectValue placeholder="Scope..." /></SelectTrigger>
-                <SelectContent>
-                  {(SCOPE_OF_WORK[(editValues.trade ?? item.trade) as keyof typeof SCOPE_OF_WORK] || []).map(s => (
-                    <SelectItem key={s} value={s}>{s}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <div className="min-w-[140px]">
+                <ScopeCombobox
+                  value={editValues.scope_of_work ?? item.scope_of_work ?? ''}
+                  onChange={(v) => setEditValues({ ...editValues, scope_of_work: v })}
+                  trade={editValues.trade ?? item.trade}
+                />
+              </div>
             ) : item.scope_of_work}
           </TableCell>
           <TableCell>
@@ -978,13 +1153,26 @@ export const EstimateTemplate = ({ projectId, estimateId }: EstimateTemplateProp
           </TableCell>
           <TableCell className="text-right">
             {isEditing ? (
-              <Input
-                type="number"
-                step="0.5"
-                value={editValues.labour_hours}
-                onChange={(e) => setEditValues({ ...editValues, labour_hours: parseFloat(e.target.value) })}
-                className="h-8 w-24 text-right"
-              />
+              <div className="flex flex-col gap-1 items-end">
+                <Input
+                  type="number"
+                  step="0.5"
+                  value={editValues.labour_hours}
+                  onChange={(e) => setEditValues({ ...editValues, labour_hours: parseFloat(e.target.value) })}
+                  className="h-8 w-24 text-right"
+                  placeholder="hrs"
+                />
+                <Input
+                  type="number"
+                  step="1"
+                  min="0"
+                  value={editValues.labour_rate !== undefined ? editValues.labour_rate : (item.labour_rate || labourRates[item.trade] || config.defaultLabourRate)}
+                  onChange={(e) => setEditValues({ ...editValues, labour_rate: parseFloat(e.target.value) })}
+                  className="h-7 w-24 text-right text-xs"
+                  title="Hourly rate ($/hr)"
+                />
+                <span className="text-[10px] text-muted-foreground">$/hr</span>
+              </div>
             ) : (
               <div className="text-right">
                 <span className="font-mono">{Number(item.labour_hours).toFixed(1)}</span>
@@ -1457,6 +1645,12 @@ export const EstimateTemplate = ({ projectId, estimateId }: EstimateTemplateProp
             <p className="text-sm text-muted-foreground mb-1">Supervision</p>
             <p className="text-lg font-bold">${totals.supervision.toFixed(2)}</p>
           </div>
+          {totals.prelimsTotal > 0 && (
+            <div>
+              <p className="text-sm text-muted-foreground mb-1">Prelims</p>
+              <p className="text-lg font-bold">${totals.prelimsTotal.toFixed(2)}</p>
+            </div>
+          )}
           <div>
             <p className="text-sm text-muted-foreground mb-1">Overheads</p>
             <p className="text-lg font-bold">${totals.totalOverheads.toFixed(2)}</p>
@@ -1573,13 +1767,31 @@ export const EstimateTemplate = ({ projectId, estimateId }: EstimateTemplateProp
         >
           <span className="font-semibold text-base">Preliminaries</span>
           <div className="flex items-center gap-3">
-            {!openSections.prelims && <span className="text-sm text-muted-foreground">Allowances &amp; site costs</span>}
+            {prelimsTotal > 0 ? (
+              <span className="text-sm font-mono font-semibold text-amber-400">${prelimsTotal.toFixed(2)}</span>
+            ) : (
+              !openSections.prelims && <span className="text-sm text-muted-foreground">Allowances &amp; site costs</span>
+            )}
             <ChevronDown className={`h-4 w-4 transition-transform duration-200 ${openSections.prelims ? 'rotate-180' : ''}`} />
           </div>
         </button>
         {openSections.prelims && (
           <div className="border-t border-border">
-            <PreliminariesSection />
+            <PreliminariesSection items={prelimItems} onChange={setPrelimItems} />
+            {prelimItems.length > 0 && (
+              <div className="px-6 py-4 border-t border-border flex items-center justify-between bg-card/50">
+                <div>
+                  <p className="text-xs text-muted-foreground">Prelims subtotal</p>
+                  <p className="font-mono font-bold text-lg">${totals.prelimsTotal.toFixed(2)}</p>
+                </div>
+                <button
+                  onClick={() => setOpenSections(prev => ({ ...prev, costSummary: true }))}
+                  className="text-sm font-medium text-amber-400 hover:text-amber-300 underline underline-offset-2 transition-colors"
+                >
+                  Update estimate total
+                </button>
+              </div>
+            )}
           </div>
         )}
       </div>
@@ -1662,36 +1874,18 @@ export const EstimateTemplate = ({ projectId, estimateId }: EstimateTemplateProp
           </div>
           <div className="col-span-2">
             <Label>Trade *</Label>
-            <Select
+            <TradeCombobox
               value={newItem.trade}
-              onValueChange={(value) => setNewItem({ ...newItem, trade: value, scope_of_work: "" })}
-            >
-              <SelectTrigger>
-                <SelectValue placeholder="Select trade" />
-              </SelectTrigger>
-              <SelectContent>
-                {AU_TRADES.map(trade => (
-                  <SelectItem key={trade} value={trade}>{trade}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+              onChange={(value) => setNewItem({ ...newItem, trade: value, scope_of_work: "" })}
+            />
           </div>
           <div className="col-span-4">
             <Label>Scope of Work *</Label>
-            <Select
+            <ScopeCombobox
               value={newItem.scope_of_work}
-              onValueChange={(value) => setNewItem({ ...newItem, scope_of_work: value })}
-              disabled={!newItem.trade}
-            >
-              <SelectTrigger>
-                <SelectValue placeholder="Select scope" />
-              </SelectTrigger>
-              <SelectContent>
-                {newItem.trade && SCOPE_OF_WORK[newItem.trade as keyof typeof SCOPE_OF_WORK]?.map(scope => (
-                  <SelectItem key={scope} value={scope}>{scope}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+              onChange={(v) => setNewItem({ ...newItem, scope_of_work: v })}
+              trade={newItem.trade}
+            />
           </div>
           <div className="col-span-4">
             <Label>Material Type *</Label>
@@ -1736,7 +1930,7 @@ export const EstimateTemplate = ({ projectId, estimateId }: EstimateTemplateProp
               </SelectContent>
             </Select>
           </div>
-          <div className="col-span-2">
+          <div className="col-span-3">
             <Label>Unit Cost ($) *</Label>
             <Input
               type="number"
@@ -1753,6 +1947,17 @@ export const EstimateTemplate = ({ projectId, estimateId }: EstimateTemplateProp
               value={newItem.labour_hours}
               onChange={(e) => setNewItem({ ...newItem, labour_hours: e.target.value })}
               placeholder="0"
+            />
+          </div>
+          <div className="col-span-3">
+            <Label>Hourly Rate ($/hr)</Label>
+            <Input
+              type="number"
+              step="1"
+              min="0"
+              value={newItem.labour_rate}
+              onChange={(e) => setNewItem({ ...newItem, labour_rate: e.target.value })}
+              placeholder={`${labourRates[newItem.trade] || config.defaultLabourRate} (trade default)`}
             />
           </div>
         </div>
@@ -2253,6 +2458,14 @@ export const EstimateTemplate = ({ projectId, estimateId }: EstimateTemplateProp
                 <TableCell className="text-right font-mono text-muted-foreground">{totals.totalPrice > 0 ? ((totals.overheadsPct / totals.totalPrice) * 100).toFixed(1) : '0.0'}%</TableCell>
                 <TableCell />
               </TableRow>
+              {totals.prelimsTotal > 0 && (
+                <TableRow>
+                  <TableCell className="font-medium pl-5">Preliminaries</TableCell>
+                  <TableCell className="text-right font-mono">${totals.prelimsTotal.toFixed(2)}</TableCell>
+                  <TableCell className="text-right font-mono text-muted-foreground">{totals.totalPrice > 0 ? ((totals.prelimsTotal / totals.totalPrice) * 100).toFixed(1) : '0.0'}%</TableCell>
+                  <TableCell />
+                </TableRow>
+              )}
               {totals.overheadTotal > 0 && (
                 <TableRow>
                   <TableCell className="font-medium pl-5">Overheads (Fixed Items)</TableCell>
@@ -2271,8 +2484,8 @@ export const EstimateTemplate = ({ projectId, estimateId }: EstimateTemplateProp
               )}
               <TableRow className="border-t border-border">
                 <TableCell className="font-semibold text-muted-foreground pl-5">Total Project Costs</TableCell>
-                <TableCell className="text-right font-mono font-semibold">${(totals.totalOverheads + totals.totalMarkup).toFixed(2)}</TableCell>
-                <TableCell className="text-right font-mono text-muted-foreground">{totals.totalPrice > 0 ? (((totals.totalOverheads + totals.totalMarkup) / totals.totalPrice) * 100).toFixed(1) : '0.0'}%</TableCell>
+                <TableCell className="text-right font-mono font-semibold">${(totals.totalOverheads + totals.totalMarkup + totals.prelimsTotal).toFixed(2)}</TableCell>
+                <TableCell className="text-right font-mono text-muted-foreground">{totals.totalPrice > 0 ? (((totals.totalOverheads + totals.totalMarkup + totals.prelimsTotal) / totals.totalPrice) * 100).toFixed(1) : '0.0'}%</TableCell>
                 <TableCell />
               </TableRow>
 

@@ -1,3 +1,5 @@
+import { supabase } from '@/integrations/supabase/client';
+
 export interface SavedSupplier {
   id: string;
   name: string;
@@ -7,28 +9,68 @@ export interface SavedSupplier {
   state?: string;
 }
 
-const STORAGE_KEY = 'metricore_suppliers';
+function rowToSaved(row: {
+  id: string;
+  business_name: string;
+  email: string;
+  phone: string;
+  state: string;
+  categories: string[];
+}): SavedSupplier {
+  return {
+    id: row.id,
+    name: row.business_name,
+    email: row.email,
+    phone: row.phone || undefined,
+    trades: row.categories || [],
+    state: row.state || undefined,
+  };
+}
 
-export function loadSuppliers(): SavedSupplier[] {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    return raw ? (JSON.parse(raw) as SavedSupplier[]) : [];
-  } catch {
-    return [];
+const LS_CACHE_KEY = 'metricore_suppliers_cache';
+
+export async function loadSuppliers(): Promise<SavedSupplier[]> {
+  const { data, error } = await supabase
+    .from('suppliers')
+    .select('id, business_name, email, phone, state, categories')
+    .order('business_name');
+
+  if (error) {
+    // fallback to cached data so the UI doesn't break on transient errors
+    try {
+      const raw = localStorage.getItem(LS_CACHE_KEY);
+      return raw ? (JSON.parse(raw) as SavedSupplier[]) : [];
+    } catch { return []; }
   }
+
+  const result = (data ?? []).map(rowToSaved);
+  localStorage.setItem(LS_CACHE_KEY, JSON.stringify(result));
+  return result;
 }
 
-export function saveSuppliers(suppliers: SavedSupplier[]): void {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(suppliers));
+export async function addSupplier(s: Omit<SavedSupplier, 'id'>): Promise<SavedSupplier> {
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) throw new Error('Not authenticated');
+
+  const { data, error } = await supabase
+    .from('suppliers')
+    .insert({
+      business_name: s.name,
+      contact_name: s.name,
+      email: s.email,
+      phone: s.phone || '',
+      state: s.state || '',
+      categories: s.trades,
+      user_id: user.id,
+    })
+    .select('id, business_name, email, phone, state, categories')
+    .single();
+
+  if (error) throw error;
+  return rowToSaved(data);
 }
 
-export function addSupplier(s: Omit<SavedSupplier, 'id'>): SavedSupplier {
-  const supplier: SavedSupplier = { ...s, id: `sup_${Date.now()}_${Math.random().toString(36).slice(2)}` };
-  const existing = loadSuppliers();
-  saveSuppliers([...existing, supplier]);
-  return supplier;
-}
-
-export function removeSupplier(id: string): void {
-  saveSuppliers(loadSuppliers().filter(s => s.id !== id));
+export async function removeSupplier(id: string): Promise<void> {
+  const { error } = await supabase.from('suppliers').delete().eq('id', id);
+  if (error) throw error;
 }

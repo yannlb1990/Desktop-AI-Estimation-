@@ -616,6 +616,8 @@ export function useTakeoffState(projectId?: string) {
     supabase.storage.from(bucket).createSignedUrl(path, 3600).then(({ data, error }) => {
       if (!error && data?.signedUrl) {
         dispatch({ type: 'SET_PDF_URL', payload: data.signedUrl });
+      } else {
+        console.error('[useTakeoffState] Failed to resolve signed URL for', path, error?.message);
       }
     });
   }, [state.pdfFile?.url]);

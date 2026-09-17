@@ -211,6 +211,74 @@ const SYSTEM_TEMPLATES: Array<{ id: string; name: string; description: string; i
   },
 ];
 
+// Searchable trade picker — shows preset trades + user custom trades.
+// Typing a value not in the list shows a "Use '...' " option to save it as-is.
+function TradeCombobox({ value, onChange, trades }: {
+  value: string;
+  onChange: (v: string) => void;
+  trades: string[];
+}) {
+  const [open, setOpen] = React.useState(false);
+  const [search, setSearch] = React.useState('');
+  const filtered = trades.filter(t => t.toLowerCase().includes(search.toLowerCase()));
+  const isNew = search.trim() !== '' && !trades.some(t => t.toLowerCase() === search.trim().toLowerCase());
+
+  return (
+    <Popover open={open} onOpenChange={(o) => { setOpen(o); if (!o) setSearch(''); }}>
+      <PopoverTrigger asChild>
+        <button
+          type="button"
+          className="h-8 w-full px-2 text-xs flex items-center justify-between gap-1 rounded-md border border-border bg-background hover:bg-accent transition-colors"
+        >
+          <span className={cn('truncate text-left', !value && 'text-muted-foreground')}>{value || 'Trade'}</span>
+          <ChevronDown className="h-3 w-3 shrink-0 opacity-50" />
+        </button>
+      </PopoverTrigger>
+      <PopoverContent className="w-52 p-0" align="start" side="bottom">
+        <div className="p-2 border-b border-border">
+          <Input
+            className="h-7 text-xs"
+            placeholder="Search or type custom…"
+            value={search}
+            onChange={e => setSearch(e.target.value)}
+            onKeyDown={e => {
+              if (e.key === 'Enter' && search.trim()) {
+                onChange(search.trim());
+                setSearch('');
+                setOpen(false);
+              }
+              if (e.key === 'Escape') setOpen(false);
+            }}
+            autoFocus
+          />
+        </div>
+        <div className="max-h-52 overflow-y-auto py-1">
+          {filtered.map(t => (
+            <button
+              key={t}
+              type="button"
+              className={cn('w-full text-left px-3 py-1.5 text-xs hover:bg-accent transition-colors', value === t && 'bg-accent font-medium')}
+              onClick={() => { onChange(t); setOpen(false); setSearch(''); }}
+            >
+              {t}
+            </button>
+          ))}
+          {isNew && (
+            <button
+              type="button"
+              className="w-full text-left px-3 py-2 text-xs text-primary hover:bg-accent border-t border-border flex items-center gap-1.5"
+              onClick={() => { onChange(search.trim()); setOpen(false); setSearch(''); }}
+            >
+              <Plus className="h-3 w-3 shrink-0" />
+              Use &ldquo;{search.trim()}&rdquo;
+            </button>
+          )}
+        </div>
+      </PopoverContent>
+    </Popover>
+  );
+}
+
 interface CostEstimatorProps {
   projectId: string;
   projectName?: string;
@@ -443,6 +511,12 @@ export const CostEstimator = ({
   });
   const [showAddDialog, setShowAddDialog] = useState(false);
   const [showLibraryPicker, setShowLibraryPicker] = useState(false);
+  const [showQuickAdd, setShowQuickAdd] = useState(false);
+  const [quickTrade, setQuickTrade] = useState('');
+  const [quickName, setQuickName] = useState('');
+  const [quickUnit, setQuickUnit] = useState('item');
+  const [quickQty, setQuickQty] = useState<number>(1);
+  const [quickRate, setQuickRate] = useState<number>(0);
   const [showRecipePicker, setShowRecipePicker]   = useState(false);
   const [saveTemplateOpen, setSaveTemplateOpen] = useState(false);
   const [loadTemplateOpen, setLoadTemplateOpen] = useState(false);
@@ -632,6 +706,23 @@ export const CostEstimator = ({
     () => enabledTrades?.length ? TRADE_OPTIONS.filter(t => enabledTrades.includes(t)) : TRADE_OPTIONS,
     [enabledTrades]
   );
+
+  // visibleTrades + any user-defined custom trades (stored in localStorage)
+  const allTrades = useMemo(() => {
+    try {
+      const raw = localStorage.getItem(getUserStorageKey('user_custom_trades'));
+      const custom: string[] = raw
+        ? (JSON.parse(raw) as Array<{ trade_name: string }>).map(c => c.trade_name).filter(Boolean)
+        : [];
+      const combined = [...visibleTrades];
+      for (const c of custom) {
+        if (!combined.includes(c)) combined.push(c);
+      }
+      return combined;
+    } catch {
+      return visibleTrades;
+    }
+  }, [visibleTrades]);
 
   // Filtered SOW rates: only show rates whose trade maps to an enabled trade option
   const visibleSOWRates = useMemo(
@@ -978,6 +1069,41 @@ export const CostEstimator = ({
     toast.success('Manual item added');
   };
 
+  const handleQuickAddLine = () => {
+    if (!quickName.trim()) { toast.error('Enter an item name'); return; }
+    const newItem: CostItem = {
+      id: crypto.randomUUID(),
+      category: quickTrade || 'General',
+      name: quickName.trim(),
+      description: quickTrade ? `${quickTrade} — custom line` : 'Custom line',
+      unit: quickUnit || 'item',
+      unitCost: quickRate,
+      quantity: quickQty,
+      linkedMeasurements: [],
+      wasteFactor: 1.0,
+      subtotal: quickQty * quickRate,
+      materialWastePercent: defaultMatWaste,
+      labourWastePercent: defaultLabWaste,
+      hourlyRate: getEffectiveRate('Carpenter', selectedState),
+      trade: quickTrade || undefined,
+    };
+    onAddCostItem(newItem);
+    // Persist custom trade if new
+    if (quickTrade && !allTrades.includes(quickTrade)) {
+      try {
+        const key = getUserStorageKey('user_custom_trades');
+        const existing = JSON.parse(localStorage.getItem(key) || '[]') as Array<{ trade_name: string; default_rate: number }>;
+        if (!existing.some(e => e.trade_name === quickTrade)) {
+          localStorage.setItem(key, JSON.stringify([...existing, { trade_name: quickTrade, default_rate: quickRate }]));
+        }
+      } catch {}
+    }
+    setQuickName('');
+    setQuickQty(1);
+    setQuickRate(0);
+    toast.success('Item added');
+  };
+
   const handleAddFromLibrary = (material: MaterialEntry) => {
     const newItem: CostItem = {
       id: crypto.randomUUID(),
@@ -1246,9 +1372,78 @@ export const CostEstimator = ({
             <Plus className="h-3.5 w-3.5 mr-1.5" />
             Add Item
           </Button>
+          <Button
+            size="sm"
+            variant="outline"
+            className="h-8 text-xs"
+            onClick={() => setShowQuickAdd(v => !v)}
+          >
+            <Plus className="h-3.5 w-3.5 mr-1.5" />
+            Quick Add Line
+          </Button>
         </div>
 
       </div>
+
+      {/* Quick Add Line panel */}
+      {showQuickAdd && (
+        <Card className="p-4 bg-muted/30 border-border">
+          <div className="text-xs font-semibold text-foreground mb-3">Quick Add Line</div>
+          <div className="grid grid-cols-2 md:grid-cols-6 gap-2 items-end">
+            <div className="md:col-span-1">
+              <label className="text-xs text-muted-foreground mb-1 block">Trade</label>
+              <TradeCombobox value={quickTrade} onChange={setQuickTrade} trades={allTrades} />
+            </div>
+            <div className="md:col-span-2">
+              <label className="text-xs text-muted-foreground mb-1 block">Item name</label>
+              <Input
+                className="h-8 text-xs"
+                placeholder="e.g. Removal skip bin"
+                value={quickName}
+                onChange={e => setQuickName(e.target.value)}
+                onKeyDown={e => { if (e.key === 'Enter') handleQuickAddLine(); }}
+              />
+            </div>
+            <div>
+              <label className="text-xs text-muted-foreground mb-1 block">Unit</label>
+              <Input
+                className="h-8 text-xs"
+                placeholder="item"
+                value={quickUnit}
+                onChange={e => setQuickUnit(e.target.value)}
+              />
+            </div>
+            <div>
+              <label className="text-xs text-muted-foreground mb-1 block">Qty</label>
+              <Input
+                type="number"
+                min={0}
+                className="h-8 text-xs"
+                value={quickQty}
+                onChange={e => setQuickQty(Number(e.target.value))}
+              />
+            </div>
+            <div>
+              <label className="text-xs text-muted-foreground mb-1 block">Unit cost ($)</label>
+              <Input
+                type="number"
+                min={0}
+                className="h-8 text-xs"
+                value={quickRate}
+                onChange={e => setQuickRate(Number(e.target.value))}
+              />
+            </div>
+            <div className="flex gap-2">
+              <Button size="sm" className="h-8 text-xs flex-1" onClick={handleQuickAddLine}>
+                Add
+              </Button>
+              <Button size="sm" variant="ghost" className="h-8 text-xs px-2" onClick={() => setShowQuickAdd(false)}>
+                Done
+              </Button>
+            </div>
+          </div>
+        </Card>
+      )}
 
       <MaterialPickerDialog
         open={showLibraryPicker}
@@ -1410,15 +1605,24 @@ export const CostEstimator = ({
                         </TableCell>
 
                         {/* Trade */}
-                        <TableCell className="px-1 w-24">
-                          <Select value={item.trade || ''} onValueChange={(v) => onUpdateCostItem(item.id, { trade: v })}>
-                            <SelectTrigger className="h-8 text-xs w-full px-2">
-                              <SelectValue placeholder="Trade" />
-                            </SelectTrigger>
-                            <SelectContent className="bg-popover max-h-48">
-                              {visibleTrades.map(t => <SelectItem key={t} value={t} className="text-xs">{t}</SelectItem>)}
-                            </SelectContent>
-                          </Select>
+                        <TableCell className="px-1 w-28">
+                          <TradeCombobox
+                            value={item.trade || ''}
+                            onChange={(v) => {
+                              onUpdateCostItem(item.id, { trade: v });
+                              // Persist new custom trade if not already in allTrades
+                              if (!allTrades.includes(v)) {
+                                try {
+                                  const key = getUserStorageKey('user_custom_trades');
+                                  const existing = JSON.parse(localStorage.getItem(key) || '[]') as Array<{ trade_name: string; default_rate: number }>;
+                                  if (!existing.some(e => e.trade_name === v)) {
+                                    localStorage.setItem(key, JSON.stringify([...existing, { trade_name: v, default_rate: 0 }]));
+                                  }
+                                } catch {}
+                              }
+                            }}
+                            trades={allTrades}
+                          />
                         </TableCell>
 
                         {/* Item Name */}

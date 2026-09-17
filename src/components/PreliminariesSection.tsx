@@ -7,7 +7,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Plus, Trash2 } from "lucide-react";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 
-const PRELIMINARY_CATEGORIES = {
+export const PRELIMINARY_CATEGORIES = {
   "Site Setup": ["Site shed", "Temporary fencing", "Temporary power", "Temporary water", "Site signage", "First aid kit"],
   "Engineering": ["Soil test", "Engineering certification", "Surveyors pegs", "Set out", "Asbestos test"],
   "Insurance & Permits": ["Building permit", "Public liability insurance", "Contract works insurance", "Plumbing permit", "Electrical permit"],
@@ -16,7 +16,7 @@ const PRELIMINARY_CATEGORIES = {
   "Clean Up": ["Rough clean", "Final clean", "Window clean", "Rubbish removal", "Site restoration"]
 };
 
-interface PreliminaryItem {
+export interface PreliminaryItem {
   id: string;
   category: string;
   item: string;
@@ -26,8 +26,12 @@ interface PreliminaryItem {
   notes: string;
 }
 
-export const PreliminariesSection = () => {
-  const [items, setItems] = useState<PreliminaryItem[]>([]);
+interface PreliminariesSectionProps {
+  items: PreliminaryItem[];
+  onChange: (items: PreliminaryItem[]) => void;
+}
+
+export const PreliminariesSection = ({ items, onChange }: PreliminariesSectionProps) => {
   const [customCategory, setCustomCategory] = useState("");
   const [customItem, setCustomItem] = useState("");
   const [newItem, setNewItem] = useState({
@@ -42,7 +46,6 @@ export const PreliminariesSection = () => {
   const addItem = () => {
     const categoryToUse = newItem.category === "__custom__" ? customCategory : newItem.category;
     const itemToUse = newItem.category === "__custom__" ? customItem : newItem.item;
-    
     if (!categoryToUse || !itemToUse) return;
 
     const item: PreliminaryItem = {
@@ -55,26 +58,21 @@ export const PreliminariesSection = () => {
       notes: newItem.notes
     };
 
-    setItems([...items, item]);
-    setNewItem({
-      category: "",
-      item: "",
-      quantity: "",
-      unit: "ea",
-      unitPrice: "",
-      notes: ""
-    });
+    onChange([...items, item]);
+    setNewItem({ category: "", item: "", quantity: "", unit: "ea", unitPrice: "", notes: "" });
     setCustomCategory("");
     setCustomItem("");
   };
 
-  const deleteItem = (id: string) => {
-    setItems(items.filter(item => item.id !== id));
+  const updateItem = (id: string, field: keyof PreliminaryItem, value: string | number) => {
+    onChange(items.map(i => i.id === id ? { ...i, [field]: value } : i));
   };
 
-  const totalPreliminaries = items.reduce((sum, item) => 
-    sum + (item.quantity * item.unitPrice), 0
-  );
+  const deleteItem = (id: string) => {
+    onChange(items.filter(i => i.id !== id));
+  };
+
+  const totalPreliminaries = items.reduce((sum, i) => sum + i.quantity * i.unitPrice, 0);
 
   return (
     <Card className="p-6">
@@ -86,15 +84,10 @@ export const PreliminariesSection = () => {
             value={newItem.category}
             onValueChange={(value) => {
               setNewItem({ ...newItem, category: value, item: "" });
-              if (value !== "__custom__") {
-                setCustomCategory("");
-                setCustomItem("");
-              }
+              if (value !== "__custom__") { setCustomCategory(""); setCustomItem(""); }
             }}
           >
-            <SelectTrigger>
-              <SelectValue placeholder="Select category" />
-            </SelectTrigger>
+            <SelectTrigger><SelectValue placeholder="Select category" /></SelectTrigger>
             <SelectContent>
               {Object.keys(PRELIMINARY_CATEGORIES).map(cat => (
                 <SelectItem key={cat} value={cat}>{cat}</SelectItem>
@@ -108,19 +101,11 @@ export const PreliminariesSection = () => {
           <>
             <div className="col-span-3">
               <Label>Custom Category Name *</Label>
-              <Input
-                value={customCategory}
-                onChange={(e) => setCustomCategory(e.target.value)}
-                placeholder="Enter category name"
-              />
+              <Input value={customCategory} onChange={e => setCustomCategory(e.target.value)} placeholder="Enter category name" />
             </div>
             <div className="col-span-3">
               <Label>Custom Item Name *</Label>
-              <Input
-                value={customItem}
-                onChange={(e) => setCustomItem(e.target.value)}
-                placeholder="Enter item name"
-              />
+              <Input value={customItem} onChange={e => setCustomItem(e.target.value)} placeholder="Enter item name" />
             </div>
           </>
         ) : (
@@ -131,9 +116,7 @@ export const PreliminariesSection = () => {
               onValueChange={(value) => setNewItem({ ...newItem, item: value })}
               disabled={!newItem.category}
             >
-              <SelectTrigger>
-                <SelectValue placeholder="Select item" />
-              </SelectTrigger>
+              <SelectTrigger><SelectValue placeholder="Select item" /></SelectTrigger>
               <SelectContent>
                 {newItem.category && PRELIMINARY_CATEGORIES[newItem.category as keyof typeof PRELIMINARY_CATEGORIES]?.map(item => (
                   <SelectItem key={item} value={item}>{item}</SelectItem>
@@ -145,24 +128,13 @@ export const PreliminariesSection = () => {
 
         <div className="col-span-1">
           <Label>Qty</Label>
-          <Input
-            type="number"
-            step="1"
-            value={newItem.quantity}
-            onChange={(e) => setNewItem({ ...newItem, quantity: e.target.value })}
-            placeholder="1"
-          />
+          <Input type="number" step="1" value={newItem.quantity} onChange={e => setNewItem({ ...newItem, quantity: e.target.value })} placeholder="1" />
         </div>
 
         <div className="col-span-2">
           <Label>Unit</Label>
-          <Select
-            value={newItem.unit}
-            onValueChange={(value) => setNewItem({ ...newItem, unit: value })}
-          >
-            <SelectTrigger>
-              <SelectValue />
-            </SelectTrigger>
+          <Select value={newItem.unit} onValueChange={value => setNewItem({ ...newItem, unit: value })}>
+            <SelectTrigger><SelectValue /></SelectTrigger>
             <SelectContent>
               <SelectItem value="ea">ea</SelectItem>
               <SelectItem value="week">week</SelectItem>
@@ -174,62 +146,65 @@ export const PreliminariesSection = () => {
 
         <div className="col-span-2">
           <Label>Unit Price ($)</Label>
-          <Input
-            type="number"
-            step="0.01"
-            value={newItem.unitPrice}
-            onChange={(e) => setNewItem({ ...newItem, unitPrice: e.target.value })}
-            placeholder="0.00"
-          />
+          <Input type="number" step="0.01" value={newItem.unitPrice} onChange={e => setNewItem({ ...newItem, unitPrice: e.target.value })} placeholder="0.00" />
         </div>
 
         <div className="col-span-1">
-          <Button onClick={addItem} className="w-full">
-            <Plus className="h-4 w-4" />
-          </Button>
+          <Button onClick={addItem} className="w-full"><Plus className="h-4 w-4" /></Button>
         </div>
       </div>
 
       {/* Items Table */}
-      <div className="overflow-x-auto">
-        <Table className="table-fixed">
-          <TableHeader>
-            <TableRow>
-              <TableHead>Category</TableHead>
-              <TableHead>Item</TableHead>
-              <TableHead className="w-14 text-right">Qty</TableHead>
-              <TableHead className="w-16">Unit</TableHead>
-              <TableHead className="w-24 text-right">$/Unit</TableHead>
-              <TableHead className="w-28 text-right">Total</TableHead>
-              <TableHead className="w-10"></TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {items.map(item => (
-              <TableRow key={item.id}>
-                <TableCell>{item.category}</TableCell>
-                <TableCell>{item.item}</TableCell>
-                <TableCell className="w-14 text-right font-mono">{item.quantity}</TableCell>
-                <TableCell className="w-16">{item.unit}</TableCell>
-                <TableCell className="w-24 text-right font-mono">${item.unitPrice.toFixed(2)}</TableCell>
-                <TableCell className="w-28 text-right font-mono font-bold">
-                  ${(item.quantity * item.unitPrice).toFixed(2)}
-                </TableCell>
-                <TableCell className="w-10">
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    onClick={() => deleteItem(item.id)}
-                    className="text-destructive"
-                  >
-                    <Trash2 className="h-4 w-4" />
-                  </Button>
-                </TableCell>
+      {items.length > 0 && (
+        <div className="overflow-x-auto">
+          <Table className="table-fixed">
+            <TableHeader>
+              <TableRow>
+                <TableHead>Category</TableHead>
+                <TableHead>Item</TableHead>
+                <TableHead className="w-20 text-right">Qty</TableHead>
+                <TableHead className="w-16">Unit</TableHead>
+                <TableHead className="w-28 text-right">$/Unit</TableHead>
+                <TableHead className="w-28 text-right">Total</TableHead>
+                <TableHead className="w-10"></TableHead>
               </TableRow>
-            ))}
-          </TableBody>
-        </Table>
-      </div>
+            </TableHeader>
+            <TableBody>
+              {items.map(item => (
+                <TableRow key={item.id}>
+                  <TableCell className="text-sm">{item.category}</TableCell>
+                  <TableCell className="text-sm">{item.item}</TableCell>
+                  <TableCell className="w-20 text-right">
+                    <Input
+                      type="number"
+                      className="h-7 text-xs text-right w-full"
+                      value={item.quantity}
+                      onChange={e => updateItem(item.id, 'quantity', parseFloat(e.target.value) || 0)}
+                    />
+                  </TableCell>
+                  <TableCell className="w-16 text-sm">{item.unit}</TableCell>
+                  <TableCell className="w-28 text-right">
+                    <Input
+                      type="number"
+                      className="h-7 text-xs text-right w-full"
+                      value={item.unitPrice}
+                      onChange={e => updateItem(item.id, 'unitPrice', parseFloat(e.target.value) || 0)}
+                    />
+                  </TableCell>
+                  <TableCell className="w-28 text-right font-mono font-bold text-sm">
+                    ${(item.quantity * item.unitPrice).toFixed(2)}
+                  </TableCell>
+                  <TableCell className="w-10">
+                    <Button variant="ghost" size="icon" onClick={() => deleteItem(item.id)} className="text-destructive h-7 w-7">
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </Button>
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </div>
+      )}
 
       {items.length > 0 && (
         <div className="mt-4 flex justify-end">

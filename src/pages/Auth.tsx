@@ -72,6 +72,7 @@ const Auth = () => {
     PLANS.includes(planParam) ? planParam : "pro"
   );
   const [billing] = useState<BillingPeriod>(billingParam);
+  const [freeTrialMode, setFreeTrialMode] = useState(false);
 
   const [email, setEmail]           = useState("");
   const [password, setPassword]     = useState("");
@@ -376,7 +377,9 @@ const Auth = () => {
               <div className="flex justify-center mb-5">
                 <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-primary/10 border border-primary/20 text-xs font-medium text-primary">
                   <Check className="h-3 w-3" />
-                  {PLAN_NAMES[selectedPlan]} plan selected · ${PLAN_PRICES[selectedPlan][billing]} AUD/mo{billing === 'annual' ? ' · billed annually' : ''} after trial
+                  {freeTrialMode
+                    ? "14-day free trial · No credit card required"
+                    : `${PLAN_NAMES[selectedPlan]} plan selected · $${PLAN_PRICES[selectedPlan][billing]} AUD/mo${billing === 'annual' ? ' · billed annually' : ''} after trial`}
                 </span>
               </div>
             )}
@@ -409,19 +412,40 @@ const Auth = () => {
                   Select your plan (free trial on all)
                 </p>
                 <div className="space-y-2">
+                  {/* Free trial option — first, distinct green color */}
+                  <button
+                    type="button"
+                    onClick={() => { setSelectedPlan("pro"); setFreeTrialMode(true); }}
+                    className={`w-full flex flex-col sm:flex-row sm:items-center sm:justify-between px-4 py-3 rounded-lg border text-sm transition-all ${
+                      freeTrialMode
+                        ? "border-emerald-500 bg-emerald-950/40 text-emerald-200"
+                        : "border-emerald-800/50 text-muted-foreground hover:border-emerald-500/60"
+                    }`}
+                  >
+                    <div className="flex items-center gap-2">
+                      {freeTrialMode
+                        ? <Check className="h-4 w-4 text-emerald-400" />
+                        : <span className="w-4 h-4 rounded-full border border-emerald-800/60" />}
+                      <span className="font-medium">Try for free</span>
+                      <Badge className="text-[10px] px-1.5 py-0 bg-emerald-900/60 text-emerald-300 border-emerald-700/50">Free</Badge>
+                    </div>
+                    <span className="text-xs mt-1 sm:mt-0 text-emerald-600">14 days · No credit card · No commitment</span>
+                  </button>
+
+                  {/* Paid plans */}
                   {PLANS.map((p) => (
                     <button
                       key={p}
                       type="button"
-                      onClick={() => setSelectedPlan(p)}
+                      onClick={() => { setSelectedPlan(p); setFreeTrialMode(false); }}
                       className={`w-full flex flex-col sm:flex-row sm:items-center sm:justify-between px-4 py-3 rounded-lg border text-sm transition-all ${
-                        selectedPlan === p
+                        selectedPlan === p && !freeTrialMode
                           ? "border-primary bg-primary/5 text-foreground"
                           : "border-border text-muted-foreground hover:border-primary/40"
                       }`}
                     >
                       <div className="flex items-center gap-2">
-                        {selectedPlan === p
+                        {selectedPlan === p && !freeTrialMode
                           ? <Check className="h-4 w-4 text-primary" />
                           : <span className="w-4 h-4 rounded-full border border-border" />}
                         <span className="font-medium">{PLAN_NAMES[p]}</span>
@@ -433,9 +457,11 @@ const Auth = () => {
                     </button>
                   ))}
                 </div>
-                <p className="text-xs text-muted-foreground mt-2 text-center">
-                  After trial: ${price} AUD/mo
-                </p>
+                {!freeTrialMode && (
+                  <p className="text-xs text-muted-foreground mt-2 text-center">
+                    After trial: ${price} AUD/mo
+                  </p>
+                )}
               </div>
             )}
 
@@ -621,23 +647,27 @@ const Auth = () => {
                     : `Start Your ${TRIAL_DAYS}-Day Free Trial`}
                 </Button>
 
-                <div className="flex items-center gap-3">
-                  <div className="flex-1 h-px bg-border" />
-                  <span className="text-xs text-muted-foreground">or</span>
-                  <div className="flex-1 h-px bg-border" />
-                </div>
+                {!freeTrialMode && (
+                  <>
+                    <div className="flex items-center gap-3">
+                      <div className="flex-1 h-px bg-border" />
+                      <span className="text-xs text-muted-foreground">or</span>
+                      <div className="flex-1 h-px bg-border" />
+                    </div>
 
-                <Button
-                  type="button"
-                  variant="outline"
-                  className="w-full gap-2"
-                  disabled={isLoading || !projectType}
-                  onClick={() => submitRequest(true)}
-                >
-                  {isLoading
-                    ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Creating your account…</>
-                    : <><CreditCard className="h-4 w-4" />Subscribe to {PLAN_NAMES[selectedPlan]} · ${price}/mo{billing === 'annual' ? ' billed annually' : ''}</>}
-                </Button>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      className="w-full gap-2"
+                      disabled={isLoading || !projectType}
+                      onClick={() => submitRequest(true)}
+                    >
+                      {isLoading
+                        ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Creating your account…</>
+                        : <><CreditCard className="h-4 w-4" />Subscribe to {PLAN_NAMES[selectedPlan]} · ${price}/mo{billing === 'annual' ? ' billed annually' : ''}</>}
+                    </Button>
+                  </>
+                )}
 
                 {/* What happens next */}
                 <div className="flex items-start gap-2 p-3 rounded-lg bg-muted/50 text-xs text-muted-foreground">

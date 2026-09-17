@@ -1471,7 +1471,7 @@ export const PDFTakeoff = ({ projectId, estimateId, onAddCostItems }: PDFTakeoff
                     {calibrationBar}
                     <InteractiveCanvas
                       key={`${state.currentPageIndex}-${state.pdfFile?.planId ?? 'none'}`}
-                      pdfUrl={state.pdfFile.url}
+                      pdfUrl={state.pdfFile?.url?.startsWith('storage:') ? undefined : state.pdfFile?.url}
                       planId={state.pdfFile?.planId}
                       fileName={state.pdfFile?.name}
                       pageIndex={state.currentPageIndex}
@@ -1877,7 +1877,7 @@ export const PDFTakeoff = ({ projectId, estimateId, onAddCostItems }: PDFTakeoff
                   isCalibrated={state.isCalibrated}
                   unitsPerMetre={state.currentScale?.unitsPerMetre ?? null}
                   onAddCostItems={(items) => items.forEach(item => dispatch({ type: 'ADD_COST_ITEM', payload: item }))}
-                  pdfUrl={state.pdfFile?.url ?? undefined}
+                  pdfUrl={state.pdfFile?.url?.startsWith('storage:') ? undefined : state.pdfFile?.url}
                   pageIndex={state.currentPageIndex}
                   projectId={projectId}
                   onWallDetected={(m) => dispatch({ type: 'ADD_MEASUREMENT', payload: { ...m, planId: state.pdfFile?.planId } })}
