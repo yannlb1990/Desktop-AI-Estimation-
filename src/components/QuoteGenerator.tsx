@@ -78,11 +78,12 @@ export const QuoteGenerator = ({ project, estimate, listenForOpen }: QuoteGenera
   const logoInputRef = useRef<HTMLInputElement>(null)
   // Declared early so the useEffect dependency array can reference it without TDZ error
   const [absorbOverheads, setAbsorbOverheads] = useState(false)
+  const [absorbConsumables, setAbsorbConsumables] = useState(false)
 
   // Auto-load estimate lines whenever the dialog opens or pricing mode changes
   useEffect(() => {
     if (open) autoLoadEstimateLines()
-  }, [open, absorbOverheads])
+  }, [open, absorbOverheads, absorbConsumables])
 
   // Auto-refresh when CostEstimator transfers new items while the dialog is open
   useEffect(() => {
@@ -185,11 +186,12 @@ export const QuoteGenerator = ({ project, estimate, listenForOpen }: QuoteGenera
             try {
               const consRaw = localStorage.getItem(getUserStorageKey(`cost_estimator_consumables_${project.id}`))
               const takeoffCons: any[] = consRaw ? JSON.parse(consRaw) : []
+              const fallbackConsumableLines: QuoteLine[] = []
               takeoffCons.forEach((c: any) => {
                 const lineTotal = (c.quantity || 0) * (c.unitCost || 0)
                 if (lineTotal > 0) {
                   fallbackConsumables += lineTotal
-                  fallbackLines.push({
+                  fallbackConsumableLines.push({
                     id: c.id || crypto.randomUUID(),
                     description: c.name,
                     qty: c.quantity || 1,
@@ -201,6 +203,12 @@ export const QuoteGenerator = ({ project, estimate, listenForOpen }: QuoteGenera
                   } as QuoteLine)
                 }
               })
+              if (absorbConsumables && fallbackConsumables > 0 && fallbackBase > 0) {
+                const consumablesScale = (fallbackBase + fallbackConsumables) / fallbackBase
+                fallbackLines.forEach(l => { l.unitPrice = Math.round(l.unitPrice * consumablesScale * 100) / 100 })
+              } else {
+                fallbackLines.push(...fallbackConsumableLines)
+              }
             } catch { /* non-fatal */ }
 
             // Margin bridge using saved CostEstimator prefs
@@ -275,11 +283,12 @@ export const QuoteGenerator = ({ project, estimate, listenForOpen }: QuoteGenera
     // Consumable lines
     const projConsumables: any[] = proj?.consumables || []
     let consumablesSubtotal = 0
+    const consumableLines: QuoteLine[] = []
     projConsumables.forEach((c: any) => {
       const lineTotal = (c.quantity || 0) * (c.unit_price || 0)
       if (lineTotal > 0) {
         consumablesSubtotal += lineTotal
-        lines.push({
+        consumableLines.push({
           id: c.id || crypto.randomUUID(),
           description: c.name,
           qty: parseFloat(c.quantity) || 1,
@@ -291,6 +300,14 @@ export const QuoteGenerator = ({ project, estimate, listenForOpen }: QuoteGenera
         })
       }
     })
+
+    if (absorbConsumables && consumablesSubtotal > 0 && itemsSubtotal > 0) {
+      // Fold consumables cost into the existing line rates — no separate line shown to the client
+      const consumablesScale = (itemsSubtotal + consumablesSubtotal) / itemsSubtotal
+      lines.forEach(l => { l.unitPrice = Math.round(l.unitPrice * consumablesScale * 100) / 100 })
+    } else {
+      lines.push(...consumableLines)
+    }
 
     const estimateTotals = proj?.estimate_totals
     const linesBaseTotal = itemsSubtotal + consumablesSubtotal
@@ -745,6 +762,29 @@ ${clone.outerHTML}
                       {/* Toggle pill */}
                       <div className={`relative flex-shrink-0 w-10 h-5 rounded-full transition-colors ${absorbOverheads ? "bg-primary" : "bg-muted-foreground/30"}`}>
                         <span className={`absolute top-0.5 h-4 w-4 rounded-full bg-white shadow transition-transform ${absorbOverheads ? "translate-x-5" : "translate-x-0.5"}`} />
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Consumables display toggle */}
+                  <div
+                    className={`rounded-lg border p-3 cursor-pointer transition-colors select-none ${absorbConsumables ? "border-primary/60 bg-primary/5" : "border-border bg-muted/20"}`}
+                    onClick={() => setAbsorbConsumables(v => !v)}
+                  >
+                    <div className="flex items-center justify-between gap-3">
+                      <div>
+                        <p className="text-xs font-semibold text-foreground">
+                          {absorbConsumables ? "Consumables folded into price" : "Consumables shown separately"}
+                        </p>
+                        <p className="text-xs text-muted-foreground mt-0.5">
+                          {absorbConsumables
+                            ? "Cost of consumables spread across the other line rates. Client doesn't see a consumables line."
+                            : "Consumables (discs, fixings, etc.) listed as their own line item."}
+                        </p>
+                      </div>
+                      {/* Toggle pill */}
+                      <div className={`relative flex-shrink-0 w-10 h-5 rounded-full transition-colors ${absorbConsumables ? "bg-primary" : "bg-muted-foreground/30"}`}>
+                        <span className={`absolute top-0.5 h-4 w-4 rounded-full bg-white shadow transition-transform ${absorbConsumables ? "translate-x-5" : "translate-x-0.5"}`} />
                       </div>
                     </div>
                   </div>
