@@ -45,13 +45,29 @@ function loadItems(projectId: string): EstimateItem[] {
   }
 }
 
-function calcLine(item: EstimateItem) {
+// Same defaults as EstimateTemplate's own config (10% material / 5% labour). A missing
+// waste % isn't actually zero waste — defaulting to 0 here systematically under-counts
+// a line's true cost in the charts below.
+function loadWasteDefaults(projectId: string): { matWaste: number; labWaste: number } {
+  try {
+    const projects = JSON.parse(localStorage.getItem(getUserStorageKey("local_projects")) || "[]");
+    const project = projects.find((p: any) => p.id === projectId);
+    return {
+      matWaste: project?.estimate_config?.materialWastage ?? 10,
+      labWaste: project?.estimate_config?.labourWastage ?? 5,
+    };
+  } catch {
+    return { matWaste: 10, labWaste: 5 };
+  }
+}
+
+function calcLine(item: EstimateItem, defaults: { matWaste: number; labWaste: number }) {
   const qty = Number(item.quantity) || 0;
   const unitPrice = Number(item.unit_price) || 0;
   const labHours = Number(item.labour_hours) || 0;
   const labRate = Number(item.labour_rate) || 65;
-  const matWaste = (Number(item.material_wastage_pct) || 0) / 100;
-  const labWaste = (Number(item.labour_wastage_pct) || 0) / 100;
+  const matWaste = (item.material_wastage_pct ?? defaults.matWaste) / 100;
+  const labWaste = (item.labour_wastage_pct ?? defaults.labWaste) / 100;
   const markup = (Number(item.markup_pct) || 0) / 100;
 
   const matBase = qty * unitPrice;
@@ -121,8 +137,9 @@ function useHealthScore(items: EstimateItem[]) {
 
 export const ProjectInsightsTab = ({ projectId }: ProjectInsightsTabProps) => {
   const items = useMemo(() => loadItems(projectId), [projectId]);
+  const wasteDefaults = useMemo(() => loadWasteDefaults(projectId), [projectId]);
   const health = useHealthScore(items);
-  const lines = useMemo(() => items.map(item => ({ item, ...calcLine(item) })), [items]);
+  const lines = useMemo(() => items.map(item => ({ item, ...calcLine(item, wasteDefaults) })), [items, wasteDefaults]);
 
   // Cost composition
   const split = useMemo(() => {

@@ -291,14 +291,18 @@ export const FullTenderGenerator = ({ project, estimate }: FullTenderProps) => {
     // Use current labour rates saved by EstimateTemplate
     const cfgRates: Record<string, number> = proj?.estimate_config?.labourRates || {}
     const cfgDefaultRate: number = proj?.estimate_config?.defaultLabourRate || 65
+    // Same waste-% defaults as EstimateTemplate's own config (10% material / 5% labour),
+    // read from this project's actual saved config rather than a hardcoded guess.
+    const cfgMaterialWaste: number = proj?.estimate_config?.materialWastage ?? 10
+    const cfgLabourWaste: number = proj?.estimate_config?.labourWastage ?? 5
 
     const newBoqItems: any[] = estimateItems.map((item: any) => {
       const qty = parseFloat(item.quantity) || 1
       const unitPrice = parseFloat(item.unit_price) || 0
       const labourHours = parseFloat(item.labour_hours) || 0
       const labourRate = cfgRates[item.trade] || cfgDefaultRate || parseFloat(item.labour_rate) || 65
-      const matWaste = (item.material_wastage_pct ?? 5) / 100
-      const labWaste = (item.labour_wastage_pct ?? 10) / 100
+      const matWaste = (item.material_wastage_pct ?? cfgMaterialWaste) / 100
+      const labWaste = (item.labour_wastage_pct ?? cfgLabourWaste) / 100
       const markup = (item.markup_pct ?? 0) / 100
 
       let matTotal = qty * unitPrice * (1 + matWaste)

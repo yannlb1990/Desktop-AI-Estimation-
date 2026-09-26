@@ -858,9 +858,12 @@ export const EstimateTemplate = ({ projectId, estimateId }: EstimateTemplateProp
       let matTotal = matBase + matWaste;
       totalMaterials += matTotal;
 
-      // Add related materials — included in both totalMaterials and markup base
+      // Add related materials — included in both totalMaterials and markup base.
+      // Only count ones the user has confirmed; an unconfirmed suggestion sitting on
+      // a line isn't a cost yet and must not be silently charged to the client.
       if (item.relatedMaterials) {
         item.relatedMaterials.forEach(rm => {
+          if (!rm.confirmed) return;
           const rmCost = (rm.quantity || 0) * (rm.unit_price || 0);
           totalMaterials += rmCost;
           matTotal += rmCost;
@@ -1066,12 +1069,18 @@ export const EstimateTemplate = ({ projectId, estimateId }: EstimateTemplateProp
   };
 
   const renderItem = (item: EstimateItem) => {
+    // Use this item's own stored waste % (frozen when it was added), falling back to
+    // the current global config — matching calculateTotals() exactly. Reading the live
+    // global config here directly would make a row's displayed total drift from what's
+    // actually counted in the Price Summary the moment someone tweaks the global %.
+    const matWastePct = item.material_wastage_pct ?? config.materialWastage;
+    const labWastePct = item.labour_wastage_pct ?? config.labourWastage;
     const matBase = item.quantity * item.unit_price;
-    const matWaste = matBase * (config.materialWastage / 100);
-    const relatedMatsTotal = (item.relatedMaterials || []).reduce((s, rm) => s + (rm.quantity || 0) * (rm.unit_price || 0), 0);
+    const matWaste = matBase * (matWastePct / 100);
+    const relatedMatsTotal = (item.relatedMaterials || []).filter(rm => rm.confirmed).reduce((s, rm) => s + (rm.quantity || 0) * (rm.unit_price || 0), 0);
     const matTotalWithRelated = matBase + matWaste + relatedMatsTotal;
     const labBase = item.labour_hours * (labourRates[item.trade] || item.labour_rate || config.defaultLabourRate);
-    const labWaste = labBase * (config.labourWastage / 100);
+    const labWaste = labBase * (labWastePct / 100);
     const labTotal = labBase + labWaste;
     const subtotal = matTotalWithRelated + labTotal;
     const markup = subtotal * (item.markup_pct / 100);

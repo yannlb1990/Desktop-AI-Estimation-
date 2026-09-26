@@ -751,6 +751,12 @@ export const CostEstimator = ({
 
     const existing: any[] = projects[projectIndex].estimate_items || [];
     const existingCostIds = new Set(existing.map((e: any) => e._costItemId).filter(Boolean));
+    // Same defaults as EstimateTemplate's own config (10% material / 5% labour) if this
+    // CostItem doesn't already carry its own waste %, read from the project's saved
+    // Estimate config where available so a transferred line prices the same way the
+    // Estimate tab (and the eventual quote) will price it.
+    const cfgMaterialWaste: number = projects[projectIndex]?.estimate_config?.materialWastage ?? 10
+    const cfgLabourWaste: number = projects[projectIndex]?.estimate_config?.labourWastage ?? 5
 
     const newEstimateItems: any[] = [];
     const newTransferred = new Set(transferredIds);
@@ -771,8 +777,8 @@ export const CostEstimator = ({
         unit_price: item.unitCost,
         labour_hours: item.labourHours ?? 0,
         labour_rate: item.hourlyRate ?? 65,
-        material_wastage_pct: item.materialWastePercent ?? 5,
-        labour_wastage_pct: item.labourWastePercent ?? 10,
+        material_wastage_pct: item.materialWastePercent ?? cfgMaterialWaste,
+        labour_wastage_pct: item.labourWastePercent ?? cfgLabourWaste,
         markup_pct: item.markupPercent ?? 0,
         notes: item.description || item.notes || '',
         expanded: false,
@@ -801,9 +807,9 @@ export const CostEstimator = ({
       const allEI: any[] = projects[projectIndex].estimate_items;
       let _totMat = 0, _totLab = 0, _fixingsCost = 0;
       allEI.forEach((ei: any) => {
-        const mw = (ei.material_wastage_pct ?? 5) / 100;
+        const mw = (ei.material_wastage_pct ?? cfgMaterialWaste) / 100;
         _totMat += (ei.quantity || 1) * (ei.unit_price || 0) * (1 + mw);
-        const lw = (ei.labour_wastage_pct ?? 10) / 100;
+        const lw = (ei.labour_wastage_pct ?? cfgLabourWaste) / 100;
         _totLab += (ei.labour_hours || 0) * (ei.labour_rate || 65) * (1 + lw);
         // relatedMaterials here are pre-filtered to accepted-only by transferItems above
         if (Array.isArray(ei.relatedMaterials)) {
