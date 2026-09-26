@@ -91,6 +91,10 @@ const LEGACY_KEYS = [
   'user_materials_library',
   'estimate_subscription',
   'project_reminders',
+  'quote_brand',
+  'labour_presets',
+  'preferred_suppliers',
+  'quote_settings',
 ] as const;
 
 export function getUserStorageKey(baseKey: string): string {

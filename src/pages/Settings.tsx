@@ -131,17 +131,15 @@ const Settings = () => {
   // All settings sections are stored in the `default_rates` table as a structured
   // JSONB blob keyed by section name (company, branding, rates, etc.).
 
+  // Merges server-side via merge_default_rates_section (atomic jsonb ||) instead
+  // of select-then-upsert here, so two sections saved in quick succession can't
+  // race and silently drop one another (see 20260926000000_atomic_default_rates_merge.sql).
   const syncUserSettings = useCallback(async (section: string, data: any) => {
     try {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session?.user?.id) return;
-      const userId = session.user.id;
-      const { data: existing } = await (supabase as any)
-        .from('default_rates').select('rates').eq('user_id', userId).maybeSingle();
-      const merged = { ...(existing?.rates ?? {}), [section]: data };
-      await (supabase as any)
-        .from('default_rates')
-        .upsert({ user_id: userId, rates: merged, updated_at: new Date().toISOString() }, { onConflict: 'user_id' });
+      const { error } = await (supabase as any).rpc('merge_default_rates_section', { section, data });
+      if (error) throw error;
     } catch (e) {
       console.error('[syncUserSettings] failed:', e instanceof Error ? e.message : e);
     }

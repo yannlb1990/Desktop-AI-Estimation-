@@ -3,6 +3,14 @@
   "outputDirectory": "dist",
   "installCommand": "npm install",
   "framework": "vite",
+  "redirects": [
+    {
+      "source": "/(.*)",
+      "has": [{ "type": "host", "value": "metricore.com.au" }],
+      "destination": "https://www.metricore.com.au/$1",
+      "permanent": true
+    }
+  ],
   "rewrites": [
     { "source": "/((?!.*\\.mjs$)(?!.*\\.js$)(?!.*\\.css$)(?!.*\\.ico$)(?!.*\\.svg$)(?!.*\\.png$)(?!.*\\.jpg$)(?!.*\\.woff2?$)(?!.*\\.ttf$)(?!.*\\.xml$)(?!.*\\.txt$).*)", "destination": "/index.html" }
   ],
