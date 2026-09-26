@@ -191,7 +191,9 @@ export const ProjectInsightsTab = ({ projectId }: ProjectInsightsTabProps) => {
   const topDrivers = useMemo(() =>
     [...lines].sort((a, b) => b.lineTotal - a.lineTotal).slice(0, 5).map((l, i) => ({
       rank: i + 1,
-      label: [l.item.scope_of_work, l.item.material_type].filter(Boolean).join(" — ") || l.item.trade || "Item",
+      label: l.item.scope_of_work
+        ? (l.item.material_type ? `${l.item.scope_of_work} (${l.item.material_type})` : l.item.scope_of_work)
+        : (l.item.trade || "Item"),
       trade: l.item.trade,
       total: l.lineTotal,
       pct: grandTotal > 0 ? (l.lineTotal / grandTotal) * 100 : 0,

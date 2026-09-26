@@ -191,7 +191,7 @@ export const QuoteGenerator = ({ project, estimate, listenForOpen }: QuoteGenera
                   fallbackConsumables += lineTotal
                   fallbackLines.push({
                     id: c.id || crypto.randomUUID(),
-                    description: `Consumables — ${c.name}`,
+                    description: c.name,
                     qty: c.quantity || 1,
                     unit: c.unit || "ea",
                     unitPrice: Math.round((c.unitCost || 0) * 100) / 100,
@@ -260,7 +260,9 @@ export const QuoteGenerator = ({ project, estimate, listenForOpen }: QuoteGenera
 
       lines.push({
         id: item.id || crypto.randomUUID(),
-        description: [item.scope_of_work, item.material_type].filter(Boolean).join(" — ") || item.trade || "Item",
+        description: item.scope_of_work
+          ? (item.material_type ? `${item.scope_of_work} (${item.material_type})` : item.scope_of_work)
+          : (item.trade || "Item"),
         qty,
         unit: item.unit || "m²",
         unitPrice: Math.round((lineTotal / Math.max(qty, 1)) * 100) / 100,

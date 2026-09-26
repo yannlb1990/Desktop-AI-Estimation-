@@ -313,7 +313,9 @@ export const FullTenderGenerator = ({ project, estimate }: FullTenderProps) => {
       const lineTotal = Math.round((matTotal + labTotal) * (1 + markup) * 100) / 100
       return {
         trade: item.trade || "General",
-        description: [item.scope_of_work, item.material_type].filter(Boolean).join(" — ") || "Item",
+        description: item.scope_of_work
+          ? (item.material_type ? `${item.scope_of_work} (${item.material_type})` : item.scope_of_work)
+          : (item.trade || "Item"),
         qty: Number(qty).toFixed(1),
         unit: item.unit || "m²",
         rate: String(Math.round((lineTotal / Math.max(qty, 1)) * 100) / 100),
