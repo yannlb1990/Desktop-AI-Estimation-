@@ -17,18 +17,18 @@ const LOAD_BRAND = () => { try { return JSON.parse(localStorage.getItem(getUserS
 
 const DEFAULT_METHOD = `Our approach is built on three pillars:
 
-1. PLANNING & COORDINATION — We begin with a detailed project program identifying all trades, lead times and critical path activities. A dedicated site supervisor is allocated from day one.
+1. PLANNING & COORDINATION. We begin with a detailed project program identifying all trades, lead times and critical path activities. A dedicated site supervisor is allocated from day one.
 
-2. QUALITY ASSURANCE — All works are carried out in accordance with the National Construction Code (NCC), Australian Standards and relevant State regulations. Our internal QA checklist is completed at each stage prior to calling for inspections.
+2. QUALITY ASSURANCE. All works are carried out in accordance with the National Construction Code (NCC), Australian Standards and relevant State regulations. Our internal QA checklist is completed at each stage prior to calling for inspections.
 
-3. COMMUNICATION — Weekly site reports are issued to the client. All variations are documented and approved in writing before proceeding. We use digital project management tools for full transparency.`
+3. COMMUNICATION. Weekly site reports are issued to the client. All variations are documented and approved in writing before proceeding. We use digital project management tools for full transparency.`
 
-const DEFAULT_WHY = `• Licensed and insured — fully compliant with all regulatory requirements
-• Proven track record — completed over 150 commercial and residential projects
-• Dedicated project management — one point of contact from start to finish
-• Transparent pricing — no hidden costs, fully itemised quotations
-• On-time delivery — 94% of projects completed on or before the agreed programme
-• Post-completion support — responsive warranty service and client satisfaction follow-up`
+const DEFAULT_WHY = `• Licensed and insured: fully compliant with all regulatory requirements
+• Proven track record: completed over 150 commercial and residential projects
+• Dedicated project management: one point of contact from start to finish
+• Transparent pricing: no hidden costs, fully itemised quotations
+• On-time delivery: 94% of projects completed on or before the agreed programme
+• Post-completion support: responsive warranty service and client satisfaction follow-up`
 
 const DEFAULT_COMPLIANCE = [
   { cert: "Builder's Licence", number: "", issuer: "State Licensing Authority", expiry: "" },
@@ -103,7 +103,7 @@ If latent conditions are encountered that materially differ from those indicated
 The Contractor will maintain a Safe Work Method Statement (SWMS) for all high-risk activities in accordance with the Work Health and Safety Act and Regulations. All workers must hold current relevant licences and inductions.
 
 11. INSURANCE OBLIGATIONS
-The Contractor shall maintain throughout the works: (a) Public Liability Insurance — minimum $20,000,000 per occurrence; (b) Contract Works Insurance — full replacement value; (c) Workers Compensation — as required by law; (d) Professional Indemnity — where applicable.
+The Contractor shall maintain throughout the works: (a) Public Liability Insurance: minimum $20,000,000 per occurrence; (b) Contract Works Insurance: full replacement value; (c) Workers Compensation: as required by law; (d) Professional Indemnity: where applicable.
 
 12. TERMINATION FOR DEFAULT
 Either party may terminate this contract if the other party commits a material breach and fails to remedy that breach within 14 days of written notice. On termination for contractor default, the Principal may engage others to complete the works and recover the reasonable additional cost from the Contractor.
@@ -167,7 +167,7 @@ export const FullTenderGenerator = ({ project, estimate }: FullTenderProps) => {
   const [programWeeks, setProgramWeeks] = useState("12")
   const [siteVisitDate, setSiteVisitDate] = useState("")
   const [siteVisitBy, setSiteVisitBy] = useState("")
-  const [addendaList, setAddendaList] = useState("Addendum 1 — [date], Addendum 2 — [date]")
+  const [addendaList, setAddendaList] = useState("Addendum 1 ([date]), Addendum 2 ([date])")
   const [compliance, setCompliance] = useState(DEFAULT_COMPLIANCE)
   const [references, setReferences] = useState([
     { company: "ABC Developments Pty Ltd", contact: "John Smith", phone: "0400 000 001", project: "Commercial fitout, $2.4M" },
@@ -562,7 +562,7 @@ ${clone.outerHTML}
                   </div>
                   <p className="text-[10px] text-muted-foreground">LTIFR = Lost Time Injury Frequency Rate · TRIFR = Total Recordable Injury Frequency Rate (per million hours worked)</p>
 
-                  <p className="text-xs text-muted-foreground font-medium uppercase tracking-wide pt-2">SWMS — High Risk Activities</p>
+                  <p className="text-xs text-muted-foreground font-medium uppercase tracking-wide pt-2">SWMS: High Risk Activities</p>
                   {swmsList.map((s, i) => (
                     <div key={i} className="flex gap-1">
                       <Input value={s} onChange={e => { const n = [...swmsList]; n[i] = e.target.value; setSwmsList(n) }} className="h-7 text-xs flex-1" />
@@ -686,7 +686,7 @@ ${clone.outerHTML}
                       <button className="text-xs text-muted-foreground underline" onClick={loadFromEstimate}>Reload</button>
                     </div>
                   )}
-                  <div><Label className="text-xs">Subtotal (ex GST) — $</Label>
+                  <div><Label className="text-xs">Subtotal (ex GST) ($)</Label>
                     <Input type="number" value={subtotal} onChange={e => setSubtotal(e.target.value)} placeholder="0.00" className="h-8 text-sm font-mono" /></div>
                   {subtotalNum > 0 && (
                     <div className="bg-background rounded-lg p-3 space-y-1 text-sm font-mono border">
@@ -873,7 +873,7 @@ ${clone.outerHTML}
                       </div>
                       {swmsList.filter(Boolean).length > 0 && (
                         <div className="mt-3">
-                          <div className="text-xs font-semibold text-gray-600 mb-2">High-Risk Construction Work — SWMS will be prepared for:</div>
+                          <div className="text-xs font-semibold text-gray-600 mb-2">SWMS will be prepared for the following high-risk construction work:</div>
                           <div className="flex flex-wrap gap-2">
                             {swmsList.filter(Boolean).map((s, i) => (
                               <span key={i} className="text-xs bg-gray-100 border rounded-full px-3 py-1 text-gray-600">{s}</span>
@@ -1019,7 +1019,7 @@ ${clone.outerHTML}
 
                   {boqItems.some(b => b.trade) && (
                     <>
-                      <div className="text-sm font-semibold text-gray-700 mb-2">Schedule of Works — Trade Breakdown</div>
+                      <div className="text-sm font-semibold text-gray-700 mb-2">Schedule of Works: Trade Breakdown</div>
                       <table className="w-full text-sm border-collapse">
                         <thead>
                           <tr style={{ background: primaryColor + "12" }}>

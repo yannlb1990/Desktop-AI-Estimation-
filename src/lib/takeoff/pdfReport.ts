@@ -158,7 +158,7 @@ export function generateTakeoffPdf(options: TakeoffReportOptions): void {
         doc.setTextColor(...hexToRgb(MID_GRAY));
         doc.setFont('helvetica', 'normal');
         doc.text(
-          `${projectName}  —  Page ${pg} of ${total}`,
+          `${projectName}  ·  Page ${pg} of ${total}`,
           pageW / 2,
           pageH - 6,
           { align: 'center' },
@@ -211,7 +211,7 @@ export function generateTakeoffPdf(options: TakeoffReportOptions): void {
     doc.setTextColor(...hexToRgb(MID_GRAY));
     doc.setFont('helvetica', 'normal');
     doc.text(
-      `${projectName}  —  Page ${i} of ${totalPages}`,
+      `${projectName}  ·  Page ${i} of ${totalPages}`,
       pageW / 2,
       pageH - 6,
       { align: 'center' },
@@ -318,7 +318,7 @@ function addMeasurementTables(
         doc.setTextColor(...hexToRgb(MID_GRAY));
         doc.setFont('helvetica', 'normal');
         doc.text(
-          `${projectName}  —  Page ${pg} of ${total}`,
+          `${projectName}  ·  Page ${pg} of ${total}`,
           pageW / 2,
           pageH - 6,
           { align: 'center' },
@@ -363,7 +363,7 @@ function addMeasurementTables(
     doc.setTextColor(...hexToRgb(MID_GRAY));
     doc.setFont('helvetica', 'normal');
     doc.text(
-      `${projectName}  —  Page ${i} of ${totalPages}`,
+      `${projectName}  ·  Page ${i} of ${totalPages}`,
       pageW / 2,
       pageH - 6,
       { align: 'center' },
@@ -478,7 +478,7 @@ export function generateAnnotatedTakeoffPdf(options: AnnotatedTakeoffOptions): v
   doc.setFontSize(7);
   doc.setTextColor(...hexToRgb(MID_GRAY));
   doc.setFont('helvetica', 'normal');
-  doc.text(`${projectName}  —  Page 1  ·  Annotated plan`, pageW / 2, pageH - 4, { align: 'center' });
+  doc.text(`${projectName}  ·  Page 1  ·  Annotated plan`, pageW / 2, pageH - 4, { align: 'center' });
 
   // ── Page 2+: Measurement tables (A4 portrait) ─────────────────────────────────
   if (measurements.length > 0) {
@@ -509,7 +509,7 @@ export function generateAnnotatedTakeoffPdf(options: AnnotatedTakeoffOptions): v
       doc.setTextColor(...hexToRgb(MID_GRAY));
       doc.setFont('helvetica', 'normal');
       doc.text(
-        `${projectName}  —  Page ${i} of ${totalPages}`,
+        `${projectName}  ·  Page ${i} of ${totalPages}`,
         p2W / 2,
         p2H - 6,
         { align: 'center' },

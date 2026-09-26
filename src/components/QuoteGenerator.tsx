@@ -34,7 +34,7 @@ const DEFAULT_INCLUSIONS = [
   "All labour and materials as specified in this quotation",
   "Site protection, cleanup and waste removal upon completion",
   "All applicable permits and council approvals",
-  "Workmanship warranty — 7 years structural, 2 years general",
+  "Workmanship warranty: 7 years structural, 2 years general",
   "Public liability insurance coverage during works",
 ]
 
@@ -281,7 +281,7 @@ export const QuoteGenerator = ({ project, estimate, listenForOpen }: QuoteGenera
         consumablesSubtotal += lineTotal
         lines.push({
           id: c.id || crypto.randomUUID(),
-          description: `Consumables — ${c.name}`,
+          description: c.name,
           qty: parseFloat(c.quantity) || 1,
           unit: c.unit || "ea",
           unitPrice: Math.round((c.unit_price || 0) * 100) / 100,

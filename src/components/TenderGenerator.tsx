@@ -19,7 +19,7 @@ const DEFAULT_INCLUSIONS = [
   "All labour and materials as specified",
   "Site cleanup and waste removal upon completion",
   "All permits and council approvals (if applicable)",
-  "Workmanship warranty — 7 years structural, 2 years general",
+  "Workmanship warranty: 7 years structural, 2 years general",
 ]
 
 const DEFAULT_EXCLUSIONS = [

@@ -137,7 +137,7 @@ export function generateProgressClaimPdf(options: ProgressClaimOptions): void {
   doc.setTextColor(...hexToRgb(DARK));
   doc.setFontSize(7.5);
   doc.setFont('helvetica', 'bold');
-  doc.text('PAYMENT CLAIM — SECURITY OF PAYMENT ACT NOTICE', marginL + 3, y + 5);
+  doc.text('PAYMENT CLAIM · SECURITY OF PAYMENT ACT NOTICE', marginL + 3, y + 5);
 
   doc.setFont('helvetica', 'normal');
   const sopaText = doc.splitTextToSize(
@@ -246,7 +246,7 @@ export function generateProgressClaimPdf(options: ProgressClaimOptions): void {
     doc.setTextColor(...hexToRgb(MID_GRAY));
     doc.setFont('helvetica', 'normal');
     doc.text(
-      `Claim submitted under SOPA — Payment due within ${sopa.days} business days of claim date  |  ${projectName}  —  Page ${i} of ${totalPages}`,
+      `Claim submitted under SOPA: Payment due within ${sopa.days} business days of claim date  |  ${projectName}  ·  Page ${i} of ${totalPages}`,
       pageW / 2,
       pageH - 6,
       { align: 'center' },

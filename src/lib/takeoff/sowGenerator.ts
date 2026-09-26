@@ -50,7 +50,7 @@ function drawPageFooter(doc: jsPDF, pageNum: number, totalPages: number, project
   doc.setFont('helvetica', 'normal');
   doc.text(projectName, 14, pageH - 7);
   doc.text(`Page ${pageNum} of ${totalPages}`, pageW - 14, pageH - 7, { align: 'right' });
-  doc.text('SCOPE OF WORKS — CONFIDENTIAL', pageW / 2, pageH - 7, { align: 'center' });
+  doc.text('SCOPE OF WORKS · CONFIDENTIAL', pageW / 2, pageH - 7, { align: 'center' });
 }
 
 export function generateSOWPdf(opts: SOWGeneratorOptions): void {
