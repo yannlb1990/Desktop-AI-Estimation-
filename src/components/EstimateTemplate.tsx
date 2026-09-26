@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { ESTIMATE_TEMPLATES, EstimateTemplateData } from "@/data/estimateTemplates";
 import { getUserStorageKey } from "@/lib/localAuth";
 import { syncProjectToSupabase } from "@/lib/db/projects";
@@ -463,6 +463,7 @@ export const EstimateTemplate = ({ projectId, estimateId }: EstimateTemplateProp
     labour_hours: "",
     labour_rate: "",
   });
+  const qtyInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if (projectId) loadItems();
@@ -587,17 +588,11 @@ export const EstimateTemplate = ({ projectId, estimateId }: EstimateTemplateProp
     localStorage.setItem(getUserStorageKey('local_projects'), JSON.stringify(projects));
 
     toast.success("Item added successfully");
-    setNewItem({
-      area: "",
-      trade: "",
-      scope_of_work: "",
-      material_type: "",
-      quantity: "",
-      unit: "m²",
-      unit_price: "",
-      labour_hours: "",
-      labour_rate: "",
-    });
+    // Keep Area/Trade/Scope/Material/Unit/Price/Rate — pricing the same material across
+    // several rooms is the common case. Only the per-instance amounts reset, and focus
+    // jumps straight back to Qty so entering the next line needs no mouse at all.
+    setNewItem(prev => ({ ...prev, quantity: "", labour_hours: "" }));
+    qtyInputRef.current?.focus();
   };
 
   const deleteItem = (id: string) => {
@@ -614,6 +609,31 @@ export const EstimateTemplate = ({ projectId, estimateId }: EstimateTemplateProp
     localStorage.setItem(getUserStorageKey('local_projects'), JSON.stringify(projects));
 
     toast.success("Item deleted");
+  };
+
+  const duplicateItem = (item: EstimateItem) => {
+    const idx = items.findIndex(i => i.id === item.id);
+    const copy: EstimateItem = {
+      ...item,
+      id: `item-${Date.now()}`,
+      item_number: `${items.length + 1}`,
+      isEditing: false,
+      expanded: false,
+      relatedMaterials: (item.relatedMaterials || []).map(rm => ({ ...rm, id: Math.random().toString() })),
+    };
+    const updatedItems = [...items.slice(0, idx + 1), copy, ...items.slice(idx + 1)];
+    setItems(updatedItems);
+
+    const projects = JSON.parse(localStorage.getItem(getUserStorageKey('local_projects')) || '[]');
+    const projectIndex = projects.findIndex((p: any) => p.id === projectId);
+    if (projectIndex !== -1) {
+      projects[projectIndex].estimate_items = updatedItems;
+    } else {
+      projects.push({ id: projectId, estimate_items: updatedItems });
+    }
+    localStorage.setItem(getUserStorageKey('local_projects'), JSON.stringify(projects));
+
+    toast.success("Item duplicated — update the quantity or area as needed");
   };
 
   const startEditing = (item: EstimateItem) => {
@@ -1242,6 +1262,15 @@ export const EstimateTemplate = ({ projectId, estimateId }: EstimateTemplateProp
                     title="Product URL"
                   >
                     <Link className="h-4 w-4" />
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => duplicateItem(item)}
+                    className="h-8 w-8"
+                    title="Duplicate line"
+                  >
+                    <Copy className="h-4 w-4" />
                   </Button>
                   <Button
                     variant="ghost"
@@ -1906,10 +1935,12 @@ export const EstimateTemplate = ({ projectId, estimateId }: EstimateTemplateProp
           <div className="col-span-1">
             <Label>Qty *</Label>
             <Input
+              ref={qtyInputRef}
               type="number"
               step="0.01"
               value={newItem.quantity}
               onChange={(e) => setNewItem({ ...newItem, quantity: e.target.value })}
+              onKeyDown={(e) => e.key === 'Enter' && addItem()}
             />
           </div>
           <div className="col-span-2">
@@ -1946,6 +1977,7 @@ export const EstimateTemplate = ({ projectId, estimateId }: EstimateTemplateProp
               step="0.5"
               value={newItem.labour_hours}
               onChange={(e) => setNewItem({ ...newItem, labour_hours: e.target.value })}
+              onKeyDown={(e) => e.key === 'Enter' && addItem()}
               placeholder="0"
             />
           </div>
