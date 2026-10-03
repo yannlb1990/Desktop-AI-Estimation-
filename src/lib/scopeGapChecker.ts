@@ -112,7 +112,7 @@ const SCOPE_GAP_RULES: GapRule[] = [
         p.rooms.some(r => /kitchen/i.test(r.name))
       );
       const hasKitchenElec = items.some(i =>
-        /kitchen/i.test(i.description) && i.trade === 'Electrician'
+        /kitchen/i.test(i.description) && i.trade === 'Electrical'
       );
       const hasOvenCircuit = items.some(i =>
         /oven|cooktop|range|stove/i.test(i.description)
@@ -169,7 +169,7 @@ const SCOPE_GAP_RULES: GapRule[] = [
     title: 'No Switchboard/Main Board',
     description: 'Electrical items found but no switchboard allowance',
     condition: (analysis, items) => {
-      const hasElectrical = items.some(i => i.trade === 'Electrician');
+      const hasElectrical = items.some(i => i.trade === 'Electrical');
       const hasSwitchboard = items.some(i =>
         /switchboard|main\s*board|distribution|msb|sub\s*board/i.test(i.description)
       );

@@ -13,7 +13,6 @@ import {
 } from "lucide-react";
 import { getMyTeam, getSharedProjects } from "@/lib/db/teams";
 import type { Team, SharedProject } from "@/lib/db/teams";
-import { getUserStorageKey } from "@/lib/localAuth";
 import { useSubscription } from "@/hooks/useSubscription";
 import { PLAN_NAMES } from "@/lib/subscription";
 import { MetricoreLogoMark } from "@/components/MetricoreLogoMark";
