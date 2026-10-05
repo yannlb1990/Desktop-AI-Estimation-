@@ -114,6 +114,8 @@ export async function loadProjectsFromSupabase(): Promise<any[]> {
       .from('projects')
       .select('*')
       .eq('user_id', userId)
+      // RLS also lets the owner read deleted rows, so filter them here or they come back
+      .is('deleted_at', null)
       .order('updated_at', { ascending: false });
 
     if (error || !data) return [];
@@ -142,16 +144,37 @@ export async function loadProjectsFromSupabase(): Promise<any[]> {
   }
 }
 
+/** IDs of this user's soft-deleted projects. Never throws. */
+async function loadDeletedProjectIds(): Promise<Set<string>> {
+  const userId = await getAuthUserId();
+  if (!userId) return new Set();
+  try {
+    const { data, error } = await (supabase as any)
+      .from('projects')
+      .select('id')
+      .eq('user_id', userId)
+      .not('deleted_at', 'is', null);
+    if (error || !data) return new Set();
+    return new Set(data.map((row: any) => row.id));
+  } catch {
+    return new Set();
+  }
+}
+
 /**
  * Merge strategy: newer updated_at wins for projects that exist in both stores.
+ * Projects deleted in the DB (e.g. on another device) are dropped from local storage too.
  * localStorage-only projects are kept (offline-created, not yet synced).
  * If a localStorage version is newer than DB, it wins and gets synced back.
  */
 export async function loadProjectsMerged(): Promise<any[]> {
-  const [dbProjects, lsProjects] = await Promise.all([
+  const [dbProjects, allLsProjects, deletedIds] = await Promise.all([
     loadProjectsFromSupabase(),
     Promise.resolve(lsLoadProjects()),
+    loadDeletedProjectIds(),
   ]);
+  // A local copy of a deleted project would otherwise look "offline-created" and be re-synced.
+  const lsProjects = allLsProjects.filter((p: any) => !deletedIds.has(p.id));
 
   if (dbProjects.length === 0) return lsProjects;
 
