@@ -10,7 +10,8 @@ import { Building2, Printer, Plus, Trash2 } from "lucide-react"
 import { toast } from "sonner"
 import { useSubscription } from "@/hooks/useSubscription"
 import { UpgradeModal } from "@/components/UpgradeModal"
-import { priceLine, calculateProjectTotals, DEFAULT_ESTIMATE_CONFIG, DEFAULT_LABOUR_RATES } from "@/lib/pricing/estimatePricing"
+import { priceLine, calculateProjectTotals, resolveProjectPricing } from "@/lib/pricing/estimatePricing"
+import { readUserPricingDefaults } from "@/lib/pricing/userPricingDefaults"
 
 interface FullTenderProps { project: any; estimate?: any }
 
@@ -290,9 +291,8 @@ export const FullTenderGenerator = ({ project, estimate }: FullTenderProps) => {
     if (estimateItems.length === 0) return
 
     // Price every line with the same function the Estimate tab uses.
-    const { labourRates: savedRates, customConfigs: _cc, groupingMode: _gm, ...savedConfig } = proj?.estimate_config || {}
-    const pricingConfig = { ...DEFAULT_ESTIMATE_CONFIG, ...savedConfig }
-    const pricingRates = { ...DEFAULT_LABOUR_RATES, ...(savedRates || {}) }
+    const userPricingDefaults = readUserPricingDefaults()
+    const { config: pricingConfig, labourRates: pricingRates } = resolveProjectPricing(proj, userPricingDefaults)
 
     const newBoqItems: any[] = estimateItems.map((item: any) => {
       // A labour-only line (qty 0) shows as 1 item at its full price
@@ -327,7 +327,7 @@ export const FullTenderGenerator = ({ project, estimate }: FullTenderProps) => {
     })
 
     // Recalculate from the project so the tender always matches the Estimate tab
-    const estimateTotals = calculateProjectTotals(proj)
+    const estimateTotals = calculateProjectTotals(proj, userPricingDefaults)
     let exGstTotal: number
     if (estimateTotals?.taxable) {
       exGstTotal = Math.round(estimateTotals.taxable * 100) / 100
@@ -352,10 +352,10 @@ export const FullTenderGenerator = ({ project, estimate }: FullTenderProps) => {
   const gstPct: number = (() => {
     try {
       const projects: any[] = JSON.parse(localStorage.getItem(getUserStorageKey("local_projects")) || "[]")
-      return projects.find((p: any) => p.id === project?.id)?.estimate_config?.gstPct ?? 10
+      return resolveProjectPricing(projects.find((p: any) => p.id === project?.id), readUserPricingDefaults()).config.gstPct
     } catch { return 10 }
   })()
-  const gstAmount = subtotalNum * (gstPct / 100)
+  const gstAmount = Math.round(subtotalNum * gstPct) / 100
   const totalIncGst = subtotalNum + gstAmount
   const today = new Date()
   const validUntil = new Date(today.getTime() + parseInt(validityDays) * 86400000)

@@ -29,6 +29,7 @@ import { useSubscription } from '@/hooks/useSubscription';
 import { UpgradeModal } from '@/components/UpgradeModal';
 import { findLabourRate, getCustomRates, setCustomRate, clearCustomRate, LABOUR_MULT, getEffectiveRate } from '@/data/labourRates';
 import { calculateProjectTotals } from '@/lib/pricing/estimatePricing';
+import { readUserPricingDefaults } from '@/lib/pricing/userPricingDefaults';
 
 // Area options
 const AREA_OPTIONS: MeasurementArea[] = [
@@ -815,7 +816,7 @@ export const CostEstimator = ({
 
     // Same calculation the Estimate tab uses, so the quote that opens next shows the
     // same total as the Estimate tab (supervision, overheads, contingency, line markup).
-    projects[projectIndex].estimate_totals = calculateProjectTotals(projects[projectIndex]);
+    projects[projectIndex].estimate_totals = calculateProjectTotals(projects[projectIndex], readUserPricingDefaults());
 
     localStorage.setItem(getUserStorageKey('local_projects'), JSON.stringify(projects));
     syncProjectToSupabase(projects[projectIndex]);
@@ -840,7 +841,7 @@ export const CostEstimator = ({
             ps[pi].estimate_items = (ps[pi].estimate_items || []).filter(
               (e: any) => !transferredItemIds.includes(e.id)
             );
-            ps[pi].estimate_totals = calculateProjectTotals(ps[pi]);
+            ps[pi].estimate_totals = calculateProjectTotals(ps[pi], readUserPricingDefaults());
             localStorage.setItem(getUserStorageKey('local_projects'), JSON.stringify(ps));
             syncProjectToSupabase(ps[pi]);
             // Remove from transferred set so they can be re-transferred

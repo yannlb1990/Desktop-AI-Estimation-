@@ -135,6 +135,8 @@ export function priceLine(
   };
 }
 
+export const roundCents = (n: number): number => Math.round(n * 100) / 100;
+
 export interface EstimateTotals {
   totalMaterials: number;
   totalLabour: number;
@@ -198,8 +200,10 @@ export function calculateEstimateTotals({
   const contingency = preMargin * (config.contingencyPct / 100);
   const customConfigsTotal = customConfigs.reduce((sum, cc) => sum + preMargin * ((cc.value || 0) / 100), 0);
   const margin = preMargin * (config.marginPct / 100);
-  const taxable = preMargin + contingency + customConfigsTotal + margin;
-  const gst = taxable * (config.gstPct / 100);
+  // Round like an invoice: GST is charged on the ex-GST price in cents, so the quote
+  // (which shows cents) and the estimate always reach the same total.
+  const taxable = roundCents(preMargin + contingency + customConfigsTotal + margin);
+  const gst = roundCents(taxable * (config.gstPct / 100));
 
   return {
     totalMaterials,
@@ -221,13 +225,45 @@ export function calculateEstimateTotals({
   };
 }
 
+export interface UserPricingDefaults {
+  config: Partial<PricingConfig>;
+  labourRates: Record<string, number>;
+}
+
+export interface ProjectPricing {
+  config: PricingConfig;
+  labourRates: Record<string, number>;
+  customConfigs: { id: string; name: string; value: number }[];
+}
+
 /**
- * Totals for a project exactly as the Estimate tab would show them, read from the
- * saved project object. Used where the Estimate tab isn't mounted (Costs transfer).
+ * The pricing settings a project uses, in priority order: the project's own saved
+ * config, then the estimator's Settings → Rates defaults, then built-in defaults.
+ * Every screen resolves a project's pricing through this, so they always agree.
  */
-export function calculateProjectTotals(project: any): EstimateTotals {
-  const saved = project?.estimate_config || {};
-  const { labourRates: savedRates, customConfigs, ...savedConfig } = saved;
+export function resolveProjectPricing(project: any, userDefaults?: UserPricingDefaults): ProjectPricing {
+  const saved = project?.estimate_config;
+  if (saved) {
+    const { labourRates: savedRates, customConfigs, groupingMode: _g, ...savedConfig } = saved;
+    return {
+      config: { ...DEFAULT_ESTIMATE_CONFIG, ...savedConfig },
+      labourRates: { ...DEFAULT_LABOUR_RATES, ...(savedRates || {}) },
+      customConfigs: customConfigs || [],
+    };
+  }
+  return {
+    config: { ...DEFAULT_ESTIMATE_CONFIG, ...(userDefaults?.config || {}) },
+    labourRates: { ...DEFAULT_LABOUR_RATES, ...(userDefaults?.labourRates || {}) },
+    customConfigs: [],
+  };
+}
+
+/**
+ * Totals for a project exactly as the Estimate tab shows them, read from the saved
+ * project object. Used where the Estimate tab isn't mounted (Costs transfer, Quote, Tender).
+ */
+export function calculateProjectTotals(project: any, userDefaults?: UserPricingDefaults): EstimateTotals {
+  const { config, labourRates, customConfigs } = resolveProjectPricing(project, userDefaults);
   const prelimsTotal = (project?.prelim_items || []).reduce(
     (sum: number, p: any) => sum + (p.quantity || 0) * (p.unitPrice || 0),
     0,
@@ -235,10 +271,10 @@ export function calculateProjectTotals(project: any): EstimateTotals {
   return calculateEstimateTotals({
     items: project?.estimate_items || [],
     consumables: project?.consumables || [],
-    config: { ...DEFAULT_ESTIMATE_CONFIG, ...savedConfig },
-    labourRates: { ...DEFAULT_LABOUR_RATES, ...(savedRates || {}) },
+    config,
+    labourRates,
     overheadTotal: project?.overhead_total || 0,
     prelimsTotal,
-    customConfigs: customConfigs || [],
+    customConfigs,
   });
 }

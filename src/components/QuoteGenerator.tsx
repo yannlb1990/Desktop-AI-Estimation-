@@ -11,7 +11,8 @@ import { Checkbox } from "@/components/ui/checkbox"
 import { FileText, Printer, X, Plus, Trash2, ChevronRight, Upload, RefreshCw, GripVertical, Pencil, Check, History, RotateCcw, BookmarkPlus } from "lucide-react"
 import { toast } from "sonner"
 import { saveQuoteToLibrary } from "@/components/DocumentLibrary"
-import { priceLine, calculateProjectTotals, DEFAULT_ESTIMATE_CONFIG, DEFAULT_LABOUR_RATES } from "@/lib/pricing/estimatePricing"
+import { priceLine, calculateProjectTotals, resolveProjectPricing } from "@/lib/pricing/estimatePricing"
+import { readUserPricingDefaults } from "@/lib/pricing/userPricingDefaults"
 
 interface QuoteGeneratorProps {
   project: any
@@ -240,9 +241,8 @@ export const QuoteGenerator = ({ project, estimate, listenForOpen }: QuoteGenera
     }
 
     // Price every line with the same function the Estimate tab uses.
-    const { labourRates: savedRates, customConfigs: _cc, groupingMode: _gm, ...savedConfig } = proj?.estimate_config || {}
-    const pricingConfig = { ...DEFAULT_ESTIMATE_CONFIG, ...savedConfig }
-    const pricingRates = { ...DEFAULT_LABOUR_RATES, ...(savedRates || {}) }
+    const userPricingDefaults = readUserPricingDefaults()
+    const { config: pricingConfig, labourRates: pricingRates } = resolveProjectPricing(proj, userPricingDefaults)
 
     const lines: QuoteLine[] = []
     let itemsSubtotal = 0
@@ -298,7 +298,7 @@ export const QuoteGenerator = ({ project, estimate, listenForOpen }: QuoteGenera
 
     // Recalculate from the project rather than trusting a saved snapshot, so the quote
     // always matches the Estimate tab whichever screen saved last.
-    const estimateTotals = estimateItems.length > 0 ? calculateProjectTotals(proj) : proj?.estimate_totals
+    const estimateTotals = estimateItems.length > 0 ? calculateProjectTotals(proj, userPricingDefaults) : proj?.estimate_totals
     const linesBaseTotal = itemsSubtotal + consumablesSubtotal
     // What the client sees is qty x rounded unit price, so reconcile against that.
     const shownTotal = (ls: QuoteLine[]) => ls.reduce((sum, l) => sum + l.qty * l.unitPrice, 0)
@@ -402,10 +402,10 @@ export const QuoteGenerator = ({ project, estimate, listenForOpen }: QuoteGenera
   const gstPct: number = (() => {
     try {
       const projects: any[] = JSON.parse(localStorage.getItem(getUserStorageKey("local_projects")) || "[]")
-      return projects.find((p: any) => p.id === project?.id)?.estimate_config?.gstPct ?? 10
+      return resolveProjectPricing(projects.find((p: any) => p.id === project?.id), readUserPricingDefaults()).config.gstPct
     } catch { return 10 }
   })()
-  const gstAmount = subtotalNum * (gstPct / 100)
+  const gstAmount = Math.round(subtotalNum * gstPct) / 100
   const totalIncGst = subtotalNum + gstAmount
   const depositAmount = totalIncGst * (parseFloat(depositPct) / 100)
   const progressAmount = totalIncGst * (parseFloat(progressPct) / 100)

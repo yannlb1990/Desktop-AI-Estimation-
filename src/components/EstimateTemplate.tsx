@@ -38,9 +38,9 @@ import {
   calculateEstimateTotals,
   priceLine,
   resolveLabourRate,
-  DEFAULT_ESTIMATE_CONFIG,
-  DEFAULT_LABOUR_RATES,
+  resolveProjectPricing,
 } from "@/lib/pricing/estimatePricing";
+import { readUserPricingDefaults } from "@/lib/pricing/userPricingDefaults";
 
 // ── Template accent colour (left border stripe, by template id) ───────────────
 const TEMPLATE_STYLES: Record<string, { accent: string }> = {
@@ -371,26 +371,21 @@ export const EstimateTemplate = ({ projectId, estimateId }: EstimateTemplateProp
   const [urlDialog, setUrlDialog] = useState<{ open: boolean; url: string; type: 'item' | 'related'; itemId?: string; materialId?: string }>({ 
     open: false, url: "", type: 'item' 
   });
-  // Saved per-project pricing config. Read on mount so the save effect below never
-  // overwrites a project's margin, overheads or rates with the defaults.
-  const [savedEstimateConfig] = useState<any>(() => {
+  // Resolve this project's pricing once on mount (project's saved config, else the
+  // Settings → Rates defaults, else built-in), the same way every other screen does.
+  // Reading it up front also stops the save effect overwriting a saved config with defaults.
+  const [initialPricing] = useState(() => {
+    let project: any = null;
     try {
       const projects: any[] = JSON.parse(localStorage.getItem(getUserStorageKey('local_projects')) || '[]');
-      return projects.find((p: any) => p.id === projectId)?.estimate_config ?? null;
-    } catch {
-      return null;
-    }
+      project = projects.find((p: any) => p.id === projectId) ?? null;
+    } catch { /* corrupted data: use defaults */ }
+    return resolveProjectPricing(project, readUserPricingDefaults());
   });
-  const [labourRates, setLabourRates] = useState<Record<string, number>>(() => ({
-    ...DEFAULT_LABOUR_RATES,
-    ...(savedEstimateConfig?.labourRates || {}),
-  }));
-  const [config, setConfig] = useState(() => {
-    const { labourRates: _r, customConfigs: _c, groupingMode: _g, ...saved } = savedEstimateConfig || {};
-    return { ...DEFAULT_ESTIMATE_CONFIG, ...saved };
-  });
+  const [labourRates, setLabourRates] = useState<Record<string, number>>(initialPricing.labourRates);
+  const [config, setConfig] = useState(initialPricing.config);
   const [customConfigs, setCustomConfigs] = useState<{ id: string; name: string; value: number }[]>(
-    () => savedEstimateConfig?.customConfigs || []
+    initialPricing.customConfigs
   );
   const [newCustomConfig, setNewCustomConfig] = useState({ name: "", value: "" });
   const [showConfig, setShowConfig] = useState(false);
@@ -418,7 +413,6 @@ export const EstimateTemplate = ({ projectId, estimateId }: EstimateTemplateProp
 
   useEffect(() => {
     loadOverheads();
-    loadUserRateSettings();
   }, [projectId]);
 
   const loadOverheads = () => {
@@ -429,34 +423,6 @@ export const EstimateTemplate = ({ projectId, estimateId }: EstimateTemplateProp
         setOverheadTotal(project.overhead_total);
       }
     } catch { /* corrupted data — skip overhead load */ }
-  };
-
-  const loadUserRateSettings = () => {
-    // Settings → Rates are defaults for new projects; a project's own saved config wins.
-    if (savedEstimateConfig) return;
-    try {
-      // Apply default rates from Settings → Rates tab
-      const savedRates = localStorage.getItem(getUserStorageKey('default_rates'));
-      if (savedRates) {
-        const r = JSON.parse(savedRates);
-        const defaultLabour = parseFloat(r.labourRate);
-        if (!isNaN(defaultLabour) && defaultLabour > 0) {
-          setConfig(prev => ({ ...prev, defaultLabourRate: defaultLabour }));
-        }
-        if (r.overhead) setConfig(prev => ({ ...prev, overheadPct: parseFloat(r.overhead) || prev.overheadPct }));
-        if (r.margin) setConfig(prev => ({ ...prev, marginPct: parseFloat(r.margin) || prev.marginPct }));
-      }
-      // Merge labour presets from Settings → Rates tab into per-trade rates
-      const savedPresets = localStorage.getItem(getUserStorageKey('labour_presets'));
-      if (savedPresets) {
-        const presets: { id: string; name: string; rate: string }[] = JSON.parse(savedPresets);
-        if (presets.length > 0) {
-          const presetMap: Record<string, number> = {};
-          presets.forEach(p => { if (p.name && p.rate) presetMap[p.name] = parseFloat(p.rate); });
-          setLabourRates(prev => ({ ...prev, ...presetMap }));
-        }
-      }
-    } catch { /* non-fatal */ }
   };
 
   const [newItem, setNewItem] = useState({
