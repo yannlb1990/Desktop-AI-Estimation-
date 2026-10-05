@@ -11,7 +11,7 @@
 React 18 + TypeScript + Vite + Tailwind CSS + shadcn/ui + jsPDF + pdf.js + Fabric.js + Supabase
 
 ## Dev Server
-- Port: **3002** (`vite.config.ts` — NOT 3001 which is MindBridge, NOT 5173)
+- Port: **8080** (what `npm run dev` actually serves, verified 2026-10-03; NOT 3001 which is MindBridge)
 - Start: `npm run dev`
 
 ## CRITICAL CONSTRAINTS — read before touching any file
@@ -19,11 +19,12 @@ React 18 + TypeScript + Vite + Tailwind CSS + shadcn/ui + jsPDF + pdf.js + Fabri
 | Constraint | Rule |
 |-----------|------|
 | **Fabric.js version** | Pinned at `^6.7.1`. NEVER upgrade to v7 — breaks `canvas.getPointer`, destroys all drawing tools |
-| **Port** | Dev server on 3002 — never change vite.config.ts port |
+| **Port** | Dev server on 8080 — never change vite.config.ts port |
 | **State spelling** | `labourHours` (British) — NOT `laborHours`. Mismatching types causes silent $0 subtotals |
 | **Supabase project ref** | `dwimfbkwaebehxdavryg` |
 | **ANTHROPIC_API_KEY** | Set via: `supabase secrets set ANTHROPIC_API_KEY=sk-ant-... --project-ref dwimfbkwaebehxdavryg` |
 | **AI model** | Edge function `analyse-plan` uses `claude-sonnet-4-6` |
+| **Pricing maths** | ALL money calculations go through `src/lib/pricing/estimatePricing.ts` (`priceLine`, `calculateEstimateTotals`, `resolveProjectPricing`, `calculateProjectTotals`). Never write `quantity * unit_price` elsewhere: 8 drifted copies once put the quote $319k below the estimate |
 | **No em-dashes** | Never use em-dashes in UI copy — restructure as sentences |
 | **No credentials in chat** | Tell user to run `export TOKEN=... && command` themselves |
 | **No browser automation** | Give URL + describe instead — automation corrupts localStorage/auth |
