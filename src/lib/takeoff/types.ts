@@ -204,6 +204,7 @@ export interface CostItem {
   // Labour fields
   labourTrade?: string;         // Tradesperson type for rate lookup (Carpenter, Plumber, etc.)
   hourlyRate?: number;
+  hourlyRateOverride?: boolean; // set when the estimator chose this line's rate on purpose
   labourWastePercent?: number;  // Default 10%
 
   // Material waste

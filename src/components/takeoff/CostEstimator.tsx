@@ -28,6 +28,7 @@ import { MaterialEntry } from '@/lib/materials/types';
 import { useSubscription } from '@/hooks/useSubscription';
 import { UpgradeModal } from '@/components/UpgradeModal';
 import { findLabourRate, getCustomRates, setCustomRate, clearCustomRate, LABOUR_MULT, getEffectiveRate } from '@/data/labourRates';
+import { calculateProjectTotals } from '@/lib/pricing/estimatePricing';
 
 // Area options
 const AREA_OPTIONS: MeasurementArea[] = [
@@ -338,7 +339,7 @@ const LabourRateCell = ({ item, selectedState, onUpdateCostItem }: LabourRateCel
   // Picking a trade auto-fills its profile rate (custom or market typical)
   const handleLabourTradeChange = (tradeName: string) => {
     const rate = getEffectiveRate(tradeName, selectedState);
-    onUpdateCostItem(item.id, { labourTrade: tradeName, hourlyRate: rate });
+    onUpdateCostItem(item.id, { labourTrade: tradeName, hourlyRate: rate, hourlyRateOverride: false });
   };
 
   const handleOpenChange = (next: boolean) => {
@@ -350,12 +351,12 @@ const LabourRateCell = ({ item, selectedState, onUpdateCostItem }: LabourRateCel
   };
 
   const applyRate = (rate: number) => {
-    onUpdateCostItem(item.id, { hourlyRate: rate });
+    onUpdateCostItem(item.id, { hourlyRate: rate, hourlyRateOverride: Math.round(rate) !== Math.round(profileRate) });
     setOpen(false);
   };
 
   const resetToProfile = () => {
-    onUpdateCostItem(item.id, { hourlyRate: profileRate });
+    onUpdateCostItem(item.id, { hourlyRate: profileRate, hourlyRateOverride: false });
   };
 
   const saveDefault = () => {
@@ -401,7 +402,7 @@ const LabourRateCell = ({ item, selectedState, onUpdateCostItem }: LabourRateCel
             <Input
               type="number"
               value={currentRate}
-              onChange={(e) => onUpdateCostItem(item.id, { hourlyRate: Number(e.target.value) })}
+              onChange={(e) => onUpdateCostItem(item.id, { hourlyRate: Number(e.target.value), hourlyRateOverride: Math.round(Number(e.target.value)) !== Math.round(profileRate) })}
               className={cn(
                 "h-7 text-xs text-right font-mono w-full",
                 isOverride
@@ -777,6 +778,7 @@ export const CostEstimator = ({
         unit_price: item.unitCost,
         labour_hours: item.labourHours ?? 0,
         labour_rate: item.hourlyRate ?? 65,
+        labour_rate_override: !!item.hourlyRateOverride,
         material_wastage_pct: item.materialWastePercent ?? cfgMaterialWaste,
         labour_wastage_pct: item.labourWastePercent ?? cfgLabourWaste,
         markup_pct: item.markupPercent ?? 0,
@@ -786,7 +788,8 @@ export const CostEstimator = ({
         isEditing: false,
         relatedMaterials: (item.relatedMaterials || [])
           .filter(rm => rm.isAccepted)
-          .map(rm => ({ ...rm, unit_price: rm.unitCost ?? 0 })),
+          // accepted on the Costs tab = confirmed on the Estimate tab, so it is priced there too
+          .map(rm => ({ ...rm, unit_price: rm.unitCost ?? 0, confirmed: true })),
         _transferredAt: Date.now(),
       };
       newEstimateItems.push(estimateItem);
@@ -800,49 +803,6 @@ export const CostEstimator = ({
 
     projects[projectIndex].estimate_items = [...existing, ...newEstimateItems];
 
-    // Write a snapshot estimate_totals so QuoteGenerator can show totals immediately
-    // after transfer without needing EstimateTemplate to open first.
-    // EstimateTemplate will overwrite this with the full calculation the first time opened.
-    {
-      const allEI: any[] = projects[projectIndex].estimate_items;
-      let _totMat = 0, _totLab = 0, _fixingsCost = 0;
-      allEI.forEach((ei: any) => {
-        const mw = (ei.material_wastage_pct ?? cfgMaterialWaste) / 100;
-        _totMat += (ei.quantity || 1) * (ei.unit_price || 0) * (1 + mw);
-        const lw = (ei.labour_wastage_pct ?? cfgLabourWaste) / 100;
-        _totLab += (ei.labour_hours || 0) * (ei.labour_rate || 65) * (1 + lw);
-        // relatedMaterials here are pre-filtered to accepted-only by transferItems above
-        if (Array.isArray(ei.relatedMaterials)) {
-          ei.relatedMaterials.forEach((rm: any) => {
-            _fixingsCost += (rm.quantity || 0) * (rm.unit_price || rm.unitCost || 0);
-          });
-        }
-      });
-      // Include consumables from the CostEstimator state (same items being merged below)
-      const _consumablesTotal = consumables.reduce((sum, c) => sum + c.total, 0);
-      const _subtotal = _totMat + _totLab + _fixingsCost + _consumablesTotal;
-      const _margin = _subtotal * (marginPercent / 100);
-      const _taxable = _subtotal + _margin;
-      const _gst = gstEnabled ? _taxable * 0.10 : 0;
-      projects[projectIndex].estimate_totals = {
-        taxable: _taxable,
-        gst: _gst,
-        totalPrice: _taxable + _gst,
-        totalMaterials: _totMat,
-        totalLabour: _totLab,
-        totalMarkup: 0,
-        baseSubtotal: _subtotal,
-        supervision: 0,
-        overheadsPct: 0,
-        overheadTotal: 0,
-        totalOverheads: 0,
-        preMargin: _subtotal,
-        contingency: 0,
-        margin: _margin,
-        customConfigsTotal: 0,
-      };
-    }
-
     // Merge consumables into EstimateTemplate's list, deduped by name
     const existingConsumables: any[] = projects[projectIndex].consumables || [];
     const existingNames = new Set(existingConsumables.map((c: any) => c.name));
@@ -852,6 +812,10 @@ export const CostEstimator = ({
     if (newConsumables.length > 0) {
       projects[projectIndex].consumables = [...existingConsumables, ...newConsumables];
     }
+
+    // Same calculation the Estimate tab uses, so the quote that opens next shows the
+    // same total as the Estimate tab (supervision, overheads, contingency, line markup).
+    projects[projectIndex].estimate_totals = calculateProjectTotals(projects[projectIndex]);
 
     localStorage.setItem(getUserStorageKey('local_projects'), JSON.stringify(projects));
     syncProjectToSupabase(projects[projectIndex]);
@@ -876,6 +840,7 @@ export const CostEstimator = ({
             ps[pi].estimate_items = (ps[pi].estimate_items || []).filter(
               (e: any) => !transferredItemIds.includes(e.id)
             );
+            ps[pi].estimate_totals = calculateProjectTotals(ps[pi]);
             localStorage.setItem(getUserStorageKey('local_projects'), JSON.stringify(ps));
             syncProjectToSupabase(ps[pi]);
             // Remove from transferred set so they can be re-transferred

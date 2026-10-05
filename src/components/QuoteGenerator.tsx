@@ -11,6 +11,7 @@ import { Checkbox } from "@/components/ui/checkbox"
 import { FileText, Printer, X, Plus, Trash2, ChevronRight, Upload, RefreshCw, GripVertical, Pencil, Check, History, RotateCcw, BookmarkPlus } from "lucide-react"
 import { toast } from "sonner"
 import { saveQuoteToLibrary } from "@/components/DocumentLibrary"
+import { priceLine, calculateProjectTotals, DEFAULT_ESTIMATE_CONFIG, DEFAULT_LABOUR_RATES } from "@/lib/pricing/estimatePricing"
 
 interface QuoteGeneratorProps {
   project: any
@@ -238,39 +239,19 @@ export const QuoteGenerator = ({ project, estimate, listenForOpen }: QuoteGenera
       } catch { /* corrupted takeoff state — continue with empty lines */ }
     }
 
-    // Use current labour rates saved by EstimateTemplate (falls back to stored item rate)
-    const cfgRates: Record<string, number> = proj?.estimate_config?.labourRates || {}
-    const cfgDefaultRate: number = proj?.estimate_config?.defaultLabourRate || 65
-    // Same waste-% defaults as EstimateTemplate's own config (10% material / 5% labour),
-    // read from this project's actual saved config rather than a hardcoded guess — a
-    // mismatched hardcoded fallback here is exactly how a quote's total can silently
-    // diverge from the Estimate tab's total for the same line.
-    const cfgMaterialWaste: number = proj?.estimate_config?.materialWastage ?? 10
-    const cfgLabourWaste: number = proj?.estimate_config?.labourWastage ?? 5
+    // Price every line with the same function the Estimate tab uses.
+    const { labourRates: savedRates, customConfigs: _cc, groupingMode: _gm, ...savedConfig } = proj?.estimate_config || {}
+    const pricingConfig = { ...DEFAULT_ESTIMATE_CONFIG, ...savedConfig }
+    const pricingRates = { ...DEFAULT_LABOUR_RATES, ...(savedRates || {}) }
 
     const lines: QuoteLine[] = []
     let itemsSubtotal = 0
 
     estimateItems.forEach((item: any) => {
-      const qty = parseFloat(item.quantity) || 1
-      const unitPrice = parseFloat(item.unit_price) || 0
-      const labourHours = parseFloat(item.labour_hours) || 0
-      const labourRate = cfgRates[item.trade] || parseFloat(item.labour_rate) || cfgDefaultRate || 65
-      const matWaste = (item.material_wastage_pct ?? cfgMaterialWaste) / 100
-      const labWaste = (item.labour_wastage_pct ?? cfgLabourWaste) / 100
-      const markup = (item.markup_pct ?? 0) / 100
-
-      let matTotal = qty * unitPrice * (1 + matWaste)
-      // Include confirmed related materials in this line's cost
-      if (Array.isArray(item.relatedMaterials)) {
-        item.relatedMaterials.forEach((rm: any) => {
-          if (rm.isAccepted || rm.confirmed) matTotal += (rm.quantity || 0) * (rm.unit_price || 0)
-        })
-      }
-
-      const labTotal = labourHours * labourRate * (1 + labWaste)
-      const lineTotal = (matTotal + labTotal) * (1 + markup)
+      const lineTotal = priceLine(item, pricingConfig, pricingRates).total
       itemsSubtotal += lineTotal
+      // A labour-only line (qty 0) shows as 1 item at its full price
+      const qty = parseFloat(item.quantity) > 0 ? parseFloat(item.quantity) : 1
 
       lines.push({
         id: item.id || crypto.randomUUID(),
@@ -279,7 +260,7 @@ export const QuoteGenerator = ({ project, estimate, listenForOpen }: QuoteGenera
           : (item.trade || "Item"),
         qty,
         unit: item.unit || "m²",
-        unitPrice: Math.round((lineTotal / Math.max(qty, 1)) * 100) / 100,
+        unitPrice: Math.round((lineTotal / qty) * 100) / 100,
         included: true,
         fromEstimate: true,
         trade: item.trade || "General",
@@ -315,25 +296,34 @@ export const QuoteGenerator = ({ project, estimate, listenForOpen }: QuoteGenera
       lines.push(...consumableLines)
     }
 
-    const estimateTotals = proj?.estimate_totals
+    // Recalculate from the project rather than trusting a saved snapshot, so the quote
+    // always matches the Estimate tab whichever screen saved last.
+    const estimateTotals = estimateItems.length > 0 ? calculateProjectTotals(proj) : proj?.estimate_totals
     const linesBaseTotal = itemsSubtotal + consumablesSubtotal
+    // What the client sees is qty x rounded unit price, so reconcile against that.
+    const shownTotal = (ls: QuoteLine[]) => ls.reduce((sum, l) => sum + l.qty * l.unitPrice, 0)
 
     if (absorbOverheads) {
       // ── Absorbed mode: scale every line price so sum = estimate_totals.taxable ──
-      // Overheads/margin/supervision are baked into line prices — invisible to client
+      // Overheads/margin/supervision are baked into line prices, invisible to client
       if (estimateTotals?.taxable && linesBaseTotal > 0) {
         const scaleFactor = estimateTotals.taxable / linesBaseTotal
-        return lines.map(l => ({
+        const scaled = lines.map(l => ({
           ...l,
           unitPrice: Math.round(l.unitPrice * scaleFactor * 100) / 100,
         }))
+        // Put the cents left over from rounding on a single-quantity line so the total is exact
+        const residual = Math.round((estimateTotals.taxable - shownTotal(scaled)) * 100) / 100
+        const absorber = scaled.find(l => l.qty === 1)
+        if (absorber && residual !== 0) absorber.unitPrice = Math.round((absorber.unitPrice + residual) * 100) / 100
+        return scaled
       }
       return lines
     }
 
     // ── Default mode: show a separate "Overheads & Margin" line ──
     if (estimateTotals?.taxable) {
-      const bridgeAmount = estimateTotals.taxable - linesBaseTotal
+      const bridgeAmount = estimateTotals.taxable - shownTotal(lines)
       if (bridgeAmount > 0.01) {
         lines.push({
           id: "overhead-margin-bridge",
@@ -408,7 +398,14 @@ export const QuoteGenerator = ({ project, estimate, listenForOpen }: QuoteGenera
   // Totals derived from included lines
   const includedLines = quoteLines.filter(l => l.included)
   const subtotalNum = includedLines.reduce((sum, l) => sum + l.qty * l.unitPrice, 0)
-  const gstAmount = subtotalNum * 0.1
+  // Same GST % as the Estimate tab (10% unless the estimator changed it)
+  const gstPct: number = (() => {
+    try {
+      const projects: any[] = JSON.parse(localStorage.getItem(getUserStorageKey("local_projects")) || "[]")
+      return projects.find((p: any) => p.id === project?.id)?.estimate_config?.gstPct ?? 10
+    } catch { return 10 }
+  })()
+  const gstAmount = subtotalNum * (gstPct / 100)
   const totalIncGst = subtotalNum + gstAmount
   const depositAmount = totalIncGst * (parseFloat(depositPct) / 100)
   const progressAmount = totalIncGst * (parseFloat(progressPct) / 100)
@@ -928,7 +925,7 @@ ${clone.outerHTML}
 
                       <div className="pt-2 border-t space-y-1 text-xs font-mono">
                         <div className="flex justify-between text-muted-foreground"><span>Subtotal (ex GST)</span><span>{au$(subtotalNum)}</span></div>
-                        <div className="flex justify-between text-muted-foreground"><span>GST (10%)</span><span>{au$(gstAmount)}</span></div>
+                        <div className="flex justify-between text-muted-foreground"><span>GST ({gstPct}%)</span><span>{au$(gstAmount)}</span></div>
                         <div className="flex justify-between font-bold text-sm border-t pt-1"><span>TOTAL (inc GST)</span><span>{au$(totalIncGst)}</span></div>
                       </div>
                     </>
@@ -970,7 +967,7 @@ ${clone.outerHTML}
                   ) : (
                     <div className="bg-background rounded-lg p-3 space-y-1 text-sm font-mono border">
                       <div className="flex justify-between text-muted-foreground"><span>Lines ({includedLines.length})</span><span>{au$(subtotalNum)}</span></div>
-                      <div className="flex justify-between text-muted-foreground"><span>GST (10%)</span><span>{au$(gstAmount)}</span></div>
+                      <div className="flex justify-between text-muted-foreground"><span>GST ({gstPct}%)</span><span>{au$(gstAmount)}</span></div>
                       <div className="flex justify-between font-bold border-t pt-1"><span>TOTAL (inc GST)</span><span>{au$(totalIncGst)}</span></div>
                     </div>
                   )}
@@ -1089,7 +1086,7 @@ ${clone.outerHTML}
                       </div>
                       <div className="text-right text-sm space-y-1" style={{ color: primaryColor + "bb" }}>
                         <div>Subtotal: {au$(subtotalNum)}</div>
-                        <div>GST (10%): {au$(gstAmount)}</div>
+                        <div>GST ({gstPct}%): {au$(gstAmount)}</div>
                         <div className="text-xs text-gray-400 mt-2 max-w-[160px]">
                           Contractor is GST registered under A New Tax System (GST) Act 1999
                         </div>
@@ -1160,7 +1157,7 @@ ${clone.outerHTML}
                             <td className="pt-3 pb-1 px-3 text-right font-mono text-sm text-gray-700">{au$(subtotalNum)}</td>
                           </tr>
                           <tr>
-                            <td colSpan={4} className="pb-1 px-3 text-right text-sm text-gray-500">GST (10%)</td>
+                            <td colSpan={4} className="pb-1 px-3 text-right text-sm text-gray-500">GST ({gstPct}%)</td>
                             <td className="pb-1 px-3 text-right font-mono text-sm text-gray-700">{au$(gstAmount)}</td>
                           </tr>
                           <tr style={{ background: primaryColor + "10" }}>

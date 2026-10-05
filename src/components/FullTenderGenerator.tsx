@@ -10,6 +10,7 @@ import { Building2, Printer, Plus, Trash2 } from "lucide-react"
 import { toast } from "sonner"
 import { useSubscription } from "@/hooks/useSubscription"
 import { UpgradeModal } from "@/components/UpgradeModal"
+import { priceLine, calculateProjectTotals, DEFAULT_ESTIMATE_CONFIG, DEFAULT_LABOUR_RATES } from "@/lib/pricing/estimatePricing"
 
 interface FullTenderProps { project: any; estimate?: any }
 
@@ -288,33 +289,15 @@ export const FullTenderGenerator = ({ project, estimate }: FullTenderProps) => {
     const estimateItems: any[] = proj?.estimate_items || estimate?.estimate_items || []
     if (estimateItems.length === 0) return
 
-    // Use current labour rates saved by EstimateTemplate
-    const cfgRates: Record<string, number> = proj?.estimate_config?.labourRates || {}
-    const cfgDefaultRate: number = proj?.estimate_config?.defaultLabourRate || 65
-    // Same waste-% defaults as EstimateTemplate's own config (10% material / 5% labour),
-    // read from this project's actual saved config rather than a hardcoded guess.
-    const cfgMaterialWaste: number = proj?.estimate_config?.materialWastage ?? 10
-    const cfgLabourWaste: number = proj?.estimate_config?.labourWastage ?? 5
+    // Price every line with the same function the Estimate tab uses.
+    const { labourRates: savedRates, customConfigs: _cc, groupingMode: _gm, ...savedConfig } = proj?.estimate_config || {}
+    const pricingConfig = { ...DEFAULT_ESTIMATE_CONFIG, ...savedConfig }
+    const pricingRates = { ...DEFAULT_LABOUR_RATES, ...(savedRates || {}) }
 
     const newBoqItems: any[] = estimateItems.map((item: any) => {
-      const qty = parseFloat(item.quantity) || 1
-      const unitPrice = parseFloat(item.unit_price) || 0
-      const labourHours = parseFloat(item.labour_hours) || 0
-      const labourRate = cfgRates[item.trade] || cfgDefaultRate || parseFloat(item.labour_rate) || 65
-      const matWaste = (item.material_wastage_pct ?? cfgMaterialWaste) / 100
-      const labWaste = (item.labour_wastage_pct ?? cfgLabourWaste) / 100
-      const markup = (item.markup_pct ?? 0) / 100
-
-      let matTotal = qty * unitPrice * (1 + matWaste)
-      // Include confirmed related materials in this line's cost
-      if (Array.isArray(item.relatedMaterials)) {
-        item.relatedMaterials.forEach((rm: any) => {
-          if (rm.confirmed) matTotal += (rm.quantity || 0) * (rm.unit_price || 0)
-        })
-      }
-
-      const labTotal = labourHours * labourRate * (1 + labWaste)
-      const lineTotal = Math.round((matTotal + labTotal) * (1 + markup) * 100) / 100
+      // A labour-only line (qty 0) shows as 1 item at its full price
+      const qty = parseFloat(item.quantity) > 0 ? parseFloat(item.quantity) : 1
+      const lineTotal = Math.round(priceLine(item, pricingConfig, pricingRates).total * 100) / 100
       return {
         trade: item.trade || "General",
         description: item.scope_of_work
@@ -322,7 +305,7 @@ export const FullTenderGenerator = ({ project, estimate }: FullTenderProps) => {
           : (item.trade || "Item"),
         qty: Number(qty).toFixed(1),
         unit: item.unit || "m²",
-        rate: String(Math.round((lineTotal / Math.max(qty, 1)) * 100) / 100),
+        rate: String(Math.round((lineTotal / qty) * 100) / 100),
         total: String(lineTotal),
       }
     })
@@ -343,8 +326,8 @@ export const FullTenderGenerator = ({ project, estimate }: FullTenderProps) => {
       }
     })
 
-    // Use persisted estimate_totals.taxable as the ex-GST subtotal so tender matches estimate exactly
-    const estimateTotals = proj?.estimate_totals
+    // Recalculate from the project so the tender always matches the Estimate tab
+    const estimateTotals = calculateProjectTotals(proj)
     let exGstTotal: number
     if (estimateTotals?.taxable) {
       exGstTotal = Math.round(estimateTotals.taxable * 100) / 100
@@ -365,7 +348,14 @@ export const FullTenderGenerator = ({ project, estimate }: FullTenderProps) => {
 
   // ── Derived ──
   const subtotalNum = parseFloat(subtotal) || 0
-  const gstAmount = subtotalNum * 0.1
+  // Same GST % as the Estimate tab (10% unless the estimator changed it)
+  const gstPct: number = (() => {
+    try {
+      const projects: any[] = JSON.parse(localStorage.getItem(getUserStorageKey("local_projects")) || "[]")
+      return projects.find((p: any) => p.id === project?.id)?.estimate_config?.gstPct ?? 10
+    } catch { return 10 }
+  })()
+  const gstAmount = subtotalNum * (gstPct / 100)
   const totalIncGst = subtotalNum + gstAmount
   const today = new Date()
   const validUntil = new Date(today.getTime() + parseInt(validityDays) * 86400000)
@@ -695,7 +685,7 @@ ${clone.outerHTML}
                   {subtotalNum > 0 && (
                     <div className="bg-background rounded-lg p-3 space-y-1 text-sm font-mono border">
                       <div className="flex justify-between text-muted-foreground"><span>Subtotal (ex GST)</span><span>{au$(subtotalNum)}</span></div>
-                      <div className="flex justify-between text-muted-foreground"><span>GST (10%)</span><span>{au$(gstAmount)}</span></div>
+                      <div className="flex justify-between text-muted-foreground"><span>GST ({gstPct}%)</span><span>{au$(gstAmount)}</span></div>
                       <div className="flex justify-between font-bold border-t pt-1 text-base"><span>TENDER SUM (inc GST)</span><span>{au$(totalIncGst)}</span></div>
                     </div>
                   )}
@@ -1003,10 +993,10 @@ ${clone.outerHTML}
                         <div className="text-center">
                           <div className="text-sm uppercase tracking-wide font-medium mb-1" style={{ color: primaryColor }}>Total Tender Sum</div>
                           <div className="text-5xl font-bold font-mono mb-1" style={{ color: primaryColor }}>{au$(totalIncGst)}</div>
-                          <div className="text-sm text-gray-500">Inclusive of GST (10%)</div>
+                          <div className="text-sm text-gray-500">Inclusive of GST ({gstPct}%)</div>
                           <div className="grid grid-cols-2 gap-4 mt-4 text-sm">
                             <div className="bg-white rounded p-3 text-gray-600"><div className="text-xs text-gray-400 mb-1">Subtotal (ex GST)</div>{au$(subtotalNum)}</div>
-                            <div className="bg-white rounded p-3 text-gray-600"><div className="text-xs text-gray-400 mb-1">GST (10%)</div>{au$(gstAmount)}</div>
+                            <div className="bg-white rounded p-3 text-gray-600"><div className="text-xs text-gray-400 mb-1">GST ({gstPct}%)</div>{au$(gstAmount)}</div>
                           </div>
                           {ldRate && (
                             <div className="mt-3 text-xs text-gray-500 bg-white rounded p-2">

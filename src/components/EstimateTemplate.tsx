@@ -34,6 +34,13 @@ import { PricingHistory } from "./PricingHistory";
 import { CustomMaterialDialog } from "./CustomMaterialDialog";
 import { TourTip } from "@/components/TourTip";
 import { MaterialTypeCombobox } from "./MaterialTypeCombobox";
+import {
+  calculateEstimateTotals,
+  priceLine,
+  resolveLabourRate,
+  DEFAULT_ESTIMATE_CONFIG,
+  DEFAULT_LABOUR_RATES,
+} from "@/lib/pricing/estimatePricing";
 
 // ── Template accent colour (left border stripe, by template id) ───────────────
 const TEMPLATE_STYLES: Record<string, { accent: string }> = {
@@ -309,6 +316,7 @@ interface EstimateItem {
   unit_price: number;
   labour_hours: number;
   labour_rate: number;
+  labour_rate_override?: boolean;
   material_wastage_pct: number;
   labour_wastage_pct: number;
   markup_pct: number;
@@ -363,30 +371,27 @@ export const EstimateTemplate = ({ projectId, estimateId }: EstimateTemplateProp
   const [urlDialog, setUrlDialog] = useState<{ open: boolean; url: string; type: 'item' | 'related'; itemId?: string; materialId?: string }>({ 
     open: false, url: "", type: 'item' 
   });
-  const [labourRates, setLabourRates] = useState<Record<string, number>>({
-    Carpenter: 90,
-    Plumber: 95,
-    Electrician: 100,
-    Bricklayer: 85,
-    Plasterer: 80,
-    Painter: 75,
-    Tiler: 85,
-    Concreter: 90,
-    Roofer: 95,
-    Landscaper: 80
+  // Saved per-project pricing config. Read on mount so the save effect below never
+  // overwrites a project's margin, overheads or rates with the defaults.
+  const [savedEstimateConfig] = useState<any>(() => {
+    try {
+      const projects: any[] = JSON.parse(localStorage.getItem(getUserStorageKey('local_projects')) || '[]');
+      return projects.find((p: any) => p.id === projectId)?.estimate_config ?? null;
+    } catch {
+      return null;
+    }
   });
-  const [config, setConfig] = useState({
-    defaultLabourRate: 90,
-    materialWastage: 10,
-    labourWastage: 5,
-    contingencyPct: 5,
-    defaultMarkup: 20,
-    supervisionPct: 8,
-    overheadPct: 12,
-    marginPct: 15,
-    gstPct: 10
+  const [labourRates, setLabourRates] = useState<Record<string, number>>(() => ({
+    ...DEFAULT_LABOUR_RATES,
+    ...(savedEstimateConfig?.labourRates || {}),
+  }));
+  const [config, setConfig] = useState(() => {
+    const { labourRates: _r, customConfigs: _c, groupingMode: _g, ...saved } = savedEstimateConfig || {};
+    return { ...DEFAULT_ESTIMATE_CONFIG, ...saved };
   });
-  const [customConfigs, setCustomConfigs] = useState<{ id: string; name: string; value: number }[]>([]);
+  const [customConfigs, setCustomConfigs] = useState<{ id: string; name: string; value: number }[]>(
+    () => savedEstimateConfig?.customConfigs || []
+  );
   const [newCustomConfig, setNewCustomConfig] = useState({ name: "", value: "" });
   const [showConfig, setShowConfig] = useState(false);
   const [groupingMode, setGroupingMode] = useState<'none' | 'trade' | 'room'>('none');
@@ -427,6 +432,8 @@ export const EstimateTemplate = ({ projectId, estimateId }: EstimateTemplateProp
   };
 
   const loadUserRateSettings = () => {
+    // Settings → Rates are defaults for new projects; a project's own saved config wins.
+    if (savedEstimateConfig) return;
     try {
       // Apply default rates from Settings → Rates tab
       const savedRates = localStorage.getItem(getUserStorageKey('default_rates'));
@@ -563,6 +570,8 @@ export const EstimateTemplate = ({ projectId, estimateId }: EstimateTemplateProp
       unit_price: unitPrice,
       labour_hours: labourHrs,
       labour_rate: parseFloat(newItem.labour_rate) || labourRates[newItem.trade] || config.defaultLabourRate,
+      labour_rate_override: parseFloat(newItem.labour_rate) > 0
+        && parseFloat(newItem.labour_rate) !== (labourRates[newItem.trade] || config.defaultLabourRate),
       material_wastage_pct: config.materialWastage,
       labour_wastage_pct: config.labourWastage,
       markup_pct: config.defaultMarkup,
@@ -662,12 +671,20 @@ export const EstimateTemplate = ({ projectId, estimateId }: EstimateTemplateProp
     // Update in local state
     const updatedItems = items.map(item => {
       if (item.id === id) {
+        // Typing a $/hr that differs from the trade rate makes it this line's own rate.
+        const trade = editValues.trade ?? item.trade;
+        const tradeRate = labourRates[trade] || config.defaultLabourRate;
+        const rateEdited = editValues.labour_rate !== undefined && !isNaN(editValues.labour_rate);
+        const labour_rate_override = rateEdited
+          ? editValues.labour_rate !== tradeRate
+          : item.labour_rate_override;
         return {
           ...item,
           quantity: editValues.quantity ?? item.quantity,
           unit_price: editValues.unit_price ?? item.unit_price,
           labour_hours: editValues.labour_hours ?? item.labour_hours,
           labour_rate: editValues.labour_rate ?? item.labour_rate,
+          labour_rate_override,
           material_wastage_pct: editValues.material_wastage_pct ?? item.material_wastage_pct,
           labour_wastage_pct: editValues.labour_wastage_pct ?? item.labour_wastage_pct,
           markup_pct: editValues.markup_pct ?? item.markup_pct,
@@ -709,8 +726,9 @@ export const EstimateTemplate = ({ projectId, estimateId }: EstimateTemplateProp
   const handleRatesChange = (newRates: Record<string, number>) => {
     const changedTrades = Object.keys(newRates).filter(trade => newRates[trade] !== labourRates[trade]);
     if (changedTrades.length > 0) {
+      // Lines with their own rate keep it when the trade rate changes.
       const updatedItems = items.map(item =>
-        changedTrades.includes(item.trade)
+        changedTrades.includes(item.trade) && !item.labour_rate_override
           ? { ...item, labour_rate: newRates[item.trade] }
           : item
       );
@@ -845,89 +863,22 @@ export const EstimateTemplate = ({ projectId, estimateId }: EstimateTemplateProp
   // Must be declared before calculateTotals to avoid temporal dead zone
   const prelimsTotal = prelimItems.reduce((sum, i) => sum + (i.quantity || 0) * (i.unitPrice || 0), 0);
 
-  const calculateTotals = () => {
-    let totalMaterials = 0;
-    let totalLabour = 0;
-    let totalMarkup = 0;
-
-    items.forEach(item => {
-      // Material calculation with wastage — per-item % takes precedence, falls back to global config
-      const matWastePct = item.material_wastage_pct ?? config.materialWastage;
-      const matBase = (item.quantity || 0) * (item.unit_price || 0);
-      const matWaste = matBase * (matWastePct / 100);
-      let matTotal = matBase + matWaste;
-      totalMaterials += matTotal;
-
-      // Add related materials — included in both totalMaterials and markup base.
-      // Only count ones the user has confirmed; an unconfirmed suggestion sitting on
-      // a line isn't a cost yet and must not be silently charged to the client.
-      if (item.relatedMaterials) {
-        item.relatedMaterials.forEach(rm => {
-          if (!rm.confirmed) return;
-          const rmCost = (rm.quantity || 0) * (rm.unit_price || 0);
-          totalMaterials += rmCost;
-          matTotal += rmCost;
-        });
-      }
-
-      // Labour calculation with wastage — per-item % takes precedence, falls back to global config
-      const labWastePct = item.labour_wastage_pct ?? config.labourWastage;
-      const labBase = (item.labour_hours || 0) * (labourRates[item.trade] || item.labour_rate || config.defaultLabourRate);
-      const labWaste = labBase * (labWastePct / 100);
-      const labTotal = labBase + labWaste;
-      totalLabour += labTotal;
-
-      // Per-item markup applied to item subtotal (mat + related materials + labour with wastage)
-      totalMarkup += (matTotal + labTotal) * ((item.markup_pct || 0) / 100);
-    });
-
-    // Add consumables to materials
-    consumables.forEach(cons => {
-      totalMaterials += (cons.quantity || 0) * (cons.unit_price || 0);
-    });
-
-    const baseSubtotal = totalMaterials + totalLabour;
-    const supervision = totalLabour * (config.supervisionPct / 100);
-    const overheadsPct = (baseSubtotal + supervision) * (config.overheadPct / 100);
-    const totalOverheads = overheadsPct + overheadTotal;
-    // totalMarkup is added to preMargin so contingency and overall margin apply on top
-    const preMargin = baseSubtotal + totalMarkup + supervision + totalOverheads + prelimsTotal;
-    const contingency = preMargin * (config.contingencyPct / 100);
-
-    // Add custom configs
-    let customConfigsTotal = 0;
-    customConfigs.forEach(cc => {
-      customConfigsTotal += preMargin * (cc.value / 100);
-    });
-
-    const margin = preMargin * (config.marginPct / 100);
-    const taxable = preMargin + contingency + customConfigsTotal + margin;
-    const gst = taxable * (config.gstPct / 100);
-    const totalPrice = taxable + gst;
-
-    return {
-      totalMaterials,
-      totalLabour,
-      totalMarkup,
-      baseSubtotal,
-      supervision,
-      overheadsPct,
-      overheadTotal,
-      totalOverheads,
-      prelimsTotal,
-      preMargin,
-      contingency,
-      customConfigsTotal,
-      margin,
-      taxable,
-      gst,
-      totalPrice
-    };
-  };
+  const calculateTotals = () => calculateEstimateTotals({
+    items,
+    consumables,
+    config,
+    labourRates,
+    overheadTotal,
+    prelimsTotal,
+    customConfigs,
+  });
 
   let totals = { totalMaterials: 0, totalLabour: 0, totalMarkup: 0, baseSubtotal: 0, supervision: 0, overheadsPct: 0, overheadTotal: 0, totalOverheads: 0, prelimsTotal: 0, preMargin: 0, contingency: 0, customConfigsTotal: 0, margin: 0, taxable: 0, gst: 0, totalPrice: 0 };
   try { totals = calculateTotals(); } catch { /* corrupted item data — show zeros */ }
-  const realMarginEst = config.marginPct / (100 + config.marginPct) * 100;
+  // Profit is the overall margin plus any per-line markup, as a share of the ex-GST price.
+  const realMarginEst = totals.taxable > 0
+    ? (totals.margin + totals.totalMarkup) / totals.taxable * 100
+    : config.marginPct / (100 + config.marginPct) * 100;
 
   // Single save effect — writes all estimate data in one shot to avoid
   // two simultaneous Supabase writes racing each other and overwriting data.
@@ -1073,18 +1024,16 @@ export const EstimateTemplate = ({ projectId, estimateId }: EstimateTemplateProp
     // the current global config — matching calculateTotals() exactly. Reading the live
     // global config here directly would make a row's displayed total drift from what's
     // actually counted in the Price Summary the moment someone tweaks the global %.
+    const linePricing = priceLine(item, config, labourRates);
     const matWastePct = item.material_wastage_pct ?? config.materialWastage;
     const labWastePct = item.labour_wastage_pct ?? config.labourWastage;
-    const matBase = item.quantity * item.unit_price;
-    const matWaste = matBase * (matWastePct / 100);
-    const relatedMatsTotal = (item.relatedMaterials || []).filter(rm => rm.confirmed).reduce((s, rm) => s + (rm.quantity || 0) * (rm.unit_price || 0), 0);
-    const matTotalWithRelated = matBase + matWaste + relatedMatsTotal;
-    const labBase = item.labour_hours * (labourRates[item.trade] || item.labour_rate || config.defaultLabourRate);
-    const labWaste = labBase * (labWastePct / 100);
-    const labTotal = labBase + labWaste;
-    const subtotal = matTotalWithRelated + labTotal;
-    const markup = subtotal * (item.markup_pct / 100);
-    const lineTotal = subtotal + markup;
+    const { materialBase: matBase, materialWaste: matWaste, labourBase: labBase, labourWaste: labWaste } = linePricing;
+    const relatedMatsTotal = linePricing.relatedMaterials;
+    const matTotalWithRelated = linePricing.materials;
+    const labTotal = linePricing.labour;
+    const subtotal = linePricing.subtotal;
+    const markup = linePricing.markup;
+    const lineTotal = linePricing.total;
     const isEditing = editingId === item.id;
     const relatedMats = SOW_RELATED_MATERIALS[item.scope_of_work] || [];
 
@@ -1195,7 +1144,7 @@ export const EstimateTemplate = ({ projectId, estimateId }: EstimateTemplateProp
                   type="number"
                   step="1"
                   min="0"
-                  value={editValues.labour_rate !== undefined ? editValues.labour_rate : (item.labour_rate || labourRates[item.trade] || config.defaultLabourRate)}
+                  value={editValues.labour_rate !== undefined ? editValues.labour_rate : resolveLabourRate(item, labourRates, config.defaultLabourRate)}
                   onChange={(e) => setEditValues({ ...editValues, labour_rate: parseFloat(e.target.value) })}
                   className="h-7 w-24 text-right text-xs"
                   title="Hourly rate ($/hr)"
@@ -1206,7 +1155,7 @@ export const EstimateTemplate = ({ projectId, estimateId }: EstimateTemplateProp
               <div className="text-right">
                 <span className="font-mono">{Number(item.labour_hours).toFixed(1)}</span>
                 <div className="text-xs text-muted-foreground mt-0.5">
-                  @${(labourRates[item.trade] || item.labour_rate || config.defaultLabourRate).toFixed(0)}/hr
+                  @${linePricing.labourRate.toFixed(0)}/hr{item.labour_rate_override ? ' (line rate)' : ''}
                 </div>
               </div>
             )}
@@ -1670,7 +1619,7 @@ export const EstimateTemplate = ({ projectId, estimateId }: EstimateTemplateProp
 
       {/* 3. Price Summary */}
       <Card className="p-6 bg-gradient-to-br from-primary/5 to-accent/5 border-accent/20">
-        <div className="grid grid-cols-2 sm:grid-cols-4 xl:grid-cols-8 gap-4 text-center">
+        <div className="grid grid-cols-2 sm:grid-cols-4 xl:grid-cols-5 gap-4 text-center">
           <div>
             <p className="text-sm text-muted-foreground mb-1">Materials</p>
             <p className="text-lg font-bold">${totals.totalMaterials.toFixed(2)}</p>
@@ -1679,6 +1628,12 @@ export const EstimateTemplate = ({ projectId, estimateId }: EstimateTemplateProp
             <p className="text-sm text-muted-foreground mb-1">Labour</p>
             <p className="text-lg font-bold">${totals.totalLabour.toFixed(2)}</p>
           </div>
+          {totals.totalMarkup > 0 && (
+            <div>
+              <p className="text-sm text-muted-foreground mb-1">Line Markup</p>
+              <p className="text-lg font-bold">${totals.totalMarkup.toFixed(2)}</p>
+            </div>
+          )}
           <div>
             <p className="text-sm text-muted-foreground mb-1">Supervision</p>
             <p className="text-lg font-bold">${totals.supervision.toFixed(2)}</p>
@@ -1697,12 +1652,18 @@ export const EstimateTemplate = ({ projectId, estimateId }: EstimateTemplateProp
             <p className="text-sm text-muted-foreground mb-1">Contingency</p>
             <p className="text-lg font-bold">${totals.contingency.toFixed(2)}</p>
           </div>
+          {totals.customConfigsTotal > 0 && (
+            <div>
+              <p className="text-sm text-muted-foreground mb-1">Other Allowances</p>
+              <p className="text-lg font-bold">${totals.customConfigsTotal.toFixed(2)}</p>
+            </div>
+          )}
           <div>
             <p className="text-sm text-muted-foreground mb-1">Margin</p>
             <p className="text-lg font-bold">${totals.margin.toFixed(2)}</p>
           </div>
           <div>
-            <p className="text-sm text-muted-foreground mb-1">GST (10%)</p>
+            <p className="text-sm text-muted-foreground mb-1">GST ({config.gstPct}%)</p>
             <p className="text-lg font-bold">${totals.gst.toFixed(2)}</p>
           </div>
           <div className="bg-primary/10 rounded-lg p-3 border border-primary/20">
@@ -1754,7 +1715,9 @@ export const EstimateTemplate = ({ projectId, estimateId }: EstimateTemplateProp
                   </div>
                 </div>
                 <p className="text-[11px] text-muted-foreground leading-snug">
-                  Adding {config.marginPct}% on top of costs gives a real profit margin of {realMarginEst.toFixed(1)}% on revenue — not {config.marginPct}%.
+                  {totals.totalMarkup > 0
+                    ? `Your ${config.marginPct}% margin plus $${totals.totalMarkup.toFixed(0)} of line markup gives a real profit margin of ${realMarginEst.toFixed(1)}% on revenue.`
+                    : `Adding ${config.marginPct}% on top of costs gives a real profit margin of ${realMarginEst.toFixed(1)}% on revenue, not ${config.marginPct}%.`}
                 </p>
               </div>
               {/* Right: reverse calculator */}
@@ -2166,14 +2129,8 @@ export const EstimateTemplate = ({ projectId, estimateId }: EstimateTemplateProp
                     return order.map(groupName => {
                       const groupItems = groups[groupName];
                       const isCollapsed = collapsedGroups.has(groupName);
-                      const sectionTotal = groupItems.reduce((sum, item) => {
-                        const mb = item.quantity * item.unit_price;
-                        const mw = mb * (config.materialWastage / 100);
-                        const rt = (item.relatedMaterials || []).reduce((s, rm) => s + (rm.quantity || 0) * (rm.unit_price || 0), 0);
-                        const lb = item.labour_hours * (labourRates[item.trade] || item.labour_rate || config.defaultLabourRate);
-                        const lw = lb * (config.labourWastage / 100);
-                        return sum + (mb + mw + rt + lb + lw) * (1 + item.markup_pct / 100);
-                      }, 0);
+                      const sectionTotal = groupItems.reduce(
+                        (sum, item) => sum + priceLine(item, config, labourRates).total, 0);
                       return (
                         <React.Fragment key={groupName}>
                           <TableRow
@@ -2388,18 +2345,7 @@ export const EstimateTemplate = ({ projectId, estimateId }: EstimateTemplateProp
             <div className="bg-card p-4 rounded-lg border border-border">
               <p className="text-sm text-muted-foreground mb-1">Cost Before Overheads &amp; Margin</p>
               <p className="text-xl font-mono font-bold text-primary">
-                ${(() => {
-                  let total = 0;
-                  items.forEach(item => {
-                    const matBase = (item.quantity || 0) * (item.unit_price || 0);
-                    const matWaste = matBase * (config.materialWastage / 100);
-                    const labBase = (item.labour_hours || 0) * (labourRates[item.trade] || item.labour_rate || config.defaultLabourRate);
-                    const labWaste = labBase * (config.labourWastage / 100);
-                    const sub = matBase + matWaste + labBase + labWaste;
-                    total += sub * (1 + ((item.markup_pct || 0) / 100));
-                  });
-                  return total.toFixed(2);
-                })()}
+                ${items.reduce((sum, item) => sum + priceLine(item, config, labourRates).total, 0).toFixed(2)}
               </p>
               <p className="text-xs text-muted-foreground mt-1">{items.length} line items</p>
             </div>
