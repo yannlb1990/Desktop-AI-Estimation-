@@ -1,7 +1,8 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { isSignedIn, getUserStorageKey, getLocalUser } from "@/lib/localAuth";
-import { loadClientsMerged, lsSaveClients, deleteClientFromSupabase, migrateLocalClientsToSupabase } from "@/lib/db/clients";
+import { loadClientsMerged, lsSaveClients, lsLoadClients, deleteClientFromSupabase, migrateLocalClientsToSupabase, ensureClientForProject } from "@/lib/db/clients";
+import { stateFromAddress } from "@/lib/defaultState";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -51,6 +52,17 @@ const Clients = () => {
     const user = getLocalUser();
     if (user) migrateLocalClientsToSupabase(user.email);
     loadClientsMerged().then(all => {
+      // One-off: add clients named on existing projects (later deletions stay deleted)
+      const backfillKey = getUserStorageKey("clients_backfilled_from_projects_v1");
+      if (!localStorage.getItem(backfillKey)) {
+        lsSaveClients(all);
+        try {
+          const projects: any[] = JSON.parse(localStorage.getItem(getUserStorageKey("local_projects")) || "[]");
+          projects.forEach(p => ensureClientForProject(p.client_name, stateFromAddress(p.site_address || p.address)));
+        } catch { /* best effort */ }
+        localStorage.setItem(backfillKey, "1");
+        all = lsLoadClients();
+      }
       setClients(all);
       lsSaveClients(all);
     });

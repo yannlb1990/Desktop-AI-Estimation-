@@ -86,3 +86,41 @@ export async function migrateLocalClientsToSupabase(userEmail: string): Promise<
   }
   localStorage.setItem(flag, 'done');
 }
+
+/**
+ * Projects store the client as free text. Make sure a matching client record exists so
+ * the Clients page lists everyone you've quoted. Matches on contact or company name,
+ * case-insensitive, and never changes an existing client. Never throws.
+ */
+export function ensureClientForProject(clientName: string | null | undefined, state: string | null = null): void {
+  const name = (clientName || '').trim();
+  if (!name) return;
+  try {
+    const clients = lsLoadClients();
+    const key = name.toLowerCase();
+    const exists = clients.some(c =>
+      (c.contact_name || '').trim().toLowerCase() === key ||
+      (c.company_name || '').trim().toLowerCase() === key
+    );
+    if (exists) return;
+    const now = new Date().toISOString();
+    const client: Client = {
+      id: crypto.randomUUID(),
+      user_id: '',
+      contact_name: name,
+      company_name: null,
+      email: '',
+      phone: null,
+      mobile: null,
+      city: null,
+      state,
+      client_type: null,
+      created_at: now,
+      updated_at: now,
+    };
+    lsSaveClients([client, ...clients]);
+    syncClientToSupabase(client);
+  } catch (e) {
+    console.warn('[ensureClientForProject] could not create client:', e instanceof Error ? e.message : e);
+  }
+}

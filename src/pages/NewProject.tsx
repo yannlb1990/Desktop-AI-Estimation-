@@ -15,6 +15,12 @@ import { z } from "zod";
 import { analyzePDFWithData, PlanAnalysisResult, EstimatedLineItem } from "@/lib/aiPlanAnalyzer";
 import AIPlanAnalyzer from "@/components/AIPlanAnalyzer";
 import { syncProjectToSupabase } from "@/lib/db/projects";
+import { ensureClientForProject } from "@/lib/db/clients";
+import { aiItemsToEstimateItems } from "@/lib/pricing/aiEstimateConversion";
+import { stateFromAddress } from "@/lib/defaultState";
+import { cachePDF } from "@/lib/takeoff/pdfCache";
+import { uploadToCloud } from "@/components/takeoff/PDFUploadManager";
+import { savePlanToLibrary } from "@/components/DocumentLibrary";
 
 const projectSchema = z.object({
   name: z.string().min(1, "Project name required").max(200),
@@ -127,46 +133,39 @@ const NewProject = () => {
     }
   };
 
-  const handleAcceptEstimate = (items: EstimatedLineItem[]) => {
+  // Same storage the takeoff's own upload uses: IndexedDB cache for this browser,
+  // cloud storage for other devices, and takeoff_<projectId> pointing at both.
+  const attachPlanToTakeoff = async (projectId: string, file: File, pageCount: number) => {
+    const planId = `${file.name}_${file.size}`;
+    try {
+      // Read fresh bytes: pdf.js may have detached the buffer used for analysis
+      await cachePDF(planId, await file.arrayBuffer(), file.name, pageCount);
+      const ext = file.name.split('.').pop() ?? 'pdf';
+      const cloudUrl = await uploadToCloud(file, planId, ext);
+      localStorage.setItem(`takeoff_${projectId}`, JSON.stringify({
+        _schemaVersion: 2,
+        measurements: [],
+        costItems: [],
+        scales: {},
+        rotations: {},
+        planId,
+        pdfName: cloudUrl ? file.name : undefined,
+        pdfUrl: cloudUrl ?? undefined,
+        pdfPageCount: cloudUrl ? pageCount : undefined,
+        _localUpdatedAt: Date.now(),
+      }));
+      savePlanToLibrary(projectId, { planId, filename: file.name, uploadedAt: new Date().toISOString(), pageCount });
+    } catch (err) {
+      console.warn('[NewProject] Could not attach plan to takeoff:', err);
+    }
+  };
+
+  const handleAcceptEstimate = (items: EstimatedLineItem[], estimateConfig: Record<string, unknown>) => {
     setSelectedEstimateItems(items);
-    createProjectWithEstimate(items);
+    createProjectWithEstimate(items, estimateConfig);
   };
 
-  // Map EstimatedLineItem (AI analyzer format) → EstimateItem (EstimateTemplate format)
-  const convertAnalyzerItems = (items: EstimatedLineItem[]) => {
-    const tradeMap: Record<string, string> = {
-      Carpentry: 'Carpenter', Roofing: 'Roofer', Plasterboard: 'Plasterer',
-      Painting: 'Painter', Tiling: 'Tiler', Concrete: 'Concreter',
-      Plumbing: 'Plumber', Electrical: 'Electrician', Brickwork: 'Bricklayer',
-      Landscaping: 'Landscaper',
-    };
-    const unitMap: Record<string, string> = {
-      LM: 'lm', M2: 'm²', M3: 'm³', count: 'ea', each: 'ea', item: 'ea',
-    };
-    return items.map((item, idx) => ({
-      id: item.id,
-      section_id: null,
-      area: item.area || 'General',
-      trade: tradeMap[item.trade as string] || 'Carpenter',
-      scope_of_work: item.category || 'General',
-      material_type: item.description || '',
-      quantity: item.quantity,
-      unit: unitMap[item.unit] || 'm²',
-      unit_price: item.unitRate ?? 0,
-      labour_hours: item.labourHours ?? 0,
-      labour_rate: 90,
-      material_wastage_pct: 10,
-      labour_wastage_pct: 5,
-      markup_pct: 20,
-      notes: '',
-      expanded: false,
-      item_number: String(idx + 1),
-      isEditing: false,
-      relatedMaterials: [],
-    }));
-  };
-
-  const createProjectWithEstimate = async (items: EstimatedLineItem[]) => {
+  const createProjectWithEstimate = async (items: EstimatedLineItem[], estimateConfig: Record<string, unknown>) => {
     setIsLoading(true);
     try {
       const validData = projectSchema.parse(formData);
@@ -177,18 +176,26 @@ const NewProject = () => {
         client_name: validData.client_name || null,
         site_address: validData.site_address || null,
         address: validData.site_address || "TBD",
-        state: null,
+        state: stateFromAddress(validData.site_address),
         postcode: null,
         plan_file_name: uploadedFile?.name || null,
         status: "in_progress",
         created_at: new Date().toISOString(),
-        estimate_items: convertAnalyzerItems(items),
+        // Priced exactly as shown on the analysis screen (see aiEstimateConversion)
+        estimate_items: aiItemsToEstimateItems(items),
+        estimate_config: estimateConfig,
       };
+
+      // Hand the analysed plan to the takeoff so it doesn't have to be uploaded again
+      if (uploadedFile) {
+        await attachPlanToTakeoff(newProject.id, uploadedFile, analysisResult?.totalPages || 1);
+      }
 
       const projects = JSON.parse(localStorage.getItem(getUserStorageKey('local_projects')) || "[]");
       projects.unshift(newProject);
       localStorage.setItem(getUserStorageKey('local_projects'), JSON.stringify(projects));
       syncProjectToSupabase(newProject);
+      ensureClientForProject(newProject.client_name, newProject.state);
 
       setAnalysisStep('complete');
       toast.success("Project created with AI-generated estimate!");
@@ -246,7 +253,7 @@ const NewProject = () => {
         client_name: validData.client_name || null,
         site_address: validData.site_address || null,
         address: validData.site_address || "TBD",
-        state: null,
+        state: stateFromAddress(validData.site_address),
         postcode: null,
         status: "in_progress",
         created_at: new Date().toISOString(),
@@ -257,6 +264,7 @@ const NewProject = () => {
       projects.unshift(newProject);
       localStorage.setItem(getUserStorageKey('local_projects'), JSON.stringify(projects));
       syncProjectToSupabase(newProject);
+      ensureClientForProject(newProject.client_name, newProject.state);
 
       toast.success("Project created!");
       navigate(`/project/${newProject.id}`);

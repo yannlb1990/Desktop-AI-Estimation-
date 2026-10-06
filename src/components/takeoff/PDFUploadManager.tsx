@@ -19,7 +19,7 @@ interface PDFUploadManagerProps {
 /** Upload a blob/file to Supabase Storage.
  *  Stores the storage PATH in the DB (not the public URL) and returns a 1-hour signed URL
  *  for immediate display. Falls back gracefully if the bucket doesn't exist or user is not signed in. */
-async function uploadToCloud(
+export async function uploadToCloud(
   blob: Blob,
   planId: string,
   ext: string,

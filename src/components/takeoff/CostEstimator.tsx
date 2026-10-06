@@ -29,6 +29,7 @@ import { useSubscription } from '@/hooks/useSubscription';
 import { UpgradeModal } from '@/components/UpgradeModal';
 import { findLabourRate, getCustomRates, setCustomRate, clearCustomRate, LABOUR_MULT, getEffectiveRate } from '@/data/labourRates';
 import { calculateProjectTotals } from '@/lib/pricing/estimatePricing';
+import { defaultStateForProject } from '@/lib/defaultState';
 import { readUserPricingDefaults } from '@/lib/pricing/userPricingDefaults';
 
 // Area options
@@ -500,8 +501,8 @@ export const CostEstimator = ({
   const sub = useSubscription();
   const [upgradeOpen, setUpgradeOpen] = useState(false);
   const [selectedState, setSelectedState] = useState<State>(() => {
-    try { return (JSON.parse(localStorage.getItem(prefsKey(projectId)) || '{}').selectedState as State) || 'NSW'; }
-    catch { return 'NSW'; }
+    try { return (JSON.parse(localStorage.getItem(prefsKey(projectId)) || '{}').selectedState as State) || defaultStateForProject(projectId); }
+    catch { return defaultStateForProject(projectId); }
   });
   const [marginPercent, setMarginPercent] = useState<number>(() => {
     try { return JSON.parse(localStorage.getItem(prefsKey(projectId)) || '{}').marginPercent ?? 15; }
@@ -635,7 +636,7 @@ export const CostEstimator = ({
           .eq('project_id', projectId)
           .single();
         if (cancelled || !data) return;
-        setSelectedState((data.selected_state as any) || 'NSW');
+        setSelectedState((data.selected_state as any) || defaultStateForProject(projectId));
         setMarginPercent(data.margin_percent ?? 15);
         setGstEnabled(data.gst_enabled ?? true);
         setDefaultMatWaste((data as any).default_mat_waste ?? 5);
@@ -1019,6 +1020,7 @@ export const CostEstimator = ({
 
     const newItem: CostItem = {
       id: crypto.randomUUID(),
+      isManual: true,
       category: 'General',
       name: 'Custom Item',
       description: 'Manually added cost item',
@@ -1045,6 +1047,7 @@ export const CostEstimator = ({
     if (!quickName.trim()) { toast.error('Enter an item name'); return; }
     const newItem: CostItem = {
       id: crypto.randomUUID(),
+      isManual: true,
       category: quickTrade || 'General',
       name: quickName.trim(),
       description: quickTrade ? `${quickTrade} — custom line` : 'Custom line',
@@ -1189,20 +1192,21 @@ export const CostEstimator = ({
   const realMargin = marginPercent / (100 + marginPercent) * 100;
   const requiredMarkup = targetMargin < 100 ? targetMargin / (100 - targetMargin) * 100 : 999;
 
-  if (measurements.length === 0 && costItems.length === 0) {
-    return (
-      <Card className="p-8 text-center">
-        <Calculator className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
-        <h3 className="font-semibold text-lg mb-2">No Items Yet</h3>
-        <p className="text-muted-foreground text-sm">
-          Add measurements from the PDF or use the Plan Analyser to push trade quantities directly into your estimate.
-        </p>
-      </Card>
-    );
-  }
+  // An empty project still gets the full toolbar, so items can be added by hand
+  // without measuring anything first.
+  const isEmpty = measurements.length === 0 && costItems.length === 0;
 
   return (
     <div className="space-y-4">
+      {isEmpty && (
+        <Card className="p-6 text-center">
+          <Calculator className="h-10 w-10 mx-auto text-muted-foreground mb-3" />
+          <h3 className="font-semibold text-lg mb-1">No Items Yet</h3>
+          <p className="text-muted-foreground text-sm">
+            Measure on the plan, run the Plan Analyser, or use Add Item below to price something by hand.
+          </p>
+        </Card>
+      )}
       {/* Rate data staleness warning */}
       {new Date() > new Date(SOW_METADATA.nextUpdate) && (
         <div className="flex items-center gap-3 px-4 py-2.5 rounded-lg bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 text-sm text-amber-800 dark:text-amber-200">

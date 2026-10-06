@@ -124,9 +124,21 @@ function loadPersisted(projectId: string): PersistedState {
   }
 }
 
+/**
+ * Signed storage URLs expire after an hour. Persist the storage path instead
+ * ("storage:bucket/path"), which is re-signed on load. Also repairs plans saved
+ * with a signed URL before this fix.
+ */
+export function toDurablePdfUrl(url: string | undefined): string | undefined {
+  if (!url) return undefined;
+  const signed = url.match(/\/storage\/v1\/object\/sign\/([^?]+)/);
+  if (signed) return `storage:${decodeURIComponent(signed[1])}`;
+  return url;
+}
+
 function savePersisted(projectId: string, state: TakeoffState) {
   try {
-    const url = state.pdfFile?.url;
+    const url = toDurablePdfUrl(state.pdfFile?.url);
     // Persist cloud URLs (https://) and storage paths (storage:bucket/path).
     // Blob URLs are session-only and will fail to load after a page refresh.
     const persistableUrl = url && (url.startsWith('https://') || url.startsWith('storage:')) ? url : undefined;
@@ -150,6 +162,7 @@ function savePersisted(projectId: string, state: TakeoffState) {
 function buildInitialState(projectId?: string): TakeoffState {
   if (!projectId) return initialState;
   const persisted = loadPersisted(projectId);
+  persisted.pdfUrl = toDurablePdfUrl(persisted.pdfUrl);
   const hasScales = Object.keys(persisted.scales || {}).length > 0;
   return {
     ...initialState,
@@ -362,7 +375,9 @@ function takeoffReducer(state: TakeoffState, action: TakeoffAction): TakeoffStat
         return state;
       }
       // name+unit fallback: only for items with no rateId and no linkedMeasurement (e.g. manual entries)
-      if (!incoming.rateId && !linkedId) {
+      // Items the user adds by hand (isManual) are never deduplicated: adding two
+      // "Custom Item" rows on purpose used to silently keep only one.
+      if (!incoming.rateId && !linkedId && !incoming.isManual) {
         const isDuplicate = state.costItems.some((item) =>
           (item.name ?? '').toLowerCase() === (incoming.name ?? '').toLowerCase() &&
           item.unit === incoming.unit

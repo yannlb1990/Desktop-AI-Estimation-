@@ -1,4 +1,5 @@
 import { useState, useMemo, useEffect } from "react";
+import { profileState } from "@/lib/defaultState";
 import { useNavigate } from "react-router-dom";
 import { isSignedIn } from "@/lib/localAuth";
 import { Button } from "@/components/ui/button";
@@ -178,7 +179,10 @@ const MarketInsights = () => {
     if (!isSignedIn()) navigate("/auth");
   }, [navigate]);
 
-  const [selectedState, setSelectedState] = useState<StateCode>("NSW");
+  const [selectedState, setSelectedState] = useState<StateCode>(() => {
+    const fromProfile = profileState();
+    return (STATES as readonly string[]).includes(fromProfile ?? '') ? (fromProfile as StateCode) : "NSW";
+  });
   const [matSearch, setMatSearch] = useState("");
   const [matCat, setMatCat] = useState("All");
   const [labCat, setLabCat] = useState("All");

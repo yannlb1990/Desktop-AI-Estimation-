@@ -466,6 +466,8 @@ export const InteractiveCanvas = ({
   const isCalibrationDraggingRef = useRef(false);
   const calibrationStartPointRef = useRef<WorldPoint | null>(null);
   const calibrationPreviewLineRef = useRef<any>(null);
+  // true after a first click: the line follows the cursor until the second click
+  const calibrationAwaitingSecondClickRef = useRef(false);
 
   // Pan state
   const [isPanning, setIsPanning] = useState(false);
@@ -3139,10 +3141,17 @@ export const InteractiveCanvas = ({
   }, [onTransformChange, transform.zoom]);
 
   // Handle calibration DRAG (new drag-to-calibrate)
+  // Leaving or restarting calibration drops a half-finished click-click line
+  useEffect(() => {
+    calibrationAwaitingSecondClickRef.current = false;
+  }, [calibrationMode]);
+
   const handleCalibrationMouseDown = useCallback((worldPoint: WorldPoint) => {
+    // Second click of a click-click calibration: mouse-up completes the line
+    if (calibrationAwaitingSecondClickRef.current) return;
     const canvas = fabricCanvasRef.current;
     if (!canvas || !viewport) {
-      toast.error('Calibration failed — canvas not ready. Try again.');
+      toast.error('Calibration failed: the canvas is not ready. Try again.');
       return;
     }
 
@@ -3247,15 +3256,22 @@ export const InteractiveCanvas = ({
     const zoom = canvas.getZoom() || 1;
     const dragScreenDist = Math.hypot(worldPoint.x - start.x, worldPoint.y - start.y) * zoom;
     if (dragScreenDist < 2) {
-      // Reset drag state so user can try again
+      if (!calibrationAwaitingSecondClickRef.current) {
+        // A click rather than a drag: keep the first point and wait for the second click
+        calibrationAwaitingSecondClickRef.current = true;
+        return;
+      }
+      // Second click landed on the first point: start again
+      calibrationAwaitingSecondClickRef.current = false;
       isCalibrationDraggingRef.current = false;
       calibrationStartPointRef.current = null;
       setIsCalibrationDragging(false);
       setCalibrationStartPoint(null);
       canvas.requestRenderAll();
-      toast.error('Calibration line too short. Click and drag further to set the scale.');
+      toast.error('The two points are too close. Click two points further apart, or click and drag.');
       return;
     }
+    calibrationAwaitingSecondClickRef.current = false;
 
     const strokeWidth = getZoomAwareSize(2);
     const dashSize = getZoomAwareSize(5);
@@ -3303,6 +3319,7 @@ export const InteractiveCanvas = ({
 
     // Reset refs synchronously
     isCalibrationDraggingRef.current = false;
+    calibrationAwaitingSecondClickRef.current = false;
     calibrationStartPointRef.current = null;
 
     // Complete calibration

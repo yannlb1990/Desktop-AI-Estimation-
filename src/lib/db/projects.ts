@@ -31,6 +31,26 @@ async function getAuthUserId(): Promise<string | null> {
 
 /** Push one project to Supabase (upsert). Retries up to 3 times with backoff. */
 export async function syncProjectToSupabase(project: any, retries = 3): Promise<void> {
+  // A bare placeholder ({ id, estimate_items }) created when a screen couldn't find the
+  // project locally must never overwrite the real row (it renamed projects "Untitled").
+  if (!project?.name) {
+    console.warn('[syncProject] Skipped syncing a project with no name:', project?.id);
+    return;
+  }
+
+  // Stamp the local copy with the same time as the cloud row. If this sync fails, the
+  // local copy stays newer, so loadProjectsMerged keeps it and re-syncs instead of
+  // discarding the edit.
+  const stamp = new Date().toISOString();
+  try {
+    const all = lsLoadProjects();
+    const idx = all.findIndex((p: any) => p.id === project.id);
+    if (idx !== -1) {
+      all[idx].updated_at = stamp;
+      lsSaveProjects(all);
+    }
+  } catch { /* local stamp is best effort */ }
+
   const userId = await getAuthUserId();
   if (!userId) return;
 
@@ -69,7 +89,7 @@ export async function syncProjectToSupabase(project: any, retries = 3): Promise<
         )
       ),
     },
-    updated_at: new Date().toISOString(),
+    updated_at: stamp,
   };
 
   for (let attempt = 1; attempt <= retries; attempt++) {
