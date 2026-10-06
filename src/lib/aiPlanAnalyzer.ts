@@ -1,6 +1,7 @@
 // AI Plan Analyzer - Comprehensive PDF analysis for construction estimation
 // Extracts building elements, symbols, schedules, and generates auto-estimation
 
+import { stripEmDashes } from '@/lib/pricing/aiEstimateConversion';
 import {
   loadPDFFromFile,
   loadPDFFromArrayBuffer,
@@ -941,26 +942,55 @@ function extractStandardsReferences(texts: ExtractedText[], pageIndex: number): 
 }
 
 // Extract floor areas from plans
+// Words that show an "<words> <number> m²" match is a note, site figure or title-block
+// cell rather than a room. e.g. "ACTUAL ROOF AREA OF 114.7m²", "SITE AREA 306m²".
+const NON_ROOM_AREA_WORDS = /\b(OF|PER|FOR|ROOF|DOWNPIPE|SITE|LOT|ALLOTMENT|COVER|STOREY|STOREYS|PERMEABLE|PERMEABILITY|LANDSCAP\w*|MAXIMUM|MINIMUM|ACTUAL|ACHIEV\w*|COLORBOND|BOUNDARY|EASEMENT|SETBACK|CATCHMENT|DRAIN\w*|SCALE|DRAWING|HATCH|DENOTES|POS|OPEN SPACE|PLANTER|SEAT|VOID)\b/;
+
+function isRoomLikeAreaName(name: string): boolean {
+  const words = name.split(/\s+/).filter(Boolean);
+  return name.length > 1 && name.length < 40 && words.length <= 4 && !NON_ROOM_AREA_WORDS.test(name);
+}
+
 function extractFloorAreas(texts: ExtractedText[], pageIndex: number): FloorArea[] {
   const areas: FloorArea[] = [];
   const allText = texts.map(t => t.text).join('\n');
 
-  // Pattern for area annotations: "Living 45.6m²" or "LIVING: 45.6 m2"
-  const areaPattern = /([A-Za-z][A-Za-z\s\/]+?)[\s:=]+(\d+(?:\.\d+)?)\s*(?:m²|m2|sqm|SQM)/gi;
+  // Inline annotations: "Living 45.6m²" or "LIVING: 45.6 m2". The label must sit on the
+  // same line (or the line directly above), so separate title-block cells can't be glued
+  // into one long fake room name.
+  const areaPattern = /([A-Za-z][A-Za-z \/]*?)[ \t:=]*(?:\n[ \t]*){0,2}(\d+(?:\.\d+)?)\s*(?:m²|m2|sqm|SQM)/gi;
   let match;
   while ((match = areaPattern.exec(allText)) !== null) {
-    const name = match[1].trim().toUpperCase();
+    const name = match[1].trim().toUpperCase().replace(/\s+/g, ' ');
     const area = parseFloat(match[2]);
+    if (area > 0 && isRoomLikeAreaName(name)) {
+      areas.push({ name, area, unit: 'm²', pageIndex });
+    }
+  }
 
-    // Filter out non-room names
-    if (area > 0 && name.length > 1 && name.length < 50 &&
-        !name.includes('SCALE') && !name.includes('DRAWING')) {
-      areas.push({
-        name,
-        area,
-        unit: 'm²',
-        pageIndex,
-      });
+  // Area tables: a header such as "EST FLOOR AREAS" / "Area m2" followed by name/value rows,
+  // with the unit only in the header. Most plan sets give the area this way.
+  const lines = texts.map(t => t.text.trim()).filter(Boolean);
+  for (let i = 0; i < lines.length; i++) {
+    if (!/(FLOOR|BUILDING|ROOM)\s+AREAS?\b|AREA\s+SCHEDULE|^AREAS?\s*\(?(m2|m²|sqm)\)?$/i.test(lines[i])) continue;
+    let j = i + 1;
+    let misses = 0;
+    while (j < lines.length - 1 && misses < 3) {
+      const label = lines[j];
+      const value = lines[j + 1];
+      const valueMatch = value.match(/^(\d{1,4}(?:\.\d+)?)\s*(?:m²|m2|sqm)?$/i);
+      if (/^[A-Za-z][A-Za-z \/&]{1,30}$/.test(label) && valueMatch) {
+        const name = label.toUpperCase().replace(/\s+/g, ' ');
+        const area = parseFloat(valueMatch[1]);
+        if (area > 0) {
+          areas.push({ name: /TOTAL/.test(name) ? 'TOTAL FLOOR AREA' : name, area, unit: 'm²', pageIndex });
+        }
+        j += 2;
+        misses = 0;
+      } else {
+        j++;
+        misses++;
+      }
     }
   }
 
@@ -1609,7 +1639,7 @@ function generateEstimation(
       id: `EST-${itemId++}`,
       trade,
       category: SOW_CATEGORY_LABELS[rate.category],
-      description: customDescription || rate.description,
+      description: stripEmDashes(customDescription || rate.description),
       quantity: Math.round(quantity * 100) / 100,
       unit: rate.unit as EstimatedLineItem['unit'],
       unitRate: rate.totalRate,
@@ -1835,7 +1865,7 @@ function generateEstimation(
 
   // --- INTERNAL LININGS ---
   addItem('INT-01', wallPlasterboard, 'inferred', 0.8,
-    `Plasterboard walls (${wallPlasterboard}m²: ${extWallNet}m² ext + ${intWallSingleFace * 2}m² int both sides)`,
+    `Plasterboard walls (${wallPlasterboard}m²: ${extWallNet}m² ext + ${intWallSingleFace * 2}m² int both sides, less ${wetAreaWall}m² wet areas in Villaboard)`,
     `Ext wall net ${extWallNet}m² + internal partitions ×2 ${intWallSingleFace * 2}m² − wet areas ${wetAreaWall}m²`);
   addItem('INT-02', habitableArea, floorAreaSource, 0.85,
     `Plasterboard ceiling (${habitableArea}m² habitable)`,
@@ -2280,11 +2310,20 @@ export async function analyzePDF(file: File): Promise<PlanAnalysisResult> {
     // Determine project type
     const hasFloorPlan = pages.some(p => p.drawingType === 'floor_plan');
     const hasElevation = pages.some(p => p.drawingType === 'elevation');
+    // Renovation mode skips slab, frame and roof, so only use it when the drawings say so.
+    // (It used to be inferred from "floor plan found but no elevation recognised", which
+    // priced new houses with no structure at all.)
+    const planText = pages.flatMap(p => p.textContent).join(' ').toLowerCase();
+    const saysNewBuild = /\b(new (dwelling|residence|house|home)|dual occupancy|duplex|new build)\b/.test(planText);
+    // Title-style phrases only: general notes say things like "in addition to the jamb studs"
+    const saysRenovation = /\b(proposed (alterations?|additions?|extension|renovations?)|alterations? (and|&) additions?|additions? (and|&) alterations?|extension to (the )?existing|existing (dwelling|house|building|residence) to remain|renovation works)\b/.test(planText);
     let projectType = 'Residential';
-    if (hasFloorPlan && hasElevation) {
+    if (saysNewBuild) {
       projectType = 'New Build';
-    } else if (hasFloorPlan) {
+    } else if (saysRenovation) {
       projectType = 'Addition/Renovation';
+    } else if (hasFloorPlan || hasElevation) {
+      projectType = 'New Build';
     }
 
     // Count items — prefer schedule totals (most accurate), fall back to symbol count

@@ -492,13 +492,13 @@ export function findRoomLabels(texts: ExtractedText[]): ExtractedElement[] {
     // Commercial / Office buildings
     'office', 'corridor', 'lobby', 'reception', 'meeting', 'conference',
     'boardroom', 'breakout', 'break room', 'cafeteria', 'canteen',
-    'server', 'comms', 'communications', 'electrical', 'mechanical',
+    'server', 'comms', 'communications', 'electrical room', 'mechanical room',
     'plant', 'plant room', 'ac plant', 'hvac', 'lift', 'elevator',
     'stair', 'stairwell', 'fire stair', 'loading', 'dock', 'dock leveller',
     'amenities', 'changeroom', 'change room', 'locker', 'shower',
-    'cleaners', 'cleaner', 'waste', 'bin', 'garbage', 'refuse',
-    'mailroom', 'mail room', 'copy', 'print', 'filing', 'archive',
-    'training', 'interview', 'quiet', 'focus', 'collaboration',
+    'cleaners', 'cleaner', 'garbage', 'refuse',
+    'mailroom', 'mail room', 'filing', 'archive',
+    'training', 'interview', 'collaboration',
     'open plan', 'workstation', 'hot desk', 'booth', 'phone booth',
     'kitchenette', 'tea room', 'staff', 'waiting', 'ante',
 
@@ -509,15 +509,18 @@ export function findRoomLabels(texts: ExtractedText[]): ExtractedElement[] {
 
     // Healthcare
     'consult', 'treatment', 'procedure', 'recovery', 'ward',
-    'nurses', 'station', 'pharmacy', 'pathology', 'radiology',
+    'nurses', 'pharmacy', 'pathology', 'radiology',
 
     // Retail
-    'retail', 'sales', 'display', 'fitting', 'cashier', 'pos',
+    'retail', 'fitting', 'cashier',
 
-    // Service areas
-    'service', 'services', 'riser', 'duct', 'shaft', 'void',
-    'ceiling void', 'floor void', 'plenum', 'bulkhead', 'soffit'
+    // Service areas ('service', 'void', 'duct', 'bulkhead'... are left out: on plans
+    // they are almost always notes like "VOID BELOW" or "SERVICES TO BE CONFIRMED")
+    'riser'
   ];
+  // Whole-word match: a substring match counted "dimENSions" and "licENSe" as ensuites
+  const escapeRe = (k: string) => k.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const keywordPatterns = roomKeywords.map(k => new RegExp(`(^|[^a-z])${escapeRe(k)}([^a-z]|$)`, 'i'));
 
   // Patterns for numbered rooms (BED 1, BATH 2, OFFICE 3P, etc.)
   const roomPatterns = [
@@ -542,7 +545,7 @@ export function findRoomLabels(texts: ExtractedText[]): ExtractedElement[] {
     /^zone\s*\d+$/i,                 // ZONE 1
     /^area\s*\d+$/i,                 // AREA 1
     // Room number patterns (e.g., 4.28A, G.01) — require letter suffix to avoid matching dimension values like 3.400
-    /^\d{1,2}\.\d{2}[a-z]$/i,        // 4.28A, 1.05B (letter suffix required)
+    /^\d{1,2}\.\d{2}[a-ln-z]$/i,     // 4.28A, 1.05B (letter suffix required; not 'm', which is metres)
     /^[gbl]\d*\.\d+[a-z]?$/i,        // G.01, B.02, L1.05 (Ground, Basement, Level)
     /^rm\s*\d+$/i,                   // RM 1, RM 101
     /^room\s*\d+$/i,                 // ROOM 1
@@ -565,8 +568,16 @@ export function findRoomLabels(texts: ExtractedText[]): ExtractedElement[] {
       if (/^[-©*•]/.test(text)) return false;           // "- NOTE..." or "© 2023..."
       // Skip strings with technical metadata keywords
       if (/posi[\s-]?strut|ncc\s*\d|rpeq|gspublish|version\s*\d/i.test(text)) return false;
+      // Room labels are short names, not sentences or notes
+      if (/[,;:!?()]/.test(text)) return false;
+      if (text.split(/\s+/).length > 4) return false;
+      // Drawing titles, fixtures and products that contain a room word
+      if (/\b(LAYOUT|ELEVATION|DETAIL|SECTION|PLAN|TYPE|DOOR|DOORS|ROLL|FLUSH|SLIDING|SELECTED|PANEL|STEEL|AAA|THRESHOLD|MIXER|ROSE|SCREEN|TAP|RAIL|TUB|FITTING|LIGHT|CEILING|HT|FOOTPATH|EXISTING|REMAIN|PROPOSED)\b|C\.H\b/i.test(text)) return false;
+      if (/\s(OR|TO|AND|WITH)$/i.test(text)) return false;
+      // Interior elevation views: "BATH A", "ENS C" (walls A-D of a room)
+      if (/^[a-z' ]+\s(\d+\s)?[A-D]$/i.test(text)) return false;
       // Check keywords
-      if (roomKeywords.some(k => lower.includes(k))) return true;
+      if (keywordPatterns.some(p => p.test(lower))) return true;
       // Check patterns for numbered rooms
       if (roomPatterns.some(p => p.test(lower))) return true;
       return false;

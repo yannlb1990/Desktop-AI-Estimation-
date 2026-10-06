@@ -77,6 +77,50 @@ const SCOPE_GAP_RULES: GapRule[] = [
     }]
   },
   {
+    id: 'no-frame',
+    category: 'structure',
+    severity: 'critical',
+    title: 'No Wall Frame or External Walls',
+    description: 'New build with no wall framing, brickwork or cladding in the estimate',
+    condition: (analysis, items) => {
+      const hasWalls = items.some(i =>
+        /fram(e|ing)|stud|truss|brick|block\s*work|clad|veneer|weatherboard|tilt\s*panel/i.test(i.description)
+      );
+      return analysis.summary.projectType.includes('New') && !hasWalls;
+    },
+    reason: () => 'New build detected but nothing priced for the wall structure',
+    suggestedItems: (analysis) => [{
+      description: 'Timber wall framing incl. lintels and bracing',
+      trade: 'Carpentry',
+      category: 'Framing',
+      estimatedQty: Math.round((analysis.summary.totalFloorArea || 175) * 1.1),
+      unit: 'M2',
+      estimatedRate: 120,
+      basis: 'Approx. 1.1 m² of wall frame per m² of floor area, supply and install'
+    }]
+  },
+  {
+    id: 'no-roof',
+    category: 'structure',
+    severity: 'critical',
+    title: 'No Roof',
+    description: 'New build with no roof framing or roof covering in the estimate',
+    condition: (analysis, items) => {
+      const hasRoof = items.some(i => /roof|truss|sarking|colorbond\s*sheet/i.test(i.description));
+      return analysis.summary.projectType.includes('New') && !hasRoof;
+    },
+    reason: () => 'New build detected but no roof structure or covering found',
+    suggestedItems: (analysis) => [{
+      description: 'Roof trusses and metal roof sheeting incl. sarking',
+      trade: 'Roofing',
+      category: 'Roofing',
+      estimatedQty: Math.round((analysis.summary.totalFloorArea || 175) * 1.15),
+      unit: 'M2',
+      estimatedRate: 145,
+      basis: 'Approx. 1.15 m² of roof per m² of floor area (eaves and pitch), supply and install'
+    }]
+  },
+  {
     id: 'no-termite',
     category: 'structure',
     severity: 'critical',
