@@ -1,5 +1,10 @@
 // AI Plan Analyzer Component - Displays PDF analysis results and auto-generated estimation
 import { useState, useMemo, useCallback, useEffect } from 'react';
+import { calculateEstimateTotals as calculateSharedTotals, resolveProjectPricing } from '@/lib/pricing/estimatePricing';
+import { readUserPricingDefaults } from '@/lib/pricing/userPricingDefaults';
+import { aiItemsToEstimateItems } from '@/lib/pricing/aiEstimateConversion';
+
+const money = (n: number) => n.toLocaleString('en-AU', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -84,7 +89,6 @@ import {
   EstimatedLineItem,
   PageAnalysis,
   SourceLocation,
-  calculateEstimateTotals,
   getAnalysisConfidenceLevel,
   MaterialLookupInfo,
   CalculationBreakdown,
@@ -115,7 +119,8 @@ import { ScaleCalibration, MeasuredLine } from '@/lib/scaleCalibration';
 interface AIPlanAnalyzerProps {
   analysis: PlanAnalysisResult;
   pdfData?: ArrayBuffer;  // Optional PDF data for viewer
-  onAcceptEstimate: (items: EstimatedLineItem[]) => void;
+  /** estimateConfig is saved on the project so it prices exactly as shown here */
+  onAcceptEstimate: (items: EstimatedLineItem[], estimateConfig: Record<string, unknown>) => void;
   onReanalyze?: () => void;
   isLoading?: boolean;
 }
@@ -312,11 +317,20 @@ export function AIPlanAnalyzer({
   const [projectName, setProjectName] = useState(analysis.fileName?.replace(/\.[^.]+$/, '') || 'Untitled Project');
   const [lastSaved, setLastSaved] = useState<Date | null>(null);
 
-  // Overhead and margin percentages
-  const [siteOverheads, setSiteOverheads] = useState(8); // %
-  const [companyOverheads, setCompanyOverheads] = useState(5); // %
-  const [contingency, setContingency] = useState(5); // %
-  const [margin, setMargin] = useState(10); // %
+  // Overheads and margin use the same settings as the Estimate tab (from Settings → Rates),
+  // so the total accepted here is the total the project shows.
+  const [basePricing] = useState(() => resolveProjectPricing(null, readUserPricingDefaults()));
+  const [supervisionPct, setSupervisionPct] = useState(basePricing.config.supervisionPct);
+  const [overheadPct, setOverheadPct] = useState(basePricing.config.overheadPct);
+  const [contingency, setContingency] = useState(basePricing.config.contingencyPct);
+  const [margin, setMargin] = useState(basePricing.config.marginPct);
+  const pricingConfig = useMemo(() => ({
+    ...basePricing.config,
+    supervisionPct,
+    overheadPct,
+    contingencyPct: contingency,
+    marginPct: margin,
+  }), [basePricing, supervisionPct, overheadPct, contingency, margin]);
 
   // Trade grouping state
   const [viewMode, setViewMode] = useState<'flat' | 'grouped'>('grouped');
@@ -478,32 +492,27 @@ export function AIPlanAnalyzer({
 
   const confidenceLevel = useMemo(() => getAnalysisConfidenceLevel(analysis), [analysis]);
 
-  // Calculate totals based on editable items with overheads and margin
+  // Totals use the shared pricing on the converted items: identical to the project after Accept.
   const totals = useMemo(() => {
     const selected = editableItems.filter(item => selectedItems.has(item.id));
-    const baseTotals = calculateEstimateTotals(selected);
-
-    // Calculate overheads and margin
-    const siteOverheadAmount = Math.round(baseTotals.subtotal * (siteOverheads / 100));
-    const companyOverheadAmount = Math.round(baseTotals.subtotal * (companyOverheads / 100));
-    const contingencyAmount = Math.round(baseTotals.subtotal * (contingency / 100));
-    const subtotalWithOverheads = baseTotals.subtotal + siteOverheadAmount + companyOverheadAmount + contingencyAmount;
-    const marginAmount = Math.round(subtotalWithOverheads * (margin / 100));
-    const finalSubtotal = subtotalWithOverheads + marginAmount;
-    const gstAmount = Math.round(finalSubtotal * 0.10);
-    const finalTotal = finalSubtotal + gstAmount;
-
+    const t = calculateSharedTotals({
+      items: aiItemsToEstimateItems(selected),
+      config: pricingConfig,
+      labourRates: basePricing.labourRates,
+    });
     return {
-      ...baseTotals,
-      siteOverheads: siteOverheadAmount,
-      companyOverheads: companyOverheadAmount,
-      contingency: contingencyAmount,
-      margin: marginAmount,
-      subtotalWithOverheads: finalSubtotal,
-      gst: gstAmount,
-      total: finalTotal,
+      totalMaterials: t.totalMaterials,
+      totalLabour: t.totalLabour,
+      subtotal: t.baseSubtotal,
+      supervision: t.supervision,
+      overheads: t.totalOverheads,
+      contingency: t.contingency,
+      margin: t.margin,
+      subtotalWithOverheads: t.taxable,
+      gst: t.gst,
+      total: t.totalPrice,
     };
-  }, [editableItems, selectedItems, siteOverheads, companyOverheads, contingency, margin]);
+  }, [editableItems, selectedItems, pricingConfig, basePricing]);
 
   const toggleItem = (id: string) => {
     const newSelected = new Set(selectedItems);
@@ -523,48 +532,33 @@ export function AIPlanAnalyzer({
     setSelectedItems(new Set());
   };
 
-  // Update item quantity
+  // Re-price a line after a quantity or rate edit, keeping its own materials/labour
+  // split and scaling labour hours with quantity.
+  const repriceItem = (item: EditableLineItem, quantity: number, unitRate: number): EditableLineItem => {
+    const totalCost = quantity * unitRate;
+    const materialShare = item.totalCost > 0 ? item.materialCost / item.totalCost : 0.6;
+    const hoursPerUnit = item.quantity > 0 ? item.labourHours / item.quantity : 0;
+    return {
+      ...item,
+      quantity,
+      unitRate,
+      totalCost,
+      materialCost: totalCost * materialShare,
+      labourCost: totalCost * (1 - materialShare),
+      labourHours: hoursPerUnit * quantity,
+      isEdited: true,
+    };
+  };
+
   const updateItemQuantity = useCallback((id: string, newQuantity: number) => {
     setEditableItems(items =>
-      items.map(item => {
-        if (item.id === id) {
-          const materialCost = (item.materialCost / item.quantity) * newQuantity;
-          const labourCost = (item.labourCost / item.quantity) * newQuantity;
-          return {
-            ...item,
-            quantity: newQuantity,
-            materialCost,
-            labourCost,
-            totalCost: materialCost + labourCost,
-            labourHours: (item.labourHours / item.quantity) * newQuantity,
-            isEdited: true,
-          };
-        }
-        return item;
-      })
+      items.map(item => (item.id === id ? repriceItem(item, newQuantity, item.unitRate) : item))
     );
   }, []);
 
-  // Update item unit rate
   const updateItemRate = useCallback((id: string, newRate: number) => {
     setEditableItems(items =>
-      items.map(item => {
-        if (item.id === id) {
-          const totalCost = newRate * item.quantity;
-          // Assume 60% material, 40% labour split for edited rates
-          const materialCost = totalCost * 0.6;
-          const labourCost = totalCost * 0.4;
-          return {
-            ...item,
-            unitRate: newRate,
-            materialCost,
-            labourCost,
-            totalCost,
-            isEdited: true,
-          };
-        }
-        return item;
-      })
+      items.map(item => (item.id === id ? repriceItem(item, item.quantity, newRate) : item))
     );
   }, []);
 
@@ -572,19 +566,10 @@ export function AIPlanAnalyzer({
   const updateItemField = useCallback((id: string, field: keyof EditableLineItem, value: any) => {
     setEditableItems(items =>
       items.map(item => {
-        if (item.id === id) {
-          const updated = { ...item, [field]: value, isEdited: true };
-          // Recalculate totals if qty or rate changed
-          if (field === 'quantity' || field === 'unitRate') {
-            const qty = field === 'quantity' ? value : item.quantity;
-            const rate = field === 'unitRate' ? value : item.unitRate;
-            updated.totalCost = qty * rate;
-            updated.materialCost = updated.totalCost * 0.6;
-            updated.labourCost = updated.totalCost * 0.4;
-          }
-          return updated;
-        }
-        return item;
+        if (item.id !== id) return item;
+        if (field === 'quantity') return repriceItem(item, value, item.unitRate);
+        if (field === 'unitRate') return repriceItem(item, item.quantity, value);
+        return { ...item, [field]: value, isEdited: true };
       })
     );
   }, []);
@@ -968,7 +953,12 @@ export function AIPlanAnalyzer({
 
   const handleAccept = () => {
     const selected = editableItems.filter(item => selectedItems.has(item.id));
-    onAcceptEstimate(selected);
+    onAcceptEstimate(selected, {
+      ...pricingConfig,
+      labourRates: basePricing.labourRates,
+      customConfigs: [],
+      groupingMode: 'none',
+    });
   };
 
   const handleExport = () => {
@@ -1290,22 +1280,26 @@ export function AIPlanAnalyzer({
           {/* Estimate Summary */}
           <Card className="p-4">
             <h3 className="font-semibold mb-4">Estimate Summary</h3>
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
               <div>
                 <p className="text-sm text-muted-foreground">Materials</p>
-                <p className="text-xl font-bold">${totals.totalMaterials.toLocaleString()}</p>
+                <p className="text-xl font-bold">${money(totals.totalMaterials)}</p>
               </div>
               <div>
                 <p className="text-sm text-muted-foreground">Labour</p>
-                <p className="text-xl font-bold">${totals.totalLabour.toLocaleString()}</p>
+                <p className="text-xl font-bold">${money(totals.totalLabour)}</p>
               </div>
               <div>
-                <p className="text-sm text-muted-foreground">GST (10%)</p>
-                <p className="text-xl font-bold">${totals.gst.toLocaleString()}</p>
+                <p className="text-sm text-muted-foreground">Overheads &amp; Margin</p>
+                <p className="text-xl font-bold">${money(totals.supervision + totals.overheads + totals.contingency + totals.margin)}</p>
+              </div>
+              <div>
+                <p className="text-sm text-muted-foreground">GST ({pricingConfig.gstPct}%)</p>
+                <p className="text-xl font-bold">${money(totals.gst)}</p>
               </div>
               <div>
                 <p className="text-sm text-muted-foreground">Total</p>
-                <p className="text-2xl font-bold text-primary">${totals.total.toLocaleString()}</p>
+                <p className="text-2xl font-bold text-primary">${money(totals.total)}</p>
               </div>
             </div>
           </Card>
@@ -2244,7 +2238,7 @@ export function AIPlanAnalyzer({
                   {selectedItems.size} of {editableItems.length} items
                 </span>
                 <Badge variant="outline" className="text-sm">
-                  Total: ${totals.total.toLocaleString()}
+                  Total: ${money(totals.total)}
                 </Badge>
               </div>
             </div>
@@ -2255,11 +2249,11 @@ export function AIPlanAnalyzer({
             <h4 className="font-semibold mb-3 text-foreground dark:text-foreground/90">Overheads & Margin</h4>
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
               <div>
-                <label className="text-xs text-muted-foreground">Site Overheads %</label>
+                <label className="text-xs text-muted-foreground">Supervision % (of labour)</label>
                 <Input
                   type="number"
-                  value={siteOverheads}
-                  onChange={(e) => setSiteOverheads(parseFloat(e.target.value) || 0)}
+                  value={supervisionPct}
+                  onChange={(e) => setSupervisionPct(parseFloat(e.target.value) || 0)}
                   className="h-8 w-24"
                   min="0"
                   max="30"
@@ -2267,11 +2261,11 @@ export function AIPlanAnalyzer({
                 />
               </div>
               <div>
-                <label className="text-xs text-muted-foreground">Company Overheads %</label>
+                <label className="text-xs text-muted-foreground">Overheads %</label>
                 <Input
                   type="number"
-                  value={companyOverheads}
-                  onChange={(e) => setCompanyOverheads(parseFloat(e.target.value) || 0)}
+                  value={overheadPct}
+                  onChange={(e) => setOverheadPct(parseFloat(e.target.value) || 0)}
                   className="h-8 w-24"
                   min="0"
                   max="20"
@@ -2397,53 +2391,53 @@ export function AIPlanAnalyzer({
             <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
               <div>
                 <p className="text-xs text-muted-foreground uppercase">Materials</p>
-                <p className="text-lg font-bold">${totals.totalMaterials.toLocaleString()}</p>
+                <p className="text-lg font-bold">${money(totals.totalMaterials)}</p>
               </div>
               <div>
                 <p className="text-xs text-muted-foreground uppercase">Labour</p>
-                <p className="text-lg font-bold">${totals.totalLabour.toLocaleString()}</p>
+                <p className="text-lg font-bold">${money(totals.totalLabour)}</p>
               </div>
               <div className="col-span-2 border-l pl-4">
                 <p className="text-xs text-muted-foreground uppercase">Base Subtotal</p>
-                <p className="text-lg font-bold">${totals.subtotal.toLocaleString()}</p>
+                <p className="text-lg font-bold">${money(totals.subtotal)}</p>
               </div>
             </div>
 
             <div className="border-t pt-3 space-y-1 text-sm">
               <div className="flex justify-between">
-                <span className="text-muted-foreground">Site Overheads ({siteOverheads}%)</span>
-                <span className="font-mono">${totals.siteOverheads?.toLocaleString() || 0}</span>
+                <span className="text-muted-foreground">Supervision ({supervisionPct}% of labour)</span>
+                <span className="font-mono">${money(totals.supervision)}</span>
               </div>
               <div className="flex justify-between">
-                <span className="text-muted-foreground">Company Overheads ({companyOverheads}%)</span>
-                <span className="font-mono">${totals.companyOverheads?.toLocaleString() || 0}</span>
+                <span className="text-muted-foreground">Overheads ({overheadPct}%)</span>
+                <span className="font-mono">${money(totals.overheads)}</span>
               </div>
               <div className="flex justify-between">
                 <span className="text-muted-foreground">Contingency ({contingency}%)</span>
-                <span className="font-mono">${totals.contingency?.toLocaleString() || 0}</span>
+                <span className="font-mono">${money(totals.contingency)}</span>
               </div>
               <div className="flex justify-between font-medium border-t pt-1 mt-2">
                 <span>Subtotal with Overheads</span>
-                <span className="font-mono">${(totals.subtotalWithOverheads - (totals.margin || 0)).toLocaleString()}</span>
+                <span className="font-mono">${money(totals.subtotalWithOverheads - totals.margin)}</span>
               </div>
               <div className="flex justify-between">
                 <span className="text-muted-foreground">Margin ({margin}%)</span>
-                <span className="font-mono">${totals.margin?.toLocaleString() || 0}</span>
+                <span className="font-mono">${money(totals.margin)}</span>
               </div>
             </div>
 
             <div className="border-t mt-3 pt-3 grid grid-cols-3 gap-4">
               <div>
                 <p className="text-xs text-muted-foreground uppercase">Net Total</p>
-                <p className="text-xl font-bold">${totals.subtotalWithOverheads?.toLocaleString() || totals.subtotal.toLocaleString()}</p>
+                <p className="text-xl font-bold">${money(totals.subtotalWithOverheads)}</p>
               </div>
               <div>
-                <p className="text-xs text-muted-foreground uppercase">GST (10%)</p>
-                <p className="text-xl font-bold">${totals.gst.toLocaleString()}</p>
+                <p className="text-xs text-muted-foreground uppercase">GST ({pricingConfig.gstPct}%)</p>
+                <p className="text-xl font-bold">${money(totals.gst)}</p>
               </div>
               <div className="bg-primary/10 -m-2 p-2 rounded-lg">
                 <p className="text-xs text-primary uppercase font-medium">Total (inc GST)</p>
-                <p className="text-2xl font-bold text-primary">${totals.total.toLocaleString()}</p>
+                <p className="text-2xl font-bold text-primary">${money(totals.total)}</p>
               </div>
             </div>
 
@@ -2615,7 +2609,7 @@ export function AIPlanAnalyzer({
             <div className="bg-muted/50 p-3 rounded-lg text-sm">
               <p className="font-medium mb-2">Will be saved:</p>
               <ul className="space-y-1 text-muted-foreground">
-                <li>• {editableItems.length} line items (${totals.total.toLocaleString()} inc GST)</li>
+                <li>• {editableItems.length} line items (${money(totals.total)} inc GST)</li>
                 <li>• {measuredRooms.length} measured rooms</li>
                 <li>• {measuredLines.length} distance measurements</li>
                 {calibration && <li>• Scale calibration ({calibration.scale})</li>}
