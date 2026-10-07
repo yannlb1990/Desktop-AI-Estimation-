@@ -1,7 +1,8 @@
-import { useReducer, useEffect, useRef } from 'react';
+import { useReducer, useEffect, useRef, useState } from 'react';
 import { TakeoffState, TakeoffAction, Measurement } from '@/lib/takeoff/types';
 import { getEffectiveQuantity } from '@/lib/takeoff/calculations';
 import { supabase } from '@/integrations/supabase/client';
+import { getCachedPDF, cachePDF } from '@/lib/takeoff/pdfCache';
 
 // Fields on Measurement whose change should cascade to linked cost item quantities
 const QUANTITY_FIELDS = new Set<keyof Measurement>([
@@ -136,9 +137,15 @@ export function toDurablePdfUrl(url: string | undefined): string | undefined {
   return url;
 }
 
+/** The permanent storage path for a plan URL, if it has one. */
+function durablePathOf(url: string | undefined): string | undefined {
+  const durable = toDurablePdfUrl(url);
+  return durable?.startsWith('storage:') ? durable : undefined;
+}
+
 function savePersisted(projectId: string, state: TakeoffState) {
   try {
-    const url = toDurablePdfUrl(state.pdfFile?.url);
+    const url = state.pdfFile?.storagePath ?? toDurablePdfUrl(state.pdfFile?.url);
     // Persist cloud URLs (https://) and storage paths (storage:bucket/path).
     // Blob URLs are session-only and will fail to load after a page refresh.
     const persistableUrl = url && (url.startsWith('https://') || url.startsWith('storage:')) ? url : undefined;
@@ -181,6 +188,7 @@ function buildInitialState(projectId?: string): TakeoffState {
           name: persisted.pdfName || 'plan.pdf',
           pageCount: persisted.pdfPageCount || 1,
           planId: persisted.planId,
+          storagePath: durablePathOf(persisted.pdfUrl),
         }
       : null,
     uploadStatus: persisted.pdfUrl && (persisted.pdfUrl.startsWith('https://') || persisted.pdfUrl.startsWith('storage:')) ? 'success' : 'idle',
@@ -205,7 +213,7 @@ function takeoffReducer(state: TakeoffState, action: TakeoffAction): TakeoffStat
 
       return {
         ...state,
-        pdfFile: action.payload,
+        pdfFile: { ...action.payload, storagePath: action.payload.storagePath ?? durablePathOf(action.payload.url) },
         pageCount: action.payload.pageCount,
         currentPageIndex: 0,
         uploadStatus: 'success',
@@ -428,7 +436,8 @@ function takeoffReducer(state: TakeoffState, action: TakeoffAction): TakeoffStat
       return { ...state, selectedColor: action.payload };
 
     case 'LOAD_PERSISTED_STATE': {
-      const { measurements, costItems, scales, pdfUrl, pdfName, pdfPageCount, planId } = action.payload;
+      const { measurements, costItems, scales, pdfName, pdfPageCount, planId } = action.payload;
+      const pdfUrl = toDurablePdfUrl(action.payload.pdfUrl);
       const hasScales = Object.keys(scales || {}).length > 0;
       // Deduplicate existing costItems — prefer rateId as key, fall back to name+unit
       const seenRateIds = new Set<string>();
@@ -454,7 +463,7 @@ function takeoffReducer(state: TakeoffState, action: TakeoffAction): TakeoffStat
         isCalibrated: hasScales,
         currentScale: hasScales ? (scales[state.currentPageIndex] ?? scales[0] ?? null) : null,
         pdfFile: isCloudUrl
-          ? { file: null as any, url: pdfUrl!, name: pdfName || 'plan.pdf', pageCount: pdfPageCount || 1, planId }
+          ? { file: null as any, url: pdfUrl!, name: pdfName || 'plan.pdf', pageCount: pdfPageCount || 1, planId, storagePath: durablePathOf(pdfUrl) }
           : state.pdfFile,
         uploadStatus: isCloudUrl ? 'success' : state.uploadStatus,
         pageCount: isCloudUrl ? (pdfPageCount || 0) : state.pageCount,
@@ -463,7 +472,19 @@ function takeoffReducer(state: TakeoffState, action: TakeoffAction): TakeoffStat
 
     case 'SET_PDF_URL':
       if (!state.pdfFile) return state;
-      return { ...state, pdfFile: { ...state.pdfFile, url: action.payload } };
+      // Keep the permanent path when swapping in a signed or cached display URL
+      return {
+        ...state,
+        pdfFile: {
+          ...state.pdfFile,
+          url: action.payload,
+          storagePath: state.pdfFile.storagePath ?? durablePathOf(state.pdfFile.url),
+        },
+      };
+
+    case 'SET_PDF_STORAGE_PATH':
+      if (!state.pdfFile) return state;
+      return { ...state, pdfFile: { ...state.pdfFile, storagePath: action.payload } };
 
     case 'UNDO':
       if (state.historyIndex > 0) {
@@ -515,6 +536,15 @@ function takeoffReducer(state: TakeoffState, action: TakeoffAction): TakeoffStat
   }
 }
 
+/** Does a saved takeoff hold real work (measurements, cost items or a plan)? */
+function hasTakeoffContent(t: { measurements?: unknown[]; costItems?: unknown[]; cost_items?: unknown[]; pdfUrl?: string | null; pdf_url?: string | null; planId?: string | null; plan_id?: string | null } | null | undefined): boolean {
+  if (!t) return false;
+  return (t.measurements?.length ?? 0) > 0
+    || (t.costItems?.length ?? 0) > 0
+    || (t.cost_items?.length ?? 0) > 0
+    || !!(t.pdfUrl || t.pdf_url || t.planId || t.plan_id);
+}
+
 export function useTakeoffState(projectId?: string) {
   const [state, dispatch] = useReducer(
     takeoffReducer,
@@ -525,17 +555,22 @@ export function useTakeoffState(projectId?: string) {
   // Suppress cloud save for 3s after loading from cloud to avoid immediate write-back
   const suppressCloudSaveUntil = useRef<number>(0);
   const cloudSyncStatus = useRef<'idle' | 'loading' | 'ready'>('idle');
+  // Nothing is saved (locally or to the cloud) until the cloud copy has been checked.
+  // Saving the empty starting state first used to stamp it "newest", so the real cloud
+  // copy was ignored and then overwritten: opening a project on a new device wiped it.
+  const [cloudReady, setCloudReady] = useState(false);
 
   // ── Load from Supabase on mount ────────────────────────────────────────────
   useEffect(() => {
     if (!projectId) return;
     let cancelled = false;
     cloudSyncStatus.current = 'loading';
+    setCloudReady(false);
 
     async function loadFromCloud() {
       try {
         const { data: { session } } = await supabase.auth.getSession();
-        if (!session || cancelled) { cloudSyncStatus.current = 'ready'; return; }
+        if (!session || cancelled) return;
 
         const { data, error } = await supabase
           .from('takeoff_sessions')
@@ -543,14 +578,19 @@ export function useTakeoffState(projectId?: string) {
           .eq('project_id', projectId)
           .single();
 
-        if (cancelled || error || !data) { cloudSyncStatus.current = 'ready'; return; }
+        if (cancelled || error || !data) return;
 
-        // Conflict resolution: use whichever source is newer
+        // Conflict resolution: a copy with real work always beats an empty one;
+        // between two copies with work, the newer one wins.
         const cloudTs = new Date(data.updated_at).getTime();
         const localRaw = localStorage.getItem(storageKey(projectId));
-        const localTs: number = localRaw ? (JSON.parse(localRaw)._localUpdatedAt ?? 0) : 0;
+        const local = localRaw ? JSON.parse(localRaw) : null;
+        const localTs: number = local?._localUpdatedAt ?? 0;
+        const cloudHasWork = hasTakeoffContent(data as any);
+        const localHasWork = hasTakeoffContent(local);
+        const takeCloud = cloudHasWork && (!localHasWork || cloudTs > localTs);
 
-        if (cloudTs > localTs) {
+        if (takeCloud) {
           suppressCloudSaveUntil.current = Date.now() + 3000;
           dispatch({
             type: 'LOAD_PERSISTED_STATE',
@@ -568,7 +608,10 @@ export function useTakeoffState(projectId?: string) {
       } catch (err) {
         console.warn('[takeoff] Cloud load failed:', err);
       } finally {
-        if (!cancelled) cloudSyncStatus.current = 'ready';
+        if (!cancelled) {
+          cloudSyncStatus.current = 'ready';
+          setCloudReady(true);
+        }
       }
     }
 
@@ -579,19 +622,27 @@ export function useTakeoffState(projectId?: string) {
   // ── Persist on every change: localStorage immediately, Supabase debounced ─
   useEffect(() => {
     if (!projectId) return;
+    if (!cloudReady) return;
 
-    // Always keep localStorage in sync immediately (same-browser fast reload)
+    const hasWork = hasTakeoffContent({ measurements: state.measurements, costItems: state.costItems, planId: state.pdfFile?.planId ?? (state.pdfFile ? 'loaded' : null) });
+
+    // Keep localStorage in sync immediately (same-browser fast reload)
     savePersisted(projectId, state);
 
     // Don't queue a cloud save if we just loaded from cloud (suppress window)
     if (Date.now() < suppressCloudSaveUntil.current) return;
+
+    // A completely empty takeoff (no plan, no measurements, no cost items) is never
+    // uploaded: losing real work is far worse than an old copy surviving a "delete all".
+    if (!hasWork) return;
 
     const timer = setTimeout(async () => {
       try {
         const { data: { session } } = await supabase.auth.getSession();
         if (!session) return;
 
-        const url = state.pdfFile?.url;
+        // Save the permanent path, never a signed (1-hour) or blob display URL
+        const url = state.pdfFile?.storagePath ?? toDurablePdfUrl(state.pdfFile?.url);
         const persistableUrl = url && (url.startsWith('https://') || url.startsWith('storage:')) ? url : null;
 
         const { error } = await supabase.from('takeoff_sessions').upsert({
@@ -614,27 +665,51 @@ export function useTakeoffState(projectId?: string) {
     }, 1500);
 
     return () => clearTimeout(timer);
-  }, [state.measurements, state.costItems, state.scales, state.pdfFile, projectId]);
+  }, [state.measurements, state.costItems, state.scales, state.pdfFile, projectId, cloudReady]);
 
-  // Resolve storage: paths to 1-hour signed URLs so pdf.js and Fabric.js can load them
+  // Resolve storage: paths to something pdf.js can load. The browser cache (IndexedDB)
+  // comes first: instant, works offline, never expires. Otherwise use a 1-hour signed URL
+  // for this session and save a copy to the cache so the next open is instant.
   useEffect(() => {
     const url = state.pdfFile?.url;
     if (!url?.startsWith('storage:')) return;
+    let cancelled = false;
 
     const withoutPrefix = url.replace('storage:', '');
     const slashIdx = withoutPrefix.indexOf('/');
     if (slashIdx === -1) return;
-
     const bucket = withoutPrefix.slice(0, slashIdx);
     const path = withoutPrefix.slice(slashIdx + 1);
+    const planId = state.pdfFile?.planId;
+    const name = state.pdfFile?.name || 'plan.pdf';
+    const pageCount = state.pdfFile?.pageCount || 1;
 
-    supabase.storage.from(bucket).createSignedUrl(path, 3600).then(({ data, error }) => {
-      if (!error && data?.signedUrl) {
-        dispatch({ type: 'SET_PDF_URL', payload: data.signedUrl });
-      } else {
-        console.error('[useTakeoffState] Failed to resolve signed URL for', path, error?.message);
+    (async () => {
+      if (planId) {
+        const cached = await getCachedPDF(planId).catch(() => null);
+        if (cancelled) return;
+        if (cached) {
+          const blobUrl = URL.createObjectURL(new Blob([cached.data], { type: 'application/pdf' }));
+          dispatch({ type: 'SET_PDF_URL', payload: blobUrl });
+          return;
+        }
       }
-    });
+      const { data, error } = await supabase.storage.from(bucket).createSignedUrl(path, 3600);
+      if (cancelled) return;
+      if (error || !data?.signedUrl) {
+        console.error('[useTakeoffState] Failed to resolve signed URL for', path, error?.message);
+        return;
+      }
+      dispatch({ type: 'SET_PDF_URL', payload: data.signedUrl });
+      if (planId) {
+        fetch(data.signedUrl)
+          .then(r => (r.ok ? r.arrayBuffer() : Promise.reject(r.status)))
+          .then(buf => cachePDF(planId, buf, name, pageCount))
+          .catch(() => { /* cache warm-up is best effort */ });
+      }
+    })();
+
+    return () => { cancelled = true; };
   }, [state.pdfFile?.url]);
 
   return { state, dispatch };

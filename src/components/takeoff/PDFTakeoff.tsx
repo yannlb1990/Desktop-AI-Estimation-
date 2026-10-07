@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom';
 import { Download, ZoomIn, ZoomOut, RotateCw, RotateCcw, Maximize2, Minimize2, ChevronLeft, ChevronRight, ChevronUp, ChevronDown, Trash2, FileText, SlidersHorizontal, Combine, Ruler, X, CheckCircle, EyeOff, Lock, ScanLine, AlertTriangle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { PDFUploadManager } from './PDFUploadManager';
+import { PDFUploadManager, uploadToCloud } from './PDFUploadManager';
 import { InteractiveCanvas } from './InteractiveCanvas';
 import { MeasurementToolbar } from './MeasurementToolbar';
 import { ViewportControls } from './ViewportControls';
@@ -147,7 +147,7 @@ export const PDFTakeoff = ({ projectId, estimateId, onAddCostItems }: PDFTakeoff
       const persisted = JSON.parse(raw);
       const planId: string | undefined = persisted.planId;
       if (!planId) return;
-      getCachedPDF(planId).then(cached => {
+      getCachedPDF(planId).then(async cached => {
         if (cancelled || !cached) return;
         const blob = new Blob([cached.data], { type: 'application/pdf' });
         const url = URL.createObjectURL(blob);
@@ -155,6 +155,14 @@ export const PDFTakeoff = ({ projectId, estimateId, onAddCostItems }: PDFTakeoff
           type: 'SET_PDF_FILE',
           payload: { file: null as any, url, name: cached.name, pageCount: cached.pageCount, planId },
         });
+        // This plan only exists in this browser. Upload it once so it opens on any
+        // device and survives a cleared browser; the takeoff then saves the path.
+        // Not gated on `cancelled`: loading the plan above re-runs this effect (which
+        // cancels it), but a finished upload must still record where the plan now lives.
+        if (!persisted.pdfUrl) {
+          const storagePath = await uploadToCloud(blob, planId, 'pdf');
+          if (storagePath) dispatch({ type: 'SET_PDF_STORAGE_PATH', payload: storagePath });
+        }
       }).catch(() => { /* cache unavailable — user will need to re-upload */ });
     } catch { /* ignore parse errors */ }
     return () => { cancelled = true; };

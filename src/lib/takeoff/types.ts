@@ -281,6 +281,7 @@ export interface PDFFile {
   name: string;
   pageCount: number;
   planId?: string;   // stable identifier: name + size, survives blob URL expiry
+  storagePath?: string; // permanent cloud location ("storage:bucket/path"); what gets saved, never the display URL
 }
 
 // === PDF STATE ===
@@ -383,4 +384,5 @@ export type TakeoffAction =
   | { type: 'REDO' }
   | { type: 'DELETE_LAST_MEASUREMENT' }
   | { type: 'CALCULATE_ESTIMATE' }
-  | { type: 'SET_PDF_URL'; payload: string };
+  | { type: 'SET_PDF_URL'; payload: string }
+  | { type: 'SET_PDF_STORAGE_PATH'; payload: string };
