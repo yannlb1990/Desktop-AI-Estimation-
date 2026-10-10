@@ -27,7 +27,9 @@ interface Props {
 }
 
 function fmt(n: number) {
-  return n.toLocaleString('en-AU', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  // Avoid "-0.00" for a zero deduction
+  const v = Math.abs(n) < 0.005 ? 0 : n;
+  return v.toLocaleString('en-AU', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
 /**
@@ -256,8 +258,8 @@ export function ProgressClaimGenerator({ projectId, projectName, siteAddress = '
             ].map(({ label, value, className }) => (
               <div key={label} className={`flex justify-between items-center ${className}`}>
                 <span>{label}</span>
-                <span className={value < 0 ? 'text-amber-400' : ''}>
-                  {value < 0 ? `($${fmt(Math.abs(value))})` : `$${fmt(value)}`}
+                <span className={value < -0.005 ? 'text-amber-400' : ''}>
+                  {value < -0.005 ? `($${fmt(Math.abs(value))})` : `$${fmt(value)}`}
                 </span>
               </div>
             ))}

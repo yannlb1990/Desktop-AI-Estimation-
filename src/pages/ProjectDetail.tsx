@@ -699,7 +699,7 @@ const ProjectDetail = () => {
           })}
         </div>
 
-        {/* ── Row 2: Tools strip (violet active, scrollable on mobile) ── */}
+        {/* ── Row 2: Tools strip (warm brown active, scrollable on mobile) ── */}
         <div className="relative mb-6">
           {canScrollLeft && (
             <button
@@ -738,8 +738,8 @@ const ProjectDetail = () => {
                     onClick={() => setActiveMainTab(tool.key)}
                     className={`flex items-center gap-1.5 px-2 md:px-3 py-2 rounded-lg text-xs font-medium transition-all shrink-0 ${
                       isActive
-                        ? "bg-violet-600 text-white shadow-sm"
-                        : "text-muted-foreground hover:bg-violet-500/10 hover:text-violet-300"
+                        ? "bg-[#412D15] text-foreground shadow-sm ring-1 ring-[#D4A045]/40"
+                        : "text-muted-foreground hover:bg-muted/50 hover:text-foreground"
                     }`}
                     title={tool.label}
                   >

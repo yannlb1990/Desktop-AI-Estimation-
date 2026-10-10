@@ -87,10 +87,11 @@ export function approveQuoteVersion(
   const project = loadProject(projectId);
   if (!project) return null;
   const gstPct = projectGstPct(project);
-  const lines: ApprovedQuoteLine[] = version.lines
-    .filter(l => l.included)
+  const included = version.lines.filter(l => l.included);
+  const lines: ApprovedQuoteLine[] = included
     .map(l => ({ description: l.description, trade: l.trade || 'General', amount: roundCents(l.qty * l.unitPrice) }));
-  const subtotalExGst = roundCents(lines.reduce((s, l) => s + l.amount, 0));
+  // Same rounding as the quote: sum the unrounded line amounts, then round once
+  const subtotalExGst = roundCents(included.reduce((s, l) => s + l.qty * l.unitPrice, 0));
   const approved: ApprovedQuote = {
     versionId: version.id,
     versionNumber: version.versionNumber,
@@ -99,7 +100,7 @@ export function approveQuoteVersion(
     approvedBy,
     subtotalExGst,
     gstPct,
-    totalIncGst: roundCents(subtotalExGst * (1 + gstPct / 100)),
+    totalIncGst: roundCents(subtotalExGst + roundCents(subtotalExGst * gstPct / 100)),
     lines,
     paymentSchedule,
   };
@@ -148,7 +149,7 @@ export function contractSummary(projectId: string): ContractSummary {
     variationsExGst: variations.total,
     contractExGst,
     gstPct,
-    contractIncGst: roundCents(contractExGst * (1 + gstPct / 100)),
+    contractIncGst: roundCents(contractExGst + roundCents(contractExGst * gstPct / 100)),
     estimatedCostExGst: totals ? roundCents(totals.taxable - totals.margin - totals.totalMarkup) : 0,
   };
 }
