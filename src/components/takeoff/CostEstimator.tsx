@@ -821,7 +821,7 @@ export const CostEstimator = ({
 
     // Same calculation the Estimate tab uses, so the quote that opens next shows the
     // same total as the Estimate tab (supervision, overheads, contingency, line markup).
-    projects[projectIndex].estimate_totals = calculateProjectTotals(projects[projectIndex], readUserPricingDefaults());
+    projects[projectIndex].estimate_totals = calculateProjectTotals(projects[projectIndex], readUserPricingDefaults(projects[projectIndex]));
 
     localStorage.setItem(getUserStorageKey('local_projects'), JSON.stringify(projects));
     syncProjectToSupabase(projects[projectIndex]);
@@ -846,7 +846,7 @@ export const CostEstimator = ({
             ps[pi].estimate_items = (ps[pi].estimate_items || []).filter(
               (e: any) => !transferredItemIds.includes(e.id)
             );
-            ps[pi].estimate_totals = calculateProjectTotals(ps[pi], readUserPricingDefaults());
+            ps[pi].estimate_totals = calculateProjectTotals(ps[pi], readUserPricingDefaults(ps[pi]));
             localStorage.setItem(getUserStorageKey('local_projects'), JSON.stringify(ps));
             syncProjectToSupabase(ps[pi]);
             // Remove from transferred set so they can be re-transferred

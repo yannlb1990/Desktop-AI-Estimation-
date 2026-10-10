@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { priceLine, resolveProjectPricing } from "@/lib/pricing/estimatePricing";
 import { readUserPricingDefaults } from "@/lib/pricing/userPricingDefaults";
-import { contractSummary } from "@/lib/contract";
+import { contractSummary, syncClientApprovals } from "@/lib/contract";
 import { format, parseISO } from "date-fns";
 import { toast } from "sonner";
 import { getUserStorageKey } from "@/lib/localAuth";
@@ -49,7 +49,7 @@ const aud = (v: number) =>
  * the budget you track spending against. Priced by the shared pricing module.
  */
 function computeItemCost(item: any, project: any): number {
-  const { config, labourRates } = resolveProjectPricing(project, readUserPricingDefaults());
+  const { config, labourRates } = resolveProjectPricing(project, readUserPricingDefaults(project));
   return priceLine(item, config, labourRates).subtotal;
 }
 
@@ -126,6 +126,8 @@ export default function JobCostTracker({ projectId }: JobCostTrackerProps) {
     }
 
     loadJobCostsMerged(projectId).then(setEntries);
+    // Pick up a quote the client approved through their link
+    syncClientApprovals(projectId).then(() => setContract(contractSummary(projectId)));
   }, [projectId]);
 
   // ─── Persist ─────────────────────────────────────────────────────────────

@@ -3,329 +3,185 @@ import { useParams } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
-import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
-import { CheckCircle2, AlertTriangle, Building2, MapPin, User, DollarSign, Clock, ClipboardCheck } from 'lucide-react';
+import { CheckCircle2, AlertTriangle, Building2, MapPin, User, Clock, MessageSquare, Loader2 } from 'lucide-react';
+import { supabase } from '@/integrations/supabase/client';
+import type { QuoteSharePayload } from '@/lib/contract';
 
-interface QuoteShare {
+interface ShareView {
   token: string;
-  projectId: string;
-  projectName: string;
-  clientName: string;
-  siteAddress: string;
-  grandTotal: number;
-  estimateItems: Array<{
-    id: string;
-    category?: string;
-    trade?: string;
-    name?: string;
-    description?: string;
-    quantity: number;
-    unit: string;
-    unitCost: number;
-    total: number;
-  }>;
-  generatedAt: string;
-  expiresAt: string;
+  payload: QuoteSharePayload;
   status: 'pending' | 'approved' | 'changes_requested';
-  approvedByName?: string;
-  approvedAt?: string;
-  changeComments?: string;
+  responded_name: string | null;
+  responded_at: string | null;
+  comments: string | null;
+  expires_at: string;
+  expired: boolean;
 }
 
-const fmtCurrency = (v: number) =>
-  new Intl.NumberFormat('en-AU', { style: 'currency', currency: 'AUD', maximumFractionDigits: 0 }).format(v);
+const money = (v: number) =>
+  new Intl.NumberFormat('en-AU', { style: 'currency', currency: 'AUD', minimumFractionDigits: 2 }).format(v);
 
+/**
+ * Public page a client opens from the estimator's approval link. No account needed:
+ * the quote is read and answered through two database functions keyed on the token.
+ */
 export default function QuoteApproval() {
   const { token } = useParams<{ token: string }>();
-  const [quote, setQuote] = useState<QuoteShare | null>(null);
-  const [notFound, setNotFound] = useState(false);
-  const [expired, setExpired] = useState(false);
-  const [clientNameInput, setClientNameInput] = useState('');
+  const [share, setShare] = useState<ShareView | null>(null);
+  const [state, setState] = useState<'loading' | 'ready' | 'notfound'>('loading');
+  const [name, setName] = useState('');
   const [comments, setComments] = useState('');
-  const [submitted, setSubmitted] = useState<'approved' | 'changes_requested' | null>(null);
+  const [mode, setMode] = useState<'approve' | 'changes'>('approve');
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!token) { setNotFound(true); return; }
-    const raw = localStorage.getItem(`quote_share_${token}`);
-    if (!raw) { setNotFound(true); return; }
-    try {
-      const data: QuoteShare = JSON.parse(raw);
-      if (new Date(data.expiresAt) < new Date()) { setExpired(true); return; }
-      setQuote(data);
-      if (data.status === 'approved') setSubmitted('approved');
-      if (data.status === 'changes_requested') setSubmitted('changes_requested');
-      setClientNameInput(data.approvedByName ?? data.clientName ?? '');
-    } catch {
-      setNotFound(true);
-    }
+    if (!token) { setState('notfound'); return; }
+    (supabase as any).rpc('get_quote_share', { p_token: token }).then(({ data, error }: any) => {
+      if (error || !data) { setState('notfound'); return; }
+      setShare(data as ShareView);
+      setName((data as ShareView).payload.clientName || '');
+      setState('ready');
+    });
   }, [token]);
 
-  const respond = (action: 'approved' | 'changes_requested') => {
-    if (!quote || !token) return;
-    const updated: QuoteShare = {
-      ...quote,
-      status: action,
-      approvedByName: clientNameInput,
-      approvedAt: new Date().toISOString(),
-      changeComments: action === 'changes_requested' ? comments : undefined,
-    };
-    localStorage.setItem(`quote_share_${token}`, JSON.stringify(updated));
-    setQuote(updated);
-    setSubmitted(action);
+  const respond = async () => {
+    if (!token || !share) return;
+    if (!name.trim()) { setError('Please enter your full name.'); return; }
+    if (mode === 'changes' && !comments.trim()) { setError('Please describe the changes you need.'); return; }
+    setSubmitting(true);
+    setError(null);
+    const { data, error: rpcError } = await (supabase as any).rpc('respond_quote_share', {
+      p_token: token,
+      p_status: mode === 'approve' ? 'approved' : 'changes_requested',
+      p_name: name.trim(),
+      p_comments: mode === 'changes' ? comments.trim() : null,
+    });
+    setSubmitting(false);
+    if (rpcError) {
+      setError(/already answered/.test(rpcError.message) ? 'This quote has already been answered.'
+        : /expired/.test(rpcError.message) ? 'This link has expired. Please ask for a new one.'
+        : 'Something went wrong. Please try again.');
+      return;
+    }
+    setShare(data as ShareView);
   };
 
-  // Group line items by category/trade
-  const grouped = quote
-    ? Object.entries(
-        (quote.estimateItems ?? []).reduce<Record<string, typeof quote.estimateItems>>((acc, item) => {
-          const key = item.category ?? item.trade ?? 'General';
-          (acc[key] = acc[key] ?? []).push(item);
-          return acc;
-        }, {})
-      )
-    : [];
-
-  if (notFound) {
+  if (state === 'loading') {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-[#000000] text-white p-6">
-        <div className="text-center space-y-4 max-w-md">
+      <div className="min-h-screen flex items-center justify-center bg-background text-foreground">
+        <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+      </div>
+    );
+  }
+
+  if (state === 'notfound' || !share) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-background text-foreground p-6">
+        <div className="text-center space-y-3 max-w-md">
           <AlertTriangle className="h-12 w-12 text-amber-400 mx-auto" />
           <h1 className="text-2xl font-bold">Link not found</h1>
-          <p className="text-muted-foreground">This quote link has expired or is invalid. Please contact the estimator for a new link.</p>
+          <p className="text-muted-foreground">This quote link is invalid. Please contact your builder for a new link.</p>
         </div>
       </div>
     );
   }
 
-  if (expired) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-[#000000] text-white p-6">
-        <div className="text-center space-y-4 max-w-md">
-          <Clock className="h-12 w-12 text-amber-400 mx-auto" />
-          <h1 className="text-2xl font-bold">Quote link expired</h1>
-          <p className="text-muted-foreground">This quote link has expired (links are valid for 30 days). Please contact the estimator for a fresh link.</p>
-        </div>
-      </div>
-    );
-  }
-
-  if (!quote) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-[#000000]">
-        <div className="h-8 w-8 rounded-full border-2 border-foreground/25 border-t-transparent animate-spin" />
-      </div>
-    );
-  }
+  const q = share.payload;
+  const byTrade = q.lines.reduce<Record<string, typeof q.lines>>((acc, l) => {
+    (acc[l.trade || 'General'] = acc[l.trade || 'General'] || []).push(l);
+    return acc;
+  }, {});
+  const answered = share.status !== 'pending';
 
   return (
-    <div className="min-h-screen bg-[#000000] text-white">
-      {/* Brand header */}
-      <div className="bg-[#0a1628] border-b border-slate-800">
-        <div className="max-w-4xl mx-auto px-6 py-4 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <Building2 className="h-6 w-6 text-[#E1DCC9]" />
-            <span className="font-bold text-lg tracking-tight">Metricore</span>
-          </div>
-          <div className="text-xs text-slate-500">Quote Reference · {token?.slice(0, 8).toUpperCase()}</div>
-        </div>
-      </div>
-
-      <div className="max-w-4xl mx-auto px-6 py-10 space-y-8">
-        {/* Project header */}
-        <div className="bg-card/90/50 border border-border/50 rounded-xl p-6 space-y-4">
-          <div className="flex items-start justify-between gap-4 flex-wrap">
-            <div>
-              <h1 className="text-2xl font-bold text-white">{quote.projectName}</h1>
-              <p className="text-muted-foreground text-sm mt-1">Estimate prepared by Metricore</p>
-            </div>
-            <Badge
-              variant="outline"
-              className={
-                quote.status === 'approved'
-                  ? 'border-[#E1DCC9]/30 text-[#E1DCC9]/80 bg-muted/100/10 text-sm px-3 py-1'
-                  : quote.status === 'changes_requested'
-                  ? 'border-amber-500 text-amber-400 bg-amber-500/10 text-sm px-3 py-1'
-                  : 'border-slate-500 text-muted-foreground bg-slate-500/10 text-sm px-3 py-1'
-              }
-            >
-              {quote.status === 'approved' ? '✓ Approved' : quote.status === 'changes_requested' ? '⚠ Changes Requested' : 'Awaiting Approval'}
-            </Badge>
-          </div>
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
-            {quote.clientName && (
-              <div className="flex items-center gap-2 text-foreground/60">
-                <User className="h-4 w-4 text-slate-500 shrink-0" />
-                <span>{quote.clientName}</span>
-              </div>
-            )}
-            {quote.siteAddress && (
-              <div className="flex items-center gap-2 text-foreground/60">
-                <MapPin className="h-4 w-4 text-slate-500 shrink-0" />
-                <span>{quote.siteAddress}</span>
-              </div>
-            )}
-            <div className="flex items-center gap-2 text-foreground/60">
-              <Clock className="h-4 w-4 text-slate-500 shrink-0" />
-              <span>Issued {new Date(quote.generatedAt).toLocaleDateString('en-AU', { day: 'numeric', month: 'long', year: 'numeric' })}</span>
-            </div>
-            <div className="flex items-center gap-2 text-foreground/60">
-              <Clock className="h-4 w-4 text-slate-500 shrink-0" />
-              <span>Valid until {new Date(quote.expiresAt).toLocaleDateString('en-AU', { day: 'numeric', month: 'long', year: 'numeric' })}</span>
-            </div>
+    <div className="min-h-screen bg-background text-foreground">
+      <div className="max-w-3xl mx-auto p-4 sm:p-8 space-y-6">
+        {/* Header */}
+        <div className="rounded-xl border border-border bg-card p-6 space-y-3">
+          <p className="text-xs uppercase tracking-wider text-amber-400 font-semibold">Quotation {q.quoteNumber}</p>
+          <h1 className="text-2xl font-bold">{q.projectName}</h1>
+          <div className="grid sm:grid-cols-2 gap-2 text-sm text-muted-foreground">
+            <span className="flex items-center gap-2"><Building2 className="h-4 w-4" />{q.company.name || 'Your builder'}{q.company.abn ? `, ABN ${q.company.abn}` : ''}</span>
+            {q.siteAddress && <span className="flex items-center gap-2"><MapPin className="h-4 w-4" />{q.siteAddress}</span>}
+            {q.clientName && <span className="flex items-center gap-2"><User className="h-4 w-4" />Prepared for {q.clientName}</span>}
+            <span className="flex items-center gap-2"><Clock className="h-4 w-4" />Valid until {new Date(share.expires_at).toLocaleDateString('en-AU')}</span>
           </div>
         </div>
 
-        {/* Grand total banner */}
-        <div className="bg-primary/10 border border-foreground/20 rounded-xl p-6 flex items-center justify-between">
-          <div>
-            <p className="text-muted-foreground text-sm">Total Estimate (excl. GST)</p>
-            <p className="text-4xl font-bold text-[#E1DCC9] mt-1">{fmtCurrency(quote.grandTotal)}</p>
-          </div>
-          <DollarSign className="h-12 w-12 text-[#E1DCC9]/70" />
-        </div>
-
-        {/* Line items by category */}
-        {grouped.length > 0 && (
-          <div className="space-y-4">
-            <h2 className="text-lg font-semibold text-slate-200">Estimate Breakdown</h2>
-            {grouped.map(([category, items]) => {
-              const catTotal = items.reduce((s, i) => s + (i.total ?? 0), 0);
-              return (
-                <div key={category} className="bg-card/90/40 border border-border/50 rounded-lg overflow-hidden">
-                  <div className="flex items-center justify-between px-4 py-2.5 bg-card/90/60">
-                    <span className="text-sm font-semibold text-slate-200">{category}</span>
-                    <span className="text-sm font-mono text-[#E1DCC9]">{fmtCurrency(catTotal)}</span>
-                  </div>
-                  <table className="w-full text-sm">
-                    <thead>
-                      <tr className="border-b border-border/50">
-                        <th className="text-left px-4 py-2 text-muted-foreground font-normal">Item</th>
-                        <th className="text-right px-4 py-2 text-muted-foreground font-normal w-20">Qty</th>
-                        <th className="text-right px-4 py-2 text-muted-foreground font-normal w-20">Unit</th>
-                        <th className="text-right px-4 py-2 text-muted-foreground font-normal w-28">Total</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {items.map((item, i) => (
-                        <tr key={item.id ?? i} className="border-b border-border/50/50 last:border-0">
-                          <td className="px-4 py-2 text-slate-200">{item.name ?? item.description ?? '—'}</td>
-                          <td className="px-4 py-2 text-right text-foreground/60 tabular-nums">{item.quantity}</td>
-                          <td className="px-4 py-2 text-right text-muted-foreground">{item.unit}</td>
-                          <td className="px-4 py-2 text-right text-slate-200 tabular-nums font-mono">{fmtCurrency(item.total ?? 0)}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
+        {/* Lines */}
+        <div className="rounded-xl border border-border bg-card p-6 space-y-4">
+          {Object.entries(byTrade).map(([trade, lines]) => (
+            <div key={trade}>
+              <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-2">{trade}</p>
+              {lines.map((l, i) => (
+                <div key={i} className="flex justify-between gap-4 py-1.5 text-sm border-b border-border/40">
+                  <span>{l.description}</span>
+                  <span className="text-muted-foreground whitespace-nowrap">{l.qty} {l.unit}</span>
+                  <span className="font-mono whitespace-nowrap">{money(l.qty * l.unitPrice)}</span>
                 </div>
-              );
-            })}
-
-            <div className="flex justify-end">
-              <div className="text-right space-y-1">
-                <div className="flex gap-8 text-sm text-muted-foreground">
-                  <span>Subtotal (excl. GST)</span>
-                  <span className="font-mono tabular-nums text-slate-200">{fmtCurrency(quote.grandTotal)}</span>
-                </div>
-                <div className="flex gap-8 text-sm text-muted-foreground">
-                  <span>GST (10%)</span>
-                  <span className="font-mono tabular-nums text-slate-200">{fmtCurrency(quote.grandTotal * 0.1)}</span>
-                </div>
-                <Separator className="bg-slate-600 my-2" />
-                <div className="flex gap-8 font-bold text-lg">
-                  <span className="text-slate-200">Total (incl. GST)</span>
-                  <span className="font-mono tabular-nums text-[#E1DCC9]">{fmtCurrency(quote.grandTotal * 1.1)}</span>
-                </div>
-              </div>
+              ))}
             </div>
+          ))}
+          <Separator />
+          <div className="space-y-1 text-sm">
+            <div className="flex justify-between"><span className="text-muted-foreground">Subtotal (ex GST)</span><span className="font-mono">{money(q.subtotalExGst)}</span></div>
+            <div className="flex justify-between"><span className="text-muted-foreground">GST ({q.gstPct}%)</span><span className="font-mono">{money(q.gst)}</span></div>
+            <div className="flex justify-between text-lg font-bold pt-1"><span>Total (inc GST)</span><span className="font-mono text-[#E1DCC9]">{money(q.totalIncGst)}</span></div>
           </div>
-        )}
-
-        {/* Approval section */}
-        <div className="bg-card/90/50 border border-border/50 rounded-xl p-6 space-y-5">
-          <div className="flex items-center gap-2">
-            <ClipboardCheck className="h-5 w-5 text-[#E1DCC9]" />
-            <h2 className="text-lg font-semibold">Digital Approval</h2>
-          </div>
-
-          {submitted === 'approved' ? (
-            <div className="flex flex-col items-center gap-3 py-8 text-center">
-              <CheckCircle2 className="h-14 w-14 text-[#E1DCC9]/80" />
-              <h3 className="text-xl font-bold text-[#E1DCC9]/80">Quote Approved</h3>
-              <p className="text-muted-foreground">
-                Approved by <span className="text-slate-200">{quote.approvedByName}</span> on{' '}
-                {quote.approvedAt ? new Date(quote.approvedAt).toLocaleDateString('en-AU', { day: 'numeric', month: 'long', year: 'numeric' }) : '—'}
-              </p>
-              <p className="text-slate-500 text-sm">The estimator has been notified. You will receive a copy of this approval by email.</p>
-            </div>
-          ) : submitted === 'changes_requested' ? (
-            <div className="flex flex-col items-center gap-3 py-8 text-center">
-              <AlertTriangle className="h-14 w-14 text-amber-400" />
-              <h3 className="text-xl font-bold text-amber-400">Changes Requested</h3>
-              <p className="text-muted-foreground">Your feedback has been sent to the estimator.</p>
-              {quote.changeComments && (
-                <div className="bg-muted/60/50 rounded-lg p-4 text-sm text-foreground/60 text-left max-w-md">
-                  <p className="font-medium text-slate-200 mb-1">Your comments:</p>
-                  <p>{quote.changeComments}</p>
-                </div>
-              )}
-            </div>
-          ) : (
-            <>
-              <p className="text-muted-foreground text-sm">
-                By approving, you confirm acceptance of the estimate total of{' '}
-                <span className="text-white font-semibold">{fmtCurrency(quote.grandTotal * 1.1)} incl. GST</span> and authorise the estimator to proceed.
-              </p>
-              <div className="space-y-3">
-                <div>
-                  <label className="text-sm text-muted-foreground mb-1 block">Your full name *</label>
-                  <Input
-                    placeholder="e.g. John Smith"
-                    value={clientNameInput}
-                    onChange={e => setClientNameInput(e.target.value)}
-                    className="bg-muted/60 border-slate-600 text-white placeholder:text-slate-500"
-                  />
-                </div>
-                <div>
-                  <label className="text-sm text-muted-foreground mb-1 block">Comments (optional)</label>
-                  <Textarea
-                    placeholder="Any notes or conditions for your approval, or changes you'd like to request…"
-                    value={comments}
-                    onChange={e => setComments(e.target.value)}
-                    rows={3}
-                    className="bg-muted/60 border-slate-600 text-white placeholder:text-slate-500 resize-none"
-                  />
-                </div>
-                <div className="flex gap-3 pt-2">
-                  <Button
-                    className="flex-1 bg-[#412D15]/70 hover:bg-muted/100 text-white font-semibold h-11"
-                    disabled={!clientNameInput.trim()}
-                    onClick={() => respond('approved')}
-                  >
-                    <CheckCircle2 className="h-4 w-4 mr-2" />
-                    Approve Quote
-                  </Button>
-                  <Button
-                    variant="outline"
-                    className="flex-1 border-amber-600 text-amber-400 hover:bg-amber-500/10 h-11"
-                    disabled={!clientNameInput.trim()}
-                    onClick={() => respond('changes_requested')}
-                  >
-                    <AlertTriangle className="h-4 w-4 mr-2" />
-                    Request Changes
-                  </Button>
-                </div>
-              </div>
-            </>
+          {q.paymentSchedule && (
+            <p className="text-xs text-muted-foreground">
+              Payments: {q.paymentSchedule.depositPct}% deposit, {q.paymentSchedule.progressPct}% progress, {q.paymentSchedule.finalPct}% on completion.
+            </p>
           )}
         </div>
 
-        {/* Footer */}
-        <div className="text-center text-xs text-slate-600 pb-6">
-          This quote was prepared using Metricore — Australian Construction Estimation Software.
-          <br />
-          Quote reference: {token?.toUpperCase()}
+        {/* Response */}
+        <div className="rounded-xl border border-border bg-card p-6 space-y-4">
+          {answered ? (
+            <div className="flex gap-3 items-start">
+              {share.status === 'approved'
+                ? <CheckCircle2 className="h-6 w-6 text-amber-400 shrink-0" />
+                : <MessageSquare className="h-6 w-6 text-orange-400 shrink-0" />}
+              <div>
+                <p className="font-semibold">
+                  {share.status === 'approved' ? 'Quote approved' : 'Changes requested'} by {share.responded_name}
+                  {share.responded_at ? ` on ${new Date(share.responded_at).toLocaleDateString('en-AU')}` : ''}
+                </p>
+                {share.comments && <p className="text-sm text-muted-foreground mt-1">"{share.comments}"</p>}
+                <p className="text-sm text-muted-foreground mt-2">Your builder has been notified in Metricore.</p>
+              </div>
+            </div>
+          ) : share.expired ? (
+            <p className="text-sm text-amber-400">This link has expired. Please ask your builder for a new one.</p>
+          ) : (
+            <>
+              <div className="flex gap-2">
+                <Button variant={mode === 'approve' ? 'default' : 'outline'} onClick={() => setMode('approve')} className="flex-1">Approve quote</Button>
+                <Button variant={mode === 'changes' ? 'default' : 'outline'} onClick={() => setMode('changes')} className="flex-1">Request changes</Button>
+              </div>
+              <div className="space-y-1">
+                <label className="text-xs text-muted-foreground">Your full name</label>
+                <Input value={name} onChange={e => setName(e.target.value)} placeholder="Full name" />
+              </div>
+              {mode === 'changes' && (
+                <div className="space-y-1">
+                  <label className="text-xs text-muted-foreground">What would you like changed?</label>
+                  <Textarea value={comments} onChange={e => setComments(e.target.value)} rows={4} />
+                </div>
+              )}
+              {mode === 'approve' && (
+                <p className="text-xs text-muted-foreground">
+                  By approving, you accept this quotation of {money(q.totalIncGst)} including GST.
+                </p>
+              )}
+              {error && <p className="text-sm text-red-400">{error}</p>}
+              <Button onClick={respond} disabled={submitting} className="w-full">
+                {submitting ? 'Sending...' : mode === 'approve' ? 'Approve this quote' : 'Send change request'}
+              </Button>
+            </>
+          )}
         </div>
       </div>
     </div>

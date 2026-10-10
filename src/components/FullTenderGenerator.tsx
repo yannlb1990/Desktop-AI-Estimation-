@@ -292,7 +292,7 @@ export const FullTenderGenerator = ({ project, estimate }: FullTenderProps) => {
     if (estimateItems.length === 0) return
 
     // Price every line with the same function the Estimate tab uses.
-    const userPricingDefaults = readUserPricingDefaults()
+    const userPricingDefaults = readUserPricingDefaults(proj)
     const { config: pricingConfig, labourRates: pricingRates } = resolveProjectPricing(proj, userPricingDefaults)
 
     const newBoqItems: any[] = estimateItems.map((item: any) => {
@@ -368,7 +368,8 @@ export const FullTenderGenerator = ({ project, estimate }: FullTenderProps) => {
   const gstPct: number = (() => {
     try {
       const projects: any[] = JSON.parse(localStorage.getItem(getUserStorageKey("local_projects")) || "[]")
-      return resolveProjectPricing(projects.find((p: any) => p.id === project?.id), readUserPricingDefaults()).config.gstPct
+      const p = projects.find((x: any) => x.id === project?.id)
+      return resolveProjectPricing(p, readUserPricingDefaults(p)).config.gstPct
     } catch { return 10 }
   })()
   const gstAmount = Math.round(subtotalNum * gstPct) / 100

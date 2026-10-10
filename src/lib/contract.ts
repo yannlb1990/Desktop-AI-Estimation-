@@ -10,6 +10,7 @@ import { syncProjectToSupabase } from '@/lib/db/projects';
 import { lsLoadVariations } from '@/lib/db/variations';
 import { calculateProjectTotals, resolveProjectPricing, roundCents } from '@/lib/pricing/estimatePricing';
 import { readUserPricingDefaults } from '@/lib/pricing/userPricingDefaults';
+import { supabase } from '@/integrations/supabase/client';
 
 export interface ApprovedQuoteLine {
   description: string;
@@ -23,6 +24,8 @@ export interface ApprovedQuote {
   quoteNumber: string;
   approvedAt: string;
   approvedBy?: string;
+  /** Set when the client approved through a shared link */
+  shareToken?: string;
   subtotalExGst: number;
   gstPct: number;
   totalIncGst: number;
@@ -73,7 +76,7 @@ function patchProject(projectId: string, patch: Record<string, unknown>): any | 
 }
 
 export function projectGstPct(project: any): number {
-  return resolveProjectPricing(project, readUserPricingDefaults()).config.gstPct;
+  return resolveProjectPricing(project, readUserPricingDefaults(project)).config.gstPct;
 }
 
 // ── Quote approval ────────────────────────────────────────────────────────────
@@ -83,6 +86,7 @@ export function approveQuoteVersion(
   version: { id: string; versionNumber: number; quoteNumber: string; lines: { description: string; qty: number; unitPrice: number; included: boolean; trade?: string }[] },
   paymentSchedule?: ApprovedQuote['paymentSchedule'],
   approvedBy?: string,
+  extra?: { approvedAt?: string; shareToken?: string },
 ): ApprovedQuote | null {
   const project = loadProject(projectId);
   if (!project) return null;
@@ -96,8 +100,9 @@ export function approveQuoteVersion(
     versionId: version.id,
     versionNumber: version.versionNumber,
     quoteNumber: version.quoteNumber,
-    approvedAt: new Date().toISOString(),
+    approvedAt: extra?.approvedAt ?? new Date().toISOString(),
     approvedBy,
+    shareToken: extra?.shareToken,
     subtotalExGst,
     gstPct,
     totalIncGst: roundCents(subtotalExGst + roundCents(subtotalExGst * gstPct / 100)),
@@ -140,7 +145,7 @@ export function contractSummary(projectId: string): ContractSummary {
   const gstPct = project ? projectGstPct(project) : 10;
   const approvedQuote: ApprovedQuote | null = project?.approved_quote ?? null;
   const variations = approvedVariationsExGst(projectId);
-  const totals = project ? calculateProjectTotals(project, readUserPricingDefaults()) : null;
+  const totals = project ? calculateProjectTotals(project, readUserPricingDefaults(project)) : null;
   const quoteExGst = approvedQuote?.subtotalExGst ?? 0;
   const contractExGst = roundCents(quoteExGst + variations.total);
   return {
@@ -199,4 +204,124 @@ export function stagesForNextClaim(projectId: string, previous: ProgressClaimRec
   // Stages added by hand on earlier claims are kept
   previous.stages.filter(s => !fresh.some(f => f.id === s.id)).forEach(s => merged.push({ ...s }));
   return merged;
+}
+
+// ── Client approval links ─────────────────────────────────────────────────────
+
+export interface QuoteSharePayload {
+  versionId: string;
+  versionNumber: number;
+  quoteNumber: string;
+  projectName: string;
+  clientName: string;
+  siteAddress: string;
+  company: { name?: string; abn?: string; phone?: string; email?: string };
+  lines: { description: string; trade: string; qty: number; unit: string; unitPrice: number }[];
+  subtotalExGst: number;
+  gstPct: number;
+  gst: number;
+  totalIncGst: number;
+  paymentSchedule?: ApprovedQuote['paymentSchedule'];
+}
+
+export interface QuoteShareRow {
+  token: string;
+  quote_version_id: string | null;
+  payload: QuoteSharePayload;
+  status: 'pending' | 'approved' | 'changes_requested';
+  responded_name: string | null;
+  responded_at: string | null;
+  comments: string | null;
+  expires_at: string;
+  created_at: string;
+}
+
+export function quoteShareUrl(token: string): string {
+  return `${window.location.origin}/quote/${token}`;
+}
+
+/** Snapshot a saved quote version and create a private link the client can approve. */
+export async function createQuoteShare(
+  projectId: string,
+  version: { id: string; versionNumber: number; quoteNumber: string; lines: { description: string; qty: number; unit: string; unitPrice: number; included: boolean; trade?: string }[] },
+  company: QuoteSharePayload['company'],
+  paymentSchedule?: ApprovedQuote['paymentSchedule'],
+): Promise<string> {
+  const project = loadProject(projectId);
+  if (!project) throw new Error('Project not found');
+  const { data: { session } } = await supabase.auth.getSession();
+  if (!session) throw new Error('Please sign in again');
+
+  const gstPct = projectGstPct(project);
+  const lines = version.lines.filter(l => l.included).map(l => ({
+    description: l.description, trade: l.trade || 'General', qty: l.qty, unit: l.unit, unitPrice: l.unitPrice,
+  }));
+  const subtotalExGst = roundCents(lines.reduce((s, l) => s + l.qty * l.unitPrice, 0));
+  const gst = roundCents(subtotalExGst * gstPct / 100);
+  const payload: QuoteSharePayload = {
+    versionId: version.id,
+    versionNumber: version.versionNumber,
+    quoteNumber: version.quoteNumber,
+    projectName: project.name || 'Project',
+    clientName: project.client_name || '',
+    siteAddress: project.site_address || project.address || '',
+    company,
+    lines,
+    subtotalExGst,
+    gstPct,
+    gst,
+    totalIncGst: roundCents(subtotalExGst + gst),
+    paymentSchedule,
+  };
+  const { data, error } = await (supabase as any)
+    .from('quote_shares')
+    .insert({ user_id: session.user.id, project_id: projectId, quote_version_id: version.id, payload })
+    .select('token')
+    .single();
+  if (error) {
+    throw new Error(/relation .*quote_shares.* does not exist|schema cache/i.test(error.message)
+      ? 'Client approval links are not set up on the database yet'
+      : error.message);
+  }
+  return data.token as string;
+}
+
+export async function loadQuoteShares(projectId: string): Promise<QuoteShareRow[]> {
+  try {
+    const { data, error } = await (supabase as any)
+      .from('quote_shares')
+      .select('token, quote_version_id, payload, status, responded_name, responded_at, comments, expires_at, created_at')
+      .eq('project_id', projectId)
+      .order('created_at', { ascending: false });
+    if (error || !data) return [];
+    return data as QuoteShareRow[];
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * If the client approved a quote through a link, record it as the project's approved
+ * quote (once). Returns the newly recorded approval, or null if nothing changed.
+ */
+export async function syncClientApprovals(projectId: string): Promise<ApprovedQuote | null> {
+  const project = loadProject(projectId);
+  if (!project) return null;
+  const shares = await loadQuoteShares(projectId);
+  const approved = shares
+    .filter(s => s.status === 'approved' && s.responded_at)
+    .sort((a, b) => (b.responded_at || '').localeCompare(a.responded_at || ''))[0];
+  if (!approved) return null;
+  const current: ApprovedQuote | null = project.approved_quote ?? null;
+  if (current?.shareToken === approved.token) return null;
+  // A newer manual approval wins over an older client approval
+  if (current && !current.shareToken && current.approvedAt > (approved.responded_at || '')) return null;
+  const p = approved.payload;
+  return approveQuoteVersion(
+    projectId,
+    { id: p.versionId, versionNumber: p.versionNumber, quoteNumber: p.quoteNumber, lines: p.lines.map(l => ({ ...l, included: true })) },
+    p.paymentSchedule,
+    approved.responded_name ?? undefined,
+    { approvedAt: approved.responded_at ?? undefined, shareToken: approved.token },
+  );
 }

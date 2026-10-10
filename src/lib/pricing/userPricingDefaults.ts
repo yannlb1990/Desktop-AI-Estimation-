@@ -1,12 +1,23 @@
 import { getUserStorageKey } from '@/lib/localAuth';
 import type { UserPricingDefaults } from './estimatePricing';
+import { marketLabourRatesForState, getCustomRates } from '@/data/labourRates';
+import { stateFromAddress, profileState } from '@/lib/defaultState';
 
 /**
- * The estimator's own defaults from Settings → Rates. They apply to any project
- * that hasn't saved its own pricing config yet.
+ * Defaults for a project that hasn't saved its own pricing yet.
+ *
+ * Labour rate rule (most specific wins; the line's own rate is applied later):
+ *   1. your rate for the trade: Settings → Rates presets, else the rate saved with
+ *      "Save as profile default" on the Costs tab
+ *   2. market typical for the project's state (national typical × state factor)
+ *   3. built-in fallback in estimatePricing.ts
  */
-export function readUserPricingDefaults(): UserPricingDefaults {
-  const defaults: UserPricingDefaults = { config: {}, labourRates: {} };
+export function readUserPricingDefaults(project?: any): UserPricingDefaults {
+  const state = stateFromAddress(project?.site_address || project?.address)
+    ?? stateFromAddress(project?.state)
+    ?? profileState()
+    ?? 'NSW';
+  const defaults: UserPricingDefaults = { config: {}, labourRates: { ...marketLabourRatesForState(state), ...getCustomRates() } };
   try {
     const savedRates = localStorage.getItem(getUserStorageKey('default_rates'));
     if (savedRates) {

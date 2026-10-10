@@ -14,6 +14,7 @@ import {
   saveProgressClaims,
   stagesForNextClaim,
   computeClaim,
+  syncClientApprovals,
   type ClaimStage,
   type ProgressClaimRecord,
 } from '@/lib/contract';
@@ -55,9 +56,12 @@ export function ProgressClaimGenerator({ projectId, projectName, siteAddress = '
     setStages(stagesForNextClaim(projectId, latestClaims[latestClaims.length - 1]));
   }, [projectId]);
   useEffect(() => {
-    window.addEventListener('focus', refresh);
-    return () => window.removeEventListener('focus', refresh);
-  }, [refresh]);
+    // A client may have approved through their link since this was last opened
+    const check = () => { syncClientApprovals(projectId).then(recorded => { if (recorded) toast.success(`${recorded.approvedBy || 'Your client'} approved quote version ${recorded.versionNumber}`); refresh(); }); };
+    check();
+    window.addEventListener('focus', check);
+    return () => window.removeEventListener('focus', check);
+  }, [projectId, refresh]);
 
   const claimNumber = claims.length + 1;
   const parsedRetention = parseFloat(retentionPct) || 0;

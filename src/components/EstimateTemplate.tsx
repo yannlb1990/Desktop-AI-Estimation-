@@ -382,7 +382,7 @@ export const EstimateTemplate = ({ projectId, estimateId }: EstimateTemplateProp
       const projects: any[] = JSON.parse(localStorage.getItem(getUserStorageKey('local_projects')) || '[]');
       project = projects.find((p: any) => p.id === projectId) ?? null;
     } catch { /* corrupted data: use defaults */ }
-    return resolveProjectPricing(project, readUserPricingDefaults());
+    return resolveProjectPricing(project, readUserPricingDefaults(project));
   });
   const [labourRates, setLabourRates] = useState<Record<string, number>>(initialPricing.labourRates);
   const [config, setConfig] = useState(initialPricing.config);

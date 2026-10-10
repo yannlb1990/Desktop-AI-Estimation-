@@ -123,8 +123,8 @@ export const ProjectInsightsTab = ({ projectId }: ProjectInsightsTabProps) => {
       return projects.find((p: any) => p.id === projectId) ?? null;
     } catch { return null; }
   }, [projectId]);
-  const pricing = useMemo(() => resolveProjectPricing(project, readUserPricingDefaults()), [project]);
-  const projectTotals = useMemo(() => calculateProjectTotals(project, readUserPricingDefaults()), [project]);
+  const pricing = useMemo(() => resolveProjectPricing(project, readUserPricingDefaults(project)), [project]);
+  const projectTotals = useMemo(() => calculateProjectTotals(project, readUserPricingDefaults(project)), [project]);
   const health = useHealthScore(items, pricing.config.marginPct);
   const lines = useMemo(() => items.map(item => ({ item, ...calcLine(item, pricing) })), [items, pricing]);
 

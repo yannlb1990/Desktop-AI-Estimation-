@@ -14,7 +14,7 @@ import { saveQuoteToLibrary } from "@/components/DocumentLibrary"
 import { priceLine, calculateProjectTotals, resolveProjectPricing, projectFfeAllowance } from "@/lib/pricing/estimatePricing"
 import { readUserPricingDefaults } from "@/lib/pricing/userPricingDefaults"
 import { scopeForDisplay } from "@/lib/takeoff/scopeLabels"
-import { approveQuoteVersion, clearQuoteApproval, loadProject } from "@/lib/contract"
+import { approveQuoteVersion, clearQuoteApproval, loadProject, createQuoteShare, loadQuoteShares, syncClientApprovals, quoteShareUrl, type QuoteShareRow } from "@/lib/contract"
 
 interface QuoteGeneratorProps {
   project: any
@@ -243,7 +243,7 @@ export const QuoteGenerator = ({ project, estimate, listenForOpen }: QuoteGenera
     }
 
     // Price every line with the same function the Estimate tab uses.
-    const userPricingDefaults = readUserPricingDefaults()
+    const userPricingDefaults = readUserPricingDefaults(proj)
     const { config: pricingConfig, labourRates: pricingRates } = resolveProjectPricing(proj, userPricingDefaults)
 
     const lines: QuoteLine[] = []
@@ -422,7 +422,8 @@ export const QuoteGenerator = ({ project, estimate, listenForOpen }: QuoteGenera
   const gstPct: number = (() => {
     try {
       const projects: any[] = JSON.parse(localStorage.getItem(getUserStorageKey("local_projects")) || "[]")
-      return resolveProjectPricing(projects.find((p: any) => p.id === project?.id), readUserPricingDefaults()).config.gstPct
+      const p = projects.find((x: any) => x.id === project?.id)
+      return resolveProjectPricing(p, readUserPricingDefaults(p)).config.gstPct
     } catch { return 10 }
   })()
   const gstAmount = Math.round(subtotalNum * gstPct) / 100
@@ -626,6 +627,38 @@ ${clone.outerHTML}
     if (!approved) { toast.error('Could not find this project to record the approval'); return }
     setApprovedVersionId(v.id)
     toast.success(`Version ${v.versionNumber} marked as approved. Progress claims will use it.`)
+  }
+
+  // Client approval links: shares for this project, refreshed when the quote opens
+  const [shares, setShares] = useState<QuoteShareRow[]>([])
+  const [sharing, setSharing] = useState<string | null>(null)
+  const refreshShares = async () => {
+    if (!project?.id) return
+    const recorded = await syncClientApprovals(project.id)
+    if (recorded) {
+      setApprovedVersionId(recorded.versionId)
+      toast.success(`${recorded.approvedBy || 'Your client'} approved version ${recorded.versionNumber}`)
+    }
+    setShares(await loadQuoteShares(project.id))
+  }
+  useEffect(() => { if (open) refreshShares() }, [open, project?.id])
+
+  const sendApprovalLink = async (v: typeof versions[0]) => {
+    if (!project?.id) return
+    setSharing(v.id)
+    try {
+      const token = await createQuoteShare(project.id, v,
+        { name: companyName, abn: companyABN, phone: companyPhone, email: companyEmail },
+        { depositPct: parseFloat(depositPct) || 0, progressPct: parseFloat(progressPct) || 0, finalPct: parseFloat(finalPct) || 0 })
+      const url = quoteShareUrl(token)
+      try { await navigator.clipboard.writeText(url) } catch { /* shown below anyway */ }
+      toast.success('Approval link copied. Send it to your client.')
+      setShares(await loadQuoteShares(project.id))
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Could not create the approval link')
+    } finally {
+      setSharing(null)
+    }
   }
 
   const unmarkApproved = () => {
@@ -1060,7 +1093,33 @@ ${clone.outerHTML}
                                   <Check className="h-2.5 w-2.5" />Approved by client
                                 </div>
                               )}
-                              <div className="flex gap-1 mt-1.5">
+                              {(() => {
+                                const share = shares.find(sh => sh.quote_version_id === v.id)
+                                if (!share) return null
+                                const url = quoteShareUrl(share.token)
+                                return (
+                                  <div className="mt-1 text-[10px] text-left space-y-0.5 max-w-[220px]">
+                                    {share.status === 'pending' && (
+                                      <div className="text-muted-foreground">
+                                        Link sent, waiting for client.{' '}
+                                        <button className="underline" onClick={() => { navigator.clipboard?.writeText(url); toast.success('Link copied') }}>Copy link</button>
+                                      </div>
+                                    )}
+                                    {share.status === 'approved' && (
+                                      <div className="text-amber-400">Approved by {share.responded_name} on {new Date(share.responded_at || '').toLocaleDateString('en-AU')}</div>
+                                    )}
+                                    {share.status === 'changes_requested' && (
+                                      <div className="text-orange-400">
+                                        {share.responded_name} asked for changes{share.comments ? `: "${share.comments}"` : ''}
+                                      </div>
+                                    )}
+                                  </div>
+                                )
+                              })()}
+                              <div className="flex gap-1 mt-1.5 flex-wrap justify-end">
+                                <Button size="sm" variant="outline" className="h-6 text-[10px] px-2" disabled={sharing === v.id} onClick={() => sendApprovalLink(v)}>
+                                  {sharing === v.id ? 'Creating...' : 'Send approval link'}
+                                </Button>
                                 {approvedVersionId === v.id ? (
                                   <Button size="sm" variant="ghost" className="h-6 text-[10px] px-2" onClick={unmarkApproved}>
                                     Undo approval

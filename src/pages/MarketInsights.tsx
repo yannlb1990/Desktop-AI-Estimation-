@@ -1,5 +1,5 @@
 import { useState, useMemo, useEffect } from "react";
-import { LABOUR_RATES } from "@/data/labourRates";
+import { LABOUR_RATES, LABOUR_MULT as SHARED_LABOUR_MULT } from "@/data/labourRates";
 import { profileState } from "@/lib/defaultState";
 import { useNavigate } from "react-router-dom";
 import { isSignedIn } from "@/lib/localAuth";
@@ -21,7 +21,8 @@ type StateCode = typeof STATES[number];
 
 // All prices are NSW base — apply multiplier for other states
 const STATE_MULT: Record<StateCode, number> = { NSW: 1.00, VIC: 0.97, QLD: 0.95, WA: 1.08, SA: 0.93 };
-const LABOUR_MULT: Record<StateCode, number> = { NSW: 1.00, VIC: 0.98, QLD: 0.96, WA: 1.12, SA: 0.93 };
+// Same state factors the Estimate and Costs tabs use
+const LABOUR_MULT: Record<StateCode, number> = SHARED_LABOUR_MULT as Record<StateCode, number>;
 const LAST_UPDATED = "Q2 2026";
 
 // ─── SUPPLIER DEFINITIONS ────────────────────────────────────────────────────

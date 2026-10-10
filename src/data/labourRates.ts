@@ -63,7 +63,34 @@ export function clearCustomRate(trade: string) {
   localStorage.setItem(customRatesKey(), JSON.stringify(rates));
 }
 
+/** Rates set in Settings → Rates (labour presets), by trade name. */
+function getSettingsPresetRates(): Record<string, number> {
+  try {
+    const presets: { name?: string; rate?: string | number }[] =
+      JSON.parse(localStorage.getItem(getUserStorageKey('labour_presets')) || '[]');
+    const out: Record<string, number> = {};
+    presets.forEach(p => { const r = Number(p.rate); if (p.name && r > 0) out[p.name] = r; });
+    return out;
+  } catch {
+    return {};
+  }
+}
+
+/** Market typical $/hr for every trade in a state (national typical × state factor). */
+export function marketLabourRatesForState(state: string): Record<string, number> {
+  const mult = LABOUR_MULT[state] ?? 1;
+  const out: Record<string, number> = {};
+  LABOUR_RATES.forEach(r => { out[r.trade] = Math.round(r.typical * mult); });
+  return out;
+}
+
+/**
+ * The same rule the Estimate uses: your Settings rate, else your "Save as profile
+ * default" rate, else market typical for the state.
+ */
 export function getEffectiveRate(trade: string, state = "QLD"): number {
+  const preset = getSettingsPresetRates()[trade];
+  if (preset) return preset;
   const custom = getCustomRates()[trade];
   if (custom) return custom;
   const mult = LABOUR_MULT[state] ?? 1;
