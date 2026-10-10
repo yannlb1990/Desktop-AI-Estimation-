@@ -1,4 +1,6 @@
 import { useMemo } from "react";
+import { priceLine, resolveProjectPricing, calculateProjectTotals, type ProjectPricing } from "@/lib/pricing/estimatePricing";
+import { readUserPricingDefaults } from "@/lib/pricing/userPricingDefaults";
 import { getUserStorageKey } from "@/lib/localAuth";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -45,44 +47,20 @@ function loadItems(projectId: string): EstimateItem[] {
   }
 }
 
-// Same defaults as EstimateTemplate's own config (10% material / 5% labour). A missing
-// waste % isn't actually zero waste — defaulting to 0 here systematically under-counts
-// a line's true cost in the charts below.
-function loadWasteDefaults(projectId: string): { matWaste: number; labWaste: number } {
-  try {
-    const projects = JSON.parse(localStorage.getItem(getUserStorageKey("local_projects")) || "[]");
-    const project = projects.find((p: any) => p.id === projectId);
-    return {
-      matWaste: project?.estimate_config?.materialWastage ?? 10,
-      labWaste: project?.estimate_config?.labourWastage ?? 5,
-    };
-  } catch {
-    return { matWaste: 10, labWaste: 5 };
-  }
-}
-
-function calcLine(item: EstimateItem, defaults: { matWaste: number; labWaste: number }) {
-  const qty = Number(item.quantity) || 0;
-  const unitPrice = Number(item.unit_price) || 0;
-  const labHours = Number(item.labour_hours) || 0;
-  const labRate = Number(item.labour_rate) || 65;
-  const matWaste = (item.material_wastage_pct ?? defaults.matWaste) / 100;
-  const labWaste = (item.labour_wastage_pct ?? defaults.labWaste) / 100;
-  const markup = (Number(item.markup_pct) || 0) / 100;
-
-  const matBase = qty * unitPrice;
-  const matWasteCost = matBase * matWaste;
-  const materialTotal = matBase + matWasteCost;
-
-  const labBase = labHours * labRate;
-  const labWasteCost = labBase * labWaste;
-  const labourTotal = labBase + labWasteCost;
-
-  const subtotal = materialTotal + labourTotal;
-  const markupAmount = subtotal * markup;
-  const lineTotal = subtotal + markupAmount;
-
-  return { matBase, matWasteCost, materialTotal, labBase, labWasteCost, labourTotal, subtotal, markupAmount, lineTotal };
+// Priced by the shared pricing module, so Insights always matches the Estimate tab.
+function calcLine(item: EstimateItem, pricing: ProjectPricing) {
+  const p = priceLine(item as any, pricing.config, pricing.labourRates);
+  return {
+    matBase: p.materialBase,
+    matWasteCost: p.materialWaste + p.relatedMaterials,
+    materialTotal: p.materials,
+    labBase: p.labourBase,
+    labWasteCost: p.labourWaste,
+    labourTotal: p.labour,
+    subtotal: p.subtotal,
+    markupAmount: p.markup,
+    lineTotal: p.total,
+  };
 }
 
 const TRADE_COLORS: Record<string, string> = {
@@ -95,7 +73,7 @@ const au$ = (n: number) => "$" + Math.round(n).toLocaleString("en-AU");
 
 // ── Health Score ─────────────────────────────────────────────────────────────
 
-function useHealthScore(items: EstimateItem[]) {
+function useHealthScore(items: EstimateItem[], projectMarginPct: number) {
   return useMemo(() => {
     if (items.length === 0) return { score: 0, issues: [], grade: "N/A" };
     const issues: { text: string; severity: "high" | "medium" | "low" }[] = [];
@@ -106,15 +84,17 @@ function useHealthScore(items: EstimateItem[]) {
       deductions += Math.min(zeroPrice.length * 8, 30);
       issues.push({ text: `${zeroPrice.length} item${zeroPrice.length > 1 ? "s" : ""} with $0 unit price`, severity: "high" });
     }
-    const zeroMarkup = items.filter(i => !i.markup_pct || Number(i.markup_pct) === 0);
+    // Margin can be applied per line or once for the whole project; only flag lines
+    // with no markup when the project has no margin either.
+    const zeroMarkup = projectMarginPct > 0 ? [] : items.filter(i => !i.markup_pct || Number(i.markup_pct) === 0);
     if (zeroMarkup.length) {
       deductions += Math.min(zeroMarkup.length * 5, 20);
-      issues.push({ text: `${zeroMarkup.length} item${zeroMarkup.length > 1 ? "s" : ""} with 0% markup — no profit margin applied`, severity: "high" });
+      issues.push({ text: `${zeroMarkup.length} item${zeroMarkup.length > 1 ? "s" : ""} with 0% markup and no project margin, so no profit is applied`, severity: "high" });
     }
     const noLabour = items.filter(i => !i.labour_hours || Number(i.labour_hours) === 0);
     if (noLabour.length > items.length * 0.5) {
       deductions += 15;
-      issues.push({ text: `${noLabour.length} items missing labour hours — labour cost excluded`, severity: "medium" });
+      issues.push({ text: `${noLabour.length} items missing labour hours, so their labour cost is excluded`, severity: "medium" });
     }
     const noDesc = items.filter(i => !i.scope_of_work && !i.material_type);
     if (noDesc.length) {
@@ -137,25 +117,37 @@ function useHealthScore(items: EstimateItem[]) {
 
 export const ProjectInsightsTab = ({ projectId }: ProjectInsightsTabProps) => {
   const items = useMemo(() => loadItems(projectId), [projectId]);
-  const wasteDefaults = useMemo(() => loadWasteDefaults(projectId), [projectId]);
-  const health = useHealthScore(items);
-  const lines = useMemo(() => items.map(item => ({ item, ...calcLine(item, wasteDefaults) })), [items, wasteDefaults]);
+  const project = useMemo(() => {
+    try {
+      const projects = JSON.parse(localStorage.getItem(getUserStorageKey("local_projects")) || "[]");
+      return projects.find((p: any) => p.id === projectId) ?? null;
+    } catch { return null; }
+  }, [projectId]);
+  const pricing = useMemo(() => resolveProjectPricing(project, readUserPricingDefaults()), [project]);
+  const projectTotals = useMemo(() => calculateProjectTotals(project, readUserPricingDefaults()), [project]);
+  const health = useHealthScore(items, pricing.config.marginPct);
+  const lines = useMemo(() => items.map(item => ({ item, ...calcLine(item, pricing) })), [items, pricing]);
 
   // Cost composition
   const split = useMemo(() => {
     let matBase = 0, matWaste = 0, labBase = 0, labWaste = 0, markup = 0;
     lines.forEach(l => { matBase += l.matBase; matWaste += l.matWasteCost; labBase += l.labBase; labWaste += l.labWasteCost; markup += l.markupAmount; });
-    const grand = matBase + matWaste + labBase + labWaste + markup;
+    // Supervision, overheads, contingency, prelims, consumables and margin sit at project level
+    const linesTotal = matBase + matWaste + labBase + labWaste + markup;
+    const projectLevel = Math.max(0, projectTotals.taxable - linesTotal);
+    const grand = linesTotal + projectLevel;
     return [
       { name: "Materials", value: Math.round(matBase), color: "#3b82f6" },
       { name: "Material Waste", value: Math.round(matWaste), color: "#93c5fd" },
       { name: "Labour", value: Math.round(labBase), color: "#10b981" },
       { name: "Labour Waste", value: Math.round(labWaste), color: "#6ee7b7" },
-      { name: "Markup", value: Math.round(markup), color: "#f59e0b" },
+      { name: "Line Markup", value: Math.round(markup), color: "#f59e0b" },
+      { name: "Overheads & Margin", value: Math.round(projectLevel), color: "#D4A045" },
     ].filter(d => d.value > 0).map(d => ({ ...d, pct: grand > 0 ? ((d.value / grand) * 100).toFixed(1) : "0" }));
-  }, [lines]);
+  }, [lines, projectTotals]);
 
-  const grandTotal = useMemo(() => lines.reduce((s, l) => s + l.lineTotal, 0), [lines]);
+  // Same ex-GST total as the Estimate tab and the quote
+  const grandTotal = projectTotals.taxable;
 
   // Markup by trade
   const markupByTrade = useMemo(() => {
@@ -509,7 +501,7 @@ export const ProjectInsightsTab = ({ projectId }: ProjectInsightsTabProps) => {
                 <div key={i} className={`flex items-start gap-2.5 p-2.5 rounded-lg text-sm ${
                   flag.severity === "high" ? "bg-red-50 border border-red-100 text-red-800" :
                   flag.severity === "medium" ? "bg-amber-50 border border-amber-100 text-amber-800" :
-                  "bg-slate-50 border border-slate-200 text-slate-700"
+                  "bg-muted/10 border border-border/30 text-foreground/90"
                 }`}>
                   {flag.severity === "high" ? <XCircle className="h-4 w-4 flex-shrink-0 mt-0.5" /> :
                    flag.severity === "medium" ? <AlertTriangle className="h-4 w-4 flex-shrink-0 mt-0.5" /> :
@@ -518,7 +510,7 @@ export const ProjectInsightsTab = ({ projectId }: ProjectInsightsTabProps) => {
                   <Badge variant="outline" className={`ml-auto shrink-0 text-[10px] h-4 px-1.5 ${
                     flag.severity === "high" ? "border-red-300 text-red-700" :
                     flag.severity === "medium" ? "border-amber-300 text-amber-700" :
-                    "border-slate-300 text-slate-600"
+                    "border-border/40 text-muted-foreground"
                   }`}>{flag.severity}</Badge>
                 </div>
               ))}

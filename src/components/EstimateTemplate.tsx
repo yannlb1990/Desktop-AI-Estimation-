@@ -39,6 +39,7 @@ import {
   priceLine,
   resolveLabourRate,
   resolveProjectPricing,
+  projectFfeAllowance,
 } from "@/lib/pricing/estimatePricing";
 import { readUserPricingDefaults } from "@/lib/pricing/userPricingDefaults";
 import { isMeasurementValueLabel } from "@/lib/takeoff/scopeLabels";
@@ -827,6 +828,25 @@ export const EstimateTemplate = ({ projectId, estimateId }: EstimateTemplateProp
     toast.success("Consumable removed");
   };
 
+  // FF&E schedule total, when the estimator included it in the quote (set on the FF&E tab)
+  const [ffeTotal, setFfeTotal] = useState(() => {
+    try {
+      const projects: any[] = JSON.parse(localStorage.getItem(getUserStorageKey('local_projects')) || '[]');
+      return projectFfeAllowance(projects.find((p: any) => p.id === projectId));
+    } catch { return 0; }
+  });
+  useEffect(() => {
+    const refresh = () => {
+      try {
+        const projects: any[] = JSON.parse(localStorage.getItem(getUserStorageKey('local_projects')) || '[]');
+        setFfeTotal(projectFfeAllowance(projects.find((p: any) => p.id === projectId)));
+      } catch { /* keep current */ }
+    };
+    window.addEventListener('ffe-updated', refresh);
+    window.addEventListener('focus', refresh);
+    return () => { window.removeEventListener('ffe-updated', refresh); window.removeEventListener('focus', refresh); };
+  }, [projectId]);
+
   // Must be declared before calculateTotals to avoid temporal dead zone
   const prelimsTotal = prelimItems.reduce((sum, i) => sum + (i.quantity || 0) * (i.unitPrice || 0), 0);
 
@@ -837,10 +857,11 @@ export const EstimateTemplate = ({ projectId, estimateId }: EstimateTemplateProp
     labourRates,
     overheadTotal,
     prelimsTotal,
+    ffeTotal,
     customConfigs,
   });
 
-  let totals = { totalMaterials: 0, totalLabour: 0, totalMarkup: 0, baseSubtotal: 0, supervision: 0, overheadsPct: 0, overheadTotal: 0, totalOverheads: 0, prelimsTotal: 0, preMargin: 0, contingency: 0, customConfigsTotal: 0, margin: 0, taxable: 0, gst: 0, totalPrice: 0 };
+  let totals = { totalMaterials: 0, totalLabour: 0, totalMarkup: 0, baseSubtotal: 0, supervision: 0, overheadsPct: 0, overheadTotal: 0, totalOverheads: 0, prelimsTotal: 0, ffeTotal: 0, preMargin: 0, contingency: 0, customConfigsTotal: 0, margin: 0, taxable: 0, gst: 0, totalPrice: 0 };
   try { totals = calculateTotals(); } catch { /* corrupted item data — show zeros */ }
   // Profit is the overall margin plus any per-line markup, as a share of the ex-GST price.
   const realMarginEst = totals.taxable > 0
@@ -860,7 +881,7 @@ export const EstimateTemplate = ({ projectId, estimateId }: EstimateTemplateProp
     projects[idx].estimate_totals = calculateTotals();
     localStorage.setItem(getUserStorageKey('local_projects'), JSON.stringify(projects));
     syncProjectToSupabase(projects[idx]);
-  }, [items, config, consumables, labourRates, overheadTotal, prelimItems, customConfigs, groupingMode, projectId]);
+  }, [items, config, consumables, labourRates, overheadTotal, prelimItems, ffeTotal, customConfigs, groupingMode, projectId]);
 
   const handleAIItems = (aiItems: any[]) => {
     aiItems.forEach(item => {
@@ -1620,6 +1641,12 @@ export const EstimateTemplate = ({ projectId, estimateId }: EstimateTemplateProp
             <div>
               <p className="text-sm text-muted-foreground mb-1">Prelims</p>
               <p className="text-lg font-bold">${totals.prelimsTotal.toFixed(2)}</p>
+            </div>
+          )}
+          {totals.ffeTotal > 0 && (
+            <div>
+              <p className="text-sm text-muted-foreground mb-1">FF&amp;E</p>
+              <p className="text-lg font-bold">${totals.ffeTotal.toFixed(2)}</p>
             </div>
           )}
           <div>

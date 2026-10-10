@@ -3,7 +3,8 @@ import { Plus, Download, Sofa } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { FFERoomSection } from './FFERoomSection';
-import { loadFFESheet, saveFFESheet, sheetTotal } from '@/lib/ffe/storage';
+import { loadFFESheet, saveFFESheet, sheetTotal, deleteFFEPhoto } from '@/lib/ffe/storage';
+import { Switch } from '@/components/ui/switch';
 import { exportFFEtoPDF } from '@/lib/ffe/pdfExport';
 import type { FFESheet, FFEItem, FFERoom } from '@/lib/ffe/types';
 import { supabase } from '@/integrations/supabase/client';
@@ -41,8 +42,25 @@ export const FFEModule: React.FC<FFEModuleProps> = ({ projectId, projectName }) 
 
   const persist = useCallback((updated: FFESheet) => {
     setSheet(updated);
-    saveFFESheet(updated);
-  }, []);
+    try {
+      saveFFESheet(updated);
+      window.dispatchEvent(new CustomEvent('ffe-updated', { detail: { projectId } }));
+    } catch {
+      // Usually the browser's storage is full (large photos). Say so rather than
+      // showing the change as saved when it will be gone on reload.
+      toast.error('Could not save FF&E: browser storage is full. Remove some photos or use smaller images.');
+    }
+  }, [projectId]);
+
+  // Remove photo files from storage once the change that dropped them is saved
+  const removeStoredPhotos = (photos: { supabaseUrl?: string }[]) => {
+    photos.forEach(ph => { if (ph.supabaseUrl) deleteFFEPhoto(ph.supabaseUrl).catch(() => {}); });
+  };
+
+  const setIncludeInQuote = (include: boolean) => {
+    persist({ ...sheet, includeInQuote: include });
+    toast.success(include ? 'FF&E is now included in the estimate and quote' : 'FF&E removed from the estimate and quote');
+  };
 
   const addRoom = () => {
     const name = newRoomName.trim();
@@ -54,6 +72,7 @@ export const FFEModule: React.FC<FFEModuleProps> = ({ projectId, projectName }) 
   };
 
   const deleteRoom = (roomId: string) => {
+    removeStoredPhotos(sheet.rooms.find(r => r.id === roomId)?.items.flatMap(i => i.photos || []) ?? []);
     persist({ ...sheet, rooms: sheet.rooms.filter(r => r.id !== roomId) });
   };
 
@@ -67,6 +86,9 @@ export const FFEModule: React.FC<FFEModuleProps> = ({ projectId, projectName }) 
   };
 
   const updateItem = (roomId: string, item: FFEItem) => {
+    const before = sheet.rooms.find(r => r.id === roomId)?.items.find(i => i.id === item.id);
+    const keptIds = new Set((item.photos || []).map(p => p.id));
+    removeStoredPhotos((before?.photos || []).filter(p => !keptIds.has(p.id)));
     persist({
       ...sheet,
       rooms: sheet.rooms.map(r =>
@@ -78,6 +100,7 @@ export const FFEModule: React.FC<FFEModuleProps> = ({ projectId, projectName }) 
   };
 
   const deleteItem = (roomId: string, itemId: string) => {
+    removeStoredPhotos(sheet.rooms.find(r => r.id === roomId)?.items.find(i => i.id === itemId)?.photos ?? []);
     persist({
       ...sheet,
       rooms: sheet.rooms.map(r =>
@@ -137,11 +160,15 @@ export const FFEModule: React.FC<FFEModuleProps> = ({ projectId, projectName }) 
           <div>
             <h2 className="font-semibold text-base">FF&amp;E Schedule</h2>
             <p className="text-xs text-muted-foreground">
-              Fixtures, Fittings &amp; Equipment — {totalItems} item{totalItems !== 1 ? 's' : ''}
+              Fixtures, Fittings &amp; Equipment: {totalItems} item{totalItems !== 1 ? 's' : ''}
             </p>
           </div>
         </div>
         <div className="flex items-center gap-2">
+          <label className="flex items-center gap-2 text-xs text-muted-foreground mr-2 cursor-pointer select-none" title="Price the FF&E total into the estimate, quote and tender">
+            <Switch checked={!!sheet.includeInQuote} onCheckedChange={setIncludeInQuote} />
+            Include in quote
+          </label>
           <Button
             variant="outline"
             size="sm"
@@ -203,7 +230,7 @@ export const FFEModule: React.FC<FFEModuleProps> = ({ projectId, projectName }) 
           <div className="flex items-center justify-between mt-0.5">
             <span className="text-xs text-muted-foreground">Incl. GST</span>
             <span className="text-sm text-muted-foreground tabular-nums">
-              {(total * 1.1).toLocaleString('en-AU', { style: 'currency', currency: 'AUD', minimumFractionDigits: 0 })}
+              {(Math.round(total * 110) / 100).toLocaleString('en-AU', { style: 'currency', currency: 'AUD', minimumFractionDigits: 0 })}
             </span>
           </div>
         </div>

@@ -4,14 +4,14 @@ import { getUserStorageKey } from '@/lib/localAuth';
 import type { FFESheet } from './types';
 import { roomTotal, sheetTotal } from './storage';
 
-// Metricore design system
-const NAVY: [number, number, number]        = [9, 17, 31];
-const CYAN: [number, number, number]        = [0, 200, 255];
+// Metricore warm palette (src/index.css). Names kept from the old navy/cyan theme.
+const NAVY: [number, number, number]        = [26, 17, 10];    // #1A110A card
+const CYAN: [number, number, number]        = [212, 160, 69];  // #D4A045 amber accent
 const WHITE: [number, number, number]       = [255, 255, 255];
-const DARK: [number, number, number]        = [20, 30, 50];
-const MUTED: [number, number, number]       = [120, 140, 165];
-const ROW_ALT: [number, number, number]     = [245, 248, 252];
-const SUBTOTAL_BG: [number, number, number] = [232, 239, 250];
+const DARK: [number, number, number]        = [40, 28, 18];
+const MUTED: [number, number, number]       = [138, 112, 96];  // #8a7060
+const ROW_ALT: [number, number, number]     = [250, 247, 240];
+const SUBTOTAL_BG: [number, number, number] = [240, 232, 215];
 
 function fmt(n: number) {
   return n.toLocaleString('en-AU', { style: 'currency', currency: 'AUD', minimumFractionDigits: 0 });
@@ -116,13 +116,13 @@ export async function exportFFEtoPDF(
         item.name,
         item.category,
         `${item.quantity} ${item.unit}`,
-        item.supplier || '—',
-        item.model || '—',
+        item.supplier || 'N/A',
+        item.model || 'N/A',
         fmt(item.supplyCost),
         fmt(item.installCost),
         fmt((item.supplyCost + item.installCost) * item.quantity),
         item.status,
-        photoCount > 0 ? String(photoCount) : '—',
+        photoCount > 0 ? String(photoCount) : 'None',
       ];
     });
 
@@ -190,7 +190,7 @@ export async function exportFFEtoPDF(
       doc.setFontSize(7.5);
       doc.setFont('helvetica', 'italic');
       doc.setTextColor(...MUTED);
-      doc.text(`Photos — ${item.name}`, margin, y + THUMB / 2 + 2);
+      doc.text(`Photos: ${item.name}`, margin, y + THUMB / 2 + 2);
 
       let px = margin + LABEL_W;
       for (const photo of photos.slice(0, 6)) {

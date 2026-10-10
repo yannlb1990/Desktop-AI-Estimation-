@@ -1,4 +1,5 @@
 import { useState, useMemo, useEffect } from "react";
+import { LABOUR_RATES } from "@/data/labourRates";
 import { profileState } from "@/lib/defaultState";
 import { useNavigate } from "react-router-dom";
 import { isSignedIn } from "@/lib/localAuth";
@@ -79,8 +80,8 @@ const MATERIALS: MaterialItem[] = [
   { id:"pl3", category:"Plumbing", subcategory:"Pipes",    name:"Copper Pipe 15mm Type B",    unit:"m",    prices:{ reece:{lo:24.00,hi:30.00},   tradelink:{lo:22.00,hi:28.00}, bunnings:{lo:25.00,hi:31.00} } },
   { id:"pl4", category:"Plumbing", subcategory:"Pipes",    name:"Copper Pipe 20mm Type B",    unit:"m",    prices:{ reece:{lo:32.00,hi:40.00},   tradelink:{lo:30.00,hi:38.00}, bunnings:{lo:33.00,hi:41.00} } },
   { id:"pl5", category:"Plumbing", subcategory:"Pipes",    name:"Pex-a Pipe 16mm (50m roll)", unit:"roll", prices:{ reece:{lo:95.00,hi:130.00},  tradelink:{lo:90.00,hi:125.00} } },
-  { id:"pl6", category:"Plumbing", subcategory:"Fixtures", name:"Toilet Suite — Mid Range",   unit:"unit", prices:{ reece:{lo:480,hi:850},       tradelink:{lo:420,hi:780},     bunnings:{lo:350,hi:650} } },
-  { id:"pl7", category:"Plumbing", subcategory:"Fixtures", name:"Basin & Tap Set — Mid Range",unit:"unit", prices:{ reece:{lo:380,hi:720},       tradelink:{lo:340,hi:680},     bunnings:{lo:280,hi:580} } },
+  { id:"pl6", category:"Plumbing", subcategory:"Fixtures", name:"Toilet Suite, Mid Range",   unit:"unit", prices:{ reece:{lo:480,hi:850},       tradelink:{lo:420,hi:780},     bunnings:{lo:350,hi:650} } },
+  { id:"pl7", category:"Plumbing", subcategory:"Fixtures", name:"Basin & Tap Set, Mid Range",unit:"unit", prices:{ reece:{lo:380,hi:720},       tradelink:{lo:340,hi:680},     bunnings:{lo:280,hi:580} } },
   { id:"pl8", category:"Plumbing", subcategory:"Fixtures", name:"Shower Set Chrome",          unit:"unit", prices:{ reece:{lo:320,hi:680},       tradelink:{lo:290,hi:640},     bunnings:{lo:220,hi:480} } },
   { id:"pl9", category:"Plumbing", subcategory:"Valves",   name:"Brass Ball Valve 15mm",      unit:"unit", prices:{ reece:{lo:28.00,hi:45.00},   tradelink:{lo:25.00,hi:42.00}, bunnings:{lo:22.00,hi:38.00} } },
   // ── ELECTRICAL ──
@@ -145,22 +146,8 @@ interface LabourTrade {
   award: number; low: number; high: number; typical: number;
   desc: string;
 }
-const LABOUR: LabourTrade[] = [
-  { trade:"Carpenter",        icon:"🔨", category:"Structural", award:42, low:75,  high:115, typical:92,  desc:"Framing, fix-out, formwork, joinery" },
-  { trade:"Plumber",          icon:"🔧", category:"Services",   award:44, low:85,  high:130, typical:105, desc:"Sanitary, stormwater, hot/cold water" },
-  { trade:"Electrician",      icon:"⚡", category:"Services",   award:44, low:88,  high:135, typical:108, desc:"Rough-in, fit-off, switchboard" },
-  { trade:"Bricklayer",       icon:"🧱", category:"Structural", award:41, low:72,  high:110, typical:88,  desc:"Brick & block laying, mortar, DPC" },
-  { trade:"Plasterer",        icon:"🏠", category:"Lining",     award:40, low:68,  high:105, typical:84,  desc:"Plasterboard fix, set, cornice, render" },
-  { trade:"Painter",          icon:"🎨", category:"Finishing",  award:38, low:60,  high:95,  typical:76,  desc:"Interior / exterior paint, preparation" },
-  { trade:"Tiler",            icon:"⬛", category:"Finishing",  award:40, low:70,  high:115, typical:88,  desc:"Floor & wall tiles, waterproofing prep" },
-  { trade:"Concreter",        icon:"🏗️", category:"Structural", award:41, low:72,  high:108, typical:88,  desc:"Footings, slabs, paths, driveways" },
-  { trade:"Roofer",           icon:"🏘️", category:"Structural", award:42, low:75,  high:120, typical:95,  desc:"Metal roofing, tiling, gutters, flashings" },
-  { trade:"Waterproofer",     icon:"💧", category:"Finishing",  award:40, low:72,  high:115, typical:90,  desc:"Wet areas, balconies, below-ground tanking" },
-  { trade:"Landscaper",       icon:"🌿", category:"External",   award:36, low:55,  high:95,  typical:72,  desc:"Retaining walls, turf, soft & hard landscape" },
-  { trade:"Scaffolder",       icon:"🔗", category:"Structural", award:43, low:80,  high:125, typical:98,  desc:"Tube & coupler, system scaffold, edge protection" },
-  { trade:"Steel Fixer",      icon:"⚙️", category:"Structural", award:44, low:82,  high:128, typical:102, desc:"Rebar cutting, bending & tying; post-tension" },
-  { trade:"Civil / Excavation",icon:"🚜",category:"Civil",      award:38, low:65,  high:110, typical:82,  desc:"Bulk earthworks, trenching, compaction, drainage" },
-];
+// Same rate file the rest of the app uses (was a hand-copied duplicate)
+const LABOUR: LabourTrade[] = LABOUR_RATES;
 
 // ─── HELPERS ─────────────────────────────────────────────────────────────────
 const avg = (p: MatPrice) => (p.lo + p.hi) / 2;
@@ -211,12 +198,6 @@ const MarketInsights = () => {
     });
   }, [labSearch, labCat]);
 
-  const handleRefresh = () => {
-    const now = new Date();
-    const q = `Q${Math.ceil((now.getMonth() + 1) / 3)} ${now.getFullYear()}`;
-    setLastRefresh(q);
-    toast.success("Prices refreshed. Data current as of " + q + ".");
-  };
 
   const exportCSV = () => {
     const rows = [
@@ -294,11 +275,8 @@ const MarketInsights = () => {
                 </SelectContent>
               </Select>
               <Badge variant="outline" className="text-xs font-normal hidden sm:flex">
-                Last verified: {lastRefresh}
+                Reference prices, reviewed {lastRefresh}
               </Badge>
-              <Button variant="outline" size="sm" onClick={handleRefresh}>
-                <RefreshCw className="h-3.5 w-3.5 mr-1.5" />Refresh
-              </Button>
               <Button variant="outline" size="sm" onClick={exportCSV}>
                 <Download className="h-3.5 w-3.5 mr-1.5" />Export CSV
               </Button>
@@ -556,7 +534,7 @@ const MarketInsights = () => {
         <Card className="p-4 mt-6 bg-muted/50">
           <p className="text-xs text-muted-foreground">
             <strong>Disclaimer:</strong> Prices sourced from publicly available supplier catalogues, industry cost guides (Rawlinsons, Cordell), and verified trade networks as of {lastRefresh}.
-            Prices are GST-exclusive and are indicative only — actual pricing varies by order volume, account terms, location, and market conditions.
+            Prices are GST-exclusive and are indicative only. Actual pricing varies by order volume, account terms, location, and market conditions.
             Always obtain current quotes from suppliers before pricing jobs. State factors applied: WA +8%, VIC −3%, QLD −5%, SA −7%.
           </p>
         </Card>

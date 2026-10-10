@@ -18,12 +18,14 @@ export interface ProgressClaimOptions {
   contractSum: number;
   retentionPct: number;
   previouslyClaimed: number;
+  /** GST % from the project's pricing settings (default 10) */
+  gstPct?: number;
   stages: ProgressClaimStage[];
   contractorName: string;
   contractorAbn: string;
 }
 
-const BRAND = '#1e40af';
+const BRAND = '#412D15'; // warm brown from the app palette
 const LIGHT_GRAY = '#f3f4f6';
 const DARK = '#111827';
 const MID_GRAY = '#9ca3af';
@@ -73,6 +75,7 @@ export function generateProgressClaimPdf(options: ProgressClaimOptions): void {
     claimNumber, claimDate, contractSum, retentionPct,
     previouslyClaimed, stages, contractorName, contractorAbn,
   } = options;
+  const gstPct = options.gstPct ?? 10;
 
   const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
   const pageW = doc.internal.pageSize.getWidth();
@@ -122,8 +125,8 @@ export function generateProgressClaimPdf(options: ProgressClaimOptions): void {
   doc.setFont('helvetica', 'normal');
   doc.setFontSize(8.5);
   doc.text(projectName, marginL + 3, y + 10);
-  doc.text(siteAddress || '—', marginL + 3, y + 15);
-  doc.text(clientName || '—', marginL + 3 + contentW / 2, y + 10);
+  doc.text(siteAddress || 'N/A', marginL + 3, y + 15);
+  doc.text(clientName || 'N/A', marginL + 3 + contentW / 2, y + 10);
 
   y += 23;
 
@@ -198,7 +201,7 @@ export function generateProgressClaimPdf(options: ProgressClaimOptions): void {
   const retentionAmount = totalValueClaimed * (retentionPct / 100);
   const amountExcRetention = totalValueClaimed - retentionAmount - previouslyClaimed;
   const netClaim = Math.max(0, amountExcRetention);
-  const gst = netClaim * 0.1;
+  const gst = Math.round(netClaim * gstPct) / 100;
   const totalDue = netClaim + gst;
 
   if (y > pageH - 65) {
@@ -217,7 +220,7 @@ export function generateProgressClaimPdf(options: ProgressClaimOptions): void {
     [`Retention (${retentionPct}%)`, `($${fmt(retentionAmount)})`],
     ['Previously Claimed', `($${fmt(previouslyClaimed)})`],
     ['Amount Excluding Retention & Prior Claims', `$${fmt(netClaim)}`],
-    ['GST (10%)', `$${fmt(gst)}`],
+    [`GST (${gstPct}%)`, `$${fmt(gst)}`],
   ];
 
   autoTable(doc, {

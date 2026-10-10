@@ -147,6 +147,8 @@ export interface EstimateTotals {
   overheadTotal: number;
   totalOverheads: number;
   prelimsTotal: number;
+  /** FF&E schedule total when the estimator chose to include it in the quote */
+  ffeTotal: number;
   preMargin: number;
   contingency: number;
   customConfigsTotal: number;
@@ -164,6 +166,8 @@ export interface EstimateTotalsInput {
   /** fixed $ overheads from the Overheads tab */
   overheadTotal?: number;
   prelimsTotal?: number;
+  /** FF&E schedule total (ex GST) when included in the quote; priced like prelims */
+  ffeTotal?: number;
   customConfigs?: { value: number }[];
 }
 
@@ -174,6 +178,7 @@ export function calculateEstimateTotals({
   labourRates,
   overheadTotal = 0,
   prelimsTotal = 0,
+  ffeTotal = 0,
   customConfigs = [],
 }: EstimateTotalsInput): EstimateTotals {
   let totalMaterials = 0;
@@ -196,7 +201,7 @@ export function calculateEstimateTotals({
   const overheadsPct = (baseSubtotal + supervision) * (config.overheadPct / 100);
   const totalOverheads = overheadsPct + overheadTotal;
   // Line markup sits inside preMargin, so contingency and margin apply on top of it.
-  const preMargin = baseSubtotal + totalMarkup + supervision + totalOverheads + prelimsTotal;
+  const preMargin = baseSubtotal + totalMarkup + supervision + totalOverheads + prelimsTotal + ffeTotal;
   const contingency = preMargin * (config.contingencyPct / 100);
   const customConfigsTotal = customConfigs.reduce((sum, cc) => sum + preMargin * ((cc.value || 0) / 100), 0);
   const margin = preMargin * (config.marginPct / 100);
@@ -215,6 +220,7 @@ export function calculateEstimateTotals({
     overheadTotal,
     totalOverheads,
     prelimsTotal,
+    ffeTotal,
     preMargin,
     contingency,
     customConfigsTotal,
@@ -275,6 +281,13 @@ export function calculateProjectTotals(project: any, userDefaults?: UserPricingD
     labourRates,
     overheadTotal: project?.overhead_total || 0,
     prelimsTotal,
+    ffeTotal: projectFfeAllowance(project),
     customConfigs,
   });
+}
+
+/** FF&E schedule total to price into the contract, or 0 when it's excluded. */
+export function projectFfeAllowance(project: any): number {
+  const ffe = project?.ffe_summary;
+  return ffe?.includeInQuote ? Number(ffe.totalExGst) || 0 : 0;
 }

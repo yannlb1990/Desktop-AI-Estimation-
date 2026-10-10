@@ -229,7 +229,7 @@ export const FFEItemForm: React.FC<FFEItemFormProps> = ({ open, onClose, initial
     const file = files?.[0];
     if (!file) return;
     const sizeKb = file.size / 1024;
-    if (sizeKb > 10240) { toast.error('File too large — 10 MB max'); return; }
+    if (sizeKb > 10240) { toast.error('File too large: 10 MB max'); return; }
     const doc: FFEQuoteDoc = { fileName: file.name, fileType: file.type, uploading: true };
     set({ quoteDoc: doc });
     try {
@@ -375,7 +375,7 @@ export const FFEItemForm: React.FC<FFEItemFormProps> = ({ open, onClose, initial
 
           {/* Photos */}
           <div className="space-y-2">
-            <Label>Photos — JPEG, PNG, WEBP, HEIC (max 4)</Label>
+            <Label>Photos: JPEG, PNG, WEBP, HEIC (max 4)</Label>
             {item.photos.length < 4 && (
               <button
                 type="button"
@@ -411,7 +411,7 @@ export const FFEItemForm: React.FC<FFEItemFormProps> = ({ open, onClose, initial
 
           {/* Quote Document */}
           <div className="space-y-2">
-            <Label>Quote Document — PDF, DOC, XLS</Label>
+            <Label>Quote Document: PDF, DOC, XLS</Label>
             {!item.quoteDoc ? (
               <button
                 type="button"

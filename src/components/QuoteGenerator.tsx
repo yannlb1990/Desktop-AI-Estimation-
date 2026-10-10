@@ -11,9 +11,10 @@ import { Checkbox } from "@/components/ui/checkbox"
 import { FileText, Printer, X, Plus, Trash2, ChevronRight, Upload, RefreshCw, GripVertical, Pencil, Check, History, RotateCcw, BookmarkPlus } from "lucide-react"
 import { toast } from "sonner"
 import { saveQuoteToLibrary } from "@/components/DocumentLibrary"
-import { priceLine, calculateProjectTotals, resolveProjectPricing } from "@/lib/pricing/estimatePricing"
+import { priceLine, calculateProjectTotals, resolveProjectPricing, projectFfeAllowance } from "@/lib/pricing/estimatePricing"
 import { readUserPricingDefaults } from "@/lib/pricing/userPricingDefaults"
 import { scopeForDisplay } from "@/lib/takeoff/scopeLabels"
+import { approveQuoteVersion, clearQuoteApproval, loadProject } from "@/lib/contract"
 
 interface QuoteGeneratorProps {
   project: any
@@ -269,6 +270,22 @@ export const QuoteGenerator = ({ project, estimate, listenForOpen }: QuoteGenera
         trade: item.trade || "General",
       })
     })
+
+    // FF&E schedule, when included in the quote (priced into the totals like prelims)
+    const ffeAllowance = projectFfeAllowance(proj)
+    if (ffeAllowance > 0) {
+      itemsSubtotal += ffeAllowance
+      lines.push({
+        id: "ffe-allowance",
+        description: "Furniture, fittings and equipment (as per FF&E schedule)",
+        qty: 1,
+        unit: "item",
+        unitPrice: Math.round(ffeAllowance * 100) / 100,
+        included: true,
+        fromEstimate: true,
+        trade: "FF&E",
+      })
+    }
 
     // Consumable lines
     const projConsumables: any[] = proj?.consumables || []
@@ -592,6 +609,30 @@ ${clone.outerHTML}
         quote_number: next.quoteNumber, total: next.total, lines: next.lines as any,
       }).then(({ error }) => { if (error) console.warn('[versions] Cloud save failed:', error.message) })
     })
+  }
+
+  // Which saved version the client approved (stored on the project; progress claims use it)
+  const [approvedVersionId, setApprovedVersionId] = useState<string | null>(
+    () => (project?.id ? loadProject(project.id)?.approved_quote?.versionId : null) ?? null
+  )
+
+  const markApproved = (v: typeof versions[0]) => {
+    if (!project?.id) return
+    const approved = approveQuoteVersion(project.id, v, {
+      depositPct: parseFloat(depositPct) || 0,
+      progressPct: parseFloat(progressPct) || 0,
+      finalPct: parseFloat(finalPct) || 0,
+    })
+    if (!approved) { toast.error('Could not find this project to record the approval'); return }
+    setApprovedVersionId(v.id)
+    toast.success(`Version ${v.versionNumber} marked as approved. Progress claims will use it.`)
+  }
+
+  const unmarkApproved = () => {
+    if (!project?.id) return
+    clearQuoteApproval(project.id)
+    setApprovedVersionId(null)
+    toast.success('Approval removed')
   }
 
   const restoreVersion = (v: typeof versions[0]) => {
@@ -1014,7 +1055,21 @@ ${clone.outerHTML}
                             </div>
                             <div className="text-right">
                               <div className="font-mono font-bold text-sm">{au$(v.total)}</div>
+                              {approvedVersionId === v.id && (
+                                <div className="mt-1 inline-flex items-center gap-1 rounded bg-amber-500/15 text-amber-400 text-[10px] font-semibold px-1.5 py-0.5">
+                                  <Check className="h-2.5 w-2.5" />Approved by client
+                                </div>
+                              )}
                               <div className="flex gap-1 mt-1.5">
+                                {approvedVersionId === v.id ? (
+                                  <Button size="sm" variant="ghost" className="h-6 text-[10px] px-2" onClick={unmarkApproved}>
+                                    Undo approval
+                                  </Button>
+                                ) : (
+                                  <Button size="sm" variant="outline" className="h-6 text-[10px] px-2" onClick={() => markApproved(v)}>
+                                    <Check className="h-2.5 w-2.5 mr-0.5" />Mark as approved by client
+                                  </Button>
+                                )}
                                 <Button size="sm" variant="outline" className="h-6 text-[10px] px-2" onClick={() => restoreVersion(v)}>
                                   <RotateCcw className="h-2.5 w-2.5 mr-0.5" />Restore
                                 </Button>

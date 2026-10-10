@@ -45,6 +45,8 @@ export interface FFERoom {
 export interface FFESheet {
   projectId: string;
   rooms: FFERoom[];
+  /** When on, the FF&E total is priced into the estimate, quote and tender */
+  includeInQuote?: boolean;
   updatedAt: string;
 }
 

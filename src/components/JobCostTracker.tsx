@@ -1,4 +1,7 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from "react";
+import { priceLine, resolveProjectPricing } from "@/lib/pricing/estimatePricing";
+import { readUserPricingDefaults } from "@/lib/pricing/userPricingDefaults";
+import { contractSummary } from "@/lib/contract";
 import { format, parseISO } from "date-fns";
 import { toast } from "sonner";
 import { getUserStorageKey } from "@/lib/localAuth";
@@ -41,12 +44,13 @@ interface JobCostTrackerProps {
 const aud = (v: number) =>
   new Intl.NumberFormat("en-AU", { style: "currency", currency: "AUD" }).format(v);
 
-function computeItemPrice(item: any): number {
-  if (item.total_price) return parseFloat(item.total_price) || 0;
-  if (item.subtotal) return parseFloat(item.subtotal) || 0;
-  const unitPrice = parseFloat(item.unit_price || item.unitCost || 0);
-  const qty = parseFloat(item.quantity || 0);
-  return unitPrice * qty;
+/**
+ * Estimated cost of a line (materials + labour with waste), before markup and margin:
+ * the budget you track spending against. Priced by the shared pricing module.
+ */
+function computeItemCost(item: any, project: any): number {
+  const { config, labourRates } = resolveProjectPricing(project, readUserPricingDefaults());
+  return priceLine(item, config, labourRates).subtotal;
 }
 
 const COST_TYPES: CostType[] = ["invoice", "labour", "material", "subcontract", "other"];
@@ -56,7 +60,7 @@ const typeColors: Record<CostType, string> = {
   labour: "bg-orange-500/20 text-orange-300 border-orange-500/30",
   material: "bg-muted/100/20 text-[#E1DCC9]/70 border-[#E1DCC9]/20",
   subcontract: "bg-muted/20 text-muted-foreground border-border/30",
-  other: "bg-slate-500/20 text-foreground/60 border-border/30",
+  other: "bg-muted/40 text-foreground/60 border-border/30",
 };
 
 const BUDGET_LS_KEY = (pid: string) => `job_cost_budgets_${pid}`;
@@ -67,6 +71,9 @@ export default function JobCostTracker({ projectId }: JobCostTrackerProps) {
   const [entries, setEntries] = useState<CostEntry[]>([]);
   const [estimateItems, setEstimateItems] = useState<any[]>([]);
   const [manualBudgets, setManualBudgets] = useState<Record<string, number>>({});
+  // Contract the client signed: approved quote + approved variations (ex GST)
+  const [contract, setContract] = useState(() => contractSummary(projectId));
+  const [projectRecord, setProjectRecord] = useState<any>(null);
 
   // Inline budget editing
   const [editingTrade, setEditingTrade] = useState<string | null>(null);
@@ -96,6 +103,8 @@ export default function JobCostTracker({ projectId }: JobCostTrackerProps) {
       const project = projects.find((p: any) => p.id === projectId);
       const items = project?.estimate_items || [];
       setEstimateItems(items);
+      setProjectRecord(project ?? null);
+      setContract(contractSummary(projectId));
 
       const saved = localStorage.getItem(getUserStorageKey(BUDGET_LS_KEY(projectId)));
       if (saved) {
@@ -108,7 +117,7 @@ export default function JobCostTracker({ projectId }: JobCostTrackerProps) {
         // Pre-fill from estimate items on first open
         const init: Record<string, number> = {};
         items.forEach((item: any) => {
-          if (item.trade) init[item.trade] = (init[item.trade] || 0) + computeItemPrice(item);
+          if (item.trade) init[item.trade] = (init[item.trade] || 0) + computeItemCost(item, project);
         });
         setManualBudgets(init);
       }
@@ -142,6 +151,16 @@ export default function JobCostTracker({ projectId }: JobCostTrackerProps) {
     syncJobCostsToSupabase(projectId, updated);
   }, [projectId]);
 
+  // Rebuild trade budgets from the estimate's cost (materials + labour, before margin)
+  const resetBudgetsFromEstimate = () => {
+    const init: Record<string, number> = {};
+    estimateItems.forEach((item: any) => {
+      if (item.trade) init[item.trade] = Math.round(((init[item.trade] || 0) + computeItemCost(item, projectRecord)) * 100) / 100;
+    });
+    saveBudgets(init);
+    toast.success("Budgets rebuilt from the estimate's cost");
+  };
+
   // ─── Derived values ───────────────────────────────────────────────────────
 
   // Active trades = those with a manual budget OR with cost entries
@@ -169,9 +188,11 @@ export default function JobCostTracker({ projectId }: JobCostTrackerProps) {
   }), [activeTrades, manualBudgets, entries]);
 
   const budgetTotal = useMemo(() => Object.values(manualBudgets).reduce((s, v) => s + v, 0), [manualBudgets]);
-  const estimateTotal = useMemo(() => estimateItems.reduce((s, i) => s + computeItemPrice(i), 0), [estimateItems]);
+  const estimateTotal = useMemo(() => estimateItems.reduce((s, i) => s + computeItemCost(i, projectRecord), 0), [estimateItems, projectRecord]);
   const effectiveBudgetTotal = budgetTotal > 0 ? budgetTotal : estimateTotal;
   const actualTotal = useMemo(() => entries.reduce((s, e) => s + e.amount, 0), [entries]);
+  // Margin left = what the client pays (ex GST) minus what has been spent (ex GST)
+  const marginLeft = contract.contractExGst - actualTotal;
   const variance = effectiveBudgetTotal - actualTotal;
   const pctComplete = effectiveBudgetTotal > 0 ? (actualTotal / effectiveBudgetTotal) * 100 : 0;
   const totalSavings = useMemo(
@@ -253,22 +274,45 @@ export default function JobCostTracker({ projectId }: JobCostTrackerProps) {
 
       {/* Header */}
       <div className="flex items-center justify-between">
-        <h2 className="text-lg font-semibold text-white">Job Cost Tracker</h2>
+        <h2 className="text-lg font-semibold text-foreground">Job Cost Tracker</h2>
+        <div className="flex gap-2">
+          {estimateItems.length > 0 && (
+            <Button size="sm" variant="outline" onClick={resetBudgetsFromEstimate} className="text-xs">
+              Reset budgets from estimate
+            </Button>
+          )}
         <Button size="sm" onClick={() => setShowForm(!showForm)} className="gap-1 bg-primary hover:bg-primary/90 text-primary-foreground">
           <Plus className="w-3.5 h-3.5" /> Add Cost
         </Button>
+        </div>
       </div>
 
       {/* Summary cards */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+        <Card className="bg-card/90 border-border/50">
+          <CardContent className="pt-4 pb-4">
+            <p className="text-xs text-muted-foreground mb-1">Contract (ex GST)</p>
+            {contract.approvedQuote ? (
+              <>
+                <p className="text-xl font-bold text-foreground">{aud(contract.contractExGst)}</p>
+                <p className={`text-[11px] mt-1 ${marginLeft >= 0 ? "text-muted-foreground" : "text-red-400"}`}>
+                  Margin left {aud(marginLeft)}
+                  {contract.variationsExGst > 0 && <> · incl. {aud(contract.variationsExGst)} variations</>}
+                </p>
+              </>
+            ) : (
+              <p className="text-xs text-amber-400 mt-1">No approved quote yet. Approve one in Generate Quote, History.</p>
+            )}
+          </CardContent>
+        </Card>
         <Card className="bg-card/90 border-border/50">
           <CardContent className="pt-4 pb-4">
             <div className="flex items-start justify-between">
               <div>
-                <p className="text-xs text-muted-foreground mb-1">Total Budget</p>
-                <p className="text-xl font-bold text-white">{aud(effectiveBudgetTotal)}</p>
+                <p className="text-xs text-muted-foreground mb-1">Cost Budget (ex GST)</p>
+                <p className="text-xl font-bold text-foreground">{aud(effectiveBudgetTotal)}</p>
               </div>
-              <DollarSign className="w-5 h-5 text-slate-500 mt-0.5" />
+              <DollarSign className="w-5 h-5 text-muted-foreground mt-0.5" />
             </div>
           </CardContent>
         </Card>
@@ -277,8 +321,8 @@ export default function JobCostTracker({ projectId }: JobCostTrackerProps) {
           <CardContent className="pt-4 pb-4">
             <div className="flex items-start justify-between">
               <div>
-                <p className="text-xs text-muted-foreground mb-1">Actual to Date</p>
-                <p className="text-xl font-bold text-white">{aud(actualTotal)}</p>
+                <p className="text-xs text-muted-foreground mb-1">Actual Cost (ex GST)</p>
+                <p className="text-xl font-bold text-foreground">{aud(actualTotal)}</p>
               </div>
               <DollarSign className="w-5 h-5 text-[#E1DCC9] mt-0.5" />
             </div>
@@ -306,9 +350,9 @@ export default function JobCostTracker({ projectId }: JobCostTrackerProps) {
             <div className="flex items-start justify-between">
               <div>
                 <p className="text-xs text-muted-foreground mb-1">% Spent</p>
-                <p className="text-xl font-bold text-white">{pctComplete.toFixed(1)}%</p>
+                <p className="text-xl font-bold text-foreground">{pctComplete.toFixed(1)}%</p>
               </div>
-              <Percent className="w-5 h-5 text-slate-500 mt-0.5" />
+              <Percent className="w-5 h-5 text-muted-foreground mt-0.5" />
             </div>
             <div className="mt-2 h-1.5 bg-muted/60 rounded-full overflow-hidden">
               <div
@@ -325,24 +369,24 @@ export default function JobCostTracker({ projectId }: JobCostTrackerProps) {
         <div ref={formRef}>
           <Card className="bg-card/90 border-border/50">
             <CardHeader className="pb-3">
-              <CardTitle className="text-sm text-white">New Cost Entry</CardTitle>
+              <CardTitle className="text-sm text-foreground">New Cost Entry</CardTitle>
             </CardHeader>
             <CardContent>
               <div className="grid grid-cols-2 md:grid-cols-3 gap-3 mb-3">
                 <div>
                   <Label className="text-xs text-muted-foreground mb-1 block">Date</Label>
                   <Input type="date" value={formDate} onChange={e => setFormDate(e.target.value)}
-                    className="h-8 text-sm bg-muted/60 border-slate-600 text-white" />
+                    className="h-8 text-sm bg-muted/60 border-border text-foreground" />
                 </div>
                 <div>
                   <Label className="text-xs text-muted-foreground mb-1 block">Trade *</Label>
                   <Select value={formTrade} onValueChange={setFormTrade}>
-                    <SelectTrigger className="h-8 text-sm bg-muted/60 border-slate-600 text-white">
+                    <SelectTrigger className="h-8 text-sm bg-muted/60 border-border text-foreground">
                       <SelectValue placeholder="Select trade…" />
                     </SelectTrigger>
-                    <SelectContent className="bg-card/90 border-slate-600">
+                    <SelectContent className="bg-card/90 border-border">
                       {allTradesForDropdown.map(t => (
-                        <SelectItem key={t} value={t} className="text-white hover:bg-muted/60">{t}</SelectItem>
+                        <SelectItem key={t} value={t} className="text-foreground hover:bg-muted/60">{t}</SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
@@ -350,12 +394,12 @@ export default function JobCostTracker({ projectId }: JobCostTrackerProps) {
                 <div>
                   <Label className="text-xs text-muted-foreground mb-1 block">Type</Label>
                   <Select value={formType} onValueChange={v => setFormType(v as CostType)}>
-                    <SelectTrigger className="h-8 text-sm bg-muted/60 border-slate-600 text-white">
+                    <SelectTrigger className="h-8 text-sm bg-muted/60 border-border text-foreground">
                       <SelectValue placeholder="Select type…" />
                     </SelectTrigger>
-                    <SelectContent className="bg-card/90 border-slate-600">
+                    <SelectContent className="bg-card/90 border-border">
                       {COST_TYPES.map(t => (
-                        <SelectItem key={t} value={t} className="text-white hover:bg-muted/60 capitalize">{t}</SelectItem>
+                        <SelectItem key={t} value={t} className="text-foreground hover:bg-muted/60 capitalize">{t}</SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
@@ -363,20 +407,20 @@ export default function JobCostTracker({ projectId }: JobCostTrackerProps) {
                 <div>
                   <Label className="text-xs text-muted-foreground mb-1 block">Supplier</Label>
                   <Input value={formSupplier} onChange={e => setFormSupplier(e.target.value)}
-                    placeholder="Supplier name…" className="h-8 text-sm bg-muted/60 border-slate-600 text-white" />
+                    placeholder="Supplier name…" className="h-8 text-sm bg-muted/60 border-border text-foreground" />
                 </div>
                 <div>
                   <Label className="text-xs text-muted-foreground mb-1 block">Description *</Label>
                   <Input value={formDescription} onChange={e => setFormDescription(e.target.value)}
-                    placeholder="Description…" className="h-8 text-sm bg-muted/60 border-slate-600 text-white" />
+                    placeholder="Description…" className="h-8 text-sm bg-muted/60 border-border text-foreground" />
                 </div>
                 <div>
-                  <Label className="text-xs text-muted-foreground mb-1 block">Amount *</Label>
+                  <Label className="text-xs text-muted-foreground mb-1 block">Amount ex GST *</Label>
                   <div className="relative">
                     <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground text-sm">$</span>
                     <Input type="number" min={0} step={0.01} value={formAmount}
                       onChange={e => setFormAmount(e.target.value)} placeholder="0.00"
-                      className="h-8 text-sm bg-muted/60 border-slate-600 text-white pl-6" />
+                      className="h-8 text-sm bg-muted/60 border-border text-foreground pl-6" />
                   </div>
                 </div>
               </div>
@@ -393,8 +437,8 @@ export default function JobCostTracker({ projectId }: JobCostTrackerProps) {
       <Card className="bg-card/90 border-border/50">
         <CardHeader className="pb-0 pt-4 px-4">
           <div className="flex items-center justify-between">
-            <CardTitle className="text-sm text-white">Trade Budget Control</CardTitle>
-            <p className="text-xs text-slate-500">Click any budget to edit · Tab to move between rows</p>
+            <CardTitle className="text-sm text-foreground">Trade Budget Control</CardTitle>
+            <p className="text-xs text-muted-foreground">Click any budget to edit · Tab to move between rows</p>
           </div>
         </CardHeader>
         <CardContent className="p-0 mt-3">
@@ -402,11 +446,11 @@ export default function JobCostTracker({ projectId }: JobCostTrackerProps) {
             <div className="px-4 py-8">
               {!showMonitorForm ? (
                 <div className="text-center">
-                  <DollarSign className="w-8 h-8 text-slate-600 mx-auto mb-2" />
+                  <DollarSign className="w-8 h-8 text-muted-foreground mx-auto mb-2" />
                   <p className="text-muted-foreground text-sm font-medium">No trades monitored yet</p>
-                  <p className="text-slate-500 text-xs mt-1 mb-4">Add a trade budget to start tracking costs vs budget</p>
+                  <p className="text-muted-foreground text-xs mt-1 mb-4">Add a trade budget to start tracking costs vs budget</p>
                   <Button size="sm" variant="outline" onClick={() => { setShowMonitorForm(true); setMonitorTrade(availableTrades[0] || ""); }}
-                    className="border-slate-600 text-foreground/60 hover:text-foreground">
+                    className="border-border text-foreground/60 hover:text-foreground">
                     <Plus className="w-3.5 h-3.5 mr-1" /> Monitor first trade
                   </Button>
                 </div>
@@ -415,12 +459,12 @@ export default function JobCostTracker({ projectId }: JobCostTrackerProps) {
                   <div>
                     <Label className="text-xs text-muted-foreground mb-1 block">Trade</Label>
                     <Select value={monitorTrade} onValueChange={setMonitorTrade}>
-                      <SelectTrigger className="h-8 text-sm bg-muted/60 border-slate-600 text-white w-52">
+                      <SelectTrigger className="h-8 text-sm bg-muted/60 border-border text-foreground w-52">
                         <SelectValue placeholder="Select trade…" />
                       </SelectTrigger>
-                      <SelectContent className="bg-card/90 border-slate-600">
+                      <SelectContent className="bg-card/90 border-border">
                         {availableTrades.map(t => (
-                          <SelectItem key={t} value={t} className="text-white hover:bg-muted/60">{t}</SelectItem>
+                          <SelectItem key={t} value={t} className="text-foreground hover:bg-muted/60">{t}</SelectItem>
                         ))}
                       </SelectContent>
                     </Select>
@@ -432,7 +476,7 @@ export default function JobCostTracker({ projectId }: JobCostTrackerProps) {
                       <Input
                         type="number" min={0} value={monitorBudget}
                         onChange={e => setMonitorBudget(e.target.value)}
-                        placeholder="0" className="h-8 text-sm bg-muted/60 border-slate-600 text-white pl-6 w-36"
+                        placeholder="0" className="h-8 text-sm bg-muted/60 border-border text-foreground pl-6 w-36"
                         onKeyDown={e => e.key === "Enter" && handleAddMonitor()}
                       />
                     </div>
@@ -460,7 +504,7 @@ export default function JobCostTracker({ projectId }: JobCostTrackerProps) {
                     <tr key={row.trade} className="group border-b border-border/50/50 hover:bg-muted/60/20 transition-colors">
 
                       {/* Trade name */}
-                      <td className="px-4 py-3 text-white font-medium">{row.trade}</td>
+                      <td className="px-4 py-3 text-foreground font-medium">{row.trade}</td>
 
                       {/* Budget — click to edit inline */}
                       <td className="px-4 py-3 text-right">
@@ -470,7 +514,7 @@ export default function JobCostTracker({ projectId }: JobCostTrackerProps) {
                             type="number"
                             min={0}
                             step={100}
-                            className="w-28 text-right bg-muted/60 border border-foreground/25 rounded px-2 py-1 text-sm text-white focus:outline-none"
+                            className="w-28 text-right bg-muted/60 border border-foreground/25 rounded px-2 py-1 text-sm text-foreground focus:outline-none"
                             value={editingValue}
                             onChange={e => setEditingValue(e.target.value)}
                             onBlur={commitBudget}
@@ -488,7 +532,7 @@ export default function JobCostTracker({ projectId }: JobCostTrackerProps) {
                           >
                             {row.budget > 0
                               ? <span className="font-mono">{aud(row.budget)}</span>
-                              : <span className="text-slate-500 text-xs italic">set budget</span>}
+                              : <span className="text-muted-foreground text-xs italic">set budget</span>}
                             <Pencil className="w-3 h-3 opacity-0 group-hover/btn:opacity-50 transition-opacity" />
                           </button>
                         )}
@@ -509,9 +553,9 @@ export default function JobCostTracker({ projectId }: JobCostTrackerProps) {
                             </div>
                           </div>
                         ) : row.spent > 0 ? (
-                          <span className="text-slate-500 text-xs italic">no budget set</span>
+                          <span className="text-muted-foreground text-xs italic">no budget set</span>
                         ) : (
-                          <span className="text-slate-600">—</span>
+                          <span className="text-muted-foreground">Not set</span>
                         )}
                       </td>
 
@@ -519,7 +563,7 @@ export default function JobCostTracker({ projectId }: JobCostTrackerProps) {
                       <td className="px-4 py-3">
                         {row.budget > 0 ? (
                           <div className="space-y-1">
-                            <span className="text-xs text-slate-500">{row.pctUsed.toFixed(0)}%</span>
+                            <span className="text-xs text-muted-foreground">{row.pctUsed.toFixed(0)}%</span>
                             <div className="h-1.5 bg-muted/60 rounded-full overflow-hidden">
                               <div
                                 className={`h-full rounded-full transition-all ${row.pctUsed >= 100 ? "bg-red-500" : row.pctUsed >= 80 ? "bg-amber-500" : "bg-primary"}`}
@@ -528,7 +572,7 @@ export default function JobCostTracker({ projectId }: JobCostTrackerProps) {
                             </div>
                           </div>
                         ) : (
-                          <span className="text-slate-600 text-xs">—</span>
+                          <span className="text-muted-foreground text-xs">N/A</span>
                         )}
                       </td>
 
@@ -546,10 +590,10 @@ export default function JobCostTracker({ projectId }: JobCostTrackerProps) {
                 </tbody>
                 <tfoot>
                   {/* Totals row */}
-                  <tr className="border-t-2 border-slate-600 bg-slate-900/40">
-                    <td className="px-4 py-3 text-white font-semibold">Total</td>
-                    <td className="px-4 py-3 text-right font-mono font-semibold text-white">{aud(effectiveBudgetTotal)}</td>
-                    <td className="px-4 py-3 text-right font-mono font-semibold text-white">{aud(actualTotal)}</td>
+                  <tr className="border-t-2 border-border bg-card">
+                    <td className="px-4 py-3 text-foreground font-semibold">Total</td>
+                    <td className="px-4 py-3 text-right font-mono font-semibold text-foreground">{aud(effectiveBudgetTotal)}</td>
+                    <td className="px-4 py-3 text-right font-mono font-semibold text-foreground">{aud(actualTotal)}</td>
                     <td className="px-4 py-3 text-right">
                       {totalSavings > 0 && (
                         <div>
@@ -588,12 +632,12 @@ export default function JobCostTracker({ projectId }: JobCostTrackerProps) {
                           <div>
                             <Label className="text-xs text-muted-foreground mb-1 block">Trade</Label>
                             <Select value={monitorTrade} onValueChange={setMonitorTrade}>
-                              <SelectTrigger className="h-8 text-sm bg-muted/60 border-slate-600 text-white w-52">
+                              <SelectTrigger className="h-8 text-sm bg-muted/60 border-border text-foreground w-52">
                                 <SelectValue placeholder="Select trade…" />
                               </SelectTrigger>
-                              <SelectContent className="bg-card/90 border-slate-600">
+                              <SelectContent className="bg-card/90 border-border">
                                 {availableTrades.map(t => (
-                                  <SelectItem key={t} value={t} className="text-white hover:bg-muted/60">{t}</SelectItem>
+                                  <SelectItem key={t} value={t} className="text-foreground hover:bg-muted/60">{t}</SelectItem>
                                 ))}
                               </SelectContent>
                             </Select>
@@ -605,7 +649,7 @@ export default function JobCostTracker({ projectId }: JobCostTrackerProps) {
                               <Input
                                 type="number" min={0} value={monitorBudget}
                                 onChange={e => setMonitorBudget(e.target.value)}
-                                placeholder="0" className="h-8 text-sm bg-muted/60 border-slate-600 text-white pl-6 w-36"
+                                placeholder="0" className="h-8 text-sm bg-muted/60 border-border text-foreground pl-6 w-36"
                                 onKeyDown={e => e.key === "Enter" && handleAddMonitor()}
                               />
                             </div>
@@ -620,7 +664,7 @@ export default function JobCostTracker({ projectId }: JobCostTrackerProps) {
                       <td colSpan={6} className="px-4 py-2.5">
                         <button
                           onClick={() => { setShowMonitorForm(true); setMonitorTrade(availableTrades[0]); }}
-                          className="flex items-center gap-1.5 text-xs text-slate-500 hover:text-[#E1DCC9] transition-colors"
+                          className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-[#E1DCC9] transition-colors"
                         >
                           <Plus className="w-3.5 h-3.5" /> Monitor another trade
                         </button>
@@ -637,14 +681,14 @@ export default function JobCostTracker({ projectId }: JobCostTrackerProps) {
       {/* Cost log */}
       <Card className="bg-card/90 border-border/50">
         <CardHeader className="pb-3">
-          <CardTitle className="text-sm text-white">Cost Log</CardTitle>
+          <CardTitle className="text-sm text-foreground">Cost Log</CardTitle>
         </CardHeader>
         <CardContent className="p-0">
           {entries.length === 0 ? (
             <div className="px-4 py-8 text-center">
-              <DollarSign className="w-8 h-8 text-slate-600 mx-auto mb-2" />
+              <DollarSign className="w-8 h-8 text-muted-foreground mx-auto mb-2" />
               <p className="text-muted-foreground text-sm">No cost entries yet.</p>
-              <p className="text-slate-500 text-xs mt-1">Click "Add Cost" to record your first actual cost.</p>
+              <p className="text-muted-foreground text-xs mt-1">Click "Add Cost" to record your first actual cost.</p>
             </div>
           ) : (
             <div className="overflow-x-auto">
@@ -666,18 +710,18 @@ export default function JobCostTracker({ projectId }: JobCostTrackerProps) {
                       <td className="px-4 py-2.5 text-foreground/60 whitespace-nowrap">
                         {format(parseISO(entry.date), "dd MMM yyyy")}
                       </td>
-                      <td className="px-4 py-2.5 text-white">{entry.trade}</td>
+                      <td className="px-4 py-2.5 text-foreground">{entry.trade}</td>
                       <td className="px-4 py-2.5 text-foreground/60 max-w-[200px] truncate">{entry.description}</td>
-                      <td className="px-4 py-2.5 text-muted-foreground">{entry.supplier || "—"}</td>
+                      <td className="px-4 py-2.5 text-muted-foreground">{entry.supplier || "Not set"}</td>
                       <td className="px-4 py-2.5">
                         <span className={`inline-block px-1.5 py-0.5 rounded text-xs font-medium border capitalize ${typeColors[entry.type]}`}>
                           {entry.type}
                         </span>
                       </td>
-                      <td className="px-4 py-2.5 text-right text-white font-medium whitespace-nowrap">{aud(entry.amount)}</td>
+                      <td className="px-4 py-2.5 text-right text-foreground font-medium whitespace-nowrap">{aud(entry.amount)}</td>
                       <td className="px-4 py-2.5">
                         <button onClick={() => handleDelete(entry.id)}
-                          className="text-slate-600 hover:text-red-400 transition-colors" aria-label="Delete entry">
+                          className="text-muted-foreground hover:text-red-400 transition-colors" aria-label="Delete entry">
                           <Trash2 className="w-4 h-4" />
                         </button>
                       </td>

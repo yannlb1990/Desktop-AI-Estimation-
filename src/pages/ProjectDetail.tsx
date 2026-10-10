@@ -930,11 +930,11 @@ const ProjectDetail = () => {
 
           <TabsContent value="progressclaim">
             <ProgressClaimGenerator
+              projectId={projectId!}
               projectName={project?.name ?? ""}
               siteAddress={project?.site_address ?? ""}
               clientName={project?.client_name ?? ""}
               state={project?.state ?? "NSW"}
-              contractSum={project?.grand_total ?? 0}
             />
           </TabsContent>
         </Tabs>

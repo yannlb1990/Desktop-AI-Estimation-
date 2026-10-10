@@ -10,7 +10,7 @@ import { Building2, Printer, Plus, Trash2 } from "lucide-react"
 import { toast } from "sonner"
 import { useSubscription } from "@/hooks/useSubscription"
 import { UpgradeModal } from "@/components/UpgradeModal"
-import { priceLine, calculateProjectTotals, resolveProjectPricing } from "@/lib/pricing/estimatePricing"
+import { priceLine, calculateProjectTotals, resolveProjectPricing, projectFfeAllowance } from "@/lib/pricing/estimatePricing"
 import { readUserPricingDefaults } from "@/lib/pricing/userPricingDefaults"
 import { scopeForDisplay } from "@/lib/takeoff/scopeLabels"
 
@@ -312,6 +312,19 @@ export const FullTenderGenerator = ({ project, estimate }: FullTenderProps) => {
         total: String(lineTotal),
       }
     })
+
+    // FF&E schedule, when included in the quote
+    const ffeAllowance = projectFfeAllowance(proj)
+    if (ffeAllowance > 0) {
+      newBoqItems.push({
+        trade: "FF&E",
+        description: "Furniture, fittings and equipment (as per FF&E schedule)",
+        qty: "1.0",
+        unit: "item",
+        rate: String(Math.round(ffeAllowance * 100) / 100),
+        total: String(Math.round(ffeAllowance * 100) / 100),
+      })
+    }
 
     // Add consumable rows
     const projConsumables: any[] = proj?.consumables || []
