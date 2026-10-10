@@ -13,6 +13,7 @@ import { toast } from "sonner"
 import { saveQuoteToLibrary } from "@/components/DocumentLibrary"
 import { priceLine, calculateProjectTotals, resolveProjectPricing } from "@/lib/pricing/estimatePricing"
 import { readUserPricingDefaults } from "@/lib/pricing/userPricingDefaults"
+import { scopeForDisplay } from "@/lib/takeoff/scopeLabels"
 
 interface QuoteGeneratorProps {
   project: any
@@ -255,9 +256,11 @@ export const QuoteGenerator = ({ project, estimate, listenForOpen }: QuoteGenera
 
       lines.push({
         id: item.id || crypto.randomUUID(),
-        description: item.scope_of_work
-          ? (item.material_type ? `${item.scope_of_work} (${item.material_type})` : item.scope_of_work)
-          : (item.trade || "Item"),
+        // A measured size ("19.98 m²") is never shown to the client as the description
+        description: (() => {
+          const scope = scopeForDisplay(item)
+          return item.material_type && item.material_type !== scope ? `${scope} (${item.material_type})` : scope
+        })(),
         qty,
         unit: item.unit || "m²",
         unitPrice: Math.round((lineTotal / qty) * 100) / 100,

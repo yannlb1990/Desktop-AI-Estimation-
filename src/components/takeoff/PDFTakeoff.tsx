@@ -4,6 +4,7 @@ import { Download, ZoomIn, ZoomOut, RotateCw, RotateCcw, Maximize2, Minimize2, C
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { PDFUploadManager, uploadToCloud } from './PDFUploadManager';
+import { workLabelForMeasurement } from '@/lib/takeoff/scopeLabels';
 import { InteractiveCanvas } from './InteractiveCanvas';
 import { MeasurementToolbar } from './MeasurementToolbar';
 import { ViewportControls } from './ViewportControls';
@@ -811,7 +812,7 @@ export const PDFTakeoff = ({ projectId, estimateId, onAddCostItems }: PDFTakeoff
           const genericItem: CostItem = {
             id: crypto.randomUUID(),
             category: measurement.measurementType || 'General',
-            name: measurement.label || `${measurement.measurementType || measurement.type} - ${measurement.area || 'General'}`,
+            name: workLabelForMeasurement({ ...measurement, unit }),
             description: measurement.comments || `Measurement from takeoff`,
             unit: unit,
             unitCost: getMeasurementTypeRate(measurement.measurementType, unit, !!measurement.isConcreteFloor, projectState),

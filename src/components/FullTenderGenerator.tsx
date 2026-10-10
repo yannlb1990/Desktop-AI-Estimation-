@@ -12,6 +12,7 @@ import { useSubscription } from "@/hooks/useSubscription"
 import { UpgradeModal } from "@/components/UpgradeModal"
 import { priceLine, calculateProjectTotals, resolveProjectPricing } from "@/lib/pricing/estimatePricing"
 import { readUserPricingDefaults } from "@/lib/pricing/userPricingDefaults"
+import { scopeForDisplay } from "@/lib/takeoff/scopeLabels"
 
 interface FullTenderProps { project: any; estimate?: any }
 
@@ -300,9 +301,11 @@ export const FullTenderGenerator = ({ project, estimate }: FullTenderProps) => {
       const lineTotal = Math.round(priceLine(item, pricingConfig, pricingRates).total * 100) / 100
       return {
         trade: item.trade || "General",
-        description: item.scope_of_work
-          ? (item.material_type ? `${item.scope_of_work} (${item.material_type})` : item.scope_of_work)
-          : (item.trade || "Item"),
+        // A measured size ("19.98 m²") is never shown to the client as the description
+        description: (() => {
+          const scope = scopeForDisplay(item)
+          return item.material_type && item.material_type !== scope ? `${scope} (${item.material_type})` : scope
+        })(),
         qty: Number(qty).toFixed(1),
         unit: item.unit || "m²",
         rate: String(Math.round((lineTotal / qty) * 100) / 100),

@@ -41,6 +41,7 @@ import {
   resolveProjectPricing,
 } from "@/lib/pricing/estimatePricing";
 import { readUserPricingDefaults } from "@/lib/pricing/userPricingDefaults";
+import { isMeasurementValueLabel } from "@/lib/takeoff/scopeLabels";
 
 // ── Template accent colour (left border stripe, by template id) ───────────────
 const TEMPLATE_STYLES: Record<string, { accent: string }> = {
@@ -1061,6 +1062,17 @@ export const EstimateTemplate = ({ projectId, estimateId }: EstimateTemplateProp
                   trade={editValues.trade ?? item.trade}
                 />
               </div>
+            ) : isMeasurementValueLabel(item.scope_of_work) ? (
+              // Only a measured size was saved here: ask for the type of work instead
+              <button
+                type="button"
+                onClick={() => startEditing(item)}
+                className="text-left text-amber-500 hover:underline"
+                title="Click to choose the scope of work"
+              >
+                Set scope of work
+                <span className="block text-[11px] text-muted-foreground">measured {item.scope_of_work}</span>
+              </button>
             ) : item.scope_of_work}
           </TableCell>
           <TableCell>

@@ -30,6 +30,7 @@ import { UpgradeModal } from '@/components/UpgradeModal';
 import { findLabourRate, getCustomRates, setCustomRate, clearCustomRate, LABOUR_MULT, getEffectiveRate } from '@/data/labourRates';
 import { calculateProjectTotals } from '@/lib/pricing/estimatePricing';
 import { defaultStateForProject } from '@/lib/defaultState';
+import { isMeasurementValueLabel, workLabelForMeasurement } from '@/lib/takeoff/scopeLabels';
 import { readUserPricingDefaults } from '@/lib/pricing/userPricingDefaults';
 
 // Area options
@@ -773,8 +774,11 @@ export const CostEstimator = ({
         section_id: null,
         area: item.area || '',
         trade: CATEGORY_TO_TRADE[item.category] || item.trade || 'Carpenter',
-        scope_of_work: item.name || item.category,
-        material_type: item.customMaterial || item.material || item.name || '',
+        // The scope says what the work is, never the measured size
+        scope_of_work: isMeasurementValueLabel(item.name)
+          ? workLabelForMeasurement({ measurementType: item.measurementType ?? (item.category !== 'General' ? item.category : null), area: item.area, unit: item.unit })
+          : (item.name || item.category),
+        material_type: item.customMaterial || item.material || (isMeasurementValueLabel(item.name) ? '' : item.name) || '',
         quantity: item.quantity,
         unit: item.unit,
         unit_price: item.unitCost,
