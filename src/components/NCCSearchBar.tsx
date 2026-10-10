@@ -189,7 +189,7 @@ export const NCCSearchBar = () => {
 
                   {/* Quantity Required */}
                   {ref.quantityRequired && (
-                    <div className="bg-blue-50/10 dark:bg-blue-950/20 border border-blue-200/20 rounded-md p-3">
+                    <div className="bg-muted/30 border border-border rounded-md p-3">
                       <h5 className="font-semibold text-xs text-blue-400 mb-1 uppercase tracking-wide">Quantity Required</h5>
                       <p className="text-sm text-foreground/80 leading-snug">{ref.quantityRequired}</p>
                     </div>

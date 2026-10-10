@@ -178,7 +178,7 @@ function ElementsPanel({ elements }: { elements?: BuildingElements }) {
           </div>
           <div className="flex flex-wrap gap-1">
             {elements.wetAreas.map((area, i) => (
-              <span key={i} className="text-[10px] bg-blue-900/30 text-blue-300 border border-blue-700/40 rounded px-1.5 py-0.5">
+              <span key={i} className="text-[10px] bg-muted/50 text-foreground/80 border border-border rounded px-1.5 py-0.5">
                 {area}
               </span>
             ))}

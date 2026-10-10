@@ -1428,7 +1428,7 @@ export default function GanttSchedule({ projectId }: GanttScheduleProps) {
       {/* Tooltip */}
       {tooltip && (
         <div
-          className="fixed z-[9999] bg-slate-900 border border-slate-600 rounded-lg px-3 py-2.5 shadow-2xl text-xs text-white pointer-events-none max-w-xs"
+          className="fixed z-[9999] bg-card border border-border rounded-lg px-3 py-2.5 shadow-2xl text-xs text-foreground pointer-events-none max-w-xs"
           style={{ left: tooltip.x + 14, top: tooltip.y - 10 }}
         >
           <div className="flex items-center gap-2 mb-1">
@@ -1450,13 +1450,13 @@ export default function GanttSchedule({ projectId }: GanttScheduleProps) {
             const f = criticalPath.get(tooltip.task.id);
             if (f === undefined) return null;
             return (
-              <div className={`mt-1 text-[10px] font-semibold ${f === 0 ? 'text-red-400' : f <= NEAR_CRITICAL_DAYS ? 'text-amber-400' : 'text-slate-500'}`}>
+              <div className={`mt-1 text-[10px] font-semibold ${f === 0 ? 'text-red-400' : f <= NEAR_CRITICAL_DAYS ? 'text-amber-400' : 'text-muted-foreground'}`}>
                 {f === 0 ? 'Critical — no float' : `Float: ${f}d${f <= NEAR_CRITICAL_DAYS ? ' · near-critical' : ''}`}
               </div>
             );
           })()}
           {tooltip.task.notes && (
-            <div className="text-slate-500 mt-1 border-t border-border/50 pt-1">{tooltip.task.notes}</div>
+            <div className="text-muted-foreground mt-1 border-t border-border/50 pt-1">{tooltip.task.notes}</div>
           )}
         </div>
       )}
@@ -1465,8 +1465,8 @@ export default function GanttSchedule({ projectId }: GanttScheduleProps) {
         {/* ── Toolbar ──────────────────────────────────────────────────────── */}
         <div className="flex items-center justify-between gantt-no-print">
           <div>
-            <h2 className="text-lg font-semibold text-white">{projectName} · Schedule</h2>
-            <p className="text-xs text-slate-500 mt-0.5">
+            <h2 className="text-lg font-semibold text-foreground">{projectName} · Schedule</h2>
+            <p className="text-xs text-muted-foreground mt-0.5">
               {tasks.length} tasks
               {criticalCount > 0 && <> · <span className="text-red-400/80">{criticalCount} critical</span></>}
               {nearCriticalCount > 0 && <> · <span className="text-amber-400/70">{nearCriticalCount} near-critical</span></>}
@@ -1632,7 +1632,7 @@ export default function GanttSchedule({ projectId }: GanttScheduleProps) {
         )}
 
         {/* ── Gantt container ──────────────────────────────────────────────── */}
-        <div className="border border-border/50 rounded-xl overflow-hidden bg-slate-900 shadow-xl">
+        <div className="border border-border/50 rounded-xl overflow-hidden bg-card shadow-xl">
           <div className="flex">
 
             {/* Left fixed column */}
@@ -1645,7 +1645,7 @@ export default function GanttSchedule({ projectId }: GanttScheduleProps) {
                 <React.Fragment key={phase}>
                   <button
                     onClick={() => togglePhase(phase)}
-                    className="w-full flex items-center gap-2 px-3 border-b border-slate-600 bg-muted/60/40 hover:bg-muted/60/70 transition-colors"
+                    className="w-full flex items-center gap-2 px-3 border-b border-border bg-muted/60/40 hover:bg-muted/60/70 transition-colors"
                     style={{ height: PH_H }}
                   >
                     {collapsedPhases.has(phase)
@@ -1653,7 +1653,7 @@ export default function GanttSchedule({ projectId }: GanttScheduleProps) {
                       : <ChevronDown  className="w-3 h-3 text-muted-foreground flex-shrink-0" />
                     }
                     <span className="text-[10px] font-bold text-foreground/60 uppercase tracking-widest flex-1 text-left">{phase}</span>
-                    <span className="text-[10px] text-slate-500 bg-slate-600/50 rounded px-1.5 py-0.5">{phaseTasks.length}</span>
+                    <span className="text-[10px] text-muted-foreground bg-muted/50 rounded px-1.5 py-0.5">{phaseTasks.length}</span>
                   </button>
 
                   {!collapsedPhases.has(phase) && phaseTasks.map((task) => {
@@ -1672,31 +1672,31 @@ export default function GanttSchedule({ projectId }: GanttScheduleProps) {
                           <div className="w-2 h-7 rounded-full flex-shrink-0" style={{ backgroundColor: task.color }} />
                           <div className="flex flex-col min-w-0 flex-1">
                             <div className="flex items-center gap-1.5">
-                              <span className="text-sm font-semibold text-white truncate leading-tight">{task.name}</span>
+                              <span className="text-sm font-semibold text-foreground truncate leading-tight">{task.name}</span>
                               {lpCritical    && <span className="w-1.5 h-1.5 rounded-full bg-red-500 flex-shrink-0" title="Critical — no float" />}
                               {lpNearCritical && <span className="w-1.5 h-1.5 rounded-full bg-amber-400 flex-shrink-0" title={`${lpFloat}d float`} />}
                               {isNoEstimate && (
                                 <span className="text-[8px] text-amber-400/70 border border-amber-400/30 rounded px-1 leading-tight flex-shrink-0">~est</span>
                               )}
                             </div>
-                            <span className="text-[10px] text-slate-500 leading-tight mt-0.5">
+                            <span className="text-[10px] text-muted-foreground leading-tight mt-0.5">
                               {format(parseISO(task.startDate), "dd MMM")} – {format(parseISO(task.endDate), "dd MMM")} · {workDays ? `${countWorkingDays(parseISO(task.startDate), parseISO(task.endDate), activeHols)}wd` : `${task.durationDays}d`}
                             </span>
                             {task.progress > 0 && (
                               <div className="mt-1 flex items-center gap-1.5">
-                                <div className="flex-1 h-1 rounded-full bg-slate-700/60 overflow-hidden">
+                                <div className="flex-1 h-1 rounded-full bg-muted/60 overflow-hidden">
                                   <div className="h-full rounded-full" style={{ width: `${task.progress}%`, backgroundColor: task.color }} />
                                 </div>
-                                <span className="text-[9px] text-slate-500 flex-shrink-0">{task.progress}%</span>
+                                <span className="text-[9px] text-muted-foreground flex-shrink-0">{task.progress}%</span>
                               </div>
                             )}
                             {taskSowRate && (
-                              <span className="text-[9px] text-slate-500/70 truncate leading-tight mt-0.5 italic">
+                              <span className="text-[9px] text-muted-foreground/70 truncate leading-tight mt-0.5 italic">
                                 {taskSowRate.sow}
                               </span>
                             )}
                           </div>
-                          <svg className="w-3 h-3 text-slate-600 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                          <svg className="w-3 h-3 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                             <path strokeLinecap="round" strokeLinejoin="round" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.5L16.732 3.732z" />
                           </svg>
                         </div>
@@ -1745,7 +1745,7 @@ export default function GanttSchedule({ projectId }: GanttScheduleProps) {
                       subLabel = format(col, "yyyy");
                     } else if (viewMode === "weekly") {
                       const newMonth = !prev || format(col, "MMM") !== format(prev, "MMM");
-                      label    = newMonth ? <strong className="text-slate-200">{format(col, "MMM")}</strong> : format(col, "dd");
+                      label    = newMonth ? <strong className="text-foreground">{format(col, "MMM")}</strong> : format(col, "dd");
                       subLabel = hasWeekHol
                         ? <span style={{ fontSize: 8, fontWeight: 600, color: weekHolIsCustom ? "#a78bfa" : "#fbbf24" }}
                             title={weekHols.map((h) => h.name).join(", ")}>
@@ -1791,7 +1791,7 @@ export default function GanttSchedule({ projectId }: GanttScheduleProps) {
                           <div className="absolute bottom-0 left-0 right-0" style={{ height: 2, backgroundColor: weekHolIsCustom ? "rgba(167,139,250,0.8)" : "rgba(251,191,36,0.8)" }} />
                         )}
                         <span className="text-[10px] text-muted-foreground font-medium relative z-10 leading-tight">{label}</span>
-                        {subLabel && <span className="text-[8px] text-slate-600 relative z-10 leading-tight">{subLabel}</span>}
+                        {subLabel && <span className="text-[8px] text-muted-foreground relative z-10 leading-tight">{subLabel}</span>}
                         {viewMode === "daily" && (isPublicHol || isCustomHol) && dispHol?.name && (
                           <span
                             className="absolute z-10 pointer-events-none select-none"
@@ -1819,7 +1819,7 @@ export default function GanttSchedule({ projectId }: GanttScheduleProps) {
                 {/* Task rows */}
                 {groupedTasks.map(({ phase, tasks: phaseTasks }) => (
                   <React.Fragment key={phase}>
-                    <div className="border-b border-slate-600 bg-muted/60/20 relative" style={{ height: PH_H, minWidth: `${displayColumns.length * COL_W}px` }}>
+                    <div className="border-b border-border bg-muted/60/20 relative" style={{ height: PH_H, minWidth: `${displayColumns.length * COL_W}px` }}>
                       {collapsedPhases.has(phase) && phaseTasks.length > 0 && (() => {
                         const earliest = phaseTasks.reduce((m, t) => t.startDate < m ? t.startDate : m, phaseTasks[0].startDate);
                         const latestEndDate = phaseTasks.reduce((m, t) => t.endDate > m ? t.endDate : m, phaseTasks[0].endDate);
@@ -1959,10 +1959,10 @@ export default function GanttSchedule({ projectId }: GanttScheduleProps) {
           <div className="border border-[#412D15]/80 rounded-xl bg-card/90 px-4 py-3 gantt-no-print">
             <div className="flex items-center gap-2 mb-3">
               <div className="w-3 h-3 rounded-sm flex-shrink-0" style={{ backgroundColor: editDraft.color }} />
-              <span className="text-sm font-semibold text-white truncate">{editDraft.name}</span>
+              <span className="text-sm font-semibold text-foreground truncate">{editDraft.name}</span>
               <button
                 onClick={() => { setExpandedId(null); setEditDraft(null); setConfirmDelete(null); }}
-                className="ml-auto text-slate-500 hover:text-white transition-colors flex-shrink-0"
+                className="ml-auto text-muted-foreground hover:text-foreground transition-colors flex-shrink-0"
                 aria-label="Close"
               >
                 <X className="w-4 h-4" />
@@ -1972,32 +1972,32 @@ export default function GanttSchedule({ projectId }: GanttScheduleProps) {
             <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-3">
               <div>
                 <Label className="text-xs text-muted-foreground mb-1 block">Task Name</Label>
-                <Input value={editDraft.name} onChange={(e) => setEditDraft({ ...editDraft, name: e.target.value })} className="h-7 text-sm bg-muted/60 border-slate-600 text-white" />
+                <Input value={editDraft.name} onChange={(e) => setEditDraft({ ...editDraft, name: e.target.value })} className="h-7 text-sm bg-muted/60 border-border text-foreground" />
               </div>
               <div>
                 <Label className="text-xs text-muted-foreground mb-1 block">Start Date</Label>
-                <Input type="date" value={editDraft.startDate} onChange={(e) => setEditDraft({ ...editDraft, startDate: e.target.value })} className="h-7 text-sm bg-muted/60 border-slate-600 text-white" />
+                <Input type="date" value={editDraft.startDate} onChange={(e) => setEditDraft({ ...editDraft, startDate: e.target.value })} className="h-7 text-sm bg-muted/60 border-border text-foreground" />
               </div>
               <div>
                 <Label className="text-xs text-muted-foreground mb-1 block">End Date</Label>
-                <Input type="date" value={editDraft.endDate} onChange={(e) => setEditDraft({ ...editDraft, endDate: e.target.value })} className="h-7 text-sm bg-muted/60 border-slate-600 text-white" />
+                <Input type="date" value={editDraft.endDate} onChange={(e) => setEditDraft({ ...editDraft, endDate: e.target.value })} className="h-7 text-sm bg-muted/60 border-border text-foreground" />
               </div>
               <div>
                 <Label className="text-xs text-muted-foreground mb-1 block">Progress (%)</Label>
-                <Input type="number" min={0} max={100} value={editDraft.progress} onChange={(e) => setEditDraft({ ...editDraft, progress: Math.min(100, Math.max(0, Number(e.target.value))) })} className="h-7 text-sm bg-muted/60 border-slate-600 text-white" />
+                <Input type="number" min={0} max={100} value={editDraft.progress} onChange={(e) => setEditDraft({ ...editDraft, progress: Math.min(100, Math.max(0, Number(e.target.value))) })} className="h-7 text-sm bg-muted/60 border-border text-foreground" />
               </div>
             </div>
 
             <div className="grid grid-cols-2 gap-3 mb-3">
               <div>
                 <Label className="text-xs text-muted-foreground mb-1 block">Trade / Assignee</Label>
-                <Input value={editDraft.trade} onChange={(e) => setEditDraft({ ...editDraft, trade: e.target.value })} placeholder="e.g. Carpenter" className="h-7 text-sm bg-muted/60 border-slate-600 text-white" />
+                <Input value={editDraft.trade} onChange={(e) => setEditDraft({ ...editDraft, trade: e.target.value })} placeholder="e.g. Carpenter" className="h-7 text-sm bg-muted/60 border-border text-foreground" />
               </div>
               <div>
                 <Label className="text-xs text-muted-foreground mb-1 block">Bar Colour</Label>
                 <div className="flex items-center gap-2">
                   <input type="color" value={editDraft.color} onChange={(e) => setEditDraft({ ...editDraft, color: e.target.value })} className="h-7 w-10 rounded cursor-pointer border-0 bg-transparent" />
-                  <span className="text-xs text-slate-500">{editDraft.color}</span>
+                  <span className="text-xs text-muted-foreground">{editDraft.color}</span>
                 </div>
               </div>
             </div>
@@ -2008,7 +2008,7 @@ export default function GanttSchedule({ projectId }: GanttScheduleProps) {
                 value={editDraft.notes?.startsWith("No estimate items matched") ? "" : (editDraft.notes ?? "")}
                 onChange={(e) => setEditDraft({ ...editDraft, notes: e.target.value })}
                 placeholder="Optional notes…"
-                className="h-7 text-sm bg-muted/60 border-slate-600 text-white"
+                className="h-7 text-sm bg-muted/60 border-border text-foreground"
               />
             </div>
 
@@ -2022,12 +2022,12 @@ export default function GanttSchedule({ projectId }: GanttScheduleProps) {
                   value={sowSearch}
                   onFocus={() => setSowOpen(true)}
                   onChange={(e) => { setSowSearch(e.target.value); setSowOpen(true); }}
-                  className="h-7 text-sm w-full rounded-md border border-slate-600 bg-muted/60 px-3 py-1 text-white placeholder:text-slate-500 focus:outline-none focus:border-[#412D15]"
+                  className="h-7 text-sm w-full rounded-md border border-border bg-muted/60 px-3 py-1 text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-[#412D15]"
                 />
                 {editDraft.sowRef && (
                   <button
                     onMouseDown={(e) => { e.preventDefault(); setEditDraft({ ...editDraft, sowRef: undefined }); setSowSearch(""); }}
-                    className="absolute right-2 top-1.5 text-slate-500 hover:text-white"
+                    className="absolute right-2 top-1.5 text-muted-foreground hover:text-foreground"
                     aria-label="Clear"
                   >
                     <X className="w-3 h-3" />
@@ -2035,19 +2035,19 @@ export default function GanttSchedule({ projectId }: GanttScheduleProps) {
                 )}
               </div>
               {sowOpen && (
-                <div className="absolute z-50 left-0 right-0 top-full mt-0.5 bg-slate-800 border border-slate-600 rounded-lg shadow-xl max-h-52 overflow-y-auto">
+                <div className="absolute z-50 left-0 right-0 top-full mt-0.5 bg-card border border-border rounded-lg shadow-xl max-h-52 overflow-y-auto">
                   {filteredSOW.length === 0 ? (
-                    <div className="px-3 py-2 text-xs text-slate-500">No results</div>
+                    <div className="px-3 py-2 text-xs text-muted-foreground">No results</div>
                   ) : (
                     filteredSOW.map(({ trade, items: tradeItems }) => (
                       <div key={trade}>
-                        <div className="px-3 py-1 text-[9px] font-semibold text-slate-500 uppercase tracking-wider bg-slate-900/60 sticky top-0">
+                        <div className="px-3 py-1 text-[9px] font-semibold text-muted-foreground uppercase tracking-wider bg-background/80 sticky top-0">
                           {trade}
                         </div>
                         {tradeItems.map((r) => (
                           <button
                             key={r.id}
-                            className={`w-full text-left px-3 py-1.5 text-xs hover:bg-slate-700 flex items-center gap-2 ${editDraft.sowRef === r.id ? "bg-[#412D15]/60 text-white" : "text-slate-300"}`}
+                            className={`w-full text-left px-3 py-1.5 text-xs hover:bg-muted flex items-center gap-2 ${editDraft.sowRef === r.id ? "bg-[#412D15]/60 text-foreground" : "text-foreground/80"}`}
                             onMouseDown={(e) => {
                               e.preventDefault();
                               setEditDraft({ ...editDraft, sowRef: r.id });
@@ -2056,7 +2056,7 @@ export default function GanttSchedule({ projectId }: GanttScheduleProps) {
                             }}
                           >
                             <span className="flex-1 truncate">{r.sow}</span>
-                            <span className="text-[9px] text-slate-500 flex-shrink-0">{r.unit}</span>
+                            <span className="text-[9px] text-muted-foreground flex-shrink-0">{r.unit}</span>
                           </button>
                         ))}
                       </div>
@@ -2088,22 +2088,22 @@ export default function GanttSchedule({ projectId }: GanttScheduleProps) {
         <div className="flex flex-wrap items-center gap-4 gantt-no-print px-1">
           <div className="flex items-center gap-1.5">
             <div className="w-0.5 h-4 bg-red-500/70 rounded-full" />
-            <span className="text-xs text-slate-500">Today</span>
+            <span className="text-xs text-muted-foreground">Today</span>
           </div>
           <div className="flex items-center gap-1.5">
             <div className="w-10 h-4 rounded" style={{ background: "linear-gradient(90deg,#0891b2 55%,transparent 55%),repeating-linear-gradient(135deg,transparent 0,transparent 4px,rgba(255,255,255,.18) 4px,rgba(255,255,255,.18) 8px)", backgroundColor: "#0891b2" }} />
-            <span className="text-xs text-slate-500">Progress</span>
+            <span className="text-xs text-muted-foreground">Progress</span>
           </div>
           {criticalCount > 0 && (
             <div className="flex items-center gap-1.5">
               <div className="w-10 h-4 rounded overflow-hidden" style={{ backgroundColor: '#64748b', borderLeft: '4px solid #ef4444' }} />
-              <span className="text-xs text-slate-500">Critical</span>
+              <span className="text-xs text-muted-foreground">Critical</span>
             </div>
           )}
           {nearCriticalCount > 0 && (
             <div className="flex items-center gap-1.5">
               <div className="w-10 h-4 rounded overflow-hidden" style={{ backgroundColor: '#64748b', borderLeft: '4px solid #f59e0b' }} />
-              <span className="text-xs text-slate-500">Near-critical</span>
+              <span className="text-xs text-muted-foreground">Near-critical</span>
             </div>
           )}
           <div className="flex items-center gap-1.5">
@@ -2111,12 +2111,12 @@ export default function GanttSchedule({ projectId }: GanttScheduleProps) {
               <div className="absolute inset-0 rounded" style={{ backgroundColor: '#64748b' }} />
               <div className="absolute top-0 bottom-0 rounded-r-md" style={{ left: '65%', right: 0, backgroundColor: 'rgba(100,116,139,0.18)', border: '1.5px dashed rgba(148,163,184,0.55)', borderLeft: 'none' }} />
             </div>
-            <span className="text-xs text-slate-500">Float</span>
+            <span className="text-xs text-muted-foreground">Float</span>
           </div>
           <div className="ml-auto flex items-center gap-2">
             {groupedTasks.map(({ phase }) => (
               <button key={phase} onClick={() => togglePhase(phase)}
-                className={`text-[10px] px-2 py-0.5 rounded border transition-colors ${collapsedPhases.has(phase) ? "border-slate-600 text-slate-500 bg-card/90" : "border-slate-600 text-muted-foreground hover:bg-muted/60/50"}`}
+                className={`text-[10px] px-2 py-0.5 rounded border transition-colors ${collapsedPhases.has(phase) ? "border-border text-muted-foreground bg-card/90" : "border-border text-muted-foreground hover:bg-muted/60/50"}`}
               >
                 {collapsedPhases.has(phase) ? "▶" : "▼"} {phase}
               </button>

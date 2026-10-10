@@ -104,7 +104,7 @@ const STATUS_CONFIG: Record<
   VariationStatus,
   { label: string; className: string }
 > = {
-  draft: { label: "Draft", className: "bg-slate-600 text-slate-200" },
+  draft: { label: "Draft", className: "bg-muted text-foreground/80" },
   pending_approval: {
     label: "Pending Approval",
     className: "bg-amber-600/80 text-amber-100 border border-amber-500/50",
@@ -298,11 +298,11 @@ export default function VariationsLog({
     const itemLines = variation.items
       .map(
         (item) =>
-          `  • ${item.description} — ${item.qty} ${item.unit} @ ${aud(item.rate)} = ${aud(item.amount)}`
+          `  • ${item.description}: ${item.qty} ${item.unit} @ ${aud(item.rate)} = ${aud(item.amount)}`
       )
       .join("\n");
 
-    const text = `Subject: Variation Order ${padVO(variation.number)} – ${projectName}
+    const text = `Subject: Variation Order ${padVO(variation.number)}: ${projectName}
 
 Dear ${clientEmail || "Client"},
 
@@ -355,7 +355,7 @@ Please respond to approve or reject this variation.`;
     <div className="flex flex-col gap-6">
       {/* Header */}
       <div className="flex items-center justify-between">
-        <h2 className="text-lg font-semibold text-white">Variations Log</h2>
+        <h2 className="text-lg font-semibold text-foreground">Variations Log</h2>
         <Button
           size="sm"
           onClick={openCreateDialog}
@@ -371,7 +371,7 @@ Please respond to approve or reject this variation.`;
         <Card className="bg-card/90 border-border/50">
           <CardContent className="pt-4 pb-4">
             <p className="text-xs text-muted-foreground mb-1">Total Variations</p>
-            <p className="text-2xl font-bold text-white">{variations.length}</p>
+            <p className="text-2xl font-bold text-foreground">{variations.length}</p>
           </CardContent>
         </Card>
         <Card className="bg-card/40 border-[#E1DCC9]/20">
@@ -391,9 +391,9 @@ Please respond to approve or reject this variation.`;
       {/* Empty state */}
       {variations.length === 0 && (
         <div className="text-center py-12 border border-dashed border-border/50 rounded-lg">
-          <ClipboardCheck className="w-10 h-10 text-slate-600 mx-auto mb-3" />
+          <ClipboardCheck className="w-10 h-10 text-muted-foreground mx-auto mb-3" />
           <p className="text-muted-foreground font-medium">No variations yet</p>
-          <p className="text-slate-500 text-sm mt-1">
+          <p className="text-muted-foreground text-sm mt-1">
             Click "New Variation" to create a change order.
           </p>
         </div>
@@ -410,10 +410,10 @@ Please respond to approve or reject this variation.`;
               <div className="flex items-start justify-between gap-3">
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 flex-wrap mb-1">
-                    <span className="text-xs font-mono text-slate-500 font-semibold">
+                    <span className="text-xs font-mono text-muted-foreground font-semibold">
                       {padVO(v.number)}
                     </span>
-                    <span className="text-white font-semibold truncate">{v.title}</span>
+                    <span className="text-foreground font-semibold truncate">{v.title}</span>
                     <span
                       className={`inline-block px-2 py-0.5 rounded text-xs font-semibold ${cfg.className}`}
                     >
@@ -425,14 +425,14 @@ Please respond to approve or reject this variation.`;
                       {v.description}
                     </p>
                   )}
-                  <div className="flex items-center gap-4 mt-1.5 text-xs text-slate-500">
+                  <div className="flex items-center gap-4 mt-1.5 text-xs text-muted-foreground">
                     <span>Reason: {v.reason}</span>
                     <span>Created: {format(parseISO(v.createdAt), "dd MMM yyyy")}</span>
                   </div>
                 </div>
                 <div className="flex-shrink-0 text-right">
-                  <p className="text-lg font-bold text-white">{aud(v.totalAmount)}</p>
-                  <p className="text-xs text-slate-500">ex GST</p>
+                  <p className="text-lg font-bold text-foreground">{aud(v.totalAmount)}</p>
+                  <p className="text-xs text-muted-foreground">ex GST</p>
                 </div>
               </div>
             </CardHeader>
@@ -441,7 +441,7 @@ Please respond to approve or reject this variation.`;
               {/* Items toggle */}
               <button
                 onClick={() => toggleExpand(v.id)}
-                className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-slate-200 mb-3 transition-colors"
+                className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground mb-3 transition-colors"
               >
                 {isExpanded ? (
                   <ChevronUp className="w-3.5 h-3.5" />
@@ -470,14 +470,14 @@ Please respond to approve or reject this variation.`;
                           <td className="py-1.5 text-right text-foreground/60">{item.qty}</td>
                           <td className="py-1.5 text-right text-muted-foreground">{item.unit}</td>
                           <td className="py-1.5 text-right text-foreground/60">{aud(item.rate)}</td>
-                          <td className="py-1.5 text-right text-white font-medium">{aud(item.amount)}</td>
+                          <td className="py-1.5 text-right text-foreground font-medium">{aud(item.amount)}</td>
                         </tr>
                       ))}
                     </tbody>
                     <tfoot>
-                      <tr className="border-t border-slate-600">
+                      <tr className="border-t border-border">
                         <td colSpan={4} className="pt-1.5 text-muted-foreground font-semibold">Total (ex GST)</td>
-                        <td className="pt-1.5 text-right text-white font-bold">{aud(v.totalAmount)}</td>
+                        <td className="pt-1.5 text-right text-foreground font-bold">{aud(v.totalAmount)}</td>
                       </tr>
                       <tr>
                         <td colSpan={4} className="py-0.5 text-muted-foreground">GST (10%)</td>
@@ -485,7 +485,7 @@ Please respond to approve or reject this variation.`;
                       </tr>
                       <tr>
                         <td colSpan={4} className="pb-1.5 text-muted-foreground font-semibold">Total (inc GST)</td>
-                        <td className="pb-1.5 text-right text-white font-bold">{aud(v.totalAmount * 1.1)}</td>
+                        <td className="pb-1.5 text-right text-foreground font-bold">{aud(v.totalAmount * 1.1)}</td>
                       </tr>
                     </tfoot>
                   </table>
@@ -648,9 +648,9 @@ Please respond to approve or reject this variation.`;
 
       {/* Create / Edit Dialog */}
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-        <DialogContent className="bg-slate-900 border-border/50 text-white max-w-2xl max-h-[90vh] overflow-y-auto">
+        <DialogContent className="bg-card border-border/50 text-foreground max-w-2xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle className="text-white">
+            <DialogTitle className="text-foreground">
               {editingVariation ? `Edit ${padVO(editingVariation.number)}` : "New Variation"}
             </DialogTitle>
           </DialogHeader>
@@ -662,7 +662,7 @@ Please respond to approve or reject this variation.`;
                 value={formTitle}
                 onChange={(e) => setFormTitle(e.target.value)}
                 placeholder="e.g. Additional retaining wall"
-                className="bg-card/90 border-slate-600 text-white"
+                className="bg-card/90 border-border text-foreground"
               />
             </div>
 
@@ -670,12 +670,12 @@ Please respond to approve or reject this variation.`;
               <div>
                 <Label className="text-xs text-muted-foreground mb-1 block">Reason</Label>
                 <Select value={formReason} onValueChange={setFormReason}>
-                  <SelectTrigger className="bg-card/90 border-slate-600 text-white">
+                  <SelectTrigger className="bg-card/90 border-border text-foreground">
                     <SelectValue />
                   </SelectTrigger>
-                  <SelectContent className="bg-card/90 border-slate-600">
+                  <SelectContent className="bg-card/90 border-border">
                     {REASONS.map((r) => (
-                      <SelectItem key={r} value={r} className="text-white hover:bg-muted/60">
+                      <SelectItem key={r} value={r} className="text-foreground hover:bg-muted/60">
                         {r}
                       </SelectItem>
                     ))}
@@ -691,7 +691,7 @@ Please respond to approve or reject this variation.`;
                 onChange={(e) => setFormDescription(e.target.value)}
                 placeholder="Describe the scope of this variation…"
                 rows={3}
-                className="bg-card/90 border-slate-600 text-white resize-none"
+                className="bg-card/90 border-border text-foreground resize-none"
               />
             </div>
 
@@ -729,7 +729,7 @@ Please respond to approve or reject this variation.`;
                             value={item.description}
                             onChange={(e) => updateItem(index, "description", e.target.value)}
                             placeholder="Description…"
-                            className="h-7 text-xs bg-muted/60 border-slate-600 text-white"
+                            className="h-7 text-xs bg-muted/60 border-border text-foreground"
                           />
                         </td>
                         <td className="py-1 pl-1">
@@ -739,7 +739,7 @@ Please respond to approve or reject this variation.`;
                             step={0.01}
                             value={item.qty}
                             onChange={(e) => updateItem(index, "qty", parseFloat(e.target.value) || 0)}
-                            className="h-7 text-xs bg-muted/60 border-slate-600 text-white text-right"
+                            className="h-7 text-xs bg-muted/60 border-border text-foreground text-right"
                           />
                         </td>
                         <td className="py-1 pl-1">
@@ -747,12 +747,12 @@ Please respond to approve or reject this variation.`;
                             value={item.unit}
                             onValueChange={(v) => updateItem(index, "unit", v)}
                           >
-                            <SelectTrigger className="h-7 text-xs bg-muted/60 border-slate-600 text-white">
+                            <SelectTrigger className="h-7 text-xs bg-muted/60 border-border text-foreground">
                               <SelectValue />
                             </SelectTrigger>
-                            <SelectContent className="bg-card/90 border-slate-600">
+                            <SelectContent className="bg-card/90 border-border">
                               {UNITS.map((u) => (
-                                <SelectItem key={u} value={u} className="text-white hover:bg-muted/60 text-xs">
+                                <SelectItem key={u} value={u} className="text-foreground hover:bg-muted/60 text-xs">
                                   {u}
                                 </SelectItem>
                               ))}
@@ -766,7 +766,7 @@ Please respond to approve or reject this variation.`;
                             step={0.01}
                             value={item.rate}
                             onChange={(e) => updateItem(index, "rate", parseFloat(e.target.value) || 0)}
-                            className="h-7 text-xs bg-muted/60 border-slate-600 text-white text-right"
+                            className="h-7 text-xs bg-muted/60 border-border text-foreground text-right"
                           />
                         </td>
                         <td className="py-1 pl-1 text-right text-foreground/60 font-medium whitespace-nowrap">
@@ -776,7 +776,7 @@ Please respond to approve or reject this variation.`;
                           {formItems.length > 1 && (
                             <button
                               onClick={() => removeItemRow(index)}
-                              className="text-slate-600 hover:text-red-400 transition-colors"
+                              className="text-muted-foreground hover:text-red-400 transition-colors"
                             >
                               <Trash2 className="w-3.5 h-3.5" />
                             </button>
@@ -786,11 +786,11 @@ Please respond to approve or reject this variation.`;
                     ))}
                   </tbody>
                   <tfoot>
-                    <tr className="border-t border-slate-600">
+                    <tr className="border-t border-border">
                       <td colSpan={4} className="pt-2 text-muted-foreground font-semibold text-right pr-2">
                         Total (ex GST)
                       </td>
-                      <td className="pt-2 text-right text-white font-bold whitespace-nowrap">
+                      <td className="pt-2 text-right text-foreground font-bold whitespace-nowrap">
                         {aud(totalFromItems(formItems))}
                       </td>
                       <td />
@@ -806,7 +806,7 @@ Please respond to approve or reject this variation.`;
                       <td colSpan={4} className="pb-2 text-muted-foreground font-semibold text-right pr-2">
                         Total (inc GST)
                       </td>
-                      <td className="pb-2 text-right text-white font-bold whitespace-nowrap">
+                      <td className="pb-2 text-right text-foreground font-bold whitespace-nowrap">
                         {aud(totalFromItems(formItems) * 1.1)}
                       </td>
                       <td />
@@ -823,7 +823,7 @@ Please respond to approve or reject this variation.`;
                 onChange={(e) => setFormNotes(e.target.value)}
                 placeholder="Internal notes…"
                 rows={2}
-                className="bg-card/90 border-slate-600 text-white resize-none"
+                className="bg-card/90 border-border text-foreground resize-none"
               />
             </div>
           </div>

@@ -466,7 +466,7 @@ function ModalElementsPanel({ elements, elementSources }: {
           <ElementCard icon={<Droplets className="h-4 w-4 text-blue-400" />} title="Wet Areas (Waterproofing Required)" nccRef="NCC F2.2 · AS 3740">
             <div className="flex flex-wrap gap-2 pt-1">
               {elements.wetAreas.map((area, i) => (
-                <span key={i} className="text-xs bg-blue-900/30 text-blue-300 border border-blue-700/40 rounded-md px-2.5 py-1">
+                <span key={i} className="text-xs bg-muted/50 text-foreground/80 border border-border rounded-md px-2.5 py-1">
                   {area}
                 </span>
               ))}
