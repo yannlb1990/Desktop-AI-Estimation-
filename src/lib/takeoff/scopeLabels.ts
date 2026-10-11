@@ -31,3 +31,14 @@ export function scopeForDisplay(item: { scope_of_work?: string | null; material_
   if (item.scope_of_work && !isMeasurementValueLabel(item.scope_of_work)) return item.scope_of_work;
   return item.material_type || item.trade || 'Item';
 }
+
+/**
+ * A scope that only names what was measured ("Wall", "Floor - Kitchen",
+ * "Measured area") rather than the work. The Estimate asks for a real scope.
+ */
+export function isGenericScope(scope: string | null | undefined): boolean {
+  const s = String(scope ?? '').trim();
+  if (!s) return true;
+  if (isMeasurementValueLabel(s)) return true;
+  return /^(wall|walls|floor|ceiling|tiling|roofing|cladding|concrete slab|framing|painting|waterproofing|insulation|other|general|custom item|item|measured length|measured area|counted items|line|rectangle|polygon|circle|count)( - .*)?$/i.test(s);
+}

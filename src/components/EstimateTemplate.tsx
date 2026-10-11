@@ -42,10 +42,10 @@ import {
   projectFfeAllowance,
 } from "@/lib/pricing/estimatePricing";
 import { readUserPricingDefaults } from "@/lib/pricing/userPricingDefaults";
-import { isMeasurementValueLabel } from "@/lib/takeoff/scopeLabels";
-import { lineSource, relinkWithQuantity, type EstimateLineSource, type PlanLink } from "@/lib/estimate/planLinks";
+import { isMeasurementValueLabel, isGenericScope } from "@/lib/takeoff/scopeLabels";
+import { lineSource, relinkWithQuantity, createPlanLink, measuredValueFor, type EstimateLineSource, type PlanLink } from "@/lib/estimate/planLinks";
 import { acknowledgePlanChange } from "@/lib/estimate/planLinkSync";
-import { EstimatePlanPanel } from "@/components/estimate/EstimatePlanPanel";
+import { EstimatePlanPanel, pendingPlanItems, readTakeoff } from "@/components/estimate/EstimatePlanPanel";
 import { mergeWithSaved as mergeLines } from "@/lib/estimate/mergeSaved";
 
 // ── Template accent colour (left border stripe, by template id) ───────────────
@@ -185,20 +185,24 @@ function TradeCombobox({ value, onChange }: { value: string; onChange: (v: strin
 const AU_TRADES = AU_TRADES_BASE;
 
 // Scope of work combobox — shows predefined scopes for the trade + accepts free-text
-function ScopeCombobox({ value, onChange, trade }: { value: string; onChange: (v: string) => void; trade: string }) {
+function ScopeCombobox({ value, onChange, trade, extra = [], placeholder = 'Select scope', compact = false }: {
+  value: string; onChange: (v: string) => void; trade: string;
+  /** Suggestions shown first, e.g. from what was measured */
+  extra?: string[]; placeholder?: string; compact?: boolean;
+}) {
   const [open, setOpen] = React.useState(false);
   const [search, setSearch] = React.useState('');
-  const presets: string[] = (SCOPE_OF_WORK as Record<string, string[]>)[trade] ?? [];
+  const presets: string[] = [...new Set([...extra, ...((SCOPE_OF_WORK as Record<string, string[]>)[trade] ?? [])])];
   const filtered = presets.filter(s => s.toLowerCase().includes(search.toLowerCase()));
   const isNew = search.trim() !== '' && !presets.some(s => s.toLowerCase() === search.trim().toLowerCase());
 
   return (
     <Popover open={open} onOpenChange={(o) => { setOpen(o); if (!o) setSearch(''); }}>
       <PopoverTrigger asChild>
-        <button type="button" disabled={!trade}
-          className={cn('h-10 w-full px-3 text-sm flex items-center justify-between gap-1 rounded-md border border-input bg-background hover:bg-accent transition-colors', !trade && 'opacity-50 cursor-not-allowed')}
+        <button type="button" disabled={!trade && extra.length === 0}
+          className={cn('w-full flex items-center justify-between gap-1 rounded-md border bg-background hover:bg-accent transition-colors', compact ? 'h-8 px-2 text-xs border-amber-500/50 text-amber-400' : 'h-10 px-3 text-sm border-input', !trade && extra.length === 0 && 'opacity-50 cursor-not-allowed')}
         >
-          <span className={cn('truncate text-left', !value && 'text-muted-foreground')}>{value || 'Select scope'}</span>
+          <span className={cn('truncate text-left', !value && !compact && 'text-muted-foreground')}>{value || placeholder}</span>
           <ChevronDown className="h-4 w-4 shrink-0 opacity-50" />
         </button>
       </PopoverTrigger>
@@ -240,6 +244,24 @@ function ScopeCombobox({ value, onChange, trade }: { value: string; onChange: (v
     </Popover>
   );
 }
+
+/** Scopes that fit what was measured, offered first on lines that come from the plan */
+const SCOPES_BY_MEASUREMENT: Record<string, string[]> = {
+  Wall: ['Wall framing', 'Plasterboard lining', 'Wall insulation', 'Painting walls', 'Wall tiling', 'External cladding', 'Skirting'],
+  Floor: ['Floor tiling', 'Floor coverings', 'Concrete slab', 'Waterproofing', 'Timber flooring'],
+  Ceiling: ['Ceiling lining', 'Ceiling insulation', 'Painting ceilings', 'Cornice'],
+  Tiling: ['Floor tiling', 'Wall tiling', 'Splashbacks'],
+  Roofing: ['Roof sheeting', 'Roof tiles', 'Sarking', 'Gutters', 'Fascia'],
+  Cladding: ['External cladding', 'Weatherboards', 'Render'],
+  'Concrete Slab': ['Concrete slab', 'Slab reinforcement', 'Vapour barrier'],
+  Framing: ['Wall framing', 'Roof framing', 'Floor framing'],
+  Painting: ['Painting walls', 'Painting ceilings', 'External painting'],
+  Waterproofing: ['Waterproofing'],
+  Insulation: ['Wall insulation', 'Ceiling insulation'],
+  LM: ['Skirting', 'Architraves', 'Cornice', 'Fencing', 'Gutters', 'Edging'],
+  M2: ['Floor tiling', 'Floor coverings', 'Painting', 'Paving', 'Turf'],
+  EA: ['Doors', 'Windows', 'Light points', 'Power points', 'Fixtures'],
+};
 
 const ESTIMATE_AREAS = [
   'Site', 'Structure', 'Envelope', 'Roof', 'Internal', 'Wet Areas',
@@ -372,6 +394,7 @@ export const EstimateTemplate = ({ projectId, estimateId }: EstimateTemplateProp
   });
   const [recentlyTransferred, setRecentlyTransferred] = useState<EstimateItem[]>([]);
   const [takeoffCount, setTakeoffCount] = useState(0);
+  const pendingFromPlan = useMemo(() => pendingPlanItems(projectId).length, [projectId, items]);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editValues, setEditValues] = useState<Partial<EstimateItem>>({});
   const [showCustomMaterialDialog, setShowCustomMaterialDialog] = useState(false);
@@ -445,6 +468,8 @@ export const EstimateTemplate = ({ projectId, estimateId }: EstimateTemplateProp
     labour_rate: "",
   });
   const qtyInputRef = useRef<HTMLInputElement>(null);
+  /** Measurement the new line takes its quantity from (kept linked), or '' for a typed quantity */
+  const [newItemMeasurement, setNewItemMeasurement] = useState('');
 
   useEffect(() => {
     if (projectId) loadItems();
@@ -545,7 +570,8 @@ export const EstimateTemplate = ({ projectId, estimateId }: EstimateTemplateProp
     // Create new estimate item
     const newEstimateItem: EstimateItem = {
       id: `item-${Date.now()}`,
-      source: 'manual',
+      source: newItemMeasurement ? 'plan' : 'manual',
+      plan_link: newItemMeasurement ? createPlanLink([newItemMeasurement], qty, takeoffMeasurements, newItem.unit) : null,
       section_id: null,
       area: newItem.area,
       trade: newItem.trade,
@@ -586,7 +612,8 @@ export const EstimateTemplate = ({ projectId, estimateId }: EstimateTemplateProp
     // Keep Area/Trade/Scope/Material/Unit/Price/Rate — pricing the same material across
     // several rooms is the common case. Only the per-instance amounts reset, and focus
     // jumps straight back to Qty so entering the next line needs no mouse at all.
-    setNewItem(prev => ({ ...prev, quantity: "", labour_hours: "" }));
+    // With a measurement picked, keep it: framing, lining and insulation off the same wall
+    setNewItem(prev => ({ ...prev, quantity: newItemMeasurement ? measuredFor(newItemMeasurement, prev.unit) : "", labour_hours: "" }));
     qtyInputRef.current?.focus();
   };
 
@@ -1042,20 +1069,43 @@ export const EstimateTemplate = ({ projectId, estimateId }: EstimateTemplateProp
     return names;
   }, [projectId, items]);
 
-  const sourceBadge = (item: EstimateItem) => {
+  // Takeoff measurements, for the plan picker and for scope suggestions on plan lines
+  const takeoffMeasurements = useMemo(() => readTakeoff(projectId).measurements, [projectId, items]);
+  const measurementKind = (m: any): string =>
+    (m.measurementType && SCOPES_BY_MEASUREMENT[m.measurementType]) ? m.measurementType
+      : String(m.unit || '').toUpperCase() === 'COUNT' ? 'EA'
+      : String(m.unit || '').toUpperCase() === 'LM' ? 'LM' : 'M2';
+  const scopesForLine = (item: EstimateItem): string[] => {
+    const ids = item.plan_link?.measurementIds ?? [];
+    const kinds = ids.map(id => takeoffMeasurements.find((m: any) => m.id === id)).filter(Boolean).map(measurementKind);
+    return [...new Set(kinds.flatMap(k => SCOPES_BY_MEASUREMENT[k] ?? []))];
+  };
+
+  const UNIT_FOR_KIND: Record<string, string> = { LM: 'lm', EA: 'ea', M2: 'm²' };
+  const defaultUnitFor = (m: any): string => {
+    const u = String(m.unit || '').toUpperCase();
+    if (u === 'LM' && m.measurementType === 'Wall' && m.height) return 'm²';
+    if (m.measurementType === 'Floor' && m.isConcreteFloor && m.concreteDepth) return 'm³';
+    return UNIT_FOR_KIND[u === 'COUNT' ? 'EA' : u] ?? 'm²';
+  };
+  const measuredFor = (id: string, unit: string): string => {
+    const m = takeoffMeasurements.find((x: any) => x.id === id);
+    return m ? String(Math.round(measuredValueFor(m, unit) * 100) / 100) : '';
+  };
+  const measurementOptionLabel = (m: any): string => {
+    const u = String(m.unit || '').toUpperCase();
+    const size = u === 'LM' ? `${Number(m.realValue).toFixed(2)} m` : u === 'COUNT' ? `${m.realValue} ea` : `${Number(m.realValue).toFixed(2)} m²`;
+    const kind = m.measurementType && m.measurementType !== 'Other' ? m.measurementType : (u === 'LM' ? 'Length' : u === 'COUNT' ? 'Count' : 'Area');
+    const label = m.label && !isMeasurementValueLabel(m.label) ? ` (${m.label})` : '';
+    return `${kind}${label} · ${size} · page ${(m.pageIndex ?? 0) + 1}`;
+  };
+  const pickedMeasurement = takeoffMeasurements.find((m: any) => m.id === newItemMeasurement);
+
+  const sourceLabel = (item: EstimateItem) => {
     const src = lineSource(item);
-    const styles: Record<EstimateLineSource, string> = {
-      plan: 'bg-amber-500/15 text-amber-400 border-amber-500/30',
-      ai: 'bg-muted/60 text-foreground/80 border-border',
-      manual: 'bg-transparent text-muted-foreground border-border/60',
-    };
-    const label = src === 'plan' ? 'Plan' : src === 'ai' ? 'AI' : 'Manual';
-    return (
-      <span className={`mt-1 inline-block rounded border px-1 text-[9px] font-semibold uppercase tracking-wide ${styles[src]}`}
-        title={src === 'plan' ? 'Quantity follows the linked measurements' : src === 'ai' ? 'From the AI plan analysis' : 'Added by hand'}>
-        {label}
-      </span>
-    );
+    const label = src === 'plan' ? 'from plan' : src === 'ai' ? 'AI analysis' : 'manual';
+    const hint = src === 'plan' ? 'Quantity follows the linked measurements' : src === 'ai' ? 'From the AI plan analysis' : 'Added by hand';
+    return <span className="mt-0.5 block text-[10px] font-normal text-muted-foreground" title={hint}>{label}</span>;
   };
 
   const renderItem = (item: EstimateItem) => {
@@ -1097,7 +1147,7 @@ export const EstimateTemplate = ({ projectId, estimateId }: EstimateTemplateProp
           </TableCell>
           <TableCell className="font-mono text-sm font-medium">
             {item.item_number}
-            <div>{sourceBadge(item)}</div>
+            {sourceLabel(item)}
           </TableCell>
           <TableCell>
             <Select
@@ -1137,17 +1187,21 @@ export const EstimateTemplate = ({ projectId, estimateId }: EstimateTemplateProp
                   trade={editValues.trade ?? item.trade}
                 />
               </div>
-            ) : isMeasurementValueLabel(item.scope_of_work) ? (
-              // Only a measured size was saved here: ask for the type of work instead
-              <button
-                type="button"
-                onClick={() => startEditing(item)}
-                className="text-left text-amber-500 hover:underline"
-                title="Click to choose the scope of work"
-              >
-                Set scope of work
-                <span className="block text-[11px] text-muted-foreground">measured {item.scope_of_work}</span>
-              </button>
+            ) : isGenericScope(item.scope_of_work) ? (
+              // Only what was measured is known ("Wall", "18.0 m"): pick the work, or type your own
+              <div className="min-w-[150px]">
+                <ScopeCombobox
+                  value=""
+                  placeholder="Choose scope of work"
+                  compact
+                  onChange={(v) => updateItemField(item.id, 'scope_of_work', v)}
+                  trade={item.trade}
+                  extra={scopesForLine(item)}
+                />
+                {item.scope_of_work && (
+                  <span className="mt-0.5 block text-[10px] text-muted-foreground">measured: {item.scope_of_work}</span>
+                )}
+              </div>
             ) : item.scope_of_work}
           </TableCell>
           <TableCell>
@@ -1491,27 +1545,7 @@ export const EstimateTemplate = ({ projectId, estimateId }: EstimateTemplateProp
 
   return (
     <div className="space-y-6 p-6">
-      {/* Transfer banner — appears briefly after items arrive from PDF Takeoff */}
-      {recentlyTransferred.length > 0 && (
-        <div className="flex items-center justify-between gap-3 px-4 py-3 rounded-lg bg-accent/10 border border-accent/30 text-sm animate-in fade-in slide-in-from-top-2 duration-300">
-          <div className="flex items-center gap-2 text-accent-foreground font-medium">
-            <CheckCircle className="h-4 w-4 text-accent" />
-            {recentlyTransferred.length} item{recentlyTransferred.length > 1 ? 's' : ''} transferred from PDF Takeoff:&nbsp;
-            <span className="font-normal text-muted-foreground">
-              {recentlyTransferred.map(i => i.scope_of_work || i.trade).join(', ')}
-            </span>
-          </div>
-          <button
-            onClick={() => setRecentlyTransferred([])}
-            className="text-muted-foreground hover:text-foreground shrink-0"
-            aria-label="Dismiss"
-          >
-            <X className="h-4 w-4" />
-          </button>
-        </div>
-      )}
-
-      <EstimatePlanPanel projectId={projectId} refreshKey={items} />
+      {/* Lines arriving from the takeoff are announced by the takeoff's own message (with Undo) */}
 
       {/* 1. NCC Standards Research */}
       <div className="rounded-xl border border-border overflow-hidden">
@@ -1918,21 +1952,59 @@ export const EstimateTemplate = ({ projectId, estimateId }: EstimateTemplateProp
         )}
       </div>
 
-      {/* 8. Add Line Item */}
+      {/* 8. Add to estimate: typed lines, plan quantities, takeoff items, library, recipes */}
       <Card className="overflow-hidden">
         <button
           onClick={() => toggleSection('addItem')}
           className="w-full flex items-center justify-between px-6 py-4 hover:bg-muted/20 transition-colors text-left"
         >
-          <span className="font-semibold text-base">Add Line Item</span>
+          <span className="font-semibold text-base">Add to estimate</span>
           <div className="flex items-center gap-3">
-            {!openSections.addItem && <span className="text-sm text-muted-foreground">Add items manually</span>}
+            {!openSections.addItem && (
+              <span className={`text-sm ${pendingFromPlan > 0 ? 'text-amber-400' : 'text-muted-foreground'}`}>
+                {pendingFromPlan > 0
+                  ? `${pendingFromPlan} item${pendingFromPlan !== 1 ? 's' : ''} from the takeoff not priced yet`
+                  : 'Type a line or take the quantity from the plan'}
+              </span>
+            )}
             <ChevronDown className={`h-4 w-4 transition-transform duration-200 ${openSections.addItem ? 'rotate-180' : ''}`} />
           </div>
         </button>
         {openSections.addItem && (
         <div className="px-6 pb-6 border-t border-border">
+        <EstimatePlanPanel projectId={projectId} refreshKey={items} />
         <div className="grid grid-cols-12 gap-3 mt-4">
+          {takeoffMeasurements.length > 0 && (
+            <div className="col-span-12">
+              <Label>Quantity from the plan (optional)</Label>
+              <Select
+                value={newItemMeasurement || 'none'}
+                onValueChange={(v) => {
+                  if (v === 'none') { setNewItemMeasurement(''); return; }
+                  const m = takeoffMeasurements.find((x: any) => x.id === v);
+                  if (!m) return;
+                  const unit = defaultUnitFor(m);
+                  setNewItemMeasurement(v);
+                  setNewItem({ ...newItem, unit, quantity: measuredFor(v, unit) });
+                }}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Type the quantity yourself" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">None, I'll type the quantity</SelectItem>
+                  {takeoffMeasurements.map((m: any) => (
+                    <SelectItem key={m.id} value={m.id}>{measurementOptionLabel(m)}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              {pickedMeasurement && (
+                <p className="mt-1 text-xs text-muted-foreground">
+                  The line stays linked: re-measure and its quantity updates. Change the quantity (say, double it for both faces) and it keeps that ratio.
+                </p>
+              )}
+            </div>
+          )}
           <div className="col-span-2">
             <Label>Area *</Label>
             <Select
@@ -1962,6 +2034,7 @@ export const EstimateTemplate = ({ projectId, estimateId }: EstimateTemplateProp
               value={newItem.scope_of_work}
               onChange={(v) => setNewItem({ ...newItem, scope_of_work: v })}
               trade={newItem.trade}
+              extra={pickedMeasurement ? (SCOPES_BY_MEASUREMENT[measurementKind(pickedMeasurement)] ?? []) : []}
             />
           </div>
           <div className="col-span-4">
@@ -1995,7 +2068,11 @@ export const EstimateTemplate = ({ projectId, estimateId }: EstimateTemplateProp
             <Label>Unit</Label>
             <Select
               value={newItem.unit}
-              onValueChange={(value) => setNewItem({ ...newItem, unit: value })}
+              onValueChange={(value) => setNewItem({
+                ...newItem,
+                unit: value,
+                quantity: newItemMeasurement ? measuredFor(newItemMeasurement, value) : newItem.quantity,
+              })}
             >
               <SelectTrigger>
                 <SelectValue />
@@ -2082,8 +2159,7 @@ export const EstimateTemplate = ({ projectId, estimateId }: EstimateTemplateProp
             disabled={!newItem.area || !newItem.trade || !newItem.material_type}
             className="bg-accent text-accent-foreground hover:bg-accent/90 disabled:opacity-40 disabled:cursor-not-allowed"
           >
-            <CheckCircle className="h-4 w-4 mr-2" />
-            Confirm & Add to Estimate
+            Add to estimate
           </Button>
         </div>
         </div>

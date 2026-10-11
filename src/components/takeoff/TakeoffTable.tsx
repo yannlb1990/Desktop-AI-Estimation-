@@ -587,7 +587,8 @@ export const TakeoffTable = ({
           {/* Label */}
           <div className="col-span-2 min-w-0">
             <div className="text-xs font-medium truncate text-foreground leading-tight" title={m.label}>
-              {m.label || <span className="text-muted-foreground italic">Unnamed</span>}
+              {/* Walls, doors and windows carry no label (none is drawn on the plan): name them by type */}
+              {m.label || <span className="text-muted-foreground">{m.measurementType && m.measurementType !== 'Other' ? m.measurementType : 'Measurement'} {index + 1}</span>}
             </div>
             {m.drawingNumber && (
               <div className="text-[10px] text-muted-foreground truncate">{m.drawingNumber}</div>

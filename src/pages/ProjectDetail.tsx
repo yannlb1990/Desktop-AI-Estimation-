@@ -1,6 +1,11 @@
 import React, { useState, useEffect, useRef, Component } from "react";
 import { priceLine, resolveProjectPricing, calculateProjectTotals } from "@/lib/pricing/estimatePricing";
 import { readUserPricingDefaults } from "@/lib/pricing/userPricingDefaults";
+import { downloadEstimateBOQ } from "@/lib/estimate/exports";
+import { estimateLinesAsCostItems } from "@/lib/estimate/fromCostItem";
+import { SOWGeneratorDialog } from "@/components/takeoff/SOWGeneratorDialog";
+import { SupplierQuoteDialog } from "@/components/SupplierQuoteDialog";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import type { ReactNode } from "react";
 
 // Isolate takeoff crashes so they don't white-out the entire project page
@@ -77,6 +82,14 @@ const ProjectDetail = () => {
     try { return JSON.parse(localStorage.getItem(getUserStorageKey("preferred_suppliers")) || "[]"); }
     catch { return []; }
   })();
+
+  const [sowOpen, setSowOpen] = useState(false);
+  const [supplierItems, setSupplierItems] = useState<any[] | null>(null);
+  const readLocalProject = (): any => {
+    try {
+      return (JSON.parse(localStorage.getItem(getUserStorageKey("local_projects")) || "[]") as any[]).find(p => p.id === projectId) || {};
+    } catch { return {}; }
+  };
 
   const handleExportExcel = async () => {
     if (!project) return;
@@ -510,13 +523,36 @@ const ProjectDetail = () => {
               <TourTip text="Create a full corporate tender document including company profile, methodology, NCC compliance, programme and legal terms." position="bottom">
                 <FullTenderGenerator project={project} estimate={estimate} />
               </TourTip>
-              <TourTip text="Download the full estimate as a formatted Excel workbook — trade groupings, material and labour totals, margin, and GST." position="bottom">
-                <Button size="sm" variant="outline" onClick={handleExportExcel} className="shrink-0" title="Export to Excel">
-                  <FileText className="h-4 w-4 md:mr-2" />
-                  <span className="hidden md:inline">Export to Excel</span>
-                  <span className="md:hidden">Export</span>
-                </Button>
+              <TourTip text="Export the estimate as an Excel workbook, a bill of quantities, a scope of work PDF, or send it to a supplier for pricing. Totals match the quote." position="bottom">
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button size="sm" variant="outline" className="shrink-0" title="Export">
+                      <FileText className="h-4 w-4 md:mr-2" />
+                      <span className="hidden md:inline">Export</span>
+                      <ChevronDown className="h-3.5 w-3.5 ml-1 opacity-60" />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end">
+                    <DropdownMenuItem onClick={handleExportExcel}>Excel workbook</DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => downloadEstimateBOQ(readLocalProject())}>Bill of quantities (CSV)</DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => setSowOpen(true)}>Scope of work (PDF)</DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => setSupplierItems(estimateLinesAsCostItems(readLocalProject()))}>Request supplier quote</DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
               </TourTip>
+              <SOWGeneratorDialog
+                open={sowOpen}
+                onOpenChange={setSowOpen}
+                costItems={sowOpen ? estimateLinesAsCostItems(readLocalProject()) : []}
+                defaultProjectName={project?.name || ''}
+              />
+              <SupplierQuoteDialog
+                open={supplierItems !== null}
+                onClose={() => setSupplierItems(null)}
+                items={supplierItems ?? []}
+                projectName={project?.name}
+                siteAddress={(project as any)?.site_address || (project as any)?.address}
+              />
             </div>
           </div>
         </div>

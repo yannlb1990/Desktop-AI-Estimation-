@@ -10,7 +10,7 @@ import { getUserStorageKey } from '@/lib/localAuth';
 import { syncProjectToSupabase } from '@/lib/db/projects';
 import { calculateProjectTotals, priceLine, resolveProjectPricing } from '@/lib/pricing/estimatePricing';
 import { readUserPricingDefaults } from '@/lib/pricing/userPricingDefaults';
-import { isMeasurementValueLabel, workLabelForMeasurement } from '@/lib/takeoff/scopeLabels';
+import { isMeasurementValueLabel, workLabelForMeasurement, isGenericScope } from '@/lib/takeoff/scopeLabels';
 import { createPlanLink } from './planLinks';
 
 /** Map a CostItem category to the nearest AU trade */
@@ -30,6 +30,18 @@ export function costItemToEstimateLine(
   const linkedIds = item.linkedMeasurements ?? [];
   const link = linkedIds.length ? createPlanLink(linkedIds, item.quantity, measurements, item.unit) : null;
   const linked = !!link && link.measurementIds.length > 0;
+  // A plan line named only after its measurement ("Kitchen floor", "Wall") says where,
+  // not what work: keep the name as a note and let the Estimate ask for the scope.
+  const source = linked ? measurements.find(m => m.id === link!.measurementIds[0]) : undefined;
+  const namedAfterMeasurement = !!source && (
+    isGenericScope(item.name) ||
+    (!!source.label && source.label.trim().toLowerCase() === String(item.name ?? '').trim().toLowerCase())
+  );
+  const scope = namedAfterMeasurement
+    ? (source!.measurementType && source!.measurementType !== 'Other' ? source!.measurementType : 'Measured area')
+    : isMeasurementValueLabel(item.name)
+      ? workLabelForMeasurement({ measurementType: item.measurementType ?? (item.category !== 'General' ? item.category : null), area: item.area, unit: item.unit })
+      : (item.name || item.category);
   return {
     id: `ci-${item.id}`,
     _costItemId: item.id,
@@ -38,11 +50,9 @@ export function costItemToEstimateLine(
     section_id: null,
     area: item.area || '',
     trade: CATEGORY_TO_TRADE[item.category] || item.trade || 'Carpenter',
-    // The scope says what the work is, never the measured size
-    scope_of_work: isMeasurementValueLabel(item.name)
-      ? workLabelForMeasurement({ measurementType: item.measurementType ?? (item.category !== 'General' ? item.category : null), area: item.area, unit: item.unit })
-      : (item.name || item.category),
-    material_type: item.customMaterial || item.material || (isMeasurementValueLabel(item.name) ? '' : item.name) || '',
+    // The scope says what the work is, never the measured size or its name
+    scope_of_work: scope,
+    material_type: item.customMaterial || item.material || (isMeasurementValueLabel(item.name) || namedAfterMeasurement ? '' : item.name) || '',
     quantity: Math.round((Number(item.quantity) || 0) * 1000) / 1000,
     unit: item.unit,
     unit_price: item.unitCost,
@@ -52,7 +62,7 @@ export function costItemToEstimateLine(
     material_wastage_pct: item.materialWastePercent ?? opts.materialWastePct,
     labour_wastage_pct: item.labourWastePercent ?? opts.labourWastePct,
     markup_pct: item.markupPercent ?? 0,
-    notes: item.description || item.notes || '',
+    notes: item.description || item.notes || (namedAfterMeasurement && source?.label ? source.label : ''),
     expanded: false,
     item_number: `${opts.itemNumber}`,
     isEditing: false,
