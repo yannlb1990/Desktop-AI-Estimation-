@@ -1,6 +1,6 @@
 import { getUserStorageKey } from '@/lib/localAuth';
 import type { UserPricingDefaults } from './estimatePricing';
-import { marketLabourRatesForState, getCustomRates } from '@/data/labourRates';
+import { marketLabourRatesForState, getCustomRates, getSettingsPresetRates } from '@/data/labourRates';
 import { stateFromAddress, profileState } from '@/lib/defaultState';
 
 /**
@@ -27,13 +27,8 @@ export function readUserPricingDefaults(project?: any): UserPricingDefaults {
       if (parseFloat(r.overhead)) defaults.config.overheadPct = parseFloat(r.overhead);
       if (parseFloat(r.margin)) defaults.config.marginPct = parseFloat(r.margin);
     }
-    const savedPresets = localStorage.getItem(getUserStorageKey('labour_presets'));
-    if (savedPresets) {
-      const presets: { name: string; rate: string }[] = JSON.parse(savedPresets);
-      presets.forEach(p => {
-        if (p.name && parseFloat(p.rate)) defaults.labourRates[p.name] = parseFloat(p.rate);
-      });
-    }
+    // Settings presets win over everything else (names matched to trades loosely)
+    Object.assign(defaults.labourRates, getSettingsPresetRates());
   } catch { /* corrupted settings: fall back to built-in defaults */ }
   return defaults;
 }

@@ -639,6 +639,8 @@ ${clone.outerHTML}
       setApprovedVersionId(recorded.versionId)
       toast.success(`${recorded.approvedBy || 'Your client'} approved version ${recorded.versionNumber}`)
     }
+    // Another screen may have recorded the approval: always re-read it
+    setApprovedVersionId(loadProject(project.id)?.approved_quote?.versionId ?? null)
     setShares(await loadQuoteShares(project.id))
   }
   useEffect(() => { if (open) refreshShares() }, [open, project?.id])
@@ -651,7 +653,8 @@ ${clone.outerHTML}
         { name: companyName, abn: companyABN, phone: companyPhone, email: companyEmail },
         { depositPct: parseFloat(depositPct) || 0, progressPct: parseFloat(progressPct) || 0, finalPct: parseFloat(finalPct) || 0 })
       const url = quoteShareUrl(token)
-      try { await navigator.clipboard.writeText(url) } catch { /* shown below anyway */ }
+      // Don't wait on the clipboard: it can hang when the window isn't focused
+      navigator.clipboard?.writeText(url).catch(() => { /* link is also shown under the version */ })
       toast.success('Approval link copied. Send it to your client.')
       setShares(await loadQuoteShares(project.id))
     } catch (e) {

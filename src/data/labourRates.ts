@@ -63,13 +63,42 @@ export function clearCustomRate(trade: string) {
   localStorage.setItem(customRatesKey(), JSON.stringify(rates));
 }
 
+const KNOWN_TRADES = [
+  'Carpenter', 'Plumber', 'Electrician', 'Bricklayer', 'Plasterer', 'Painter', 'Tiler',
+  'Concreter', 'Roofer', 'Landscaper', 'Waterproofer', 'Glazier', 'Renderer', 'Cabinetmaker',
+  'Insulation Installer', 'Gutter Installer', 'Excavator Operator', 'Steel Fixer',
+  'Scaffolder', 'HVAC Technician', 'General Labourer', 'Demolition',
+];
+
+/**
+ * Match a name typed in Settings to the trade it means: ignores case and stray
+ * spaces ("Plumber " = Plumber) and accepts close forms ("Concrete" = Concreter,
+ * "Labourer" = General Labourer). Unknown names are kept as typed.
+ */
+export function canonicalTradeName(name: string): string {
+  const n = name.trim().replace(/\s+/g, ' ').toLowerCase();
+  if (!n) return '';
+  const all = [...new Set([...KNOWN_TRADES, ...LABOUR_RATES.map(r => r.trade)])];
+  const exact = all.find(t => t.toLowerCase() === n);
+  if (exact) return exact;
+  const close = all.find(t => {
+    const tl = t.toLowerCase();
+    return tl.startsWith(n) || n.startsWith(tl) || tl.endsWith(' ' + n);
+  });
+  return close ?? name.trim();
+}
+
 /** Rates set in Settings → Rates (labour presets), by trade name. */
-function getSettingsPresetRates(): Record<string, number> {
+export function getSettingsPresetRates(): Record<string, number> {
   try {
     const presets: { name?: string; rate?: string | number }[] =
       JSON.parse(localStorage.getItem(getUserStorageKey('labour_presets')) || '[]');
     const out: Record<string, number> = {};
-    presets.forEach(p => { const r = Number(p.rate); if (p.name && r > 0) out[p.name] = r; });
+    presets.forEach(p => {
+      const r = Number(p.rate);
+      const trade = p.name ? canonicalTradeName(p.name) : '';
+      if (trade && r > 0) out[trade] = r;
+    });
     return out;
   } catch {
     return {};
