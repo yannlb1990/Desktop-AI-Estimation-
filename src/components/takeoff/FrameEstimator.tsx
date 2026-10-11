@@ -689,7 +689,6 @@ export function FrameEstimator({
     }
 
     onAddCostItems(items);
-    toast.success(`${items.length} items pushed from ${sec.name} to Cost Estimator`);
   }, [sections, bomBySection, onAddCostItems]);
 
   const pushRoofBOM = useCallback(() => {
@@ -715,7 +714,6 @@ export function FrameEstimator({
     if (roofBOM.ridgeLM > 0) items.push(makeItem('Ridge Beam', roofBOM.ridgeLM, 'LM', 21.25));
     if (roofBOM.hipRafterLM > 0) items.push(makeItem('Hip Rafters', roofBOM.hipRafterLM, 'LM', 3.85));
     onAddCostItems(items);
-    toast.success(`${items.length} roof items pushed to Cost Estimator`);
   }, [roofBOM, onAddCostItems, roofType, roofPitchDeg, roofSpacingMm]);
 
   // ─── Render ───────────────────────────────────────────────────────────────────

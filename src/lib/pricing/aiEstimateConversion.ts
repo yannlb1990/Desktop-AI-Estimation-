@@ -87,6 +87,7 @@ export function aiItemToEstimateItem(item: EstimatedLineItem, index: number) {
 
   return {
     id: item.id,
+    source: 'ai' as const,
     section_id: null,
     area: item.area || 'General',
     trade: tradeForAiItem(item),

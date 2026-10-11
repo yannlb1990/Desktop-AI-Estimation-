@@ -1,10 +1,37 @@
 import { useReducer, useEffect, useRef, useState } from 'react';
-import { TakeoffState, TakeoffAction, Measurement } from '@/lib/takeoff/types';
+import { TakeoffState, TakeoffAction, Measurement, CostItem } from '@/lib/takeoff/types';
 import { getEffectiveQuantity } from '@/lib/takeoff/calculations';
 import { supabase } from '@/integrations/supabase/client';
 import { getCachedPDF, cachePDF } from '@/lib/takeoff/pdfCache';
+import { syncEstimateWithMeasurements, flowTakeoffIntoEstimate } from '@/lib/estimate/planLinkSync';
+import { measuredValueFor } from '@/lib/estimate/planLinks';
+import { removeEstimateLines } from '@/lib/estimate/fromCostItem';
+import { toast } from 'sonner';
 
 // Fields on Measurement whose change should cascade to linked cost item quantities
+/**
+ * New quantity for a cost item after its measurements changed. Keeps the item's
+ * own ratio to the measured total (lining on both faces, waste already in the qty,
+ * recipe multipliers) instead of rebuilding it from wasteFactor, which dropped
+ * faces and added waste twice.
+ */
+function rescaleCostQty(
+  item: CostItem,
+  oldMeasurements: Measurement[],
+  newMeasurements: Measurement[],
+  newLinks: string[],
+): number {
+  const sum = (ids: string[], ms: Measurement[]) =>
+    ids.reduce((acc, mId) => {
+      const m = ms.find(x => x.id === mId);
+      return m ? acc + measuredValueFor(m, item.unit) : acc;
+    }, 0);
+  const oldBase = sum(item.linkedMeasurements, oldMeasurements);
+  const newBase = sum(newLinks, newMeasurements);
+  if (oldBase > 0) return item.quantity * (newBase / oldBase);
+  return newBase * (item.wasteFactor || 1);
+}
+
 const QUANTITY_FIELDS = new Set<keyof Measurement>([
   'realValue', 'height', 'concreteDepth', 'computedM2', 'computedM3',
   'measurementType', 'isConcreteFloor', 'unit',
@@ -291,9 +318,21 @@ function takeoffReducer(state: TakeoffState, action: TakeoffAction): TakeoffStat
     case 'UPDATE_MEASUREMENT': {
       const { id, updates } = action.payload;
 
-      const updatedMeasurements = state.measurements.map(m =>
-        m.id === id ? { ...m, ...updates } : m
-      );
+      // Stored wall area / volume (set when walls of different heights are combined):
+      // a new length scales it; a new height or depth means one value now applies, so drop it.
+      const updatedMeasurements = state.measurements.map(m => {
+        if (m.id !== id) return m;
+        const next: Measurement = { ...m, ...updates };
+        const lengthChanged = 'realValue' in updates && m.realValue > 0 && updates.realValue !== m.realValue;
+        const ratio = lengthChanged ? (updates.realValue as number) / m.realValue : 1;
+        if (!('computedM2' in updates) && m.computedM2 != null) {
+          next.computedM2 = 'height' in updates && updates.height !== m.height ? undefined : m.computedM2 * ratio;
+        }
+        if (!('computedM3' in updates) && m.computedM3 != null) {
+          next.computedM3 = 'concreteDepth' in updates && updates.concreteDepth !== m.concreteDepth ? undefined : m.computedM3 * ratio;
+        }
+        return next;
+      });
 
       // Only cascade to cost items when a quantity-relevant field changed
       const affectsQty = (Object.keys(updates) as (keyof Measurement)[])
@@ -308,18 +347,40 @@ function takeoffReducer(state: TakeoffState, action: TakeoffAction): TakeoffStat
 
       const costItems = state.costItems.map(item => {
         if (!item.linkedMeasurements.includes(id)) return item;
-
-        // Sum effective qty across ALL linked measurements; use updated value for this id
-        const totalQty = item.linkedMeasurements.reduce((sum, mId) => {
-          const m = mId === id ? updatedM : state.measurements.find(x => x.id === mId);
-          return m ? sum + getEffectiveQuantity(m) : sum;
-        }, 0);
-
-        const newQty = totalQty * item.wasteFactor;
+        const newQty = rescaleCostQty(item, state.measurements, updatedMeasurements, item.linkedMeasurements);
         return { ...item, quantity: newQty, subtotal: newQty * item.unitCost };
       });
 
       return { ...state, measurements: updatedMeasurements, costItems };
+    }
+
+    case 'COMBINE_MEASUREMENTS': {
+      // Merge into the first measurement (it keeps its id); the rest are removed.
+      // Cost items linked to any of them now point at the kept one, quantity unchanged.
+      const ids = action.payload.ids;
+      const parts = ids.map(i => state.measurements.find(m => m.id === i)).filter(Boolean) as Measurement[];
+      if (parts.length < 2) return state;
+      const [first, ...rest] = parts;
+      const restIds = new Set(rest.map(m => m.id));
+      const isWall = parts.every(m => m.measurementType === 'Wall' && m.height && m.unit === 'LM');
+      const isConcrete = parts.every(m => m.measurementType === 'Floor' && m.isConcreteFloor && m.concreteDepth);
+      const combined: Measurement = {
+        ...first,
+        realValue: parts.reduce((sum, m) => sum + m.realValue, 0),
+        label: parts.map(m => m.label || m.type).filter(Boolean).join(' + ') || first.label,
+        // Walls of different heights: keep the true total area
+        computedM2: isWall ? parts.reduce((sum, m) => sum + getEffectiveQuantity(m), 0) : undefined,
+        computedM3: isConcrete ? parts.reduce((sum, m) => sum + getEffectiveQuantity(m), 0) : undefined,
+        area: action.payload.area ?? first.area,
+      };
+      const measurements = state.measurements
+        .filter(m => !restIds.has(m.id))
+        .map(m => (m.id === first.id ? combined : m));
+      const costItems = state.costItems.map(item => {
+        if (!item.linkedMeasurements.some(mId => mId === first.id || restIds.has(mId))) return item;
+        return { ...item, linkedMeasurements: [...new Set(item.linkedMeasurements.map(mId => (restIds.has(mId) ? first.id : mId)))] };
+      });
+      return { ...state, measurements, costItems };
     }
 
     case 'DELETE_MEASUREMENT': {
@@ -336,12 +397,7 @@ function takeoffReducer(state: TakeoffState, action: TakeoffAction): TakeoffStat
           return { ...item, linkedMeasurements: [] };
         }
 
-        const totalQty = remaining.reduce((sum, mId) => {
-          const m = updatedMeasurements.find(x => x.id === mId);
-          return m ? sum + getEffectiveQuantity(m) : sum;
-        }, 0);
-
-        const newQty = totalQty * item.wasteFactor;
+        const newQty = rescaleCostQty(item, state.measurements, updatedMeasurements, remaining);
         return {
           ...item,
           linkedMeasurements: remaining,
@@ -377,9 +433,14 @@ function takeoffReducer(state: TakeoffState, action: TakeoffAction): TakeoffStat
           return { ...state, costItems: newItems };
         }
       }
-      // linkedMeasurement dedup: block re-adding the exact same measurement
+      // Same measurement + same item: block the duplicate. Different items on one
+      // wall (framing, lining, insulation) are all kept.
       const linkedId = incoming.linkedMeasurements?.[0];
-      if (linkedId && state.costItems.some(item => item.linkedMeasurements?.includes(linkedId))) {
+      if (linkedId && state.costItems.some(item =>
+        item.linkedMeasurements?.includes(linkedId) &&
+        (item.name ?? '').toLowerCase() === (incoming.name ?? '').toLowerCase() &&
+        item.unit === incoming.unit
+      )) {
         return state;
       }
       // name+unit fallback: only for items with no rateId and no linkedMeasurement (e.g. manual entries)
@@ -666,6 +727,23 @@ export function useTakeoffState(projectId?: string) {
 
     return () => clearTimeout(timer);
   }, [state.measurements, state.costItems, state.scales, state.pdfFile, projectId, cloudReady]);
+
+  // ── Live estimate: lines linked to measurements follow them ───────────────
+  // Runs after the cloud copy is checked, so a half-loaded takeoff can never
+  // flag linked lines as deleted. Debounced so dragging a point isn't a write per frame.
+  useEffect(() => {
+    if (!projectId || !cloudReady) return;
+    const timer = setTimeout(() => {
+      const added = flowTakeoffIntoEstimate(projectId, state.measurements, state.costItems);
+      syncEstimateWithMeasurements(projectId, state.measurements, state.costItems);
+      if (added.length) {
+        toast.success(`${added.length} line${added.length > 1 ? 's' : ''} added to the estimate`, {
+          action: { label: 'Undo', onClick: () => removeEstimateLines(projectId, added) },
+        });
+      }
+    }, 400);
+    return () => clearTimeout(timer);
+  }, [projectId, cloudReady, state.measurements, state.costItems]);
 
   // Resolve storage: paths to something pdf.js can load. The browser cache (IndexedDB)
   // comes first: instant, works offline, never expires. Otherwise use a 1-hour signed URL

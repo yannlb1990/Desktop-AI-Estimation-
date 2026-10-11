@@ -31,6 +31,7 @@ import { findLabourRate, getCustomRates, setCustomRate, clearCustomRate, LABOUR_
 import { calculateProjectTotals } from '@/lib/pricing/estimatePricing';
 import { defaultStateForProject } from '@/lib/defaultState';
 import { isMeasurementValueLabel, workLabelForMeasurement } from '@/lib/takeoff/scopeLabels';
+import { createPlanLink } from '@/lib/estimate/planLinks';
 import { readUserPricingDefaults } from '@/lib/pricing/userPricingDefaults';
 
 // Area options
@@ -287,6 +288,8 @@ interface CostEstimatorProps {
   projectId: string;
   projectName?: string;
   measurements: Measurement[];
+  /** Every measurement in the project (all plans), for linking estimate lines */
+  allMeasurements?: Measurement[];
   costItems: CostItem[];
   enabledTrades?: string[];
   onAddCostItem: (item: CostItem) => void;
@@ -492,6 +495,7 @@ export const CostEstimator = ({
   projectId,
   projectName,
   measurements,
+  allMeasurements,
   costItems,
   enabledTrades,
   onAddCostItem,
@@ -768,9 +772,13 @@ export const CostEstimator = ({
     items.forEach(item => {
       if (existingCostIds.has(item.id)) return; // already transferred — skip
       const { lineTotal } = calculateLineTotals(item);
+      // Lines built from measurements stay linked: their quantity follows the plan
+      const linkedIds = item.linkedMeasurements ?? [];
       const estimateItem = {
         id: `ci-${item.id}`,
         _costItemId: item.id,          // back-reference for undo/dedup
+        source: linkedIds.length ? 'plan' : 'manual',
+        plan_link: linkedIds.length ? createPlanLink(linkedIds, item.quantity, allMeasurements ?? measurements, item.unit) : null,
         section_id: null,
         area: item.area || '',
         trade: CATEGORY_TO_TRADE[item.category] || item.trade || 'Carpenter',

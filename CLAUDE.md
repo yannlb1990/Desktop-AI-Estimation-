@@ -86,6 +86,11 @@ Cards: `rounded-xl border border-border bg-card`, icons `h-4 w-4`
 - Admin recipients: `yannlb1990@gmail.com` + `admin@metricore.com.au`
 - Logo: hosted PNG `https://www.metricore.com.au/metricore-icon.png` via `<img>` tag
 
+## One estimate (since 2026-10-11)
+- There is ONE list of lines: `project.estimate_items`. Every takeoff add (measurements, walls, AI panel, frame estimator) dispatches ADD_COST_ITEM and `flowTakeoffIntoEstimate` adds it to the estimate once (`project.takeoff_added`). Old never-sent items show as suggestions (`project.takeoff_suggestions`).
+- Plan lines carry `plan_link {measurementIds, factor, baseQty, v:2}`; quantities update live when measurements change. Links are by measurement ID only: a new measurement never changes an existing line.
+- Tests: `node tests/run.mjs`
+
 ## Key File Map
 
 | File | Purpose |
@@ -99,7 +104,11 @@ Cards: `rounded-xl border border-border bg-card`, icons `h-4 w-4`
 | `src/hooks/useAIPlanAnalysis.ts` | AI analysis hook + types |
 | `src/components/takeoff/PDFTakeoff.tsx` | Main takeoff UI (upload/measure/costs tabs) |
 | `src/components/takeoff/InteractiveCanvas.tsx` | Fabric.js canvas — ALL drawing tools |
-| `src/components/takeoff/CostEstimator.tsx` | Cost items table + export buttons |
+| `src/components/takeoff/CostEstimator.tsx` | Legacy Costs table, no longer rendered (Costs tab merged into the Estimate 2026-10-11) |
+| `src/lib/estimate/planLinks.ts` | Live link estimate line ↔ measurements (qty = factor × measured, by measurement ID, unit-aware) |
+| `src/lib/estimate/planLinkSync.ts` | Takeoff → Estimate glue: auto-flow new takeoff items, live qty sync, combine remap |
+| `src/lib/estimate/fromCostItem.ts` | The one CostItem → estimate line conversion |
+| `src/components/estimate/EstimatePlanPanel.tsx` | Estimate's "From the plan" panel: suggestions, Library, Recipe, supplier quote, BOQ, SOW |
 | `src/components/takeoff/AIPlanAnalysisPanel.tsx` | Inline AI panel (sidebar) |
 | `src/components/takeoff/PlanAnalyserModal.tsx` | Full-screen AI modal |
 | `src/components/takeoff/WallSetupDialog.tsx` | Wall config dialog + presets |

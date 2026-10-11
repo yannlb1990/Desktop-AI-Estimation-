@@ -361,6 +361,7 @@ export type TakeoffAction =
   | { type: 'SET_ACTIVE_TOOL'; payload: ToolType }
   | { type: 'ADD_MEASUREMENT'; payload: Measurement }
   | { type: 'UPDATE_MEASUREMENT'; payload: { id: string; updates: Partial<Measurement> } }
+  | { type: 'COMBINE_MEASUREMENTS'; payload: { ids: string[]; area?: Measurement['area'] } }
   | { type: 'DELETE_MEASUREMENT'; payload: string }
   | { type: 'SELECT_MEASUREMENT'; payload: string | null }
   | { type: 'SET_CURRENT_MEASUREMENT'; payload: TakeoffState['currentMeasurement'] }

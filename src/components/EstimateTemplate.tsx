@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useMemo } from "react";
 import { ESTIMATE_TEMPLATES, EstimateTemplateData } from "@/data/estimateTemplates";
 import { getUserStorageKey } from "@/lib/localAuth";
 import { syncProjectToSupabase } from "@/lib/db/projects";
@@ -43,6 +43,10 @@ import {
 } from "@/lib/pricing/estimatePricing";
 import { readUserPricingDefaults } from "@/lib/pricing/userPricingDefaults";
 import { isMeasurementValueLabel } from "@/lib/takeoff/scopeLabels";
+import { lineSource, relinkWithQuantity, type EstimateLineSource, type PlanLink } from "@/lib/estimate/planLinks";
+import { acknowledgePlanChange } from "@/lib/estimate/planLinkSync";
+import { EstimatePlanPanel } from "@/components/estimate/EstimatePlanPanel";
+import { mergeWithSaved as mergeLines } from "@/lib/estimate/mergeSaved";
 
 // ── Template accent colour (left border stripe, by template id) ───────────────
 const TEMPLATE_STYLES: Record<string, { accent: string }> = {
@@ -319,6 +323,8 @@ interface EstimateItem {
   labour_hours: number;
   labour_rate: number;
   labour_rate_override?: boolean;
+  source?: EstimateLineSource;
+  plan_link?: PlanLink | null;
   material_wastage_pct: number;
   labour_wastage_pct: number;
   markup_pct: number;
@@ -511,6 +517,17 @@ export const EstimateTemplate = ({ projectId, estimateId }: EstimateTemplateProp
     } catch { /* corrupted data — skip item load */ }
   };
 
+  /**
+   * The takeoff (mounted in the background) can add lines or update plan quantities
+   * while this screen holds an older copy. Before writing, keep what changed elsewhere:
+   * lines added since we loaded, and newer versions of lines this action didn't touch.
+   */
+  const mergeWithSaved = (saved: any[] | undefined, updated: EstimateItem[]): EstimateItem[] => {
+    const result = mergeLines(saved, items, updated);
+    if (result.length !== updated.length || result.some((m, k) => m !== updated[k])) setItems(result);
+    return result;
+  };
+
   const addItem = () => {
     if (!newItem.area || !newItem.trade || !newItem.material_type) {
       toast.error("Please fill in required fields");
@@ -528,6 +545,7 @@ export const EstimateTemplate = ({ projectId, estimateId }: EstimateTemplateProp
     // Create new estimate item
     const newEstimateItem: EstimateItem = {
       id: `item-${Date.now()}`,
+      source: 'manual',
       section_id: null,
       area: newItem.area,
       trade: newItem.trade,
@@ -558,7 +576,7 @@ export const EstimateTemplate = ({ projectId, estimateId }: EstimateTemplateProp
     const projects = JSON.parse(localStorage.getItem(getUserStorageKey('local_projects')) || '[]');
     const projectIndex = projects.findIndex((p: any) => p.id === projectId);
     if (projectIndex !== -1) {
-      projects[projectIndex].estimate_items = updatedItems;
+      projects[projectIndex].estimate_items = mergeWithSaved(projects[projectIndex].estimate_items, updatedItems);
     } else {
       projects.push({ id: projectId, estimate_items: updatedItems });
     }
@@ -579,7 +597,7 @@ export const EstimateTemplate = ({ projectId, estimateId }: EstimateTemplateProp
     const projects = JSON.parse(localStorage.getItem(getUserStorageKey('local_projects')) || '[]');
     const projectIndex = projects.findIndex((p: any) => p.id === projectId);
     if (projectIndex !== -1) {
-      projects[projectIndex].estimate_items = updatedItems;
+      projects[projectIndex].estimate_items = mergeWithSaved(projects[projectIndex].estimate_items, updatedItems);
     } else {
       projects.push({ id: projectId, estimate_items: updatedItems });
     }
@@ -604,7 +622,7 @@ export const EstimateTemplate = ({ projectId, estimateId }: EstimateTemplateProp
     const projects = JSON.parse(localStorage.getItem(getUserStorageKey('local_projects')) || '[]');
     const projectIndex = projects.findIndex((p: any) => p.id === projectId);
     if (projectIndex !== -1) {
-      projects[projectIndex].estimate_items = updatedItems;
+      projects[projectIndex].estimate_items = mergeWithSaved(projects[projectIndex].estimate_items, updatedItems);
     } else {
       projects.push({ id: projectId, estimate_items: updatedItems });
     }
@@ -653,6 +671,10 @@ export const EstimateTemplate = ({ projectId, estimateId }: EstimateTemplateProp
           labour_hours: editValues.labour_hours ?? item.labour_hours,
           labour_rate: editValues.labour_rate ?? item.labour_rate,
           labour_rate_override,
+          // Typing a quantity on a plan-linked line keeps it live with the new ratio
+          plan_link: item.plan_link && editValues.quantity !== undefined && editValues.quantity !== item.quantity
+            ? relinkWithQuantity(item.plan_link, Number(editValues.quantity) || 0)
+            : item.plan_link,
           material_wastage_pct: editValues.material_wastage_pct ?? item.material_wastage_pct,
           labour_wastage_pct: editValues.labour_wastage_pct ?? item.labour_wastage_pct,
           markup_pct: editValues.markup_pct ?? item.markup_pct,
@@ -669,7 +691,7 @@ export const EstimateTemplate = ({ projectId, estimateId }: EstimateTemplateProp
     const projects = JSON.parse(localStorage.getItem(getUserStorageKey('local_projects')) || '[]');
     const projectIndex = projects.findIndex((p: any) => p.id === projectId);
     if (projectIndex !== -1) {
-      projects[projectIndex].estimate_items = updatedItems;
+      projects[projectIndex].estimate_items = mergeWithSaved(projects[projectIndex].estimate_items, updatedItems);
     } else {
       projects.push({ id: projectId, estimate_items: updatedItems });
     }
@@ -686,7 +708,7 @@ export const EstimateTemplate = ({ projectId, estimateId }: EstimateTemplateProp
     const projects = JSON.parse(localStorage.getItem(getUserStorageKey('local_projects')) || '[]');
     const projectIndex = projects.findIndex((p: any) => p.id === projectId);
     if (projectIndex !== -1) {
-      projects[projectIndex].estimate_items = updatedItems;
+      projects[projectIndex].estimate_items = mergeWithSaved(projects[projectIndex].estimate_items, updatedItems);
       localStorage.setItem(getUserStorageKey('local_projects'), JSON.stringify(projects));
     }
   };
@@ -704,7 +726,7 @@ export const EstimateTemplate = ({ projectId, estimateId }: EstimateTemplateProp
       const projects = JSON.parse(localStorage.getItem(getUserStorageKey('local_projects')) || '[]');
       const projectIndex = projects.findIndex((p: any) => p.id === projectId);
       if (projectIndex !== -1) {
-        projects[projectIndex].estimate_items = updatedItems;
+        projects[projectIndex].estimate_items = mergeWithSaved(projects[projectIndex].estimate_items, updatedItems);
         localStorage.setItem(getUserStorageKey('local_projects'), JSON.stringify(projects));
       }
     }
@@ -1007,6 +1029,35 @@ export const EstimateTemplate = ({ projectId, estimateId }: EstimateTemplateProp
     toast.success('Template deleted');
   };
 
+  // Names of the measurements plan-linked lines come from ("Wall · 12.4 m · p.5")
+  const measurementNames = useMemo(() => {
+    const names = new Map<string, string>();
+    try {
+      const takeoff = JSON.parse(localStorage.getItem(`takeoff_${projectId}`) || '{}');
+      (takeoff.measurements || []).forEach((m: any) => {
+        const kind = m.measurementType || (m.type ? String(m.type).replace(/-/g, ' ') : 'Measurement');
+        names.set(m.id, `${kind}${m.label ? ` · ${m.label}` : ''} · p.${(m.pageIndex ?? 0) + 1}`);
+      });
+    } catch { /* no takeoff yet */ }
+    return names;
+  }, [projectId, items]);
+
+  const sourceBadge = (item: EstimateItem) => {
+    const src = lineSource(item);
+    const styles: Record<EstimateLineSource, string> = {
+      plan: 'bg-amber-500/15 text-amber-400 border-amber-500/30',
+      ai: 'bg-muted/60 text-foreground/80 border-border',
+      manual: 'bg-transparent text-muted-foreground border-border/60',
+    };
+    const label = src === 'plan' ? 'Plan' : src === 'ai' ? 'AI' : 'Manual';
+    return (
+      <span className={`mt-1 inline-block rounded border px-1 text-[9px] font-semibold uppercase tracking-wide ${styles[src]}`}
+        title={src === 'plan' ? 'Quantity follows the linked measurements' : src === 'ai' ? 'From the AI plan analysis' : 'Added by hand'}>
+        {label}
+      </span>
+    );
+  };
+
   const renderItem = (item: EstimateItem) => {
     // Use this item's own stored waste % (frozen when it was added), falling back to
     // the current global config — matching calculateTotals() exactly. Reading the live
@@ -1044,7 +1095,10 @@ export const EstimateTemplate = ({ projectId, estimateId }: EstimateTemplateProp
               </Button>
             )}
           </TableCell>
-          <TableCell className="font-mono text-sm font-medium">{item.item_number}</TableCell>
+          <TableCell className="font-mono text-sm font-medium">
+            {item.item_number}
+            <div>{sourceBadge(item)}</div>
+          </TableCell>
           <TableCell>
             <Select
               value={isEditing ? (editValues.area ?? item.area ?? '') : (item.area ?? '')}
@@ -1115,6 +1169,34 @@ export const EstimateTemplate = ({ projectId, estimateId }: EstimateTemplateProp
                 className="h-8 w-24 text-right"
               />
             ) : <span className="font-mono">{Number(item.quantity).toFixed(1)}</span>}
+            {item.plan_link && item.plan_link.measurementIds.length > 0 && (
+              <div className="mt-1 space-y-0.5 text-[10px] leading-tight text-right whitespace-nowrap">
+                {item.plan_link.broken ? (
+                  <span className="block text-red-400" title="The measurement this line followed was deleted. The quantity is kept until you change it.">
+                    Measurement deleted
+                  </span>
+                ) : (
+                  <span
+                    className="block max-w-[150px] ml-auto truncate text-muted-foreground"
+                    title={item.plan_link.measurementIds.map(id => measurementNames.get(id) || 'Measurement').join('\n')}
+                  >
+                    {item.plan_link.measurementIds.length === 1
+                      ? (measurementNames.get(item.plan_link.measurementIds[0]) || 'Linked measurement')
+                      : `${item.plan_link.measurementIds.length} measurements`}
+                  </span>
+                )}
+                {item.plan_link.changedFrom != null && !item.plan_link.broken && (
+                  <button
+                    type="button"
+                    className="block ml-auto rounded bg-amber-500/15 px-1 text-amber-400 hover:bg-amber-500/25"
+                    title="Quantity updated from the plan. Click to dismiss."
+                    onClick={() => acknowledgePlanChange(projectId, item.id)}
+                  >
+                    Updated, was {Number(item.plan_link.changedFrom).toFixed(1)}
+                  </button>
+                )}
+              </div>
+            )}
           </TableCell>
           <TableCell>{item.unit}</TableCell>
           <TableCell className="text-right">
@@ -1429,18 +1511,7 @@ export const EstimateTemplate = ({ projectId, estimateId }: EstimateTemplateProp
         </div>
       )}
 
-      {/* Nudge banner — shown when Costs tab has items but nothing has been transferred here */}
-      {takeoffCount > 0 && items.length === 0 && (
-        <div className="flex items-center justify-between gap-3 px-4 py-3 rounded-lg bg-primary/10 border border-primary/20 text-sm">
-          <div className="flex items-center gap-2 text-muted-foreground">
-            <Link className="h-4 w-4 text-primary shrink-0" />
-            Your Costs tab has {takeoffCount} item{takeoffCount !== 1 ? 's' : ''} — use "Transfer to Estimate" in the Costs tab to import them here for full margin analysis.
-          </div>
-          <button onClick={() => setTakeoffCount(0)} className="text-muted-foreground hover:text-foreground shrink-0" aria-label="Dismiss">
-            <X className="h-4 w-4" />
-          </button>
-        </div>
-      )}
+      <EstimatePlanPanel projectId={projectId} refreshKey={items} />
 
       {/* 1. NCC Standards Research */}
       <div className="rounded-xl border border-border overflow-hidden">

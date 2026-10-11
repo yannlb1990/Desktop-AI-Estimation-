@@ -10,6 +10,11 @@ export interface BOQExportOptions {
   contingencyPercent?: number;
   marginPercent?: number;
   includeGST?: boolean;
+  /**
+   * Totals from the Estimate. When given, the footer shows these exact figures
+   * (allowances, contingency, margin, GST) so the BOQ matches the Estimate and quote.
+   */
+  estimateTotals?: { rows: { label: string; amount: number }[]; exGst: number; gst: number; gstPct: number; incGst: number };
 }
 
 const TRADE_ORDER = [
@@ -35,7 +40,7 @@ function $$(n: number): string {
 export function exportToBOQCsv(opts: BOQExportOptions): string {
   const {
     projectName, projectLocation = '', state = 'QLD',
-    costItems, contingencyPercent = 0, marginPercent = 0, includeGST = true,
+    costItems, contingencyPercent = 0, marginPercent = 0, includeGST = true, estimateTotals,
   } = opts;
 
   const lines: string[] = [];
@@ -128,6 +133,20 @@ export function exportToBOQCsv(opts: BOQExportOptions): string {
   lines.push('SUMMARY,,,,,,,,,,');
   lines.push(COL);
   lines.push(...summaryRows);
+
+  if (estimateTotals) {
+    for (const row of estimateTotals.rows) {
+      if (Math.abs(row.amount) >= 0.005) {
+        lines.push(['', esc(row.label), '', '', '', '', '', '', '', '', $$(row.amount), ''].join(','));
+      }
+    }
+    lines.push(['', 'PROJECT TOTAL (ex GST)', '', '', '', '', '', '', '', '', $$(estimateTotals.exGst), ''].join(','));
+    if (estimateTotals.gst > 0) {
+      lines.push(['', esc(`GST (${estimateTotals.gstPct}%)`), '', '', '', '', '', '', '', '', $$(estimateTotals.gst), ''].join(','));
+      lines.push(['', 'PROJECT TOTAL (inc GST)', '', '', '', '', '', '', '', '', $$(estimateTotals.incGst), ''].join(','));
+    }
+    return lines.join('\n');
+  }
 
   // Contingency
   const contingency = grandTotal * (contingencyPercent / 100);

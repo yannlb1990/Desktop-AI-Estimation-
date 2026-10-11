@@ -213,6 +213,7 @@ interface TakeoffTableProps {
   measurements: Measurement[];
   onUpdateMeasurement: (id: string, updates: Partial<Measurement>) => void;
   onDeleteMeasurement: (id: string) => void;
+  onCombineMeasurements: (ids: string[], area?: MeasurementArea) => void;
   onAddToEstimate: (measurementIds: string[]) => void;
   onAddWallsToEstimate?: (configuredWalls: Measurement[], nonWallIds: string[]) => void;
   onFetchNCCCode?: (measurementId: string, area: string, materials: string[]) => Promise<string>;
@@ -223,6 +224,7 @@ export const TakeoffTable = ({
   measurements,
   onUpdateMeasurement,
   onDeleteMeasurement,
+  onCombineMeasurements,
   onAddToEstimate,
   onAddWallsToEstimate,
   onFetchNCCCode,
@@ -315,18 +317,11 @@ export const TakeoffTable = ({
       toast.error(`Can't combine items with mixed units (${units.join(', ')}). Select items with the same unit.`);
       return;
     }
-    const [first, ...rest] = toMerge;
     const totalValue = toMerge.reduce((sum, m) => sum + m.realValue, 0);
     const areas = [...new Set(toMerge.map(m => m.area).filter(Boolean))];
-    const combinedLabel = toMerge.map(m => m.label || m.type).filter(Boolean).join(' + ') || first.label;
-    onUpdateMeasurement(first.id, {
-      realValue: totalValue,
-      label: combinedLabel,
-      area: areas.length === 1 ? areas[0] as MeasurementArea : first.area,
-    });
-    rest.forEach(m => onDeleteMeasurement(m.id));
+    onCombineMeasurements(toMerge.map(m => m.id), areas.length === 1 ? areas[0] as MeasurementArea : undefined);
     setSelectedIds(new Set());
-    toast.success(`Combined ${toMerge.length} measurements → ${totalValue.toFixed(2)} ${first.unit}`);
+    toast.success(`Combined ${toMerge.length} measurements → ${totalValue.toFixed(2)} ${toMerge[0].unit}`);
   };
 
   const handleMaterialToggle = (measurementId: string, material: string) => {
@@ -403,10 +398,10 @@ export const TakeoffTable = ({
   // Calculate computed values (e.g., wall area from LM + height)
   const getComputedValue = (m: Measurement): { value: number; unit: string } => {
     if (m.measurementType === 'Wall' && m.height && m.unit === 'LM') {
-      return { value: m.realValue * m.height, unit: 'm²' };
+      return { value: m.computedM2 ?? m.realValue * m.height, unit: 'm²' };
     }
     if (m.measurementType === 'Floor' && m.isConcreteFloor && m.concreteDepth && m.unit === 'M2') {
-      return { value: m.realValue * m.concreteDepth, unit: 'm³' };
+      return { value: m.computedM3 ?? m.realValue * m.concreteDepth, unit: 'm³' };
     }
     return { value: m.realValue, unit: m.unit === 'count' ? 'EA' : m.unit };
   };
@@ -414,7 +409,7 @@ export const TakeoffTable = ({
   // Get wall area for lining/insulation calculations
   const getWallArea = (m: Measurement): number | null => {
     if (m.measurementType === 'Wall' && m.height && m.unit === 'LM') {
-      return m.realValue * m.height;
+      return m.computedM2 ?? m.realValue * m.height;
     }
     if (m.measurementType === 'Wall' && m.unit === 'M2') {
       return m.realValue;

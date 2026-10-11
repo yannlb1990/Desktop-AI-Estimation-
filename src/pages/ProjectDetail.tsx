@@ -1,4 +1,6 @@
 import React, { useState, useEffect, useRef, Component } from "react";
+import { priceLine, resolveProjectPricing, calculateProjectTotals } from "@/lib/pricing/estimatePricing";
+import { readUserPricingDefaults } from "@/lib/pricing/userPricingDefaults";
 import type { ReactNode } from "react";
 
 // Isolate takeoff crashes so they don't white-out the entire project page
@@ -86,29 +88,20 @@ const ProjectDetail = () => {
     const prefs: any = (() => { try { return JSON.parse(localStorage.getItem(getUserStorageKey(`cost_estimator_prefs_${projectId}`)) || "{}"); } catch { return {}; } })();
     const brand: any = (() => { try { return JSON.parse(localStorage.getItem(getUserStorageKey("quote_brand")) || "{}"); } catch { return {}; } })();
 
-    const marginPercent: number = prefs.marginPercent ?? 15;
-    const gstEnabled: boolean   = prefs.gstEnabled ?? true;
     const selectedState: string = prefs.selectedState ?? "QLD";
 
-    let totMat = 0, totLab = 0, totFixings = 0;
+    // Same pricing as the Estimate and the quote (estimatePricing.ts), so totals match
+    const pricingDefaults = readUserPricingDefaults(lsProject);
+    const { config: priceConfig, labourRates: priceRates } = resolveProjectPricing(lsProject, pricingDefaults);
+    const t = calculateProjectTotals(lsProject, pricingDefaults);
     const calcItem = (item: any) => {
-      const mw = (item.material_wastage_pct ?? 5) / 100;
-      const lw = (item.labour_wastage_pct ?? 10) / 100;
-      const mat = (item.quantity || 0) * (item.unit_price || 0) * (1 + mw);
-      const lab = (item.labour_hours || 0) * (item.labour_rate || 65) * (1 + lw);
-      return { mat, lab, line: (mat + lab) * (1 + (item.markup_pct ?? 0) / 100) };
+      const p = priceLine(item, priceConfig, priceRates);
+      return { mat: p.materials, lab: p.labour, line: p.total };
     };
-    items.forEach((item: any) => {
-      const { mat, lab } = calcItem(item);
-      totMat += mat;
-      totLab += lab;
-      (item.relatedMaterials || []).forEach((rm: any) => { totFixings += (rm.quantity || 0) * (rm.unit_price || rm.unitCost || 0); });
-    });
-    const totConsumables = consumables.reduce((s: number, c: any) => s + (c.total || 0), 0);
-    const subtotal   = totMat + totLab + totFixings + totConsumables;
-    const margin     = subtotal * (marginPercent / 100);
-    const gst        = (subtotal + margin) * 0.1;
-    const grandTotal = subtotal + margin + (gstEnabled ? gst : 0);
+    const totMat = t.totalMaterials;
+    const totLab = t.totalLabour;
+    const allowances = t.preMargin - (t.totalMaterials + t.totalLabour + t.totalMarkup);
+    const gstEnabled = t.gst > 0;
 
     try {
       const ExcelJS = (await import("exceljs")).default;
@@ -281,12 +274,14 @@ const ProjectDetail = () => {
       const summaryRows: [string, number][] = [
         ["Materials",                    totMat],
         ["Labour",                       totLab],
-        ["Fixings",                      totFixings],
-        ["Consumables",                  totConsumables],
-        ["Subtotal",                     subtotal],
-        [`Margin (${marginPercent}%)`,   margin],
-        ...(gstEnabled ? [["GST (10%)", gst] as [string, number]] : []),
-        ["GRAND TOTAL",                  grandTotal],
+        ["Line markup",                  t.totalMarkup],
+        ["Supervision, overheads and allowances", allowances],
+        [`Contingency (${priceConfig.contingencyPct}%)`, t.contingency],
+        ...(Math.abs(t.customConfigsTotal) >= 0.005 ? [["Other adjustments", t.customConfigsTotal] as [string, number]] : []),
+        [`Margin (${priceConfig.marginPct}%)`, t.margin],
+        ["Total (ex GST)",               t.taxable],
+        ...(gstEnabled ? [[`GST (${priceConfig.gstPct}%)`, t.gst] as [string, number]] : []),
+        ["GRAND TOTAL",                  t.totalPrice],
       ];
 
       summaryRows.forEach(([label, value]) => {
