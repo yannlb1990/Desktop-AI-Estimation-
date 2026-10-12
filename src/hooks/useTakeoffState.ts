@@ -1,6 +1,6 @@
 import { useReducer, useEffect, useRef, useState } from 'react';
 import { TakeoffState, TakeoffAction, Measurement, CostItem } from '@/lib/takeoff/types';
-import { getEffectiveQuantity } from '@/lib/takeoff/calculations';
+import { getEffectiveQuantity, isConcreteSlab } from '@/lib/takeoff/calculations';
 import { supabase } from '@/integrations/supabase/client';
 import { getCachedPDF, cachePDF } from '@/lib/takeoff/pdfCache';
 import { syncEstimateWithMeasurements, flowTakeoffIntoEstimate } from '@/lib/estimate/planLinkSync';
@@ -363,7 +363,7 @@ function takeoffReducer(state: TakeoffState, action: TakeoffAction): TakeoffStat
       const [first, ...rest] = parts;
       const restIds = new Set(rest.map(m => m.id));
       const isWall = parts.every(m => m.measurementType === 'Wall' && m.height && m.unit === 'LM');
-      const isConcrete = parts.every(m => m.measurementType === 'Floor' && m.isConcreteFloor && m.concreteDepth);
+      const isConcrete = parts.every(m => isConcreteSlab(m) && m.concreteDepth);
       const combined: Measurement = {
         ...first,
         realValue: parts.reduce((sum, m) => sum + m.realValue, 0),

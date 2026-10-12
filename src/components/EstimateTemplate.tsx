@@ -1085,7 +1085,7 @@ export const EstimateTemplate = ({ projectId, estimateId }: EstimateTemplateProp
   const defaultUnitFor = (m: any): string => {
     const u = String(m.unit || '').toUpperCase();
     if (u === 'LM' && m.measurementType === 'Wall' && m.height) return 'm²';
-    if (m.measurementType === 'Floor' && m.isConcreteFloor && m.concreteDepth) return 'm³';
+    if ((m.measurementType === 'Concrete Slab' || (m.measurementType === 'Floor' && m.isConcreteFloor)) && m.concreteDepth) return 'm³';
     return UNIT_FOR_KIND[u === 'COUNT' ? 'EA' : u] ?? 'm²';
   };
   const measuredFor = (id: string, unit: string): string => {
