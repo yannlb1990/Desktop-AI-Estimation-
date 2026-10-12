@@ -1422,7 +1422,16 @@ export const PDFTakeoff = ({ projectId, estimateId, onAddCostItems }: PDFTakeoff
                           title="Click to restore toolbar (or press Escape)"
                         />
                       )}
-                      <div className={`flex items-center gap-2 px-3 bg-card border-b border-border shrink-0 transition-all duration-200 overflow-hidden ${focusMode ? 'max-h-0 py-0 border-0' : 'max-h-96 py-2'}`}>
+                      {/* Always visible, whatever the window width or focus mode */}
+                      <Button
+                        size="sm"
+                        onClick={() => setIsTakeoffFullscreen(false)}
+                        className="absolute top-2 right-3 z-30 h-8 bg-red-700 hover:bg-red-600 text-white shadow-lg"
+                        title="Exit full screen (Esc)"
+                      >
+                        Exit full screen
+                      </Button>
+                      <div className={`flex flex-wrap items-center gap-2 pl-3 pr-40 bg-card border-b border-border shrink-0 transition-all duration-200 overflow-hidden ${focusMode ? 'max-h-0 py-0 border-0' : 'max-h-96 py-2'}`}>
                         {renderToolbar(fsContextOpen)}
                         <div className="flex items-center gap-1 border-l border-border pl-2 ml-1">
                           <Button variant="ghost" size="sm" onClick={handleZoomOut} className="h-8 text-foreground/80 hover:bg-accent"><ZoomOut className="h-4 w-4" /></Button>
@@ -1483,10 +1492,6 @@ export const PDFTakeoff = ({ projectId, estimateId, onAddCostItems }: PDFTakeoff
                           <Button size="sm" variant="ghost" onClick={() => canvasExportRef.current?.export()} className="h-8 gap-1.5 text-foreground/80 hover:bg-accent" title="Export page with markup as PNG">
                             <Download className="h-4 w-4" />
                             Export
-                          </Button>
-                          <Button size="sm" onClick={() => setIsTakeoffFullscreen(false)} className="bg-red-700 hover:bg-red-600 text-white">
-                            <Minimize2 className="h-4 w-4 mr-1.5" />
-                            Exit Full Screen
                           </Button>
                         </div>
                       </div>
