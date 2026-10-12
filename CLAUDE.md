@@ -27,7 +27,7 @@ React 18 + TypeScript + Vite + Tailwind CSS + shadcn/ui + jsPDF + pdf.js + Fabri
 | **Pricing maths** | ALL money calculations go through `src/lib/pricing/estimatePricing.ts` (`priceLine`, `calculateEstimateTotals`, `resolveProjectPricing`, `calculateProjectTotals`). Never write `quantity * unit_price` elsewhere: 8 drifted copies once put the quote $319k below the estimate |
 | **No em-dashes** | Never use em-dashes in UI copy — restructure as sentences |
 | **No credentials in chat** | Tell user to run `export TOKEN=... && command` themselves |
-| **No browser automation** | Give URL + describe instead — automation corrupts localStorage/auth |
+| **Browser testing** | Only on localhost:8080 in a "QA ... - delete me" project, cleaned up after; never real projects, never type passwords |
 | **No window.location.reload()** | Never call on Metricore — kills client-side auth session |
 
 ## Design System
@@ -90,6 +90,10 @@ Cards: `rounded-xl border border-border bg-card`, icons `h-4 w-4`
 - There is ONE list of lines: `project.estimate_items`. Every takeoff add (measurements, walls, AI panel, frame estimator) dispatches ADD_COST_ITEM and `flowTakeoffIntoEstimate` adds it to the estimate once (`project.takeoff_added`). Old never-sent items show as suggestions (`project.takeoff_suggestions`).
 - Plan lines carry `plan_link {measurementIds, factor, baseQty, v:2}`; quantities update live when measurements change. Links are by measurement ID only: a new measurement never changes an existing line.
 - Tests: `node tests/run.mjs`
+- Estimate screen writes must merge with saved data (`src/lib/estimate/mergeSaved.ts`): the takeoff tab is forceMounted and adds lines in the background.
+- Plan links are unit-aware (`measuredValueFor`): metre lines follow length, m² area, m³ volume, counts on walls follow length.
+- Every panel needs Done/Change or Close; overlays over full-screen takeoff need z > 10000.
+- No icons/emoji in new UI: plain text.
 
 ## Key File Map
 
