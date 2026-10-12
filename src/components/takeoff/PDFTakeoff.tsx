@@ -295,6 +295,8 @@ export const PDFTakeoff = ({ projectId, estimateId, onAddCostItems }: PDFTakeoff
       }
       if (e.altKey) return;
       if (e.key === 'Escape') {
+        // Esc closes the open box first; full screen only when nothing else is open
+        if (measurementPopup) { setMeasurementPopup(null); return; }
         setIsTakeoffFullscreen(false);
         setModMode(null);
         dispatch({ type: 'SET_ACTIVE_TOOL', payload: 'select' });
@@ -321,7 +323,7 @@ export const PDFTakeoff = ({ projectId, estimateId, onAddCostItems }: PDFTakeoff
     };
     document.addEventListener('keydown', handleKeyDown);
     return () => document.removeEventListener('keydown', handleKeyDown);
-  }, [dispatch, state.activeTool, state.pdfFile, state.currentPageIndex]);
+  }, [dispatch, state.activeTool, state.pdfFile, state.currentPageIndex, measurementPopup]);
 
   // Auto-open context panel when a special mode activates
   useEffect(() => {
@@ -1515,27 +1517,30 @@ export const PDFTakeoff = ({ projectId, estimateId, onAddCostItems }: PDFTakeoff
                     )}
                     {/* Floating context pickers (fullscreen, focus/collapsed mode) */}
                     {isTakeoffFullscreen && (focusMode || !fsContextOpen) && modMode === 'door' && (
-                      <div className="absolute top-3 left-3 z-20 flex items-center gap-1.5 px-2 py-1.5 bg-card/90/95 border border-violet-700/60 rounded-lg backdrop-blur-sm shadow-lg">
-                        <span className="text-[10px] font-semibold text-violet-400 uppercase tracking-widest mr-1 shrink-0">Door</span>
+                      <div className="absolute top-3 left-3 z-20 flex items-center gap-1.5 px-2 py-1.5 bg-card/95 border border-border rounded-lg backdrop-blur-sm shadow-lg">
+                        <span className="text-[10px] font-semibold text-amber-400 uppercase tracking-widest mr-1 shrink-0">Door</span>
                         {(['Internal','Entry','Cavity Slider','Bi-fold','French','Fire Door'] as const).map((id) => (
-                          <button key={id} onClick={() => setDoorSubtype(id)} className={`h-6 px-2 rounded text-xs font-medium transition-colors ${doorSubtype === id ? 'bg-violet-600 text-white' : 'bg-muted/60 text-foreground/60 hover:bg-accent'}`}>{id}</button>
+                          <button key={id} onClick={() => setDoorSubtype(id)} className={`h-6 px-2 rounded text-xs font-medium transition-colors ${doorSubtype === id ? 'bg-foreground text-background' : 'bg-muted/60 text-foreground/60 hover:bg-accent'}`}>{id}</button>
                         ))}
+                        <button onClick={() => { setModMode(null); dispatch({ type: 'SET_ACTIVE_TOOL', payload: 'select' }); }} className="ml-1 h-6 px-2 rounded text-xs text-muted-foreground hover:text-foreground hover:underline">Close</button>
                       </div>
                     )}
                     {isTakeoffFullscreen && (focusMode || !fsContextOpen) && modMode === 'window' && (
-                      <div className="absolute top-3 left-3 z-20 flex items-center gap-1.5 px-2 py-1.5 bg-card/90/95 border border-amber-700/60 rounded-lg backdrop-blur-sm shadow-lg">
+                      <div className="absolute top-3 left-3 z-20 flex items-center gap-1.5 px-2 py-1.5 bg-card/95 border border-amber-700/60 rounded-lg backdrop-blur-sm shadow-lg">
                         <span className="text-[10px] font-semibold text-amber-400 uppercase tracking-widest mr-1 shrink-0">Window</span>
                         {(['Awning','Casement','Sliding','Fixed','Louvre','Skylight'] as const).map((id) => (
                           <button key={id} onClick={() => setWindowSubtype(id)} className={`h-6 px-2 rounded text-xs font-medium transition-colors ${windowSubtype === id ? 'bg-foreground text-background' : 'bg-muted/60 text-foreground/60 hover:bg-accent'}`}>{id}</button>
                         ))}
+                        <button onClick={() => { setModMode(null); dispatch({ type: 'SET_ACTIVE_TOOL', payload: 'select' }); }} className="ml-1 h-6 px-2 rounded text-xs text-muted-foreground hover:text-foreground hover:underline">Close</button>
                       </div>
                     )}
                     {isTakeoffFullscreen && (focusMode || !fsContextOpen) && (modMode === null || modMode === 'wall') && (state.activeTool === 'wall-line' || state.activeTool === 'arc-wall') && (
-                      <div className="absolute top-3 left-3 z-20 flex items-center gap-1.5 px-2 py-1.5 bg-card/90/95 border border-amber-700/60 rounded-lg backdrop-blur-sm shadow-lg">
+                      <div className="absolute top-3 left-3 z-20 flex items-center gap-1.5 px-2 py-1.5 bg-card/95 border border-amber-700/60 rounded-lg backdrop-blur-sm shadow-lg">
                         <span className="text-[10px] font-semibold text-amber-400 uppercase tracking-widest mr-1 shrink-0">Wall</span>
                         {[64, 70, 90, 92, 110, 150].map(mm => (
                           <button key={mm} onClick={() => setWallThicknessMm(mm)} className={`h-6 px-2 rounded text-xs font-mono transition-colors ${wallThicknessMm === mm ? 'bg-foreground text-background' : 'bg-muted/60 text-foreground/60 hover:bg-accent'}`}>{mm}</button>
                         ))}
+                        <button onClick={() => dispatch({ type: 'SET_ACTIVE_TOOL', payload: 'select' })} className="ml-1 h-6 px-2 rounded text-xs text-muted-foreground hover:text-foreground hover:underline">Close</button>
                       </div>
                     )}
                     {calibrationBar}
@@ -2043,16 +2048,13 @@ export const PDFTakeoff = ({ projectId, estimateId, onAddCostItems }: PDFTakeoff
                 <p className="text-sm font-bold mt-0.5">{m.label}</p>
                 <p className="text-xs text-muted-foreground">{(m.realValue ?? 0).toFixed(2)} {m.unit}</p>
               </div>
-              <button
-                className="text-muted-foreground hover:text-destructive ml-2 mt-0.5"
-                onClick={handlePopupDelete}
-                title="Delete measurement"
-              >
-                <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
-              </button>
+              <div className="ml-2 flex items-center gap-2 text-[11px]">
+                <button className="text-destructive hover:underline" onClick={handlePopupDelete}>Delete</button>
+                <button className="text-muted-foreground hover:text-foreground hover:underline" onClick={() => setMeasurementPopup(null)}>Close</button>
+              </div>
             </div>
             {m.addedToEstimate ? (
-              <p className="text-[11px] text-[#E1DCC9]/70 dark:text-[#E1DCC9]/80 mb-2 font-medium">✓ Already in estimate. Add again or update:</p>
+              <p className="text-[11px] text-[#E1DCC9]/70 dark:text-[#E1DCC9]/80 mb-2 font-medium">Already in estimate. Add again or update:</p>
             ) : (
               <p className="text-[11px] text-muted-foreground mb-2">Add to estimate as:</p>
             )}

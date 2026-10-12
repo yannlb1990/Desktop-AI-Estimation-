@@ -16,7 +16,8 @@ export const UpgradeModal = ({ open, onClose, feature, requiredPlan = 'Professio
 
   return (
     <Dialog open={open} onOpenChange={onClose}>
-      <DialogContent className="max-w-sm text-center">
+      {/* Above the full-screen takeoff (z-9999), like the other takeoff dialogs */}
+      <DialogContent className="max-w-sm text-center z-[10050]">
         <DialogHeader>
           <div className="flex items-center justify-center mb-3">
             <div className="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center">

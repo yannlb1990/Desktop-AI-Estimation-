@@ -4645,17 +4645,23 @@ export const InteractiveCanvas = ({
         <div className="absolute inset-0 flex items-center justify-center bg-background/80 z-10">
           <div className="flex flex-col items-center gap-3 max-w-sm text-center px-6">
             <p className="text-destructive text-sm">{error}</p>
-            {onReupload && error.includes('session expired') && (
-              <Button size="sm" onClick={onReupload}>
-                Re-upload PDF
+            <div className="flex gap-2">
+              {onReupload && (
+                <Button size="sm" onClick={onReupload}>
+                  Re-upload PDF
+                </Button>
+              )}
+              <Button size="sm" variant="outline" onClick={() => setError(null)}>
+                Close
               </Button>
-            )}
+            </div>
           </div>
         </div>
       )}
       {!isCalibrated && activeTool && activeTool !== 'pan' && (
-        <div className="absolute top-4 left-1/2 transform -translate-x-1/2 bg-yellow-500/90 text-black px-4 py-2 rounded-md text-sm font-medium z-10 shadow-lg">
-          ⚠️ Set scale first for accurate measurements (currently showing pixel values)
+        // Information only: clicks pass through so it never blocks drawing
+        <div className="pointer-events-none absolute top-4 left-1/2 transform -translate-x-1/2 bg-amber-500/90 text-black px-4 py-2 rounded-md text-sm font-medium z-10 shadow-lg">
+          Set the scale first for accurate measurements (values are in pixels until then)
         </div>
       )}
 

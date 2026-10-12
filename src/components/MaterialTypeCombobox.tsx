@@ -1,4 +1,4 @@
-import { useState, useCallback, useRef } from "react";
+import { useState, useCallback, useRef, useEffect } from "react";
 import { Input } from "@/components/ui/input";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Command, CommandGroup, CommandItem, CommandList } from "@/components/ui/command";
@@ -72,6 +72,16 @@ export function MaterialTypeCombobox({ value, onChange, onSelect, placeholder }:
 
   // ── My Materials hover popover (star icon, custom-only) ──────────────────
   const [starOpen, setStarOpen] = useState(false);
+  const starRef = useRef<HTMLDivElement>(null);
+  // Clicks and keys too, not only hover: click outside or Esc closes it
+  useEffect(() => {
+    if (!starOpen) return;
+    const onDown = (e: MouseEvent) => { if (starRef.current && !starRef.current.contains(e.target as Node)) setStarOpen(false); };
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setStarOpen(false); };
+    document.addEventListener('mousedown', onDown);
+    document.addEventListener('keydown', onKey);
+    return () => { document.removeEventListener('mousedown', onDown); document.removeEventListener('keydown', onKey); };
+  }, [starOpen]);
   const [customSearch, setCustomSearch] = useState("");
   const hoverTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -151,12 +161,14 @@ export function MaterialTypeCombobox({ value, onChange, onSelect, placeholder }:
 
       {/* Star — hover to show My Materials */}
       <div
+        ref={starRef}
         className="relative shrink-0"
         onMouseEnter={handleStarEnter}
         onMouseLeave={handleStarLeave}
       >
         <button
           type="button"
+          onClick={() => setStarOpen(o => !o)}
           className={`flex items-center justify-center w-8 h-8 rounded-md border transition-colors ${
             starOpen
               ? "border-primary/60 bg-primary/10 text-primary"

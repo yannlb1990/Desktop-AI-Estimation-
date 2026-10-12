@@ -107,7 +107,6 @@ const App = () => {
 
   return (
     <>
-    <MobileBlocker />
     <HelmetProvider>
     <QueryClientProvider client={queryClient}>
       <TourProvider>
@@ -116,6 +115,7 @@ const App = () => {
         <Toaster />
         <Sonner />
         <BrowserRouter>
+          <MobileBlocker />
           <IdleGuard />
           {isSignedIn() && <FeedbackWidget />}
           <Suspense fallback={<PageFallback />}>

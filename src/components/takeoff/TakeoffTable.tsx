@@ -89,8 +89,54 @@ interface RoofPitchPanelProps {
   onUpdateMeasurement: (id: string, updates: Partial<Measurement>) => void;
 }
 
+/** Thickness and grade of a slab: one line once set, "Change" opens the inputs */
+const SlabPanel = ({ m, onUpdateMeasurement }: { m: Measurement; onUpdateMeasurement: (id: string, u: Partial<Measurement>) => void }) => {
+  const [open, setOpen] = useState(!m.concreteDepth);
+  const grade = CONCRETE_OPTIONS.find(o => o.value === m.concreteType)?.label;
+  if (!open) {
+    return (
+      <div className="mt-1 flex flex-wrap items-center gap-x-2 text-[10px] text-muted-foreground">
+        <span>{m.concreteDepth ? `${Math.round(m.concreteDepth * 1000)} mm` : 'No thickness'}{grade ? ` · ${grade}` : ''}</span>
+        <button className="text-amber-400 hover:underline" onClick={() => setOpen(true)}>Change</button>
+      </div>
+    );
+  }
+  return (
+    <div className="mt-1 space-y-1">
+      <div className="flex items-center gap-1">
+        <span className="text-[10px] text-muted-foreground">Thickness</span>
+        <Input
+          type="number"
+          value={m.concreteDepth ? Math.round(m.concreteDepth * 1000) : ''}
+          onChange={(e) => {
+            const mm = parseFloat(e.target.value);
+            onUpdateMeasurement(m.id, { concreteDepth: mm > 0 ? mm / 1000 : undefined });
+          }}
+          className="h-6 text-xs w-16"
+          placeholder="100"
+          step="10"
+        />
+        <span className="text-[10px] text-muted-foreground">mm</span>
+        <button className="ml-auto text-[10px] text-muted-foreground hover:text-foreground hover:underline" onClick={() => setOpen(false)}>Done</button>
+      </div>
+      <Select value={m.concreteType || ''} onValueChange={(v) => onUpdateMeasurement(m.id, { concreteType: v })}>
+        <SelectTrigger className="h-6 text-[10px]">
+          <SelectValue placeholder="Concrete grade" />
+        </SelectTrigger>
+        <SelectContent className="bg-popover">
+          {CONCRETE_OPTIONS.map((opt) => (
+            <SelectItem key={opt.value} value={opt.value} className="text-xs">{opt.label}</SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+    </div>
+  );
+};
+
 const RoofPitchPanel = ({ measurement: m, onUpdateMeasurement }: RoofPitchPanelProps) => {
   const [customWaste, setCustomWaste] = useState('');
+  // Open until a pitch is chosen, then folds to one line; "Change" reopens it
+  const [open, setOpen] = useState(m.roofPitchDeg === undefined);
   const rawArea = m.roofRawPlanArea ?? m.realValue;
   const pitch = m.roofPitchDeg ?? 0;
   const waste = m.roofWastePercent ?? 0;
@@ -105,6 +151,7 @@ const RoofPitchPanel = ({ measurement: m, onUpdateMeasurement }: RoofPitchPanelP
       roofRawPlanArea: raw,
       realValue: roofAdjustedArea(raw, deg, w),
     });
+    setOpen(false);
   };
 
   const applyWaste = (pct: number) => {
@@ -117,9 +164,27 @@ const RoofPitchPanel = ({ measurement: m, onUpdateMeasurement }: RoofPitchPanelP
     });
   };
 
+  if (!open) {
+    return (
+      <div className="mt-1 flex flex-wrap items-center gap-x-2 text-[10px] text-muted-foreground">
+        <span>
+          {pitch > 0 ? `Pitch ${pitch}°` : 'Flat roof'}
+          {waste > 0 ? ` · waste ${waste}%` : ''}
+          {` · order ${adjustedArea.toFixed(2)} m²`}
+        </span>
+        <button className="text-amber-400 hover:underline" onClick={() => setOpen(true)}>Change</button>
+      </div>
+    );
+  }
+
   return (
     <div className="mt-2 rounded-md border border-orange-400/20 bg-orange-400/5 p-2 space-y-2">
-      <div className="text-[9px] font-mono text-orange-400/80 uppercase tracking-widest">Roof Pitch</div>
+      <div className="flex items-center justify-between">
+        <span className="text-[9px] font-mono text-orange-400/80 uppercase tracking-widest">Roof Pitch</span>
+        <button className="text-[10px] text-muted-foreground hover:text-foreground hover:underline" onClick={() => setOpen(false)}>
+          Done
+        </button>
+      </div>
 
       {/* Pitch presets */}
       <div className="flex flex-wrap gap-1">
@@ -140,8 +205,8 @@ const RoofPitchPanel = ({ measurement: m, onUpdateMeasurement }: RoofPitchPanelP
           onClick={() => applyPitch(0)}
           className={`h-6 px-2 rounded text-[10px] font-mono transition-colors ${
             pitch === 0
-              ? 'bg-slate-600 text-white'
-              : 'bg-muted text-muted-foreground hover:bg-slate-600/40'
+              ? 'bg-[#412D15] text-white'
+              : 'bg-muted text-muted-foreground hover:bg-[#412D15]/40'
           }`}
         >
           Flat
@@ -651,33 +716,7 @@ export const TakeoffTable = ({
 
             {/* Concrete slab: thickness gives the volume */}
             {m.measurementType === 'Concrete Slab' && m.unit === 'M2' && (
-              <div className="mt-1 space-y-1">
-                <div className="flex items-center gap-1">
-                  <span className="text-[10px] text-muted-foreground">Thickness</span>
-                  <Input
-                    type="number"
-                    value={m.concreteDepth ? Math.round(m.concreteDepth * 1000) : ''}
-                    onChange={(e) => {
-                      const mm = parseFloat(e.target.value);
-                      onUpdateMeasurement(m.id, { concreteDepth: mm > 0 ? mm / 1000 : undefined });
-                    }}
-                    className="h-6 text-xs w-16"
-                    placeholder="100"
-                    step="10"
-                  />
-                  <span className="text-[10px] text-muted-foreground">mm</span>
-                </div>
-                <Select value={m.concreteType || ''} onValueChange={(v) => onUpdateMeasurement(m.id, { concreteType: v })}>
-                  <SelectTrigger className="h-6 text-[10px]">
-                    <SelectValue placeholder="Concrete grade" />
-                  </SelectTrigger>
-                  <SelectContent className="bg-popover">
-                    {CONCRETE_OPTIONS.map((opt) => (
-                      <SelectItem key={opt.value} value={opt.value} className="text-xs">{opt.label}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
+              <SlabPanel m={m} onUpdateMeasurement={onUpdateMeasurement} />
             )}
 
             {/* Conditional: Concrete for Floors */}
@@ -691,43 +730,7 @@ export const TakeoffTable = ({
                   />
                   Concrete
                 </label>
-                {m.isConcreteFloor && (
-                  <>
-                    <Select
-                      value={m.concreteType || ''}
-                      onValueChange={(v) => onUpdateMeasurement(m.id, { concreteType: v })}
-                    >
-                      <SelectTrigger className="h-6 text-[10px]">
-                        <SelectValue placeholder="Type..." />
-                      </SelectTrigger>
-                      <SelectContent className="bg-popover">
-                        {CONCRETE_OPTIONS.map((opt) => (
-                          <SelectItem key={opt.value} value={opt.value} className="text-xs">
-                            {opt.label}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    <div className="flex items-center gap-1">
-                      <span className="text-[10px] text-muted-foreground">Depth:</span>
-                      <Input
-                        type="number"
-                        value={m.concreteDepth ? Math.round(m.concreteDepth * 1000) : ''}
-                        onChange={(e) => {
-                          const mm = parseFloat(e.target.value);
-                          // Convert mm to metres for storage
-                          onUpdateMeasurement(m.id, { concreteDepth: mm ? mm / 1000 : undefined });
-                        }}
-                        className="h-6 text-xs w-14"
-                        placeholder="mm"
-                        min="50"
-                        max="500"
-                        step="10"
-                      />
-                      <span className="text-[9px] text-muted-foreground">mm</span>
-                    </div>
-                  </>
-                )}
+                {m.isConcreteFloor && <SlabPanel m={m} onUpdateMeasurement={onUpdateMeasurement} />}
               </div>
             )}
 

@@ -253,7 +253,12 @@ export const FFEItemForm: React.FC<FFEItemFormProps> = ({ open, onClose, initial
 
   return (
     <Sheet open={open} onOpenChange={v => { if (!v) onClose(); }}>
-      <SheetContent side="right" className="w-full sm:max-w-lg overflow-y-auto">
+      <SheetContent
+        side="right"
+        className="w-full sm:max-w-lg overflow-y-auto"
+        // With a document open, Esc closes the viewer only, not the whole form
+        onEscapeKeyDown={(e) => { if (viewingUrl) { e.preventDefault(); setViewingUrl(null); } }}
+      >
         <SheetHeader>
           <SheetTitle>{initial ? 'Edit Item' : 'Add FF&E Item'}</SheetTitle>
         </SheetHeader>
