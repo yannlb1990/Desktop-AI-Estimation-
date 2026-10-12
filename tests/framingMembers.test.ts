@@ -17,5 +17,6 @@ eq('double length doubles studs', applyMeasurements([studs], [{ ...wall, realVal
 // Concrete slab volume
 import { getEffectiveQuantity } from '../src/lib/takeoff/calculations';
 eq('slab 8.66 m² at 100 mm', Math.round(getEffectiveQuantity({ id: 'C', unit: 'M2', realValue: 8.66, measurementType: 'Concrete Slab', concreteDepth: 0.1 } as any) * 1000) / 1000, 0.866);
+eq('imported floor in m² with concrete', Math.round(getEffectiveQuantity({ id: 'F', unit: 'm²', realValue: 10, measurementType: 'Floor', isConcreteFloor: true, concreteDepth: 0.1 } as any) * 1000) / 1000, 1);
 if (failed) { console.log(`${failed} FAILED`); process.exit(1); }
 console.log('all framing tests passed');

@@ -549,6 +549,8 @@ export const EstimateTemplate = ({ projectId, estimateId }: EstimateTemplateProp
    */
   const mergeWithSaved = (saved: any[] | undefined, updated: EstimateItem[]): EstimateItem[] => {
     const result = mergeLines(saved, items, updated);
+    // Tell the takeoff (its "In estimate" status) once this write has landed
+    setTimeout(() => window.dispatchEvent(new CustomEvent('estimate-lines-changed', { detail: { projectId } })), 0);
     if (result.length !== updated.length || result.some((m, k) => m !== updated[k])) setItems(result);
     return result;
   };
@@ -1017,6 +1019,7 @@ export const EstimateTemplate = ({ projectId, estimateId }: EstimateTemplateProp
     const projects = JSON.parse(localStorage.getItem(getUserStorageKey('local_projects')) || '[]');
     const projectIndex = projects.findIndex((p: any) => p.id === projectId);
     if (projectIndex !== -1) {
+      setTimeout(() => window.dispatchEvent(new CustomEvent('estimate-lines-changed', { detail: { projectId } })), 0);
       projects[projectIndex].estimate_items = newItems;
       localStorage.setItem(getUserStorageKey('local_projects'), JSON.stringify(projects));
       syncProjectToSupabase(projects[projectIndex]);

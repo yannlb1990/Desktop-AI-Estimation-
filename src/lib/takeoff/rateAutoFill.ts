@@ -47,7 +47,12 @@ export function getMeasurementTypeRate(
   isConcreteFloor: boolean,
   state: AustralianState
 ): number {
-  if (isConcreteFloor) return lookupRate('concrete_slab', state);
+  // The slab rate is per m² for a 100 mm pour: as a volume rate that is rate / 0.1 m
+  const slabRate = (u: string) => {
+    const perM2 = lookupRate('concrete_slab', state);
+    return String(u).toUpperCase() === 'M3' ? Math.round((perM2 / 0.1) * 100) / 100 : perM2;
+  };
+  if (isConcreteFloor) return slabRate(unit);
 
   switch (measurementType) {
     case 'Ceiling':       return lookupRate('ceiling', state);
@@ -61,7 +66,7 @@ export function getMeasurementTypeRate(
     case 'Demolition':    return lookupRate('demolition', state);
     case 'Waterproofing': return lookupRate('waterproofing', state);
     case 'Brickwork':     return lookupRate('brickwork', state);
-    case 'Concrete Slab': return lookupRate('concrete_slab', state);
+    case 'Concrete Slab': return slabRate(unit);
     default:              return 0;
   }
 }

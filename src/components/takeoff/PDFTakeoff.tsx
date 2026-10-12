@@ -71,7 +71,11 @@ export const PDFTakeoff = ({ projectId, estimateId, onAddCostItems }: PDFTakeoff
     const refresh = () => setInEstimateIds(readInEstimateIds());
     refresh();
     window.addEventListener('estimate-updated', refresh);
-    return () => window.removeEventListener('estimate-updated', refresh);
+    window.addEventListener('estimate-lines-changed', refresh);
+    return () => {
+      window.removeEventListener('estimate-updated', refresh);
+      window.removeEventListener('estimate-lines-changed', refresh);
+    };
   }, [readInEstimateIds, state.costItems]);
 
   const openEstimate = () => window.dispatchEvent(new CustomEvent('go-to-estimate-tab'));
@@ -87,7 +91,7 @@ export const PDFTakeoff = ({ projectId, estimateId, onAddCostItems }: PDFTakeoff
       materialWastePercent: 5,
     };
     const items = [
-      { ...base, id: crypto.randomUUID(), name: `Wall studs ${f.studLengthM.toFixed(2)} m${where}`, description: `${f.studs} studs at ${f.spacingMm} mm centres`,
+      { ...base, id: crypto.randomUUID(), name: `Wall studs${where}`, description: `${f.studs} studs at ${f.spacingMm} mm centres, ${f.studLengthM.toFixed(2)} m long`,
         unit: 'count', quantity: f.studs, unitCost: Math.round(TIMBER_PRICE_PER_LM * f.studLengthM * 100) / 100, subtotal: 0 },
       { ...base, id: crypto.randomUUID(), name: `Wall plates${where}`, description: 'Bottom plate and double top plate',
         unit: 'LM', quantity: f.plateLM, unitCost: TIMBER_PRICE_PER_LM, subtotal: 0 },

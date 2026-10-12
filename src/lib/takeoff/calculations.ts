@@ -270,7 +270,8 @@ export function snapWorldToGrid(point: WorldPoint, gridSize: number): WorldPoint
  */
 /** A slab measured in m² whose thickness turns it into m³ */
 export function isConcreteSlab(m: Pick<Measurement, 'measurementType' | 'isConcreteFloor' | 'unit'>): boolean {
-  if (String(m.unit).toUpperCase() !== 'M2') return false;
+  // Units arrive as 'M2', 'm2' or 'm²' depending on where the measurement came from
+  if (String(m.unit ?? '').toUpperCase().replace('²', '2') !== 'M2') return false;
   return m.measurementType === 'Concrete Slab' || (m.measurementType === 'Floor' && !!m.isConcreteFloor);
 }
 
