@@ -1,4 +1,7 @@
 import { useState, useMemo } from 'react';
+import { isConcreteSlab } from '@/lib/takeoff/calculations';
+import { isMeasurementValueLabel } from '@/lib/takeoff/scopeLabels';
+import { framingMembersForWall, STUD_SPACINGS } from '@/lib/takeoff/framingMembers';
 import { Check, Trash2, ChevronDown, ChevronRight, Plus, Search, X, Lock, MessageSquare, Clock, MapPin, Combine } from 'lucide-react';
 import { WallSetupDialog, WallUpdate } from './WallSetupDialog';
 import { toast } from 'sonner';
@@ -218,6 +221,11 @@ interface TakeoffTableProps {
   onAddWallsToEstimate?: (configuredWalls: Measurement[], nonWallIds: string[]) => void;
   onFetchNCCCode?: (measurementId: string, area: string, materials: string[]) => Promise<string>;
   inline?: boolean;
+  /** Measurements that already have a line in the estimate */
+  inEstimateIds?: Set<string>;
+  onOpenEstimate?: () => void;
+  /** Add the suggested framing members of a wall to the estimate */
+  onAddFraming?: (m: Measurement) => void;
 }
 
 export const TakeoffTable = ({
@@ -229,6 +237,9 @@ export const TakeoffTable = ({
   onAddWallsToEstimate,
   onFetchNCCCode,
   inline = false,
+  inEstimateIds,
+  onOpenEstimate,
+  onAddFraming,
 }: TakeoffTableProps) => {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
@@ -400,7 +411,7 @@ export const TakeoffTable = ({
     if (m.measurementType === 'Wall' && m.height && m.unit === 'LM') {
       return { value: m.computedM2 ?? m.realValue * m.height, unit: 'm²' };
     }
-    if (m.measurementType === 'Floor' && m.isConcreteFloor && m.concreteDepth && m.unit === 'M2') {
+    if (isConcreteSlab(m) && m.concreteDepth) {
       return { value: m.computedM3 ?? m.realValue * m.concreteDepth, unit: 'm³' };
     }
     return { value: m.realValue, unit: m.unit === 'count' ? 'EA' : m.unit };
@@ -445,6 +456,29 @@ export const TakeoffTable = ({
 
     return results;
   };
+
+  const getComputedLength = (m: Measurement) => m.realValue;
+
+  const displayName = (m: Measurement, index: number) =>
+    m.label && !isMeasurementValueLabel(m.label)
+      ? m.label
+      : `${m.measurementType && m.measurementType !== 'Other' ? m.measurementType : m.unit === 'count' ? 'Count' : 'Measurement'} ${index + 1}`;
+
+  /** In the estimate already, or a button to add just this one */
+  const estimateStatus = (m: Measurement) =>
+    inEstimateIds?.has(m.id) ? (
+      <span className="text-[11px] text-amber-400 whitespace-nowrap">In estimate</span>
+    ) : (
+      <Button size="sm" variant="outline" className="h-7 px-2 text-[11px]" onClick={() => interceptAddForWalls([m.id])}>
+        Add
+      </Button>
+    );
+
+  const deleteButton = (m: Measurement) => (
+    <Button variant="ghost" size="sm" className="h-7 px-2 text-[11px] text-destructive hover:text-destructive" onClick={() => onDeleteMeasurement(m.id)}>
+      Delete
+    </Button>
+  );
 
   const renderCountItemRow = (m: Measurement, index: number) => (
     <div key={m.id}>
@@ -524,34 +558,10 @@ export const TakeoffTable = ({
           />
         </div>
 
-        {/* Actions */}
+        {/* Status + actions */}
         <div className="col-span-2 flex items-center gap-1">
-          <TooltipProvider>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  variant={m.lockedToSOW ? 'default' : 'ghost'}
-                  size="icon"
-                  className={cn('h-7 w-7', m.lockedToSOW && 'bg-muted/70 hover:bg-muted/80')}
-                  onClick={() => handleLockToSOW(m.id)}
-                >
-                  <Lock className="h-3 w-3" />
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent>
-                {m.lockedToSOW ? 'Locked to SOW' : 'Lock to SOW'}
-              </TooltipContent>
-            </Tooltip>
-          </TooltipProvider>
-
-          <Button
-            variant="ghost"
-            size="icon"
-            className="h-7 w-7 text-destructive hover:text-destructive"
-            onClick={() => onDeleteMeasurement(m.id)}
-          >
-            <Trash2 className="h-3 w-3" />
-          </Button>
+          {estimateStatus(m)}
+          {deleteButton(m)}
         </div>
       </div>
     </div>
@@ -588,8 +598,9 @@ export const TakeoffTable = ({
           <div className="col-span-2 min-w-0">
             <div className="text-xs font-medium truncate text-foreground leading-tight" title={m.label}>
               {/* Walls, doors and windows carry no label (none is drawn on the plan): name them by type */}
-              {m.label || <span className="text-muted-foreground">{m.measurementType && m.measurementType !== 'Other' ? m.measurementType : 'Measurement'} {index + 1}</span>}
+              {displayName(m, index)}
             </div>
+            <div className="text-[10px] text-muted-foreground">page {m.pageIndex + 1}</div>
             {m.drawingNumber && (
               <div className="text-[10px] text-muted-foreground truncate">{m.drawingNumber}</div>
             )}
@@ -601,6 +612,8 @@ export const TakeoffTable = ({
               value={m.measurementType || ''}
               onValueChange={(v: MeasurementTypeOption) => {
                 const updates: Partial<Measurement> = { measurementType: v };
+                // A slab needs a thickness for m³: start at 100 mm
+                if (v === 'Concrete Slab' && m.unit === 'M2' && !m.concreteDepth) updates.concreteDepth = 0.1;
                 // Capture raw plan area when first switching to Roofing
                 if (v === 'Roofing' && m.unit === 'M2' && !m.roofRawPlanArea) {
                   updates.roofRawPlanArea = m.realValue;
@@ -623,7 +636,7 @@ export const TakeoffTable = ({
             {/* Conditional: Height for Walls */}
             {m.measurementType === 'Wall' && m.unit === 'LM' && (
               <div className="mt-1 flex items-center gap-1">
-                <span className="text-[10px] text-muted-foreground">H:</span>
+                <span className="text-[10px] text-muted-foreground">Height</span>
                 <Input
                   type="number"
                   value={m.height || ''}
@@ -632,6 +645,38 @@ export const TakeoffTable = ({
                   placeholder="m"
                   step="0.1"
                 />
+                <span className="text-[10px] text-muted-foreground">m</span>
+              </div>
+            )}
+
+            {/* Concrete slab: thickness gives the volume */}
+            {m.measurementType === 'Concrete Slab' && m.unit === 'M2' && (
+              <div className="mt-1 space-y-1">
+                <div className="flex items-center gap-1">
+                  <span className="text-[10px] text-muted-foreground">Thickness</span>
+                  <Input
+                    type="number"
+                    value={m.concreteDepth ? Math.round(m.concreteDepth * 1000) : ''}
+                    onChange={(e) => {
+                      const mm = parseFloat(e.target.value);
+                      onUpdateMeasurement(m.id, { concreteDepth: mm > 0 ? mm / 1000 : undefined });
+                    }}
+                    className="h-6 text-xs w-16"
+                    placeholder="100"
+                    step="10"
+                  />
+                  <span className="text-[10px] text-muted-foreground">mm</span>
+                </div>
+                <Select value={m.concreteType || ''} onValueChange={(v) => onUpdateMeasurement(m.id, { concreteType: v })}>
+                  <SelectTrigger className="h-6 text-[10px]">
+                    <SelectValue placeholder="Concrete grade" />
+                  </SelectTrigger>
+                  <SelectContent className="bg-popover">
+                    {CONCRETE_OPTIONS.map((opt) => (
+                      <SelectItem key={opt.value} value={opt.value} className="text-xs">{opt.label}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
             )}
 
@@ -726,103 +771,71 @@ export const TakeoffTable = ({
             </Select>
           </div>
 
-          {/* Wall Config — replaces old Framing + Lining/Insul columns */}
-          <div className="col-span-3">
+          {/* Details: framing members for walls, volume for slabs */}
+          <div className="col-span-3 text-[11px] leading-snug">
             {m.unit === 'LM' ? (
-              m.height ? (
-                // Already configured — show summary badge + re-configure button
-                <div className="flex flex-col gap-1">
-                  <div className="flex flex-wrap gap-1">
-                    <span className="inline-flex items-center rounded-full bg-[#E1DCC9]/8 px-2 py-0.5 text-[10px] font-medium text-[#E1DCC9]/60">
-                      ✓ {m.height}m
-                    </span>
-                    {m.framingSystem && m.framingSystem !== 'none' && (
-                      <span className="inline-flex items-center rounded-full bg-muted/100/15 px-2 py-0.5 text-[10px] font-medium text-foreground/70 truncate max-w-[80px]">
-                        {m.framingSystem.replace('_', ' ')}
-                      </span>
+              m.height ? (() => {
+                const spacing = m.studSpacingMm ?? 450;
+                const f = framingMembersForWall(getComputedLength(m), m.height!, spacing);
+                return (
+                  <div className="space-y-1">
+                    {f && (
+                      <div className="text-foreground/80">
+                        <div className="flex items-center gap-1 text-muted-foreground">
+                          <span>Framing at</span>
+                          <select
+                            className="h-5 rounded border border-border bg-background px-1 text-[11px]"
+                            value={spacing}
+                            onChange={(e) => onUpdateMeasurement(m.id, { studSpacingMm: Number(e.target.value) })}
+                          >
+                            {STUD_SPACINGS.map(sp => <option key={sp} value={sp}>{sp} mm</option>)}
+                          </select>
+                          <span>centres</span>
+                        </div>
+                        <div>{f.studs} studs × {f.studLengthM.toFixed(2)} m</div>
+                        <div>Plates {f.plateLM.toFixed(1)} m (bottom + double top)</div>
+                        <div>Noggings {f.noggingLM.toFixed(1)} m ({f.noggingRows} row{f.noggingRows > 1 ? 's' : ''})</div>
+                      </div>
                     )}
-                    {m.hasLining && (
-                      <span className="inline-flex items-center rounded-full bg-muted/20 px-2 py-0.5 text-[10px] font-medium text-muted-foreground">
-                        Lining
-                      </span>
-                    )}
-                    {m.hasInsulation && (
-                      <span className="inline-flex items-center rounded-full bg-orange-500/15 px-2 py-0.5 text-[10px] font-medium text-orange-600">
-                        Insul.
-                      </span>
-                    )}
+                    <div className="flex flex-wrap gap-2">
+                      {f && onAddFraming && (
+                        <button className="text-amber-400 hover:underline" onClick={() => onAddFraming(m)}>
+                          Add framing to estimate
+                        </button>
+                      )}
+                      <button
+                        className="text-muted-foreground hover:text-foreground hover:underline"
+                        onClick={() => { setWallsForSetup([m]); setPendingNonWallIds([]); setWallSetupOpen(true); }}
+                      >
+                        Lining and insulation
+                      </button>
+                    </div>
                   </div>
-                  <button
-                    className="text-[10px] text-muted-foreground hover:text-foreground underline-offset-2 hover:underline text-left"
-                    onClick={() => {
-                      setWallsForSetup([m]);
-                      setPendingNonWallIds([]);
-                      setWallSetupOpen(true);
-                    }}
-                  >
-                    Edit wall spec
-                  </button>
-                </div>
-              ) : (
-                // Not yet configured — show setup button
+                );
+              })() : (
                 <button
-                  className="flex items-center gap-1.5 rounded-md border border-dashed border-foreground/20 px-2 py-1.5 text-[11px] font-medium text-[#E1DCC9] hover:border-foreground/40 hover:text-[#E1DCC9] hover:bg-primary/10 transition-colors"
-                  onClick={() => {
-                    setWallsForSetup([m]);
-                    setPendingNonWallIds([]);
-                    setWallSetupOpen(true);
-                  }}
+                  className="rounded-md border border-dashed border-foreground/20 px-2 py-1.5 text-[11px] font-medium text-[#E1DCC9] hover:border-foreground/40 hover:bg-primary/10 transition-colors"
+                  onClick={() => { setWallsForSetup([m]); setPendingNonWallIds([]); setWallSetupOpen(true); }}
                 >
-                  ⚙ Set up wall
+                  Set up wall
                 </button>
               )
+            ) : isConcreteSlab(m) && m.concreteDepth ? (
+              <span className="text-foreground/80">
+                {(m.computedM3 ?? m.realValue * m.concreteDepth).toFixed(2)} m³ at {Math.round(m.concreteDepth * 1000)} mm
+              </span>
             ) : (
-              <span className="text-[10px] text-muted-foreground/40">—</span>
+              <span className="text-muted-foreground/40">-</span>
             )}
           </div>
 
-          {/* Expand + Actions */}
-          <div className="col-span-2 flex items-center gap-1">
-            <Button
-              variant="ghost"
-              size="icon"
-              className="h-7 w-7"
-              onClick={() => toggleExpand(m.id)}
-            >
-              {expandedIds.has(m.id) ? (
-                <ChevronDown className="h-3 w-3" />
-              ) : (
-                <MessageSquare className="h-3 w-3" />
-              )}
+          {/* Status + actions */}
+          <div className="col-span-2 flex flex-wrap items-center gap-1">
+            {estimateStatus(m)}
+            <Button variant="ghost" size="sm" className="h-7 px-2 text-[11px]" onClick={() => toggleExpand(m.id)}>
+              {expandedIds.has(m.id) ? 'Close' : 'Notes'}
             </Button>
-
-            <TooltipProvider>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Button
-                    variant={m.lockedToSOW ? 'default' : 'ghost'}
-                    size="icon"
-                    className={cn('h-7 w-7', m.lockedToSOW && 'bg-muted/70 hover:bg-muted/80')}
-                    onClick={() => handleLockToSOW(m.id)}
-                  >
-                    <Lock className="h-3 w-3" />
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent>
-                  {m.lockedToSOW ? 'Locked to SOW' : 'Lock to SOW'}
-                </TooltipContent>
-              </Tooltip>
-            </TooltipProvider>
-
-            <Button
-              variant="ghost"
-              size="icon"
-              className="h-7 w-7 text-destructive hover:text-destructive"
-              onClick={() => onDeleteMeasurement(m.id)}
-            >
-              <Trash2 className="h-3 w-3" />
-            </Button>
-
+            {deleteButton(m)}
             {/* NCC inline in actions */}
             {m.nccCode ? (
               <Badge variant="outline" className="text-[10px] ml-0.5">
@@ -980,12 +993,12 @@ export const TakeoffTable = ({
           />
           <span>#</span>
         </div>
-        <div className="col-span-2">Label</div>
+        <div className="col-span-2">Name</div>
         <div className="col-span-2">Type</div>
         <div className="col-span-1">Qty</div>
         <div className="col-span-1">Area</div>
-        <div className="col-span-3">Wall Config</div>
-        <div className="col-span-2">Actions</div>
+        <div className="col-span-3">Details</div>
+        <div className="col-span-2">Estimate</div>
       </div>
 
       {/* Table Body */}
@@ -1017,9 +1030,8 @@ export const TakeoffTable = ({
           {totals.M2 > 0 && <Badge variant="outline">M²: {totals.M2.toFixed(2)}</Badge>}
           {totals.M3 > 0 && <Badge variant="outline">M³: {totals.M3.toFixed(3)}</Badge>}
           {totals.count > 0 && <Badge variant="outline">EA: {totals.count}</Badge>}
-          <div className="ml-auto flex gap-2 text-muted-foreground">
-            <span>Locked: {lockedCount}</span>
-            <span>Validated: {validatedCount}/{measurements.length}</span>
+          <div className="ml-auto text-muted-foreground">
+            In estimate: {measurements.filter(m => inEstimateIds?.has(m.id)).length} of {measurements.length}
           </div>
         </div>
 
@@ -1059,33 +1071,20 @@ export const TakeoffTable = ({
                 interceptAddForWalls(ids);
               }}
             >
-              <Plus className="h-4 w-4 mr-2" />
               {selectedIds.size > 0
-                ? `Add ${selectedIds.size} Selected`
-                : `Add All (${measurements.length})`}
+                ? `Add ${selectedIds.size} selected to estimate`
+                : `Add all to estimate (${measurements.length})`}
             </Button>
 
-            {/* Validate / Lock selected OR all */}
-            <Button
-              variant="secondary"
-              className="w-full"
-              onClick={() => {
-                const ids = selectedIds.size > 0
-                  ? Array.from(selectedIds)
-                  : measurements.map(m => m.id);
-                interceptAddForWalls(ids, true);
-              }}
-            >
-              <Lock className="h-4 w-4 mr-2" />
-              {selectedIds.size > 0
-                ? `Validate ${selectedIds.size} Selected`
-                : `Validate All (${measurements.length})`}
+            {/* Straight to the estimate */}
+            <Button variant="secondary" className="w-full" onClick={() => { setIsOpen(false); onOpenEstimate?.(); }}>
+              Open estimate
             </Button>
           </div>
         )}
 
         <p className="text-[10px] text-muted-foreground text-center">
-          Tip: tick checkboxes to act on specific rows, or leave unticked to act on all
+          Tick rows to add only those. Lines added from here stay linked: re-measure and the estimate updates.
         </p>
       </div>
     </div>
@@ -1102,19 +1101,18 @@ export const TakeoffTable = ({
           <Button variant="outline" className="w-full">
             <Plus className="h-4 w-4 mr-2" />
             Takeoff Table ({measurements.length})
-            {lockedCount > 0 && (
-              <Badge variant="secondary" className="ml-2">
-                {lockedCount} locked
-              </Badge>
-            )}
+
           </Button>
         </SheetTrigger>
         <SheetContent side="bottom" className="h-[92vh]">
           <SheetHeader className="pb-2">
             <SheetTitle className="flex items-center justify-between">
               <span>Takeoff Measurements ({measurements.length})</span>
-              <span className="text-xs font-normal text-muted-foreground">
-                Validate, assign type/area, then Add to Estimate. The sheet stays open so you can keep going.
+              <span className="flex items-center gap-3 text-xs font-normal text-muted-foreground">
+                Set the type and area, then add to the estimate.
+                <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => { setIsOpen(false); onOpenEstimate?.(); }}>
+                  Open estimate
+                </Button>
               </span>
             </SheetTitle>
           </SheetHeader>

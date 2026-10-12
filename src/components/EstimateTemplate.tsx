@@ -549,6 +549,8 @@ export const EstimateTemplate = ({ projectId, estimateId }: EstimateTemplateProp
    */
   const mergeWithSaved = (saved: any[] | undefined, updated: EstimateItem[]): EstimateItem[] => {
     const result = mergeLines(saved, items, updated);
+    // Tell the takeoff (its "In estimate" status) once this write has landed
+    setTimeout(() => window.dispatchEvent(new CustomEvent('estimate-lines-changed', { detail: { projectId } })), 0);
     if (result.length !== updated.length || result.some((m, k) => m !== updated[k])) setItems(result);
     return result;
   };
@@ -1017,6 +1019,7 @@ export const EstimateTemplate = ({ projectId, estimateId }: EstimateTemplateProp
     const projects = JSON.parse(localStorage.getItem(getUserStorageKey('local_projects')) || '[]');
     const projectIndex = projects.findIndex((p: any) => p.id === projectId);
     if (projectIndex !== -1) {
+      setTimeout(() => window.dispatchEvent(new CustomEvent('estimate-lines-changed', { detail: { projectId } })), 0);
       projects[projectIndex].estimate_items = newItems;
       localStorage.setItem(getUserStorageKey('local_projects'), JSON.stringify(projects));
       syncProjectToSupabase(projects[projectIndex]);
@@ -1085,7 +1088,7 @@ export const EstimateTemplate = ({ projectId, estimateId }: EstimateTemplateProp
   const defaultUnitFor = (m: any): string => {
     const u = String(m.unit || '').toUpperCase();
     if (u === 'LM' && m.measurementType === 'Wall' && m.height) return 'm²';
-    if (m.measurementType === 'Floor' && m.isConcreteFloor && m.concreteDepth) return 'm³';
+    if ((m.measurementType === 'Concrete Slab' || (m.measurementType === 'Floor' && m.isConcreteFloor)) && m.concreteDepth) return 'm³';
     return UNIT_FOR_KIND[u === 'COUNT' ? 'EA' : u] ?? 'm²';
   };
   const measuredFor = (id: string, unit: string): string => {

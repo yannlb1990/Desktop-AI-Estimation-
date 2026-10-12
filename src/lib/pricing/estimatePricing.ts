@@ -253,7 +253,9 @@ export function resolveProjectPricing(project: any, userDefaults?: UserPricingDe
     const { labourRates: savedRates, customConfigs, groupingMode: _g, ...savedConfig } = saved;
     return {
       config: { ...DEFAULT_ESTIMATE_CONFIG, ...savedConfig },
-      labourRates: { ...DEFAULT_LABOUR_RATES, ...(savedRates || {}) },
+      // Rates saved on the project win; a trade it never saved (a new line's trade)
+      // falls back to Settings / market rates, not the generic default.
+      labourRates: { ...DEFAULT_LABOUR_RATES, ...(userDefaults?.labourRates || {}), ...(savedRates || {}) },
       customConfigs: customConfigs || [],
     };
   }

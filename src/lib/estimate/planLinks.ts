@@ -64,6 +64,8 @@ export function measuredValueFor(m: Measurement, lineUnit?: string): number {
   const have = unitKind(m.unit);
   if (want === 'LM' && have === 'LM') return m.realValue || 0;
   if (want === 'M2' && have === 'M2') return m.realValue || 0;
+  // Counts on a wall (studs) go with its length, not its area
+  if (want === 'EA' && have === 'LM') return m.realValue || 0;
   return getEffectiveQuantity(m) || 0;
 }
 

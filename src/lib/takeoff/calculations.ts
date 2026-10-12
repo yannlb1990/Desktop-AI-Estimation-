@@ -268,11 +268,18 @@ export function snapWorldToGrid(point: WorldPoint, gridSize: number): WorldPoint
  * Accounts for wall height (LM → M²) and concrete depth (M² → M³).
  * Used by both CostEstimator and the takeoff reducer for two-way binding.
  */
+/** A slab measured in m² whose thickness turns it into m³ */
+export function isConcreteSlab(m: Pick<Measurement, 'measurementType' | 'isConcreteFloor' | 'unit'>): boolean {
+  // Units arrive as 'M2', 'm2' or 'm²' depending on where the measurement came from
+  if (String(m.unit ?? '').toUpperCase().replace('²', '2') !== 'M2') return false;
+  return m.measurementType === 'Concrete Slab' || (m.measurementType === 'Floor' && !!m.isConcreteFloor);
+}
+
 export function getEffectiveQuantity(m: Measurement): number {
   if (m.measurementType === 'Wall' && m.height && m.unit === 'LM') {
     return m.computedM2 ?? (m.realValue * m.height);
   }
-  if (m.measurementType === 'Floor' && m.isConcreteFloor && m.concreteDepth) {
+  if (isConcreteSlab(m) && m.concreteDepth) {
     return m.computedM3 ?? (m.realValue * m.concreteDepth);
   }
   return m.realValue;

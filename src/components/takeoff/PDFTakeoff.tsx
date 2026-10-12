@@ -5,14 +5,14 @@ import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { PDFUploadManager, uploadToCloud } from './PDFUploadManager';
 import { workLabelForMeasurement } from '@/lib/takeoff/scopeLabels';
-import { getEffectiveQuantity } from '@/lib/takeoff/calculations';
+import { getEffectiveQuantity, isConcreteSlab } from '@/lib/takeoff/calculations';
+import { framingMembersForWall, TIMBER_PRICE_PER_LM, NOGGING_PRICE_PER_LM } from '@/lib/takeoff/framingMembers';
 import { remapLinkedMeasurements } from '@/lib/estimate/planLinkSync';
 import { InteractiveCanvas } from './InteractiveCanvas';
 import { MeasurementToolbar } from './MeasurementToolbar';
 import { ViewportControls } from './ViewportControls';
 import { Magnifier } from './Magnifier';
 import { TakeoffTable } from './TakeoffTable';
-import { FrameEstimator } from './FrameEstimator';
 import { DetectionResultsPanel } from './DetectionResultsPanel';
 import { useTakeoffState } from '@/hooks/useTakeoffState';
 import { WorldPoint, MeasurementUnit, Measurement, PDFViewportData, CostItem, DistanceUnit } from '@/lib/takeoff/types';
@@ -58,6 +58,49 @@ interface PDFTakeoffProps {
 export const PDFTakeoff = ({ projectId, estimateId, onAddCostItems }: PDFTakeoffProps) => {
   const { state, dispatch } = useTakeoffState(projectId);
 
+  // Which measurements already have a line in the estimate (shown in the takeoff table)
+  const readInEstimateIds = useCallback((): Set<string> => {
+    try {
+      const projects = JSON.parse(localStorage.getItem(getUserStorageKey('local_projects')) || '[]');
+      const p = projects.find((x: any) => x.id === projectId);
+      return new Set((p?.estimate_items || []).flatMap((i: any) => i.plan_link?.measurementIds ?? []));
+    } catch { return new Set(); }
+  }, [projectId]);
+  const [inEstimateIds, setInEstimateIds] = useState<Set<string>>(() => new Set());
+  useEffect(() => {
+    const refresh = () => setInEstimateIds(readInEstimateIds());
+    refresh();
+    window.addEventListener('estimate-updated', refresh);
+    window.addEventListener('estimate-lines-changed', refresh);
+    return () => {
+      window.removeEventListener('estimate-updated', refresh);
+      window.removeEventListener('estimate-lines-changed', refresh);
+    };
+  }, [readInEstimateIds, state.costItems]);
+
+  const openEstimate = () => window.dispatchEvent(new CustomEvent('go-to-estimate-tab'));
+
+  // Suggested framing members of one wall, as linked lines (they follow the wall)
+  const addFramingForWall = (m: Measurement) => {
+    const f = m.height ? framingMembersForWall(m.realValue, m.height, m.studSpacingMm ?? 450) : null;
+    if (!f) return;
+    const where = m.area ? ` - ${m.area}` : '';
+    const base = {
+      category: 'Framing', trade: 'Carpenter', linkedMeasurements: [m.id], wasteFactor: 1,
+      area: m.area, measurementType: 'Framing' as const, drawingNumber: `Page ${m.pageIndex + 1}`,
+      materialWastePercent: 5,
+    };
+    const items = [
+      { ...base, id: crypto.randomUUID(), name: `Wall studs${where}`, description: `${f.studs} studs at ${f.spacingMm} mm centres, ${f.studLengthM.toFixed(2)} m long`,
+        unit: 'count', quantity: f.studs, unitCost: Math.round(TIMBER_PRICE_PER_LM * f.studLengthM * 100) / 100, subtotal: 0 },
+      { ...base, id: crypto.randomUUID(), name: `Wall plates${where}`, description: 'Bottom plate and double top plate',
+        unit: 'LM', quantity: f.plateLM, unitCost: TIMBER_PRICE_PER_LM, subtotal: 0 },
+      { ...base, id: crypto.randomUUID(), name: `Noggings${where}`, description: `${f.noggingRows} row${f.noggingRows > 1 ? 's' : ''}`,
+        unit: 'LM', quantity: f.noggingLM, unitCost: NOGGING_PRICE_PER_LM, subtotal: 0 },
+    ] as CostItem[];
+    items.forEach(item => dispatch({ type: 'ADD_COST_ITEM', payload: item }));
+  };
+
   // Combine measurements: the first keeps its id, linked estimate lines follow it
   // with their quantities unchanged at the moment of combining.
   const combineMeasurements = (ids: string[], area?: Measurement['area']) => {
@@ -65,7 +108,7 @@ export const PDFTakeoff = ({ projectId, estimateId, onAddCostItems }: PDFTakeoff
     if (parts.length < 2) return;
     const [first, ...rest] = parts;
     const isWall = parts.every(m => m.measurementType === 'Wall' && m.height && m.unit === 'LM');
-    const isConcrete = parts.every(m => m.measurementType === 'Floor' && m.isConcreteFloor && m.concreteDepth);
+    const isConcrete = parts.every(m => isConcreteSlab(m) && m.concreteDepth);
     const total = (fn: (m: Measurement) => number) => parts.reduce((sum, m) => sum + fn(m), 0);
     const combined: Measurement = {
       ...first,
@@ -125,7 +168,6 @@ export const PDFTakeoff = ({ projectId, estimateId, onAddCostItems }: PDFTakeoff
   const [upgradeModal, setUpgradeModal] = useState<{ open: boolean; feature: string }>({ open: false, feature: '' });
   const [modMode, setModMode] = useState<'wall' | 'door' | 'window' | 'custom' | null>(null);
   const [wallClassification, setWallClassification] = useState<'external' | 'internal'>('internal');
-  const [activeFrameSectionId, setActiveFrameSectionId] = useState<string | null>(null);
   const [showRecalibConfirm, setShowRecalibConfirm] = useState(false);
   const [wallThicknessMm, setWallThicknessMm] = useState(90);
   const [wallHatchType, setWallHatchType] = useState<string>('none');
@@ -423,7 +465,6 @@ export const PDFTakeoff = ({ projectId, estimateId, onAddCostItems }: PDFTakeoff
     // Stamp classification on wall-line measurements (wallThickness indicates wall-line tool)
     if (m.wallThickness !== undefined) {
       m = { ...m, wallClassification };
-      if (activeFrameSectionId) m = { ...m, frameSectionId: activeFrameSectionId };
     }
     if (modMode === 'wall') {
       m = { ...m, color: '#f59e0b', measurementType: 'Wall', label: '' };
@@ -434,7 +475,7 @@ export const PDFTakeoff = ({ projectId, estimateId, onAddCostItems }: PDFTakeoff
     }
 
     dispatch({ type: 'ADD_MEASUREMENT', payload: m });
-  }, [dispatch, isVerifyMode, modMode, state.pdfFile?.planId, doorSubtype, windowSubtype, wallClassification, activeFrameSectionId]);
+  }, [dispatch, isVerifyMode, modMode, state.pdfFile?.planId, doorSubtype, windowSubtype, wallClassification]);
 
   const handleDeleteLastMeasurement = useCallback(() => {
     const measurements = state.measurements;
@@ -682,8 +723,8 @@ export const PDFTakeoff = ({ projectId, estimateId, onAddCostItems }: PDFTakeoff
       }
 
       // Concrete floor: calculate m³
-      if (measurement.measurementType === 'Floor' && measurement.isConcreteFloor && measurement.concreteDepth) {
-        quantity = measurement.realValue * measurement.concreteDepth;
+      if (isConcreteSlab(measurement) && measurement.concreteDepth) {
+        quantity = getEffectiveQuantity(measurement);
         unit = 'M3';
       }
 
@@ -805,7 +846,7 @@ export const PDFTakeoff = ({ projectId, estimateId, onAddCostItems }: PDFTakeoff
           let autoTrade = 'General';
           let material = '';
 
-          if (measurement.isConcreteFloor) {
+          if (isConcreteSlab(measurement)) {
             autoTrade = 'Concreter';
             const concreteLabels: Record<string, string> = {
               '20mpa': '20 MPa Concrete',
@@ -826,6 +867,8 @@ export const PDFTakeoff = ({ projectId, estimateId, onAddCostItems }: PDFTakeoff
             autoTrade = 'Tiler'; // Default for floor finishes
           } else if (measurement.measurementType === 'Ceiling') {
             autoTrade = 'Plasterer';
+          } else if (measurement.measurementType === 'Wall') {
+            autoTrade = 'Carpenter';
           } else if (measurement.area === 'Bathroom' || measurement.area === 'Ensuite' || measurement.area === 'Laundry') {
             autoTrade = 'Waterproofer';
           }
@@ -836,11 +879,11 @@ export const PDFTakeoff = ({ projectId, estimateId, onAddCostItems }: PDFTakeoff
             name: workLabelForMeasurement({ ...measurement, unit }),
             description: measurement.comments || `Measurement from takeoff`,
             unit: unit,
-            unitCost: getMeasurementTypeRate(measurement.measurementType, unit, !!measurement.isConcreteFloor, projectState),
+            unitCost: getMeasurementTypeRate(measurement.measurementType, unit, isConcreteSlab(measurement), projectState),
             quantity: quantity,
             linkedMeasurements: [measurement.id],
             wasteFactor: 1.0,
-            subtotal: getMeasurementTypeRate(measurement.measurementType, unit, !!measurement.isConcreteFloor, projectState) * quantity,
+            subtotal: getMeasurementTypeRate(measurement.measurementType, unit, isConcreteSlab(measurement), projectState) * quantity,
             area: measurement.area,
             measurementType: measurement.measurementType,
             drawingNumber: measurement.drawingNumber || `Page ${measurement.pageIndex + 1}`,
@@ -1596,6 +1639,9 @@ export const PDFTakeoff = ({ projectId, estimateId, onAddCostItems }: PDFTakeoff
                                 dispatch({ type: 'DELETE_MEASUREMENT', payload: id });
                               }}
                               onCombineMeasurements={combineMeasurements}
+                              inEstimateIds={inEstimateIds}
+                              onOpenEstimate={openEstimate}
+                              onAddFraming={addFramingForWall}
                               onAddToEstimate={handleAddToEstimate}
                               onAddWallsToEstimate={handleAddWallsToEstimate}
                               onFetchNCCCode={handleFetchNCCCode}
@@ -1717,6 +1763,9 @@ export const PDFTakeoff = ({ projectId, estimateId, onAddCostItems }: PDFTakeoff
                       dispatch({ type: 'DELETE_MEASUREMENT', payload: id });
                     }}
                     onCombineMeasurements={combineMeasurements}
+                    inEstimateIds={inEstimateIds}
+                    onOpenEstimate={openEstimate}
+                    onAddFraming={addFramingForWall}
                     onAddToEstimate={handleAddToEstimate}
                     onAddWallsToEstimate={handleAddWallsToEstimate}
                     onFetchNCCCode={handleFetchNCCCode}
@@ -1880,20 +1929,6 @@ export const PDFTakeoff = ({ projectId, estimateId, onAddCostItems }: PDFTakeoff
                     </div>
                   )}
                 </Card>
-
-                {/* Frame Estimator — appears when wall-line measurements exist */}
-                <FrameEstimator
-                  measurements={filteredMeasurements}
-                  isCalibrated={state.isCalibrated}
-                  unitsPerMetre={state.currentScale?.unitsPerMetre ?? null}
-                  onAddCostItems={(items) => items.forEach(item => dispatch({ type: 'ADD_COST_ITEM', payload: item }))}
-                  pdfUrl={state.pdfFile?.url?.startsWith('storage:') ? undefined : state.pdfFile?.url}
-                  pageIndex={state.currentPageIndex}
-                  projectId={projectId}
-                  onWallDetected={(m) => dispatch({ type: 'ADD_MEASUREMENT', payload: { ...m, planId: state.pdfFile?.planId } })}
-                  onActiveSectionChange={(sectionId) => setActiveFrameSectionId(sectionId)}
-                  onUpdateMeasurement={(id, updates) => dispatch({ type: 'UPDATE_MEASUREMENT', payload: { id, updates } })}
-                />
 
                 <AIPlanAnalysisPanel
                   canvasElementRef={canvasRef}
