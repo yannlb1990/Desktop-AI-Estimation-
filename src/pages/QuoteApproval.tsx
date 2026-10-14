@@ -7,6 +7,7 @@ import { Separator } from '@/components/ui/separator';
 import { CheckCircle2, AlertTriangle, Building2, MapPin, User, Clock, MessageSquare, Loader2 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import type { QuoteSharePayload } from '@/lib/contract';
+import { lineAmount } from "@/lib/pricing/quoteLines";
 
 interface ShareView {
   token: string;
@@ -119,7 +120,7 @@ export default function QuoteApproval() {
                 <div key={i} className="flex justify-between gap-4 py-1.5 text-sm border-b border-border/40">
                   <span>{l.description}</span>
                   <span className="text-muted-foreground whitespace-nowrap">{l.qty} {l.unit}</span>
-                  <span className="font-mono whitespace-nowrap">{money(l.qty * l.unitPrice)}</span>
+                  <span className="font-mono whitespace-nowrap">{money(lineAmount(l))}</span>
                 </div>
               ))}
             </div>

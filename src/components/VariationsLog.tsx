@@ -2,6 +2,8 @@ import { useState, useEffect, useCallback, useMemo } from "react";
 import { format, parseISO } from "date-fns";
 import { toast } from "sonner";
 import { getUserStorageKey } from "@/lib/localAuth";
+import { projectGstPct } from "@/lib/contract";
+import { gstOn } from "@/lib/pricing/estimatePricing";
 import { loadVariationsMerged, lsSaveVariations, syncVariationsToSupabase } from "@/lib/db/variations";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -136,6 +138,14 @@ export default function VariationsLog({
   clientEmail,
 }: VariationsLogProps) {
   const [variations, setVariations] = useState<Variation[]>([]);
+  // Same GST % as the estimate and contract (10% unless the estimator changed it)
+  const gstPct = (() => {
+    try {
+      const projects: any[] = JSON.parse(localStorage.getItem(getUserStorageKey("local_projects")) || "[]");
+      return projectGstPct(projects.find((p: any) => p.id === projectId));
+    } catch { return 10; }
+  })();
+  const gstOf = (exGst: number) => gstOn(exGst, gstPct);
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingVariation, setEditingVariation] = useState<Variation | null>(null);
@@ -292,8 +302,8 @@ export default function VariationsLog({
 
   const sendForApproval = (variation: Variation) => {
     const total = variation.totalAmount;
-    const gst = total * 0.1;
-    const totalInc = total * 1.1;
+    const gst = gstOf(total);
+    const totalInc = total + gst;
 
     const itemLines = variation.items
       .map(
@@ -315,7 +325,7 @@ Items:
 ${itemLines}
 
 Total (ex GST):  $${total.toFixed(2)}
-GST (10%):       $${gst.toFixed(2)}
+GST (${gstPct}%):       $${gst.toFixed(2)}
 Total (inc GST): $${totalInc.toFixed(2)}
 
 Please respond to approve or reject this variation.`;
@@ -480,12 +490,12 @@ Please respond to approve or reject this variation.`;
                         <td className="pt-1.5 text-right text-foreground font-bold">{aud(v.totalAmount)}</td>
                       </tr>
                       <tr>
-                        <td colSpan={4} className="py-0.5 text-muted-foreground">GST (10%)</td>
-                        <td className="py-0.5 text-right text-foreground/60">{aud(v.totalAmount * 0.1)}</td>
+                        <td colSpan={4} className="py-0.5 text-muted-foreground">GST ({gstPct}%)</td>
+                        <td className="py-0.5 text-right text-foreground/60">{aud(gstOf(v.totalAmount))}</td>
                       </tr>
                       <tr>
                         <td colSpan={4} className="pb-1.5 text-muted-foreground font-semibold">Total (inc GST)</td>
-                        <td className="pb-1.5 text-right text-foreground font-bold">{aud(v.totalAmount * 1.1)}</td>
+                        <td className="pb-1.5 text-right text-foreground font-bold">{aud(v.totalAmount + gstOf(v.totalAmount))}</td>
                       </tr>
                     </tfoot>
                   </table>
@@ -796,9 +806,9 @@ Please respond to approve or reject this variation.`;
                       <td />
                     </tr>
                     <tr>
-                      <td colSpan={4} className="py-0.5 text-muted-foreground text-right pr-2">GST (10%)</td>
+                      <td colSpan={4} className="py-0.5 text-muted-foreground text-right pr-2">GST ({gstPct}%)</td>
                       <td className="py-0.5 text-right text-foreground/60 whitespace-nowrap">
-                        {aud(totalFromItems(formItems) * 0.1)}
+                        {aud(gstOf(totalFromItems(formItems)))}
                       </td>
                       <td />
                     </tr>
@@ -807,7 +817,7 @@ Please respond to approve or reject this variation.`;
                         Total (inc GST)
                       </td>
                       <td className="pb-2 text-right text-foreground font-bold whitespace-nowrap">
-                        {aud(totalFromItems(formItems) * 1.1)}
+                        {aud(totalFromItems(formItems) + gstOf(totalFromItems(formItems)))}
                       </td>
                       <td />
                     </tr>

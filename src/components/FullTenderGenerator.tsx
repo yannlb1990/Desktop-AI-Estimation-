@@ -10,7 +10,7 @@ import { Building2, Printer, Plus, Trash2 } from "lucide-react"
 import { toast } from "sonner"
 import { useSubscription } from "@/hooks/useSubscription"
 import { UpgradeModal } from "@/components/UpgradeModal"
-import { priceLine, calculateProjectTotals, resolveProjectPricing, projectFfeAllowance } from "@/lib/pricing/estimatePricing"
+import { priceLine, calculateProjectTotals, resolveProjectPricing, projectFfeAllowance, gstOn } from "@/lib/pricing/estimatePricing"
 import { readUserPricingDefaults } from "@/lib/pricing/userPricingDefaults"
 import { scopeForDisplay } from "@/lib/takeoff/scopeLabels"
 
@@ -372,7 +372,7 @@ export const FullTenderGenerator = ({ project, estimate }: FullTenderProps) => {
       return resolveProjectPricing(p, readUserPricingDefaults(p)).config.gstPct
     } catch { return 10 }
   })()
-  const gstAmount = Math.round(subtotalNum * gstPct) / 100
+  const gstAmount = gstOn(subtotalNum, gstPct)
   const totalIncGst = subtotalNum + gstAmount
   const today = new Date()
   const validUntil = new Date(today.getTime() + parseInt(validityDays) * 86400000)

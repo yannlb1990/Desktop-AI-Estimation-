@@ -15,6 +15,8 @@ import { priceLine, calculateProjectTotals, resolveProjectPricing, projectFfeAll
 import { readUserPricingDefaults } from "@/lib/pricing/userPricingDefaults"
 import { scopeForDisplay } from "@/lib/takeoff/scopeLabels"
 import { approveQuoteVersion, clearQuoteApproval, loadProject, createQuoteShare, loadQuoteShares, syncClientApprovals, quoteShareUrl, type QuoteShareRow } from "@/lib/contract"
+import { scaleLinesToTotal, shownTotal, lineAmount } from "@/lib/pricing/quoteLines"
+import { gstOn } from "@/lib/pricing/estimatePricing"
 
 interface QuoteGeneratorProps {
   project: any
@@ -321,22 +323,12 @@ export const QuoteGenerator = ({ project, estimate, listenForOpen }: QuoteGenera
     const estimateTotals = estimateItems.length > 0 ? calculateProjectTotals(proj, userPricingDefaults) : proj?.estimate_totals
     const linesBaseTotal = itemsSubtotal + consumablesSubtotal
     // What the client sees is qty x rounded unit price, so reconcile against that.
-    const shownTotal = (ls: QuoteLine[]) => ls.reduce((sum, l) => sum + l.qty * l.unitPrice, 0)
 
     if (absorbOverheads) {
       // ── Absorbed mode: scale every line price so sum = estimate_totals.taxable ──
       // Overheads/margin/supervision are baked into line prices, invisible to client
       if (estimateTotals?.taxable && linesBaseTotal > 0) {
-        const scaleFactor = estimateTotals.taxable / linesBaseTotal
-        const scaled = lines.map(l => ({
-          ...l,
-          unitPrice: Math.round(l.unitPrice * scaleFactor * 100) / 100,
-        }))
-        // Put the cents left over from rounding on a single-quantity line so the total is exact
-        const residual = Math.round((estimateTotals.taxable - shownTotal(scaled)) * 100) / 100
-        const absorber = scaled.find(l => l.qty === 1)
-        if (absorber && residual !== 0) absorber.unitPrice = Math.round((absorber.unitPrice + residual) * 100) / 100
-        return scaled
+        return scaleLinesToTotal(lines, estimateTotals.taxable)
       }
       return lines
     }
@@ -344,10 +336,11 @@ export const QuoteGenerator = ({ project, estimate, listenForOpen }: QuoteGenera
     // ── Default mode: show a separate "Overheads & Margin" line ──
     if (estimateTotals?.taxable) {
       const bridgeAmount = estimateTotals.taxable - shownTotal(lines)
-      if (bridgeAmount > 0.01) {
+      if (Math.abs(bridgeAmount) >= 0.005) {
         lines.push({
           id: "overhead-margin-bridge",
-          description: "Project Management, Site Overheads & Margin",
+          // Only cents left by line rounding (no overheads or margin): call it what it is
+          description: bridgeAmount >= 1 ? "Project Management, Site Overheads & Margin" : "Rounding",
           qty: 1,
           unit: "item",
           unitPrice: Math.round(bridgeAmount * 100) / 100,
@@ -417,7 +410,7 @@ export const QuoteGenerator = ({ project, estimate, listenForOpen }: QuoteGenera
 
   // Totals derived from included lines
   const includedLines = quoteLines.filter(l => l.included)
-  const subtotalNum = includedLines.reduce((sum, l) => sum + l.qty * l.unitPrice, 0)
+  const subtotalNum = shownTotal(includedLines)
   // Same GST % as the Estimate tab (10% unless the estimator changed it)
   const gstPct: number = (() => {
     try {
@@ -426,7 +419,7 @@ export const QuoteGenerator = ({ project, estimate, listenForOpen }: QuoteGenera
       return resolveProjectPricing(p, readUserPricingDefaults(p)).config.gstPct
     } catch { return 10 }
   })()
-  const gstAmount = Math.round(subtotalNum * gstPct) / 100
+  const gstAmount = gstOn(subtotalNum, gstPct)
   const totalIncGst = subtotalNum + gstAmount
   const depositAmount = totalIncGst * (parseFloat(depositPct) / 100)
   const progressAmount = totalIncGst * (parseFloat(progressPct) / 100)
@@ -960,7 +953,7 @@ ${clone.outerHTML}
                                   </div>
                                 </div>
                                 <div className="flex items-center justify-between pt-0.5">
-                                  <span className="text-muted-foreground">Total: <strong className="text-foreground font-mono">{au$(line.qty * line.unitPrice)}</strong></span>
+                                  <span className="text-muted-foreground">Total: <strong className="text-foreground font-mono">{au$(lineAmount(line))}</strong></span>
                                   <Button size="sm" className="h-6 text-xs px-3" onClick={() => setEditingLineId(null)}>
                                     <Check className="h-3 w-3 mr-1" />Done
                                   </Button>
@@ -981,7 +974,7 @@ ${clone.outerHTML}
                                     <span>×</span>
                                     <span>{au$(line.unitPrice)}</span>
                                     <span>=</span>
-                                    <span className="font-semibold text-foreground">{au$(line.qty * line.unitPrice)}</span>
+                                    <span className="font-semibold text-foreground">{au$(lineAmount(line))}</span>
                                     {line.fromEstimate && <span className="ml-1 text-[9px] bg-muted/10 text-foreground/70 border border-border/30 rounded px-1 font-sans">estimate</span>}
                                   </div>
                                 </div>
@@ -1242,7 +1235,7 @@ ${clone.outerHTML}
                             })
                             return tradeOrder.map((trade, sectionIdx) => {
                               const sectionLines = tradeGroups[trade]
-                              const sectionSubtotal = sectionLines.reduce((sum, l) => sum + l.qty * l.unitPrice, 0)
+                              const sectionSubtotal = shownTotal(sectionLines)
                               return (
                                 <>
                                   <tr key={`sec-${trade}`}>
@@ -1259,7 +1252,7 @@ ${clone.outerHTML}
                                       <td className="py-2.5 px-3 text-right text-gray-600 border-b border-gray-100 font-mono text-xs">{Number(line.qty).toFixed(1)}</td>
                                       <td className="py-2.5 px-3 text-right text-gray-500 border-b border-gray-100 text-xs">{line.unit}</td>
                                       <td className="py-2.5 px-3 text-right text-gray-600 border-b border-gray-100 font-mono text-xs">{au$(line.unitPrice)}</td>
-                                      <td className="py-2.5 px-3 text-right font-semibold border-b border-gray-100 font-mono text-xs" style={{ color: primaryColor }}>{au$(line.qty * line.unitPrice)}</td>
+                                      <td className="py-2.5 px-3 text-right font-semibold border-b border-gray-100 font-mono text-xs" style={{ color: primaryColor }}>{au$(lineAmount(line))}</td>
                                     </tr>
                                   ))}
                                   <tr key={`sub-${trade}`}>

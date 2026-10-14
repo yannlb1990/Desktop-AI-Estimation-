@@ -8,9 +8,10 @@
 import { getUserStorageKey } from '@/lib/localAuth';
 import { syncProjectToSupabase } from '@/lib/db/projects';
 import { lsLoadVariations } from '@/lib/db/variations';
-import { calculateProjectTotals, resolveProjectPricing, roundCents } from '@/lib/pricing/estimatePricing';
+import { calculateProjectTotals, resolveProjectPricing, roundCents, gstOn } from '@/lib/pricing/estimatePricing';
 import { readUserPricingDefaults } from '@/lib/pricing/userPricingDefaults';
 import { supabase } from '@/integrations/supabase/client';
+import { shownTotal, lineAmount } from '@/lib/pricing/quoteLines';
 
 export interface ApprovedQuoteLine {
   description: string;
@@ -93,9 +94,9 @@ export function approveQuoteVersion(
   const gstPct = projectGstPct(project);
   const included = version.lines.filter(l => l.included);
   const lines: ApprovedQuoteLine[] = included
-    .map(l => ({ description: l.description, trade: l.trade || 'General', amount: roundCents(l.qty * l.unitPrice) }));
-  // Same rounding as the quote: sum the unrounded line amounts, then round once
-  const subtotalExGst = roundCents(included.reduce((s, l) => s + l.qty * l.unitPrice, 0));
+    .map(l => ({ description: l.description, trade: l.trade || 'General', amount: lineAmount(l) }));
+  // Same subtotal as the quote: the printed line amounts added up
+  const subtotalExGst = shownTotal(included);
   const approved: ApprovedQuote = {
     versionId: version.id,
     versionNumber: version.versionNumber,
@@ -105,7 +106,7 @@ export function approveQuoteVersion(
     shareToken: extra?.shareToken,
     subtotalExGst,
     gstPct,
-    totalIncGst: roundCents(subtotalExGst + roundCents(subtotalExGst * gstPct / 100)),
+    totalIncGst: roundCents(subtotalExGst + gstOn(subtotalExGst, gstPct)),
     lines,
     paymentSchedule,
   };
@@ -178,7 +179,7 @@ export function computeClaim(stages: ClaimStage[], retentionPct: number, previou
   const retentionHeld = roundCents(completedToDate * (retentionPct / 100));
   const previouslyClaimedExGst = roundCents(previousClaims.reduce((s, c) => s + c.thisClaimExGst, 0));
   const thisClaimExGst = roundCents(completedToDate - retentionHeld - previouslyClaimedExGst);
-  const gst = roundCents(thisClaimExGst * (gstPct / 100));
+  const gst = gstOn(thisClaimExGst, gstPct);
   return { completedToDate, retentionHeld, previouslyClaimedExGst, thisClaimExGst, gst, thisClaimIncGst: roundCents(thisClaimExGst + gst) };
 }
 
@@ -256,8 +257,8 @@ export async function createQuoteShare(
   const lines = version.lines.filter(l => l.included).map(l => ({
     description: l.description, trade: l.trade || 'General', qty: l.qty, unit: l.unit, unitPrice: l.unitPrice,
   }));
-  const subtotalExGst = roundCents(lines.reduce((s, l) => s + l.qty * l.unitPrice, 0));
-  const gst = roundCents(subtotalExGst * gstPct / 100);
+  const subtotalExGst = shownTotal(lines);
+  const gst = gstOn(subtotalExGst, gstPct);
   const payload: QuoteSharePayload = {
     versionId: version.id,
     versionNumber: version.versionNumber,

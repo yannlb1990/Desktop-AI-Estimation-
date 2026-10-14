@@ -227,11 +227,45 @@ export async function loadProjectsMerged(): Promise<any[]> {
     }
   }
 
+  await reconcileOverheadTotals(merged);
+
   return merged.sort(
     (a, b) =>
       new Date(b.updated_at || b.created_at || 0).getTime() -
       new Date(a.updated_at || a.created_at || 0).getTime()
   );
+}
+
+/**
+ * project.overhead_total is a cached sum of the project's overhead_items, read by every
+ * pricing screen (estimate, tender, quote, contract, dashboard). Recount it from the
+ * overhead_items table so a stale cache can never add money that no longer exists.
+ * Skipped when the query fails (offline), so a good cached value is never zeroed.
+ */
+async function reconcileOverheadTotals(projects: any[]): Promise<void> {
+  const userId = await getAuthUserId();
+  if (!userId || projects.length === 0) return;
+  const { resolveOverheadTotal, saveOverheadItemsToCloud } = await import('@/lib/db/overheads');
+  try {
+    const { data, error } = await (supabase as any)
+      .from('overhead_items')
+      .select('project_id, amount')
+      .eq('user_id', userId);
+    if (error || !data) return;
+    const rowsByProject = new Map<string, { amount: number }[]>();
+    for (const row of data) {
+      rowsByProject.set(row.project_id, [...(rowsByProject.get(row.project_id) ?? []), row]);
+    }
+    for (const project of projects) {
+      const cached = Number(project.overhead_total) || 0;
+      const { total, pushLocal } = resolveOverheadTotal(project.id, cached, rowsByProject.get(project.id) ?? []);
+      if (pushLocal) saveOverheadItemsToCloud(project.id, pushLocal);
+      if (Math.abs(total - cached) >= 0.005) {
+        project.overhead_total = total;
+        syncProjectToSupabase(project);
+      }
+    }
+  } catch { /* keep cached totals */ }
 }
 
 /**

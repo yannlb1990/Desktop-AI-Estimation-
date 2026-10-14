@@ -10,6 +10,7 @@ import {
   FileText, FileImage, Download, Trash2, Search,
   FolderOpen, Clock, DollarSign, Printer, File,
 } from "lucide-react"
+import { shownTotal, lineAmount } from "@/lib/pricing/quoteLines"
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -95,9 +96,12 @@ function printSavedQuote(q: SavedQuoteSnapshot) {
   const fmt = (d: Date) => d.toLocaleDateString("en-AU", { day: "numeric", month: "long", year: "numeric" })
   const hdr = `linear-gradient(135deg, ${q.primaryColor}ee 0%, ${q.primaryColor} 60%, ${q.primaryColor}cc 100%)`
   const includedLines = q.lines.filter(l => l.included)
-  const subtotal = includedLines.reduce((s, l) => s + l.qty * l.unitPrice, 0)
-  const gst = subtotal * 0.1
-  const total = subtotal + gst
+  // Reprint with the totals saved when the quote was made, so the copy always matches the
+  // original (GST % may not be 10, and line rounding was settled at save time).
+  const linesSubtotal = shownTotal(includedLines)
+  const subtotal = q.subtotal > 0 ? q.subtotal : linesSubtotal
+  const total = q.totalIncGST > 0 ? q.totalIncGST : Math.round(subtotal * 110) / 100
+  const gst = Math.round((total - subtotal) * 100) / 100
   const depAmt = total * (parseFloat(q.depositPct || "10") / 100)
   const progAmt = total * (parseFloat(q.progressPct || "40") / 100)
   const finalAmt = total * (parseFloat(q.finalPct || "50") / 100)
@@ -185,7 +189,7 @@ function printSavedQuote(q: SavedQuoteSnapshot) {
       </div>
       <div style="text-align:right;font-size:13px;color:${q.primaryColor}99;line-height:1.8">
         <div>Subtotal: ${au$(subtotal)}</div>
-        <div>GST (10%): ${au$(gst)}</div>
+        <div>GST: ${au$(gst)}</div>
         <div style="font-size:10px;color:#9ca3af;margin-top:6px;max-width:150px">Contractor is GST registered under A New Tax System (GST) Act 1999</div>
       </div>
     </div>` : ""}
@@ -211,12 +215,12 @@ function printSavedQuote(q: SavedQuoteSnapshot) {
             <td style="padding:10px 12px;text-align:right;color:#6b7280;border-bottom:1px solid #f1f5f9;font-family:monospace;font-size:12px">${l.qty}</td>
             <td style="padding:10px 12px;text-align:right;color:#9ca3af;border-bottom:1px solid #f1f5f9;font-size:12px">${l.unit}</td>
             <td style="padding:10px 12px;text-align:right;color:#6b7280;border-bottom:1px solid #f1f5f9;font-family:monospace;font-size:12px">${au$(l.unitPrice)}</td>
-            <td style="padding:10px 12px;text-align:right;font-weight:600;border-bottom:1px solid #f1f5f9;font-family:monospace;font-size:12px;color:${q.primaryColor}">${au$(l.qty * l.unitPrice)}</td>
+            <td style="padding:10px 12px;text-align:right;font-weight:600;border-bottom:1px solid #f1f5f9;font-family:monospace;font-size:12px;color:${q.primaryColor}">${au$(lineAmount(l))}</td>
           </tr>`).join("")}
         </tbody>
         <tfoot>
           <tr><td colspan="4" style="text-align:right;padding:8px 12px;color:#6b7280;font-size:12px">Subtotal (ex GST)</td><td style="text-align:right;padding:8px 12px;font-family:monospace;font-size:12px;color:#374151">${au$(subtotal)}</td></tr>
-          <tr><td colspan="4" style="text-align:right;padding:4px 12px;color:#6b7280;font-size:12px">GST (10%)</td><td style="text-align:right;padding:4px 12px;font-family:monospace;font-size:12px;color:#374151">${au$(gst)}</td></tr>
+          <tr><td colspan="4" style="text-align:right;padding:4px 12px;color:#6b7280;font-size:12px">GST</td><td style="text-align:right;padding:4px 12px;font-family:monospace;font-size:12px;color:#374151">${au$(gst)}</td></tr>
           <tr style="background:${q.primaryColor}0d"><td colspan="4" style="text-align:right;padding:10px 12px;font-weight:700;font-size:13px;color:#111">TOTAL (inc GST)</td><td style="text-align:right;padding:10px 12px;font-weight:700;font-family:monospace;font-size:14px;color:${q.primaryColor}">${au$(total)}</td></tr>
         </tfoot>
       </table>

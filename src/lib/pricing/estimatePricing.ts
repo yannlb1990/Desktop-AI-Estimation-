@@ -135,7 +135,12 @@ export function priceLine(
   };
 }
 
-export const roundCents = (n: number): number => Math.round(n * 100) / 100;
+// toPrecision strips float noise first (110509.795 can be stored as 110509.79499999),
+// so the same amount always rounds to the same cent on every screen.
+export const roundCents = (n: number): number => Math.round(Number((n * 100).toPrecision(12))) / 100;
+
+/** GST on an ex-GST amount, to the cent. The only GST formula in the app. */
+export const gstOn = (exGst: number, gstPct: number): number => roundCents(exGst * gstPct / 100);
 
 export interface EstimateTotals {
   totalMaterials: number;
@@ -208,7 +213,7 @@ export function calculateEstimateTotals({
   // Round like an invoice: GST is charged on the ex-GST price in cents, so the quote
   // (which shows cents) and the estimate always reach the same total.
   const taxable = roundCents(preMargin + contingency + customConfigsTotal + margin);
-  const gst = roundCents(taxable * (config.gstPct / 100));
+  const gst = gstOn(taxable, config.gstPct);
 
   return {
     totalMaterials,

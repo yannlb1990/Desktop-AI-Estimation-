@@ -24,6 +24,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
 import { Plus, Trash2, Settings, Bookmark, BookmarkCheck, ChevronDown, ChevronRight } from "lucide-react";
+import { saveOverheadItemsToCloud } from "@/lib/db/overheads";
 
 const getTemplatesKey = () => getUserStorageKey("overhead_templates");
 
@@ -158,24 +159,10 @@ export const OverheadManager = ({ projectId }: OverheadManagerProps) => {
   // ── Supabase: debounced save items ───────────────────────────────────────────
   useEffect(() => {
     if (suppressSave.current) return;
-    const timer = setTimeout(async () => {
-      try {
-        const { data: { session } } = await supabase.auth.getSession();
-        if (!session) return;
-        await supabase.from('overhead_items').delete()
-          .eq('project_id', projectId).eq('user_id', session.user.id);
-        if (items.length > 0) {
-          await supabase.from('overhead_items').insert(
-            items.map((item, i) => ({
-              id: item.id, project_id: projectId, user_id: session.user.id,
-              name: item.name, category: item.category, amount: item.amount,
-              frequency: item.frequency, notes: item.notes, sort_order: i,
-            }))
-          );
-        }
-      } catch {}
-    }, 1500);
-    return () => clearTimeout(timer);
+    let pending = true;
+    const timer = setTimeout(() => { pending = false; saveOverheadItemsToCloud(projectId, items); }, 1500);
+    // Leaving the tab within 1.5s must still save, or the cloud list falls behind the total
+    return () => { clearTimeout(timer); if (pending) saveOverheadItemsToCloud(projectId, items); };
   }, [items, projectId]);
 
   // ── Supabase: debounced save templates ──────────────────────────────────────

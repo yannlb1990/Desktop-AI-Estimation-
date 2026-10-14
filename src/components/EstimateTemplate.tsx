@@ -48,6 +48,7 @@ import { lineSource, relinkWithQuantity, createPlanLink, measuredValueFor, type 
 import { acknowledgePlanChange } from "@/lib/estimate/planLinkSync";
 import { EstimatePlanPanel, pendingPlanItems, readTakeoff } from "@/components/estimate/EstimatePlanPanel";
 import { mergeWithSaved as mergeLines } from "@/lib/estimate/mergeSaved";
+import { resolveOverheadTotal, saveOverheadItemsToCloud } from "@/lib/db/overheads";
 
 // ── Template accent colour (left border stripe, by template id) ───────────────
 const TEMPLATE_STYLES: Record<string, { accent: string }> = {
@@ -467,7 +468,8 @@ export const EstimateTemplate = ({ projectId, estimateId }: EstimateTemplateProp
         .eq('project_id', projectId)
         .eq('user_id', session.user.id);
       if (error || !data) return;
-      const actual = data.reduce((sum: number, row: any) => sum + (Number(row.amount) || 0), 0);
+      const { total: actual, pushLocal } = resolveOverheadTotal(projectId, cached, data);
+      if (pushLocal) saveOverheadItemsToCloud(projectId, pushLocal);
       setOverheadTotal(actual);
       if (Math.abs(actual - cached) > 0.005) {
         const projects: any[] = JSON.parse(localStorage.getItem(getUserStorageKey('local_projects')) || '[]');

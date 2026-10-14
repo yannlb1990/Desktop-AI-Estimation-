@@ -22,6 +22,8 @@ import { useTour } from "@/context/TourContext";
 import { TourTip } from "@/components/TourTip";
 import WelcomeOverlay from "@/components/WelcomeOverlay";
 import OnboardingChecklist from "@/components/OnboardingChecklist";
+import { calculateProjectTotals } from "@/lib/pricing/estimatePricing";
+import { readUserPricingDefaults } from "@/lib/pricing/userPricingDefaults";
 
 // ── helpers ─────────────────────────────────────────────────────────────────
 
@@ -42,9 +44,11 @@ const getStage = (p: any): Stage => {
   return 'Takeoff';
 };
 
+// Same total as the Estimate tab's Project Cost Summary (incl. GST): labour, markup,
+// overheads, prelims, contingency, margin and GST all come from the shared pricing module.
 const getProjectValue = (p: any): number => {
   if (p.estimate_items?.length > 0)
-    return p.estimate_items.reduce((s: number, i: any) => s + (i.total ?? i.unit_price * i.quantity ?? 0), 0);
+    return calculateProjectTotals(p, readUserPricingDefaults(p)).totalPrice;
   if (p.cost_items?.length > 0)
     return p.cost_items.reduce((s: number, i: any) => s + (i.subtotal ?? 0), 0);
   return 0;
@@ -94,9 +98,7 @@ function getProjectCompletion(p: any): {
     (i: any) => (i.unit_price ?? 0) > 0 || (i.labour_rate ?? 0) > 0 ||
                 (i.total ?? 0) > 0 || (i.totalCost ?? 0) > 0
   );
-  const grandTotal = (p.grand_total ?? 0) > 0
-    ? p.grand_total
-    : getProjectValue(p);
+  const grandTotal = getProjectValue(p);
   const hasTotals = grandTotal > 0;
   const isSent    = ['sent', 'won', 'lost'].includes(p.quoteStatus ?? '');
 
