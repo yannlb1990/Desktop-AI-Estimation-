@@ -558,7 +558,7 @@ const ProjectDetail = () => {
         </div>
       </nav>
 
-      <div className="container mx-auto px-4 md:px-6 py-4 md:py-8">
+      <div className="container mx-auto px-4 md:px-6 py-4 md:py-8 2xl:!max-w-[1680px]">
         <Card className="p-6 mb-8">
           <div className="flex flex-col md:flex-row md:items-start justify-between gap-6">
             <div className="space-y-2">

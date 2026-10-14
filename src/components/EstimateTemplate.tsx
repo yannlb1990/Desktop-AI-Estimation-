@@ -1163,7 +1163,7 @@ export const EstimateTemplate = ({ projectId, estimateId }: EstimateTemplateProp
                 }
               }}
             >
-              <SelectTrigger className="h-8 min-w-[90px] border-0 shadow-none hover:bg-muted/50 focus:ring-0 px-2 text-sm">
+              <SelectTrigger className="h-8 w-[104px] border-0 shadow-none hover:bg-muted/50 focus:ring-0 px-2 text-sm [&>span]:truncate">
                 <SelectValue placeholder="Area..." />
               </SelectTrigger>
               <SelectContent>
@@ -1179,7 +1179,7 @@ export const EstimateTemplate = ({ projectId, estimateId }: EstimateTemplateProp
                   onChange={(v) => setEditValues({ ...editValues, trade: v, scope_of_work: '' })}
                 />
               </div>
-            ) : item.trade}
+            ) : <span className="block max-w-[120px] text-sm leading-snug break-words">{item.trade}</span>}
           </TableCell>
           <TableCell>
             {isEditing ? (
@@ -1205,16 +1205,23 @@ export const EstimateTemplate = ({ projectId, estimateId }: EstimateTemplateProp
                   <span className="mt-0.5 block text-[10px] text-muted-foreground">measured: {item.scope_of_work}</span>
                 )}
               </div>
-            ) : item.scope_of_work}
+            ) : (
+              // Room to read: scope wraps onto a second line instead of squeezing
+              <span className="block min-w-[180px] max-w-[320px] whitespace-normal leading-snug">{item.scope_of_work}</span>
+            )}
           </TableCell>
           <TableCell>
             {isEditing ? (
               <Input
                 value={editValues.material_type}
                 onChange={(e) => setEditValues({ ...editValues, material_type: e.target.value })}
-                className="h-8"
+                className="h-8 min-w-[220px]"
               />
-            ) : item.material_type}
+            ) : (
+              <span className="block min-w-[200px] max-w-[360px] whitespace-normal leading-snug text-foreground/90" title={item.material_type}>
+                {item.material_type}
+              </span>
+            )}
           </TableCell>
           <TableCell className="text-right">
             {isEditing ? (
@@ -1225,16 +1232,21 @@ export const EstimateTemplate = ({ projectId, estimateId }: EstimateTemplateProp
                 onChange={(e) => setEditValues({ ...editValues, quantity: parseFloat(e.target.value) })}
                 className="h-8 w-24 text-right"
               />
-            ) : <span className="font-mono">{Number(item.quantity).toFixed(1)}</span>}
+            ) : (
+              <span className="whitespace-nowrap">
+                <span className="font-mono">{Number(item.quantity).toFixed(1)}</span>
+                <span className="ml-1 text-xs text-muted-foreground">{item.unit}</span>
+              </span>
+            )}
             {item.plan_link && item.plan_link.measurementIds.length > 0 && (
-              <div className="mt-1 space-y-0.5 text-[10px] leading-tight text-right whitespace-nowrap">
+              <div className="mt-1 ml-auto max-w-[104px] space-y-0.5 text-[10px] leading-tight text-right">
                 {item.plan_link.broken ? (
                   <span className="block text-red-400" title="The measurement this line followed was deleted. The quantity is kept until you change it.">
                     Measurement deleted
                   </span>
                 ) : (
                   <span
-                    className="block max-w-[150px] ml-auto truncate text-muted-foreground"
+                    className="block max-w-[104px] ml-auto truncate text-muted-foreground"
                     title={item.plan_link.measurementIds.map(id => measurementNames.get(id) || 'Measurement').join('\n')}
                   >
                     {item.plan_link.measurementIds.length === 1
@@ -1255,7 +1267,6 @@ export const EstimateTemplate = ({ projectId, estimateId }: EstimateTemplateProp
               </div>
             )}
           </TableCell>
-          <TableCell>{item.unit}</TableCell>
           <TableCell className="text-right">
             {isEditing ? (
               <Input
@@ -1292,22 +1303,23 @@ export const EstimateTemplate = ({ projectId, estimateId }: EstimateTemplateProp
             ) : (
               <div className="text-right">
                 <span className="font-mono">{Number(item.labour_hours).toFixed(1)}</span>
-                <div className="text-xs text-muted-foreground mt-0.5">
-                  @${linePricing.labourRate.toFixed(0)}/hr{item.labour_rate_override ? ' (line rate)' : ''}
+                <div
+                  className="text-xs text-muted-foreground mt-0.5 whitespace-nowrap"
+                  title={item.labour_rate_override ? 'Rate set on this line only' : 'Trade rate for this project'}
+                >
+                  @${linePricing.labourRate.toFixed(0)}/hr{item.labour_rate_override ? ' *' : ''}
                 </div>
               </div>
             )}
           </TableCell>
           <TableCell className="text-right">
-            <div>
-              <span className="font-mono text-sm">${matTotalWithRelated.toFixed(2)}</span>
+            <div className="whitespace-nowrap leading-tight" title="Materials (incl. waste) and labour for this line">
+              <div><span className="mr-1 text-[10px] text-muted-foreground">Mat</span><span className="font-mono text-sm">${matTotalWithRelated.toFixed(2)}</span></div>
               {relatedMatsTotal > 0 && (
-                <div className="text-[10px] text-muted-foreground mt-0.5">+${relatedMatsTotal.toFixed(0)} rel.</div>
+                <div className="text-[10px] text-muted-foreground">+${relatedMatsTotal.toFixed(0)} rel.</div>
               )}
+              <div className="mt-0.5"><span className="mr-1 text-[10px] text-muted-foreground">Lab</span><span className="font-mono text-sm">${labTotal.toFixed(2)}</span></div>
             </div>
-          </TableCell>
-          <TableCell className="text-right">
-            <span className="font-mono text-sm">${labTotal.toFixed(2)}</span>
           </TableCell>
           <TableCell className="text-right">
             {isEditing ? (
@@ -1326,16 +1338,16 @@ export const EstimateTemplate = ({ projectId, estimateId }: EstimateTemplateProp
               />
             ) : <span className="font-mono">{item.markup_pct}%</span>}
           </TableCell>
-          <TableCell className="text-right font-mono font-bold">${lineTotal.toFixed(2)}</TableCell>
-          <TableCell>
-            <div className="flex gap-1">
+          <TableCell className="text-right font-mono font-bold sticky right-[132px] z-10 bg-card shadow-[-6px_0_8px_-6px_rgba(0,0,0,0.6)]">${lineTotal.toFixed(2)}</TableCell>
+          <TableCell className="sticky right-0 z-10 bg-card w-[132px]">
+            <div className="flex gap-0.5">
               {isEditing ? (
                 <>
                   <Button
                     variant="ghost"
                     size="icon"
                     onClick={() => saveEdit(item.id)}
-                    className="text-[#E1DCC9]/70 h-8 w-8"
+                    className="text-[#E1DCC9]/70 h-7 w-7"
                   >
                     <Save className="h-4 w-4" />
                   </Button>
@@ -1343,7 +1355,7 @@ export const EstimateTemplate = ({ projectId, estimateId }: EstimateTemplateProp
                     variant="ghost"
                     size="icon"
                     onClick={cancelEditing}
-                    className="h-8 w-8"
+                    className="h-7 w-7"
                   >
                     <X className="h-4 w-4" />
                   </Button>
@@ -1353,7 +1365,7 @@ export const EstimateTemplate = ({ projectId, estimateId }: EstimateTemplateProp
                   <Button
                     variant="ghost"
                     size="icon"
-                    className="h-8 w-8"
+                    className="h-7 w-7"
                     onClick={() => openUrlDialog('item', item.id)}
                     title="Product URL"
                   >
@@ -1363,7 +1375,7 @@ export const EstimateTemplate = ({ projectId, estimateId }: EstimateTemplateProp
                     variant="ghost"
                     size="icon"
                     onClick={() => duplicateItem(item)}
-                    className="h-8 w-8"
+                    className="h-7 w-7"
                     title="Duplicate line"
                   >
                     <Copy className="h-4 w-4" />
@@ -1372,7 +1384,7 @@ export const EstimateTemplate = ({ projectId, estimateId }: EstimateTemplateProp
                     variant="ghost"
                     size="icon"
                     onClick={() => startEditing(item)}
-                    className="h-8 w-8"
+                    className="h-7 w-7"
                   >
                     <Edit2 className="h-4 w-4" />
                   </Button>
@@ -1380,7 +1392,7 @@ export const EstimateTemplate = ({ projectId, estimateId }: EstimateTemplateProp
                     variant="ghost"
                     size="icon"
                     onClick={() => deleteItem(item.id)}
-                    className="text-destructive h-8 w-8"
+                    className="text-destructive h-7 w-7"
                   >
                     <Trash2 className="h-4 w-4" />
                   </Button>
@@ -2256,24 +2268,24 @@ export const EstimateTemplate = ({ projectId, estimateId }: EstimateTemplateProp
         )}
 
         <div className="overflow-x-auto">
-          <Table>
+          {/* Tighter cell padding: 15 columns need the room for scope and material text */}
+          <Table className="[&_td]:px-2.5 [&_th]:px-2.5">
             <TableHeader>
               <TableRow>
-                <TableHead className="w-10"></TableHead>
+                <TableHead className="w-8"></TableHead>
                 <TableHead className="w-14">Item #</TableHead>
-                <TableHead className="min-w-[90px]">Area</TableHead>
-                <TableHead className="min-w-[90px]">Trade</TableHead>
-                <TableHead className="min-w-[100px]">Scope</TableHead>
-                <TableHead className="min-w-[120px]">Material</TableHead>
-                <TableHead className="text-right w-16">Qty</TableHead>
-                <TableHead className="w-14">Unit</TableHead>
+                <TableHead className="w-[112px]">Area</TableHead>
+                <TableHead className="w-[120px]">Trade</TableHead>
+                <TableHead className="min-w-[200px]">Scope</TableHead>
+                <TableHead className="min-w-[220px]">Material</TableHead>
+                <TableHead className="text-right w-[110px]">Qty</TableHead>
                 <TableHead className="text-right w-20">$/Unit</TableHead>
                 <TableHead className="text-right w-20">Hrs</TableHead>
-                <TableHead className="text-right w-24">Mat $</TableHead>
-                <TableHead className="text-right w-24">Labour $</TableHead>
+                <TableHead className="text-right w-[118px]">Cost</TableHead>
                 <TableHead className="text-right w-20">Markup %</TableHead>
-                <TableHead className="text-right w-24">Total</TableHead>
-                <TableHead className="w-28"></TableHead>
+                {/* Total and actions stay visible when the table scrolls sideways */}
+                <TableHead className="text-right w-24 sticky right-[132px] z-10 bg-card shadow-[-6px_0_8px_-6px_rgba(0,0,0,0.6)]">Total</TableHead>
+                <TableHead className="sticky right-0 z-10 bg-card w-[132px]"></TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -2292,7 +2304,7 @@ export const EstimateTemplate = ({ projectId, estimateId }: EstimateTemplateProp
                             className="bg-primary/5 hover:bg-primary/8 cursor-pointer select-none border-t-2 border-primary/10"
                             onClick={() => toggleGroup(groupName)}
                           >
-                            <TableCell colSpan={15} className="py-2.5 px-4">
+                            <TableCell colSpan={13} className="py-2.5 px-4">
                               <div className="flex items-center justify-between">
                                 <div className="flex items-center gap-2">
                                   {isCollapsed
