@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef, useMemo } from "react";
 import { ESTIMATE_TEMPLATES, EstimateTemplateData } from "@/data/estimateTemplates";
 import { getUserStorageKey } from "@/lib/localAuth";
 import { syncProjectToSupabase } from "@/lib/db/projects";
+import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -446,14 +447,38 @@ export const EstimateTemplate = ({ projectId, estimateId }: EstimateTemplateProp
     loadOverheads();
   }, [projectId]);
 
-  const loadOverheads = () => {
+  // Fixed overheads are the sum of the project's overhead items. project.overhead_total is
+  // only a cached copy (refreshed when the Overheads tab opens), so it can go stale and add
+  // money that no longer exists. Show the cache first, then recount from the cloud list,
+  // which the Overheads tab saves to on every change, and correct the cache if it drifted.
+  const loadOverheads = async () => {
+    let cached = 0;
     try {
       const projects = JSON.parse(localStorage.getItem(getUserStorageKey('local_projects')) || '[]');
-      const project = projects.find((p: any) => p.id === projectId);
-      if (project && project.overhead_total) {
-        setOverheadTotal(project.overhead_total);
+      cached = Number(projects.find((p: any) => p.id === projectId)?.overhead_total) || 0;
+      setOverheadTotal(cached);
+    } catch { /* corrupted data — skip cached overheads */ }
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) return;
+      const { data, error } = await supabase
+        .from('overhead_items')
+        .select('amount')
+        .eq('project_id', projectId)
+        .eq('user_id', session.user.id);
+      if (error || !data) return;
+      const actual = data.reduce((sum: number, row: any) => sum + (Number(row.amount) || 0), 0);
+      setOverheadTotal(actual);
+      if (Math.abs(actual - cached) > 0.005) {
+        const projects: any[] = JSON.parse(localStorage.getItem(getUserStorageKey('local_projects')) || '[]');
+        const idx = projects.findIndex((p: any) => p.id === projectId);
+        if (idx !== -1) {
+          projects[idx].overhead_total = actual;
+          localStorage.setItem(getUserStorageKey('local_projects'), JSON.stringify(projects));
+          syncProjectToSupabase(projects[idx]);
+        }
       }
-    } catch { /* corrupted data — skip overhead load */ }
+    } catch { /* offline: keep the cached total */ }
   };
 
   const [newItem, setNewItem] = useState({
