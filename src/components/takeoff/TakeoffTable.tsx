@@ -1,5 +1,5 @@
 import { useState, useMemo } from 'react';
-import { isConcreteSlab } from '@/lib/takeoff/calculations';
+import { isConcreteSlab, getEffectiveQuantity } from '@/lib/takeoff/calculations';
 import { isMeasurementValueLabel } from '@/lib/takeoff/scopeLabels';
 import { framingMembersForWall, STUD_SPACINGS } from '@/lib/takeoff/framingMembers';
 import { Check, Trash2, ChevronDown, ChevronRight, Plus, Search, X, Lock, MessageSquare, Clock, MapPin, Combine } from 'lucide-react';
@@ -170,7 +170,7 @@ const RoofPitchPanel = ({ measurement: m, onUpdateMeasurement }: RoofPitchPanelP
         <span>
           {pitch > 0 ? `Pitch ${pitch}°` : 'Flat roof'}
           {waste > 0 ? ` · waste ${waste}%` : ''}
-          {` · order ${adjustedArea.toFixed(2)} m²`}
+          {` · plan ${rawArea.toFixed(2)} m² → roof ${adjustedArea.toFixed(2)} m²`}
         </span>
         <button className="text-amber-400 hover:underline" onClick={() => setOpen(true)}>Change</button>
       </div>
@@ -337,15 +337,27 @@ export const TakeoffTable = ({
     }, {} as Record<string, Measurement[]>);
   }, [filteredMeasurements, groupByArea]);
 
-  const totals = useMemo(() => {
-    return measurements.reduce(
-      (acc, m) => {
-        acc[m.unit] = (acc[m.unit] || 0) + m.realValue;
-        return acc;
-      },
-      { LM: 0, M2: 0, M3: 0, count: 0 } as Record<string, number>
-    );
+  // Totals per kind of measurement: adding roof, slab and floor m² together means nothing
+  const totalsByType = useMemo(() => {
+    const groups = new Map<string, { qty: number; unit: string; derived: number; derivedUnit: string }>();
+    for (const m of measurements) {
+      const unit = String(m.unit || '').toUpperCase().replace('²', '2');
+      const type = m.measurementType === 'Floor' && m.isConcreteFloor ? 'Concrete floor'
+        : m.measurementType && m.measurementType !== 'Other' ? m.measurementType
+        : unit === 'LM' ? 'Lengths' : unit === 'COUNT' ? 'Counts' : 'Areas';
+      const key = `${type}|${unit}`;
+      const g = groups.get(key) ?? { qty: 0, unit, derived: 0, derivedUnit: '' };
+      g.qty += m.realValue || 0;
+      const effective = getEffectiveQuantity(m);
+      if (effective !== m.realValue) {
+        g.derived += effective;
+        g.derivedUnit = m.measurementType === 'Wall' ? 'm²' : 'm³';
+      }
+      groups.set(key, g);
+    }
+    return [...groups.entries()].map(([key, g]) => ({ type: key.split('|')[0], ...g }));
   }, [measurements]);
+  const unitLabel = (u: string) => (u === 'LM' ? 'lm' : u === 'M2' ? 'm²' : u === 'M3' ? 'm³' : u === 'COUNT' ? 'ea' : u.toLowerCase());
 
   const validatedCount = useMemo(
     () => measurements.filter((m) => m.validated).length,
@@ -1029,10 +1041,12 @@ export const TakeoffTable = ({
         {/* Totals */}
         <div className="flex items-center gap-4 text-xs flex-wrap">
           <span className="font-medium">Totals:</span>
-          {totals.LM > 0 && <Badge variant="outline">LM: {totals.LM.toFixed(2)}</Badge>}
-          {totals.M2 > 0 && <Badge variant="outline">M²: {totals.M2.toFixed(2)}</Badge>}
-          {totals.M3 > 0 && <Badge variant="outline">M³: {totals.M3.toFixed(3)}</Badge>}
-          {totals.count > 0 && <Badge variant="outline">EA: {totals.count}</Badge>}
+          {totalsByType.map(t => (
+            <Badge key={`${t.type}-${t.unit}`} variant="outline">
+              {t.type} {t.unit === 'COUNT' ? t.qty : t.qty.toFixed(2)} {unitLabel(t.unit)}
+              {t.derived > 0 ? ` (${t.derived.toFixed(2)} ${t.derivedUnit})` : ''}
+            </Badge>
+          ))}
           <div className="ml-auto text-muted-foreground">
             In estimate: {measurements.filter(m => inEstimateIds?.has(m.id)).length} of {measurements.length}
           </div>

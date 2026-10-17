@@ -3,6 +3,7 @@ import { ESTIMATE_TEMPLATES, EstimateTemplateData } from "@/data/estimateTemplat
 import { getUserStorageKey } from "@/lib/localAuth";
 import { syncProjectToSupabase } from "@/lib/db/projects";
 import { supabase } from "@/integrations/supabase/client";
+import { checkEstimate } from "@/lib/estimate/checks";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -255,7 +256,7 @@ const SCOPES_BY_MEASUREMENT: Record<string, string[]> = {
   Tiling: ['Floor tiling', 'Wall tiling', 'Splashbacks'],
   Roofing: ['Roof sheeting', 'Roof tiles', 'Sarking', 'Gutters', 'Fascia'],
   Cladding: ['External cladding', 'Weatherboards', 'Render'],
-  'Concrete Slab': ['Concrete slab', 'Slab reinforcement', 'Vapour barrier'],
+  'Concrete Slab': ['Concrete slab', 'Footings', 'Slab reinforcement', 'Vapour barrier', 'Edge formwork', 'Concrete pump'],
   Framing: ['Wall framing', 'Roof framing', 'Floor framing'],
   Painting: ['Painting walls', 'Painting ceilings', 'External painting'],
   Waterproofing: ['Waterproofing'],
@@ -424,6 +425,8 @@ export const EstimateTemplate = ({ projectId, estimateId }: EstimateTemplateProp
   const [showConfig, setShowConfig] = useState(false);
   const [groupingMode, setGroupingMode] = useState<'none' | 'trade' | 'room'>('none');
   const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set());
+  const [checksOpen, setChecksOpen] = useState(false);
+  const [flashRowId, setFlashRowId] = useState<string | null>(null);
   const [showTemplateModal, setShowTemplateModal] = useState(false);
   const [customTemplates, setCustomTemplates] = useState<EstimateTemplateData[]>(() => loadCustomTemplates());
   const [showSaveModal, setShowSaveModal] = useState(false);
@@ -942,6 +945,17 @@ export const EstimateTemplate = ({ projectId, estimateId }: EstimateTemplateProp
   let totals = { totalMaterials: 0, totalLabour: 0, totalMarkup: 0, baseSubtotal: 0, supervision: 0, overheadsPct: 0, overheadTotal: 0, totalOverheads: 0, prelimsTotal: 0, ffeTotal: 0, preMargin: 0, contingency: 0, customConfigsTotal: 0, margin: 0, taxable: 0, gst: 0, totalPrice: 0 };
   try { totals = calculateTotals(); } catch { /* corrupted item data — show zeros */ }
   // Profit is the overall margin plus any per-line markup, as a share of the ex-GST price.
+  const estimateChecks = useMemo(() => checkEstimate(items as any, config, labourRates), [items, config, labourRates]);
+  const showLine = (itemId: string) => {
+    setCollapsedGroups(new Set());
+    setOpenSections(prev => ({ ...prev, lineItems: true }));
+    setTimeout(() => {
+      document.getElementById(`est-row-${itemId}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      setFlashRowId(itemId);
+      setTimeout(() => setFlashRowId(null), 2000);
+    }, 50);
+  };
+
   const realMarginEst = totals.taxable > 0
     ? (totals.margin + totals.totalMarkup) / totals.taxable * 100
     : config.marginPct / (100 + config.marginPct) * 100;
@@ -1102,7 +1116,9 @@ export const EstimateTemplate = ({ projectId, estimateId }: EstimateTemplateProp
   // Takeoff measurements, for the plan picker and for scope suggestions on plan lines
   const takeoffMeasurements = useMemo(() => readTakeoff(projectId).measurements, [projectId, items]);
   const measurementKind = (m: any): string =>
-    (m.measurementType && SCOPES_BY_MEASUREMENT[m.measurementType]) ? m.measurementType
+    // A floor ticked as concrete is a slab: offer concrete scopes, not tiling
+    m.measurementType === 'Floor' && m.isConcreteFloor ? 'Concrete Slab'
+    : (m.measurementType && SCOPES_BY_MEASUREMENT[m.measurementType]) ? m.measurementType
       : String(m.unit || '').toUpperCase() === 'COUNT' ? 'EA'
       : String(m.unit || '').toUpperCase() === 'LM' ? 'LM' : 'M2';
   const scopesForLine = (item: EstimateItem): string[] => {
@@ -1158,7 +1174,7 @@ export const EstimateTemplate = ({ projectId, estimateId }: EstimateTemplateProp
 
     return (
       <React.Fragment key={item.id}>
-        <TableRow className="group">
+        <TableRow id={`est-row-${item.id}`} className={`group transition-colors ${flashRowId === item.id ? 'bg-amber-500/15 [&>td.sticky]:!bg-[#33240f]' : ''}`}>
           <TableCell>
             {relatedMats.length > 0 && (
               <Button
@@ -1340,33 +1356,36 @@ export const EstimateTemplate = ({ projectId, estimateId }: EstimateTemplateProp
             )}
           </TableCell>
           <TableCell className="text-right">
-            <div className="whitespace-nowrap leading-tight" title="Materials (incl. waste) and labour for this line">
+            <div className="whitespace-nowrap leading-tight" title="Materials (incl. waste), labour and markup for this line">
               <div><span className="mr-1 text-[10px] text-muted-foreground">Mat</span><span className="font-mono text-sm">${matTotalWithRelated.toFixed(2)}</span></div>
               {relatedMatsTotal > 0 && (
                 <div className="text-[10px] text-muted-foreground">+${relatedMatsTotal.toFixed(0)} rel.</div>
               )}
               <div className="mt-0.5"><span className="mr-1 text-[10px] text-muted-foreground">Lab</span><span className="font-mono text-sm">${labTotal.toFixed(2)}</span></div>
+              {/* Markup lives here, not in its own column: the column next to the pinned Total gets hidden when the table scrolls */}
+              <div className="mt-0.5 flex items-center justify-end gap-1">
+                <span className="text-[10px] text-muted-foreground">Markup</span>
+                {isEditing ? (
+                  <Input
+                    type="number"
+                    step="0.1"
+                    min="0"
+                    aria-label="Markup %"
+                    value={editValues.markup_pct !== undefined ? editValues.markup_pct : item.markup_pct}
+                    onChange={(e) => {
+                      setEditValues({ ...editValues, markup_pct: e.target.value === '' ? undefined : parseFloat(e.target.value) });
+                    }}
+                    onBlur={(e) => {
+                      if (e.target.value === '') setEditValues({ ...editValues, markup_pct: 0 });
+                    }}
+                    className="h-6 w-16 text-right text-xs"
+                  />
+                ) : <span className="font-mono text-xs">{item.markup_pct || 0}%</span>}
+              </div>
             </div>
           </TableCell>
-          <TableCell className="text-right">
-            {isEditing ? (
-              <Input
-                type="number"
-                step="0.1"
-                min="0"
-                value={editValues.markup_pct !== undefined ? editValues.markup_pct : item.markup_pct}
-                onChange={(e) => {
-                  setEditValues({ ...editValues, markup_pct: e.target.value === '' ? undefined : parseFloat(e.target.value) });
-                }}
-                onBlur={(e) => {
-                  if (e.target.value === '') setEditValues({ ...editValues, markup_pct: 0 });
-                }}
-                className="h-8 w-20 text-right"
-              />
-            ) : <span className="font-mono">{item.markup_pct}%</span>}
-          </TableCell>
-          <TableCell className="text-right font-mono font-bold sticky right-[132px] z-10 bg-card shadow-[-6px_0_8px_-6px_rgba(0,0,0,0.6)]">${lineTotal.toFixed(2)}</TableCell>
-          <TableCell className="sticky right-0 z-10 bg-card w-[132px]">
+          <TableCell className="text-right font-mono font-bold sticky right-[140px] z-10 bg-card shadow-[-6px_0_8px_-6px_rgba(0,0,0,0.6)]">${lineTotal.toFixed(2)}</TableCell>
+          <TableCell className="sticky right-0 z-10 bg-card w-[140px] min-w-[140px]">
             <div className="flex gap-0.5">
               {isEditing ? (
                 <>
@@ -1430,7 +1449,7 @@ export const EstimateTemplate = ({ projectId, estimateId }: EstimateTemplateProp
         </TableRow>
         {item.expanded && relatedMats.length > 0 && (
           <TableRow className="bg-muted/30">
-            <TableCell colSpan={13} className="py-0">
+            <TableCell colSpan={12} className="py-0">
               <div className="p-4 space-y-3">
                 <div className="flex items-center justify-between">
                   <p className="text-sm font-semibold text-muted-foreground">Related Materials for {item.scope_of_work}:</p>
@@ -2224,6 +2243,44 @@ export const EstimateTemplate = ({ projectId, estimateId }: EstimateTemplateProp
         </button>
         {openSections.lineItems && (
         <div className="px-6 pb-6 border-t border-border">
+        {items.length > 0 && (() => {
+          const fixes = estimateChecks.filter(c => c.level === 'fix').length;
+          const looks = estimateChecks.length - fixes;
+          const lineFor = (id: string) => items.find(i => i.id === id);
+          return (
+            <div className={`mt-3 rounded-lg border px-4 py-2.5 text-sm ${estimateChecks.length === 0 ? 'border-border' : fixes > 0 ? 'border-red-400/40 bg-red-400/5' : 'border-amber-400/40 bg-amber-400/5'}`}>
+              <div className="flex items-center justify-between gap-3">
+                <span className="font-medium">
+                  {estimateChecks.length === 0
+                    ? 'Check estimate: nothing to fix before quoting'
+                    : `Check estimate: ${[fixes ? `${fixes} to fix` : '', looks ? `${looks} to check` : ''].filter(Boolean).join(', ')}`}
+                </span>
+                {estimateChecks.length > 0 && (
+                  <button type="button" className="text-xs font-medium text-[#D4A045] hover:underline" onClick={() => setChecksOpen(o => !o)}>
+                    {checksOpen ? 'Hide' : 'Show'}
+                  </button>
+                )}
+              </div>
+              {checksOpen && estimateChecks.length > 0 && (
+                <ul className="mt-2 space-y-1">
+                  {estimateChecks.map((c, i) => {
+                    const line = lineFor(c.itemId);
+                    return (
+                      <li key={`${c.itemId}-${i}`} className="flex items-baseline justify-between gap-3 border-t border-border/50 pt-1">
+                        <span>
+                          <span className={c.level === 'fix' ? 'text-red-400' : 'text-amber-400'}>{c.level === 'fix' ? 'Fix' : 'Check'}</span>
+                          <span className="ml-2 text-muted-foreground">Line {line?.item_number ?? ''}{line?.scope_of_work && !/^\d/.test(line.scope_of_work) ? ` ${line.scope_of_work}` : ''}:</span>
+                          <span className="ml-1">{c.message}</span>
+                        </span>
+                        <button type="button" className="shrink-0 text-xs text-[#D4A045] hover:underline" onClick={() => showLine(c.itemId)}>Show line</button>
+                      </li>
+                    );
+                  })}
+                </ul>
+              )}
+            </div>
+          );
+        })()}
         <div className="flex items-center justify-between mb-4 mt-2">
           <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">Project Price Per Item</h3>
           <div className="flex items-center gap-3">
@@ -2308,11 +2365,10 @@ export const EstimateTemplate = ({ projectId, estimateId }: EstimateTemplateProp
                 <TableHead className="text-right w-[110px]">Qty</TableHead>
                 <TableHead className="text-right w-20">$/Unit</TableHead>
                 <TableHead className="text-right w-20">Hrs</TableHead>
-                <TableHead className="text-right w-[118px]">Cost</TableHead>
-                <TableHead className="text-right w-20">Markup %</TableHead>
+                <TableHead className="text-right w-[130px]">Cost</TableHead>
                 {/* Total and actions stay visible when the table scrolls sideways */}
-                <TableHead className="text-right w-24 sticky right-[132px] z-10 bg-card shadow-[-6px_0_8px_-6px_rgba(0,0,0,0.6)]">Total</TableHead>
-                <TableHead className="sticky right-0 z-10 bg-card w-[132px]"></TableHead>
+                <TableHead className="text-right w-24 sticky right-[140px] z-10 bg-card shadow-[-6px_0_8px_-6px_rgba(0,0,0,0.6)]">Total</TableHead>
+                <TableHead className="sticky right-0 z-10 bg-card w-[140px] min-w-[140px]"></TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -2331,7 +2387,7 @@ export const EstimateTemplate = ({ projectId, estimateId }: EstimateTemplateProp
                             className="bg-primary/5 hover:bg-primary/8 cursor-pointer select-none border-t-2 border-primary/10"
                             onClick={() => toggleGroup(groupName)}
                           >
-                            <TableCell colSpan={13} className="py-2.5 px-4">
+                            <TableCell colSpan={12} className="py-2.5 px-4">
                               <div className="flex items-center justify-between">
                                 <div className="flex items-center gap-2">
                                   {isCollapsed

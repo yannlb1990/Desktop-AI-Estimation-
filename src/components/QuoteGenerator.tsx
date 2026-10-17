@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from "react"
+import { useState, useRef, useEffect, useMemo } from "react"
 import { getUserStorageKey } from "@/lib/localAuth"
 import { supabase } from "@/integrations/supabase/client"
 import { Button } from "@/components/ui/button"
@@ -17,6 +17,7 @@ import { scopeForDisplay } from "@/lib/takeoff/scopeLabels"
 import { approveQuoteVersion, clearQuoteApproval, loadProject, createQuoteShare, loadQuoteShares, syncClientApprovals, quoteShareUrl, type QuoteShareRow } from "@/lib/contract"
 import { scaleLinesToTotal, shownTotal, lineAmount } from "@/lib/pricing/quoteLines"
 import { gstOn } from "@/lib/pricing/estimatePricing"
+import { checkEstimate } from "@/lib/estimate/checks"
 
 interface QuoteGeneratorProps {
   project: any
@@ -638,6 +639,18 @@ ${clone.outerHTML}
   }
   useEffect(() => { if (open) refreshShares() }, [open, project?.id])
 
+  // Same checks as the Estimate tab, so a quote isn't sent with $0 lines or unfinished text
+  const estimateIssues = useMemo(() => {
+    if (!open) return 0
+    try {
+      const projects: any[] = JSON.parse(localStorage.getItem(getUserStorageKey("local_projects")) || "[]")
+      const p = projects.find((x: any) => x.id === project?.id)
+      if (!p?.estimate_items?.length) return 0
+      const { config, labourRates } = resolveProjectPricing(p, readUserPricingDefaults(p))
+      return checkEstimate(p.estimate_items, config, labourRates).filter(c => c.level === 'fix').length
+    } catch { return 0 }
+  }, [open, project?.id, quoteLines])
+
   const sendApprovalLink = async (v: typeof versions[0]) => {
     if (!project?.id) return
     setSharing(v.id)
@@ -708,6 +721,11 @@ ${clone.outerHTML}
                 </Button>
               </div>
             </div>
+            {estimateIssues > 0 && (
+              <p className="mt-2 rounded-md border border-red-400/40 bg-red-400/5 px-3 py-1.5 text-xs text-red-300">
+                The estimate has {estimateIssues} {estimateIssues === 1 ? 'line' : 'lines'} to fix (no price, scope not chosen or unfinished text). Open the Estimate tab and use Check estimate before sending.
+              </p>
+            )}
           </DialogHeader>
 
           <div className="flex flex-1 overflow-hidden">
