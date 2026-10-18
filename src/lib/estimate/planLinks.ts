@@ -22,6 +22,11 @@ export interface PlanLink {
   factor: number;
   /** Measured total the last time the line was synced */
   baseQty: number;
+  /** Linked to the measurement but the quantity never scales (a pump hire, truck loads) */
+  fixedQty?: boolean;
+  /** Follow the measurement as drawn (slab area), not its derived volume: mesh, chairs,
+   *  membrane and edge forms don't change when only the slab thickness changes */
+  raw?: boolean;
   /** All linked measurements have been deleted: quantity frozen, needs attention */
   broken?: boolean;
   /** Set when the plan changed the quantity; cleared when the user acknowledges */
@@ -59,7 +64,8 @@ export function unitKind(unit?: string): UnitKind {
  * concrete slab follows its area (not its volume). Otherwise the measurement's
  * effective quantity (wall m², slab m³, count, length, area).
  */
-export function measuredValueFor(m: Measurement, lineUnit?: string): number {
+export function measuredValueFor(m: Measurement, lineUnit?: string, raw = false): number {
+  if (raw) return m.realValue || 0;
   const want = unitKind(lineUnit);
   const have = unitKind(m.unit);
   if (want === 'LM' && have === 'LM') return m.realValue || 0;
@@ -69,28 +75,29 @@ export function measuredValueFor(m: Measurement, lineUnit?: string): number {
   return getEffectiveQuantity(m) || 0;
 }
 
-export function measuredBase(ids: string[], byId: Map<string, Measurement>, lineUnit?: string): { base: number; found: number } {
+export function measuredBase(ids: string[], byId: Map<string, Measurement>, lineUnit?: string, raw = false): { base: number; found: number } {
   let base = 0;
   let found = 0;
   for (const id of ids) {
     const m = byId.get(id);
     if (!m) continue;
     found++;
-    base += measuredValueFor(m, lineUnit);
+    base += measuredValueFor(m, lineUnit, raw);
   }
   return { base, found };
 }
 
 /** Link a line to measurements, keeping its current quantity (factor = qty / measured). */
-export function createPlanLink(measurementIds: string[], quantity: number, measurements: Measurement[], lineUnit?: string): PlanLink {
+export function createPlanLink(measurementIds: string[], quantity: number, measurements: Measurement[], lineUnit?: string, raw = false): PlanLink {
   const byId = new Map(measurements.map(m => [m.id, m]));
   const ids = [...new Set(measurementIds)].filter(id => byId.has(id));
-  const { base } = measuredBase(ids, byId, lineUnit);
+  const { base } = measuredBase(ids, byId, lineUnit, raw);
   return {
     measurementIds: ids,
     factor: base > 0 ? quantity / base : 1,
     baseQty: round(base),
     v: 2,
+    ...(raw ? { raw: true } : {}),
   };
 }
 
@@ -126,7 +133,7 @@ export function applyMeasurements<T extends LinkableItem>(
     const link = item.plan_link;
     if (!link || !link.measurementIds?.length) return item;
 
-    const { base, found } = measuredBase(link.measurementIds, byId, item.unit);
+    const { base, found } = measuredBase(link.measurementIds, byId, item.unit, !!link.raw);
     if (link.v !== 2 && found > 0) {
       // Link made before bases followed the line's unit: re-base it, quantity unchanged
       return { ...item, plan_link: { ...link, v: 2 as const, factor: base > 0 ? (Number(item.quantity) || 0) / base : link.factor, baseQty: round(base) } };
@@ -137,6 +144,8 @@ export function applyMeasurements<T extends LinkableItem>(
       changes.push({ itemId: item.id, from: item.quantity, to: item.quantity, broken: true });
       return { ...item, plan_link: { ...link, broken: true } };
     }
+
+    if (link.fixedQty) return link.broken ? { ...item, plan_link: { ...link, broken: false } } : item;
 
     const newQty = round(link.factor * base, 3);
     const baseChanged = Math.abs(round(base) - link.baseQty) > 0.0005;
@@ -185,7 +194,7 @@ export function remapMeasurementIds<T extends LinkableItem>(
     const link = item.plan_link;
     if (!link || !link.measurementIds.some(id => old.has(id))) return item;
     const ids = [...new Set(link.measurementIds.map(id => (old.has(id) ? combined.id : id)))];
-    const { base } = measuredBase(ids, byId, item.unit);
+    const { base } = measuredBase(ids, byId, item.unit, !!link.raw);
     return {
       ...item,
       plan_link: {

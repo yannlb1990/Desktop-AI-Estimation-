@@ -12,6 +12,7 @@ import { calculateProjectTotals, priceLine, resolveProjectPricing } from '@/lib/
 import { readUserPricingDefaults } from '@/lib/pricing/userPricingDefaults';
 import { isMeasurementValueLabel, workLabelForMeasurement, isGenericScope } from '@/lib/takeoff/scopeLabels';
 import { createPlanLink } from './planLinks';
+import { knownTradeName } from '@/data/labourRates';
 
 /** Map a CostItem category to the nearest AU trade */
 export const CATEGORY_TO_TRADE: Record<string, string> = {
@@ -28,7 +29,7 @@ export function costItemToEstimateLine(
   opts: { itemNumber: number; materialWastePct: number; labourWastePct: number },
 ): any {
   const linkedIds = item.linkedMeasurements ?? [];
-  const link = linkedIds.length ? createPlanLink(linkedIds, item.quantity, measurements, item.unit) : null;
+  const link = linkedIds.length ? createPlanLink(linkedIds, item.quantity, measurements, item.unit, !!item.followsDrawnQuantity) : null;
   const linked = !!link && link.measurementIds.length > 0;
   // A plan line named only after its measurement ("Kitchen floor", "Wall") says where,
   // not what work: keep the name as a note and let the Estimate ask for the scope.
@@ -46,10 +47,12 @@ export function costItemToEstimateLine(
     id: `ci-${item.id}`,
     _costItemId: item.id,
     source: linked ? 'plan' : item.rateId ? 'ai' : 'manual',
-    plan_link: linked ? link : null,
+    plan_link: linked ? (item.fixedQuantity ? { ...link!, fixedQty: true } : link) : null,
     section_id: null,
     area: item.area || '',
-    trade: CATEGORY_TO_TRADE[item.category] || item.trade || 'Carpenter',
+    // The item's own trade wins when it is a real labour trade (batts: Insulation, trench: Civil /
+    // Excavation); 'General' or an AI category falls back to the category map as before
+    trade: knownTradeName(item.trade) ?? CATEGORY_TO_TRADE[item.category] ?? item.trade ?? 'Carpenter',
     // The scope says what the work is, never the measured size or its name
     scope_of_work: scope,
     material_type: item.customMaterial || item.material || (isMeasurementValueLabel(item.name) || namedAfterMeasurement ? '' : item.name) || '',

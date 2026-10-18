@@ -21,10 +21,12 @@ function rescaleCostQty(
   newMeasurements: Measurement[],
   newLinks: string[],
 ): number {
+  // Pump hire, truck loads: never scale. Slab mesh and forms: follow the drawn area, not the volume
+  if (item.fixedQuantity) return item.quantity;
   const sum = (ids: string[], ms: Measurement[]) =>
     ids.reduce((acc, mId) => {
       const m = ms.find(x => x.id === mId);
-      return m ? acc + measuredValueFor(m, item.unit) : acc;
+      return m ? acc + measuredValueFor(m, item.unit, !!item.followsDrawnQuantity) : acc;
     }, 0);
   const oldBase = sum(item.linkedMeasurements, oldMeasurements);
   const newBase = sum(newLinks, newMeasurements);

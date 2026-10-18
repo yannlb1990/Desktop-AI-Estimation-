@@ -124,3 +124,37 @@ const item = { id: 'L1', quantity: 54, labour_hours: 10.8, plan_link: link };
 
 if (failed) { console.log(`\n${failed} FAILED`); process.exit(1); }
 console.log('\nall plan-link tests passed');
+
+// Fixed-quantity links (pump hire, truck loads) keep their quantity when the measurement changes
+{
+  const { applyMeasurements } = await import('@/lib/estimate/planLinks');
+  const m1: any = { id: 'mx', unit: 'M2', realValue: 10 };
+  const items: any[] = [{ id: 'pump', quantity: 1, unit: 'item', plan_link: { measurementIds: ['mx'], factor: 0.1, baseQty: 10, v: 2, fixedQty: true } }];
+  const out = applyMeasurements(items, [{ ...m1, realValue: 25 }]);
+  if (out.items[0].quantity !== 1) { console.log('FAIL fixed pump changed'); process.exit(1); }
+  console.log('PASS fixed quantity link stays put');
+}
+
+// Slab mesh linked to the drawn area: a thickness change leaves it alone, an area change scales it
+{
+  const { applyMeasurements, createPlanLink } = await import('@/lib/estimate/planLinks');
+  const slab: any = { id: 'sx', unit: 'M2', measurementType: 'Concrete Slab', realValue: 100, concreteDepth: 0.1 };
+  const mesh: any = { id: 'mesh', quantity: 8, unit: 'EA', plan_link: createPlanLink(['sx'], 8, [slab], 'EA', true) };
+  const thicker = applyMeasurements([mesh], [{ ...slab, concreteDepth: 0.2 }]).items[0];
+  const bigger = applyMeasurements([mesh], [{ ...slab, realValue: 150 }]).items[0];
+  if (thicker.quantity !== 8 || Math.abs(bigger.quantity - 12) > 0.01) { console.log('FAIL slab mesh basis', thicker.quantity, bigger.quantity); process.exit(1); }
+  console.log('PASS slab mesh follows area, not thickness');
+}
+
+// Combining slabs keeps an area-based line on the area (review 18 Oct: it jumped to 10x)
+{
+  const { applyMeasurements, createPlanLink, remapMeasurementIds } = await import('@/lib/estimate/planLinks');
+  const a: any = { id: 'a', unit: 'M2', measurementType: 'Concrete Slab', realValue: 100, concreteDepth: 0.1 };
+  const b: any = { id: 'b', unit: 'M2', measurementType: 'Concrete Slab', realValue: 50, concreteDepth: 0.1 };
+  const c: any = { id: 'c', unit: 'M2', measurementType: 'Concrete Slab', realValue: 150, concreteDepth: 0.1 };
+  const mesh: any = { id: 'mesh', quantity: 8, unit: 'EA', plan_link: createPlanLink(['a'], 8, [a], 'EA', true) };
+  const remapped = remapMeasurementIds([mesh], ['a', 'b'], c, [a, b, c]);
+  const synced = applyMeasurements(remapped, [c]).items[0];
+  if (Math.abs(synced.quantity - 8) > 0.01) { console.log('FAIL remap raw', synced.quantity); process.exit(1); }
+  console.log('PASS combined slabs keep mesh on area');
+}

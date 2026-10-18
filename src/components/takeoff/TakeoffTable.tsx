@@ -4,6 +4,8 @@ import { isMeasurementValueLabel } from '@/lib/takeoff/scopeLabels';
 import { framingMembersForWall, STUD_SPACINGS } from '@/lib/takeoff/framingMembers';
 import { Check, Trash2, ChevronDown, ChevronRight, Plus, Search, X, Lock, MessageSquare, Clock, MapPin, Combine } from 'lucide-react';
 import { WallSetupDialog, WallUpdate } from './WallSetupDialog';
+import { ConcreteSetupDialog, type ConcreteSetup, type PricedConcreteLine } from './ConcreteSetupDialog';
+import type { AustralianState } from '@/data/scopeOfWorkRates';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -291,6 +293,9 @@ interface TakeoffTableProps {
   onOpenEstimate?: () => void;
   /** Add the suggested framing members of a wall to the estimate */
   onAddFraming?: (m: Measurement) => void;
+  /** Slab, footing or trench quantities from the concrete setup */
+  onAddConcrete?: (m: Measurement, setup: ConcreteSetup, lines: PricedConcreteLine[]) => void;
+  projectState?: AustralianState;
 }
 
 export const TakeoffTable = ({
@@ -305,7 +310,10 @@ export const TakeoffTable = ({
   inEstimateIds,
   onOpenEstimate,
   onAddFraming,
+  onAddConcrete,
+  projectState = 'QLD',
 }: TakeoffTableProps) => {
+  const [concreteFor, setConcreteFor] = useState<Measurement | null>(null);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
   const [searchFilter, setSearchFilter] = useState('');
@@ -828,17 +836,36 @@ export const TakeoffTable = ({
                   </div>
                 );
               })() : (
-                <button
-                  className="rounded-md border border-dashed border-foreground/20 px-2 py-1.5 text-[11px] font-medium text-[#E1DCC9] hover:border-foreground/40 hover:bg-primary/10 transition-colors"
-                  onClick={() => { setWallsForSetup([m]); setPendingNonWallIds([]); setWallSetupOpen(true); }}
-                >
-                  Set up wall
-                </button>
+                <div className="flex flex-wrap gap-1.5">
+                  <button
+                    className="rounded-md border border-dashed border-foreground/20 px-2 py-1.5 text-[11px] font-medium text-[#E1DCC9] hover:border-foreground/40 hover:bg-primary/10 transition-colors"
+                    onClick={() => { setWallsForSetup([m]); setPendingNonWallIds([]); setWallSetupOpen(true); }}
+                  >
+                    Set up wall
+                  </button>
+                  {onAddConcrete && m.measurementType !== 'Wall' && (
+                    <button
+                      className="rounded-md border border-dashed border-foreground/20 px-2 py-1.5 text-[11px] font-medium text-[#E1DCC9] hover:border-foreground/40 hover:bg-primary/10 transition-colors"
+                      onClick={() => setConcreteFor(m)}
+                    >
+                      Footing or trench
+                    </button>
+                  )}
+                </div>
               )
-            ) : isConcreteSlab(m) && m.concreteDepth ? (
-              <span className="text-foreground/80">
-                {(m.computedM3 ?? m.realValue * m.concreteDepth).toFixed(2)} m³ at {Math.round(m.concreteDepth * 1000)} mm
-              </span>
+            ) : isConcreteSlab(m) ? (
+              <div className="space-y-1">
+                {m.concreteDepth ? (
+                  <span className="block text-foreground/80">
+                    {(m.computedM3 ?? m.realValue * m.concreteDepth).toFixed(2)} m³ at {Math.round(m.concreteDepth * 1000)} mm
+                  </span>
+                ) : null}
+                {onAddConcrete && (
+                  <button className="text-amber-400 hover:underline" onClick={() => setConcreteFor(m)}>
+                    {(m as any).concreteSetup ? 'Slab setup (mesh, beams, pump)' : 'Slab setup: mesh, edge beams, pump'}
+                  </button>
+                )}
+              </div>
             ) : (
               <span className="text-muted-foreground/40">-</span>
             )}
@@ -1139,6 +1166,13 @@ export const TakeoffTable = ({
         </SheetContent>
       </Sheet>
 
+      <ConcreteSetupDialog
+        open={!!concreteFor}
+        measurement={concreteFor}
+        projectState={projectState}
+        onConfirm={(m, setup, lines) => { onAddConcrete?.(m, setup, lines); setConcreteFor(null); }}
+        onCancel={() => setConcreteFor(null)}
+      />
       <WallSetupDialog
         open={wallSetupOpen}
         walls={wallsForSetup}

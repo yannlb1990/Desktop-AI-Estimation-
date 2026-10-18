@@ -146,6 +146,8 @@ export interface Measurement {
   liningFaces?: number;
   /** Wall Setup v2: per-face finishes, openings and follow-on trades (src/lib/takeoff/wallItems.ts) */
   wallBuild?: import('./wallItems').WallBuild;
+  /** Slab, footing or trench setup (src/components/takeoff/ConcreteSetupDialog.tsx) */
+  concreteSetup?: import('@/components/takeoff/ConcreteSetupDialog').ConcreteSetup;
   customLining?: string;
   hasInsulation?: boolean;
   insulationType?: string;
@@ -180,6 +182,10 @@ export interface CostItem {
   description: string;
   unit: MeasurementUnit;
   unitCost: number;
+  /** Quantity stays put when the linked measurement changes (pump hire, truck loads) */
+  fixedQuantity?: boolean;
+  /** Plan link follows the measurement as drawn (slab area), not its volume */
+  followsDrawnQuantity?: boolean;
   quantity: number;
   linkedMeasurements: string[];
   labourHours?: number;

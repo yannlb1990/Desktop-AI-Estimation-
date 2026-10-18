@@ -49,6 +49,7 @@ import { AppProfile, loadProfile } from '@/lib/takeoff/profile';
 import { useSubscription } from '@/hooks/useSubscription';
 import { UpgradeModal } from '@/components/UpgradeModal';
 import { getCachedPDF } from '@/lib/takeoff/pdfCache';
+import type { ConcreteSetup, PricedConcreteLine } from './ConcreteSetupDialog';
 
 interface PDFTakeoffProps {
   projectId: string;
@@ -754,6 +755,46 @@ export const PDFTakeoff = ({ projectId, estimateId, onAddCostItems }: PDFTakeoff
     return items.length;
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [state.costItems, dispatch, wallCostItems, projectId]);
+
+  // Slab, footing or trench: its lines replace whatever that measurement added before
+  const handleAddConcrete = useCallback((m: Measurement, setup: ConcreteSetup, lines: PricedConcreteLine[]) => {
+    // Replace what an earlier setup added; for a slab also its plain item (that was the concrete).
+    // A trench or footing keeps other lines on the same run (a priced pipe, for example).
+    const plainCategories = setup.job === 'slab' ? [m.measurementType || 'General', 'General', 'Concrete Slab', 'Floor'] : [];
+    const old = state.costItems.filter(c => c.linkedMeasurements?.includes(m.id) &&
+      (c.category === 'Concrete works' || plainCategories.includes(c.category)));
+    old.forEach(c => dispatch({ type: 'DELETE_COST_ITEM', payload: c.id }));
+    removeEstimateLinesForCostItems(projectId, old.map(c => c.id));
+    const updates: Partial<Measurement> = { concreteSetup: setup, addedToEstimate: true, validated: true };
+    if (setup.slab && setup.slab.thicknessMm > 0) updates.concreteDepth = setup.slab.thicknessMm / 1000;
+    dispatch({ type: 'UPDATE_MEASUREMENT', payload: { id: m.id, updates } });
+    const drawingNumber = m.drawingNumber || `Page ${(m.pageIndex ?? 0) + 1}`;
+    lines.forEach(l => {
+      dispatch({ type: 'ADD_COST_ITEM', payload: {
+        id: crypto.randomUUID(),
+        category: 'Concrete works',
+        name: l.name,
+        description: l.note,
+        unit: l.unit,
+        unitCost: l.unitPrice,
+        quantity: l.qty,
+        fixedQuantity: !!l.fixed,
+        // On a slab, only concrete follows the volume; mesh, chairs, membrane, forms and beam digging follow the area
+        followsDrawnQuantity: l.unit !== 'M3' || l.key === 'beamdig',
+        // Quantities already include laps and waste: the estimate must not add its default on top
+        materialWastePercent: 0,
+        linkedMeasurements: [m.id],
+        wasteFactor: 1,
+        subtotal: l.unitPrice * l.qty,
+        area: m.area,
+        measurementType: m.measurementType,
+        drawingNumber,
+        trade: l.trade,
+        material: l.note,
+      } as CostItem });
+    });
+    toast.success(`${lines.length} lines added to the estimate`);
+  }, [state.costItems, dispatch, projectId]);
 
   const handleAddToEstimate = useCallback((measurementIds: string[]) => {
     let itemsCreated = 0;
@@ -1621,6 +1662,8 @@ export const PDFTakeoff = ({ projectId, estimateId, onAddCostItems }: PDFTakeoff
                               inEstimateIds={inEstimateIds}
                               onOpenEstimate={openEstimate}
                               onAddFraming={addFramingForWall}
+                              onAddConcrete={handleAddConcrete}
+                              projectState={projectState}
                               onAddToEstimate={handleAddToEstimate}
                               onAddWallsToEstimate={handleAddWallsToEstimate}
                               onFetchNCCCode={handleFetchNCCCode}
@@ -1745,6 +1788,8 @@ export const PDFTakeoff = ({ projectId, estimateId, onAddCostItems }: PDFTakeoff
                     inEstimateIds={inEstimateIds}
                     onOpenEstimate={openEstimate}
                     onAddFraming={addFramingForWall}
+                              onAddConcrete={handleAddConcrete}
+                              projectState={projectState}
                     onAddToEstimate={handleAddToEstimate}
                     onAddWallsToEstimate={handleAddWallsToEstimate}
                     onFetchNCCCode={handleFetchNCCCode}

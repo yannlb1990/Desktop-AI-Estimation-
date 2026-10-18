@@ -75,6 +75,14 @@ const KNOWN_TRADES = [
  * spaces ("Plumber " = Plumber) and accepts close forms ("Concrete" = Concreter,
  * "Labourer" = General Labourer). Unknown names are kept as typed.
  */
+/** The labour-rate trade a name stands for, or null when it isn't one (e.g. 'General', 'Concrete works'). */
+export function knownTradeName(name: string | null | undefined): string | null {
+  if (!name || /^general$/i.test(name.trim())) return null;
+  const c = canonicalTradeName(name);
+  const all = new Set([...KNOWN_TRADES, ...LABOUR_RATES.map(r => r.trade)]);
+  return all.has(c) ? c : null;
+}
+
 export function canonicalTradeName(name: string): string {
   const n = name.trim().replace(/\s+/g, ' ').toLowerCase();
   if (!n) return '';
