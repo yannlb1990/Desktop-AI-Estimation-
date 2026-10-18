@@ -7,7 +7,7 @@ import { PDFUploadManager, uploadToCloud } from './PDFUploadManager';
 import { workLabelForMeasurement } from '@/lib/takeoff/scopeLabels';
 import { getEffectiveQuantity, isConcreteSlab } from '@/lib/takeoff/calculations';
 import { framingMembersForWall, TIMBER_PRICE_PER_LM, NOGGING_PRICE_PER_LM } from '@/lib/takeoff/framingMembers';
-import { remapLinkedMeasurements } from '@/lib/estimate/planLinkSync';
+import { remapLinkedMeasurements, removeEstimateLinesForCostItems } from '@/lib/estimate/planLinkSync';
 import { InteractiveCanvas } from './InteractiveCanvas';
 import { MeasurementToolbar } from './MeasurementToolbar';
 import { ViewportControls } from './ViewportControls';
@@ -19,7 +19,8 @@ import { WorldPoint, MeasurementUnit, Measurement, PDFViewportData, CostItem, Di
 import { calculateManualScaleWorld } from '@/lib/takeoff/calculations';
 import { DetectedOpening } from '@/lib/takeoff/pdfTextExtractor';
 import { fetchNCCCode } from '@/lib/takeoff/nccCodeFetcher';
-import { getFramingRate, getLiningRate, getInsulationRate, getMeasurementTypeRate } from '@/lib/takeoff/rateAutoFill';
+import { getFramingRate, getLiningRate, getInsulationRate, getMeasurementTypeRate, rateById } from '@/lib/takeoff/rateAutoFill';
+import { wallLines, legacyWallBuild } from '@/lib/takeoff/wallItems';
 import { getUserStorageKey } from '@/lib/localAuth';
 import { type AustralianState } from '@/data/scopeOfWorkRates';
 import { toast } from 'sonner';
@@ -707,6 +708,53 @@ export const PDFTakeoff = ({ projectId, estimateId, onAddCostItems }: PDFTakeoff
     });
   }, [dispatch]);
 
+  // A configured wall's estimate lines (framing, each face, batts, openings off, finishes)
+  const wallCostItems = useCallback((m: Measurement): CostItem[] => {
+    const build = m.wallBuild ?? legacyWallBuild(m);
+    const drawingNumber = m.drawingNumber || `Page ${(m.pageIndex ?? 0) + 1}`;
+    // Combined walls of different heights carry their real area in computedM2
+    const height = m.realValue > 0 ? getEffectiveQuantity({ ...m, height: m.height || 2.7 }) / m.realValue : (m.height || 2.7);
+    return wallLines(m.realValue, height, build).map(l => {
+      const unitCost = rateById(l.rateId, projectState);
+      return {
+        id: crypto.randomUUID(),
+        category: l.category,
+        name: l.name,
+        description: `${l.name} - ${m.area || 'General'}`,
+        unit: l.unit,
+        unitCost,
+        quantity: l.qty,
+        linkedMeasurements: [m.id],
+        wasteFactor: l.waste,
+        subtotal: unitCost * l.qty * l.waste,
+        area: m.area,
+        measurementType: 'Wall',
+        drawingNumber,
+        parentItemId: l.key === 'framing' ? undefined : m.id,
+        labourHours: l.key === 'framing' ? m.labourHours : undefined,
+        trade: l.trade,
+        material: l.material,
+      } as CostItem;
+    });
+  }, [projectState]);
+
+  // Set a wall's lines: anything it added before (takeoff and estimate) is replaced
+  // 'Wall' is the plain item a wall gets before it is set up; the full set supersedes it
+  const WALL_CATEGORIES = ['Wall', 'Framing', 'Lining', 'Cladding', 'Insulation', 'Painting', 'Trim'];
+  const replaceWallItems = useCallback((m: Measurement): number => {
+    // Framing members added with "Add framing to estimate" are their own lines: never replaced here
+    const old = state.costItems.filter(c => c.linkedMeasurements?.[0] === m.id && WALL_CATEGORIES.includes(c.category)
+      && !/^(wall studs|wall plates|noggings)/i.test(c.name ?? ''));
+    old.forEach(c => dispatch({ type: 'DELETE_COST_ITEM', payload: c.id }));
+    removeEstimateLinesForCostItems(projectId, old.map(c => c.id));
+    // A wall priced at the default height keeps that height, so its plan link stays right
+    if (!m.height) dispatch({ type: 'UPDATE_MEASUREMENT', payload: { id: m.id, updates: { height: 2.7 } } });
+    const items = wallCostItems({ ...m, height: m.height || 2.7 });
+    items.forEach(item => dispatch({ type: 'ADD_COST_ITEM', payload: item }));
+    return items.length;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [state.costItems, dispatch, wallCostItems, projectId]);
+
   const handleAddToEstimate = useCallback((measurementIds: string[]) => {
     let itemsCreated = 0;
 
@@ -728,6 +776,16 @@ export const PDFTakeoff = ({ projectId, estimateId, onAddCostItems }: PDFTakeoff
       if (isConcreteSlab(measurement) && measurement.concreteDepth) {
         quantity = getEffectiveQuantity(measurement);
         unit = 'M3';
+      }
+
+      // Configured walls: the same lines the Wall Setup preview showed
+      const configuredWall = measurement.measurementType === 'Wall' && measurement.unit === 'LM' && (
+        !!measurement.wallBuild || (!!measurement.framingSystem && measurement.framingSystem !== 'none') ||
+        !!measurement.hasLining || !!measurement.hasInsulation);
+      if (configuredWall && wallCostItems(measurement).length > 0) {
+        itemsCreated += replaceWallItems(measurement);
+        dispatch({ type: 'UPDATE_MEASUREMENT', payload: { id: measurement.id, updates: { addedToEstimate: true, validated: true } } });
+        return;
       }
 
       // 1. Create main framing/structure item
@@ -905,106 +963,17 @@ export const PDFTakeoff = ({ projectId, estimateId, onAddCostItems }: PDFTakeoff
       });
     });
 
-  }, [state.measurements, dispatch]);
+  }, [state.measurements, dispatch, wallCostItems, replaceWallItems]);
 
   // Handles wall additions from WallSetupDialog — receives pre-configured measurements directly
   // so we never hit the stale-closure problem of reading state.measurements after dispatch.
   const handleAddWallsToEstimate = useCallback((configuredWalls: Measurement[], nonWallIds: string[]) => {
-    const framingLabels: Record<string, string> = {
-      'steel_64': 'Steel Frame 64mm',
-      'steel_92': 'Steel Frame 92mm',
-      'timber_90_mgp12': 'Timber Frame 90mm MGP12',
-      'timber_90_mgp10': 'Timber Frame 90mm MGP10',
-    };
-    const liningLabels: Record<string, string> = {
-      'pb_10': 'Plasterboard 10mm', 'pb_13': 'Plasterboard 13mm',
-      'fc_6': 'FC Cement 6mm', 'fc_9': 'FC Cement 9mm',
-    };
-    const insulationLabels: Record<string, string> = {
-      'r2_batts': 'R2.0 Batts', 'r25_batts': 'R2.5 Batts',
-      'r3_batts': 'R3.0 Batts', 'r4_batts': 'R4.0 Batts',
-      'acoustic': 'Acoustic Batts',
-    };
-
     let itemsCreated = 0;
     configuredWalls.forEach(m => {
       // Persist the wall configuration back to state
       dispatch({ type: 'UPDATE_MEASUREMENT', payload: { id: m.id, updates: m } });
 
-      const height = m.height || 2.7;
-      const framingM2 = m.computedM2 ?? m.realValue * height;
-      const drawingNumber = m.drawingNumber || `Page ${(m.pageIndex ?? 0) + 1}`;
-
-      // Framing
-      if (m.framingSystem && m.framingSystem !== 'none') {
-        const framingItem: CostItem = {
-          id: crypto.randomUUID(),
-          category: 'Framing',
-          name: framingLabels[m.framingSystem] || 'Framing',
-          description: `Wall framing - ${m.area || 'General'}`,
-          unit: 'M2',
-          unitCost: getFramingRate(projectState),
-          quantity: framingM2,
-          linkedMeasurements: [m.id],
-          wasteFactor: 1.1,
-          subtotal: getFramingRate(projectState) * framingM2 * 1.1,
-          area: m.area,
-          measurementType: 'Wall',
-          drawingNumber,
-          trade: m.framingSystem.includes('steel') ? 'General' : 'Carpenter',
-          material: framingLabels[m.framingSystem],
-        };
-        dispatch({ type: 'ADD_COST_ITEM', payload: framingItem });
-        itemsCreated++;
-      }
-
-      // Lining
-      if (m.hasLining) {
-        const liningItem: CostItem = {
-          id: crypto.randomUUID(),
-          category: 'Lining',
-          name: liningLabels[m.liningType || ''] || 'Wall Lining',
-          description: `Wall lining - ${m.area || 'General'}`,
-          unit: 'M2',
-          unitCost: getLiningRate(m.liningType, projectState),
-          quantity: framingM2 * (m.liningFaces || 1),
-          linkedMeasurements: [m.id],
-          wasteFactor: 1.1,
-          subtotal: getLiningRate(m.liningType, projectState) * framingM2 * (m.liningFaces || 1) * 1.1,
-          area: m.area,
-          measurementType: 'Wall',
-          drawingNumber,
-          parentItemId: m.id,
-          trade: 'Plasterer',
-          material: liningLabels[m.liningType || ''],
-        };
-        dispatch({ type: 'ADD_COST_ITEM', payload: liningItem });
-        itemsCreated++;
-      }
-
-      // Insulation
-      if (m.hasInsulation) {
-        const insulationItem: CostItem = {
-          id: crypto.randomUUID(),
-          category: 'Insulation',
-          name: insulationLabels[m.insulationType || ''] || 'Wall Insulation',
-          description: `Wall insulation - ${m.area || 'General'}`,
-          unit: 'M2',
-          unitCost: getInsulationRate(projectState),
-          quantity: framingM2,
-          linkedMeasurements: [m.id],
-          wasteFactor: 1.05,
-          subtotal: getInsulationRate(projectState) * framingM2 * 1.05,
-          area: m.area,
-          measurementType: 'Wall',
-          drawingNumber,
-          parentItemId: m.id,
-          trade: 'Insulation',
-          material: insulationLabels[m.insulationType || ''],
-        };
-        dispatch({ type: 'ADD_COST_ITEM', payload: insulationItem });
-        itemsCreated++;
-      }
+      itemsCreated += replaceWallItems(m);
 
       dispatch({ type: 'UPDATE_MEASUREMENT', payload: { id: m.id, updates: { addedToEstimate: true, validated: true } } });
     });
@@ -1014,7 +983,7 @@ export const PDFTakeoff = ({ projectId, estimateId, onAddCostItems }: PDFTakeoff
       handleAddToEstimate(nonWallIds);
     }
 
-  }, [dispatch, handleAddToEstimate]);
+  }, [dispatch, handleAddToEstimate, replaceWallItems]);
 
   // Calibration popover — floats above canvas, always visible during manual calibration
   const calibrationBar = state.calibrationMode === 'manual' && calibInstructVisible ? (

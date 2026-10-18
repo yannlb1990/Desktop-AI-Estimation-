@@ -70,3 +70,10 @@ export function getMeasurementTypeRate(
     default:              return 0;
   }
 }
+
+/** Rate for one row of the rates table by its id, in the project's state (0 when unknown). */
+export function rateById(rateId: string, state: AustralianState): number {
+  const row = SCOPE_OF_WORK_RATES.find(r => r.id === rateId);
+  if (!row) return 0;
+  return (row as any)[state] ?? row['QLD'] ?? 0;
+}

@@ -144,6 +144,8 @@ export interface Measurement {
   hasLining?: boolean;
   liningType?: string;
   liningFaces?: number;
+  /** Wall Setup v2: per-face finishes, openings and follow-on trades (src/lib/takeoff/wallItems.ts) */
+  wallBuild?: import('./wallItems').WallBuild;
   customLining?: string;
   hasInsulation?: boolean;
   insulationType?: string;

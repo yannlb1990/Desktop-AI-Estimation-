@@ -134,3 +134,21 @@ export function markTakeoffAdded(projectId: string, costItemIds: string[], fromS
   localStorage.setItem(getUserStorageKey('local_projects'), JSON.stringify(projects));
   syncProjectToSupabase(p);
 }
+
+/**
+ * A wall set up again (Wall Setup on a wall already in the estimate): drop the estimate
+ * lines that came from its previous takeoff items, so the new set replaces them instead
+ * of piling on top (lining counted on 3 faces) or being skipped as duplicates.
+ */
+export function removeEstimateLinesForCostItems(projectId: string, costItemIds: string[]): void {
+  if (costItemIds.length === 0) return;
+  const projects = readProjects();
+  const idx = projects.findIndex(p => p.id === projectId);
+  if (idx === -1) return;
+  const drop = new Set(costItemIds);
+  const p = projects[idx];
+  p.estimate_items = (p.estimate_items || []).filter((e: any) => !drop.has(e._costItemId));
+  p.takeoff_added = (p.takeoff_added || []).filter((id: string) => !drop.has(id));
+  p.takeoff_suggestions = (p.takeoff_suggestions || []).filter((id: string) => !drop.has(id));
+  writeProject(projects, idx);
+}
