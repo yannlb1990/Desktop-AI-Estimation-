@@ -4,6 +4,7 @@ import { getUserStorageKey } from "@/lib/localAuth";
 import { syncProjectToSupabase } from "@/lib/db/projects";
 import { supabase } from "@/integrations/supabase/client";
 import { checkEstimate } from "@/lib/estimate/checks";
+import { ServicesDialog, type PricedServiceLine } from "@/components/estimate/ServicesDialog";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -426,6 +427,7 @@ export const EstimateTemplate = ({ projectId, estimateId }: EstimateTemplateProp
   const [groupingMode, setGroupingMode] = useState<'none' | 'trade' | 'room'>('none');
   const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set());
   const [checksOpen, setChecksOpen] = useState(false);
+  const [servicesOpen, setServicesOpen] = useState(false);
   const [flashRowId, setFlashRowId] = useState<string | null>(null);
   const [showTemplateModal, setShowTemplateModal] = useState(false);
   const [customTemplates, setCustomTemplates] = useState<EstimateTemplateData[]>(() => loadCustomTemplates());
@@ -647,6 +649,56 @@ export const EstimateTemplate = ({ projectId, estimateId }: EstimateTemplateProp
     // With a measurement picked, keep it: framing, lining and insulation off the same wall
     setNewItem(prev => ({ ...prev, quantity: newItemMeasurement ? measuredFor(newItemMeasurement, prev.unit) : "", labour_hours: "" }));
     qtyInputRef.current?.focus();
+  };
+
+  // Lines from the Services calculator: per point / per fixture, all-in prices (no waste on top)
+  const addServiceLines = (all: PricedServiceLine[]) => {
+    // A count marker already priced in the estimate would be charged twice: skip those lines
+    const linkedAlready = new Set(items.flatMap(i => i.plan_link?.measurementIds ?? []));
+    const skipped = all.filter(l => l.measurementIds?.some(id => linkedAlready.has(id)));
+    const lines = all.filter(l => !skipped.includes(l));
+    if (skipped.length) toast.warning(`Already in the estimate from the plan, not added again: ${skipped.map(l => l.label).join(', ')}`);
+    if (lines.length === 0) return;
+    const stamp = Date.now();
+    const created: EstimateItem[] = lines.map((l, i) => {
+      const unit = l.unit === 'ITEM' ? 'item' : 'ea';
+      const linked = !!l.measurementIds?.length;
+      return {
+        id: `svc-${stamp}-${i}`,
+        source: linked ? 'plan' : 'manual',
+        plan_link: linked ? createPlanLink(l.measurementIds!, l.qty, takeoffMeasurements, unit) : null,
+        section_id: null,
+        area: 'Services',
+        trade: l.trade,
+        scope_of_work: l.label,
+        material_type: l.note,
+        quantity: l.qty,
+        unit,
+        unit_price: l.unitPrice,
+        labour_hours: 0,
+        labour_rate: labourRates[l.trade] || config.defaultLabourRate,
+        labour_rate_override: false,
+        material_wastage_pct: 0,
+        labour_wastage_pct: 0,
+        markup_pct: config.defaultMarkup,
+        notes: '',
+        expanded: false,
+        item_number: `${items.length + i + 1}`,
+        isEditing: false,
+        relatedMaterials: [],
+      } as EstimateItem;
+    });
+    const updatedItems = [...items, ...created];
+    setItems(updatedItems);
+    const projects = JSON.parse(localStorage.getItem(getUserStorageKey('local_projects')) || '[]');
+    const projectIndex = projects.findIndex((p: any) => p.id === projectId);
+    if (projectIndex !== -1) {
+      projects[projectIndex].estimate_items = mergeWithSaved(projects[projectIndex].estimate_items, updatedItems);
+      localStorage.setItem(getUserStorageKey('local_projects'), JSON.stringify(projects));
+    }
+    const unpriced = created.filter(c => !(c.unit_price > 0)).length;
+    // The calculator stays open so the other tabs (plumbing, air conditioning) can be added too
+    toast.success(`${created.length} line${created.length !== 1 ? 's' : ''} added${unpriced ? `, ${unpriced} still need a price` : ''}`);
   };
 
   const deleteItem = (id: string) => {
@@ -2034,6 +2086,12 @@ export const EstimateTemplate = ({ projectId, estimateId }: EstimateTemplateProp
         {openSections.addItem && (
         <div className="px-6 pb-6 border-t border-border">
         <EstimatePlanPanel projectId={projectId} refreshKey={items} />
+        <div className="mt-3 flex flex-wrap items-center gap-3 rounded-lg border border-border px-4 py-2.5 text-sm">
+          <span className="font-medium">Services</span>
+          <span className="text-muted-foreground">Electrical per point, plumbing per fixture, air conditioning sized per room</span>
+          <Button variant="outline" size="sm" className="ml-auto" onClick={() => setServicesOpen(true)}>Open services calculator</Button>
+        </div>
+        <ServicesDialog open={servicesOpen} measurements={takeoffMeasurements} onAdd={addServiceLines} onClose={() => setServicesOpen(false)} />
         <div className="grid grid-cols-12 gap-3 mt-4">
           {takeoffMeasurements.length > 0 && (
             <div className="col-span-12">
