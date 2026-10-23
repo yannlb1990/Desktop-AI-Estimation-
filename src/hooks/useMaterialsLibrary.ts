@@ -2,6 +2,7 @@ import { useState, useCallback, useEffect, useRef } from 'react';
 import { MaterialEntry, MATERIALS_STORAGE_KEY } from '@/lib/materials/types';
 import { getUserStorageKey } from '@/lib/localAuth';
 import { supabase } from '@/integrations/supabase/client';
+import { toast } from 'sonner';
 
 function getStorageKey(): string {
   return getUserStorageKey(MATERIALS_STORAGE_KEY);
@@ -217,6 +218,38 @@ export function useMaterialsLibrary() {
     return imported.length;
   }, [persist]);
 
+  /** A supplier price list: new materials added, existing ones repriced (one cloud write). */
+  const applyPriceList = useCallback((
+    added: { name: string; productCode: string; unit: string; unitCost: number; trade: string; notes: string }[],
+    changed: { id: string; unitCost: number }[],
+    supplierName: string,
+  ) => {
+    const now = new Date().toISOString();
+    const priceById = new Map(changed.map(c => [c.id, c.unitCost]));
+    const current = loadFromStorage().map(m => priceById.has(m.id) ? { ...m, unitCost: priceById.get(m.id)!, updatedAt: now } : m);
+    const fresh: MaterialEntry[] = added.map(a => ({
+      id: crypto.randomUUID(), name: a.name, trade: a.trade, unit: a.unit, unitCost: a.unitCost,
+      supplierName, supplierType: 'local', leadTimeWeeks: null, productCode: a.productCode, notes: a.notes,
+      createdAt: now, updatedAt: now,
+    }));
+    const next = [...current, ...fresh];
+    persist(next);
+    const userId = userIdRef.current;
+    const touched = [...next.filter(m => priceById.has(m.id)), ...fresh];
+    if (userId && touched.length) {
+      // Chunks: one request with thousands of rows can be rejected or time out
+      (async () => {
+        for (let i = 0; i < touched.length; i += 500) {
+          const { error } = await supabase.from('materials_library').upsert(touched.slice(i, i + 500).map(m => toRow(m, userId)));
+          if (error) {
+            toast.error(`Saved on this computer, but the cloud copy failed: ${error.message}`);
+            return;
+          }
+        }
+      })();
+    }
+  }, [persist]);
+
   const exportToCSV = useCallback(() => {
     const current = loadFromStorage();
     const headers = ['Name', 'Trade', 'Unit', 'Unit Cost', 'Supplier', 'Type', 'Lead Time (wks)', 'Product Code', 'Notes'];
@@ -248,5 +281,5 @@ export function useMaterialsLibrary() {
     return () => window.removeEventListener('storage', handler);
   }, []);
 
-  return { materials, addMaterial, updateMaterial, deleteMaterial, importFromCSV, exportToCSV };
+  return { materials, addMaterial, updateMaterial, deleteMaterial, importFromCSV, exportToCSV, applyPriceList };
 }

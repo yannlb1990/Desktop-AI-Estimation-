@@ -31,6 +31,7 @@ import { useMaterialsLibrary } from '@/hooks/useMaterialsLibrary';
 import { MaterialEntry, SUPPLIER_TYPES } from '@/lib/materials/types';
 import { TRADE_OPTIONS } from '@/lib/takeoff/types';
 import { TAKEOFF_UNITS } from '@/lib/takeoff/units';
+import { PriceListImportDialog } from '@/components/materials/PriceListImportDialog';
 
 const EMPTY_FORM: Omit<MaterialEntry, 'id' | 'createdAt' | 'updatedAt'> = {
   name: '',
@@ -47,7 +48,8 @@ const EMPTY_FORM: Omit<MaterialEntry, 'id' | 'createdAt' | 'updatedAt'> = {
 export default function MaterialsLibrary() {
   const navigate = useNavigate();
   const sub = useSubscription();
-  const { materials, addMaterial, updateMaterial, deleteMaterial, importFromCSV, exportToCSV } = useMaterialsLibrary();
+  const { materials, addMaterial, updateMaterial, deleteMaterial, exportToCSV, applyPriceList } = useMaterialsLibrary();
+  const [priceFile, setPriceFile] = useState<{ name: string; text: string } | null>(null);
 
   useEffect(() => {
     if (!isSignedIn()) navigate("/auth");
@@ -113,15 +115,8 @@ export default function MaterialsLibrary() {
     const file = e.target.files?.[0];
     if (!file) return;
     const reader = new FileReader();
-    reader.onload = (ev) => {
-      const csv = ev.target?.result as string;
-      const count = importFromCSV(csv);
-      if (count > 0) {
-        toast.success(`Imported ${count} materials`);
-      } else {
-        toast.error('No valid rows found. Check the CSV format and try again.');
-      }
-    };
+    // A supplier price list: columns are mapped and compared with the library before anything changes
+    reader.onload = (ev) => setPriceFile({ name: file.name, text: String(ev.target?.result ?? '') });
     reader.readAsText(file);
     e.target.value = '';
   };
@@ -175,9 +170,17 @@ export default function MaterialsLibrary() {
             </Button>
             <Button variant="outline" size="sm" onClick={() => fileRef.current?.click()}>
               <Upload className="h-4 w-4 mr-2" />
-              Import CSV
+              Import price list
             </Button>
-            <input ref={fileRef} type="file" accept=".csv" className="hidden" onChange={handleCSVImport} />
+            <input ref={fileRef} type="file" accept=".csv,.txt" className="hidden" onChange={handleCSVImport} />
+            <PriceListImportDialog
+              open={!!priceFile}
+              fileName={priceFile?.name ?? ''}
+              csvText={priceFile?.text ?? ''}
+              library={materials}
+              onApply={applyPriceList}
+              onClose={() => setPriceFile(null)}
+            />
             <Button size="sm" onClick={openAdd}>
               <Plus className="h-4 w-4 mr-2" />
               Add Material
@@ -256,7 +259,7 @@ export default function MaterialsLibrary() {
                 </Button>
                 <Button variant="outline" onClick={() => fileRef.current?.click()}>
                   <Upload className="h-4 w-4 mr-2" />
-                  Import CSV
+                  Import price list
                 </Button>
               </div>
             )}
