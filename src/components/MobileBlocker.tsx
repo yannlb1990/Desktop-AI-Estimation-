@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { useLocation } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 
 /** Screens that need a desktop (plan takeoff, estimate tables). Public pages and
  *  the client's quote approval link stay usable on a phone. */
@@ -8,6 +8,7 @@ const DISMISS_KEY = "metricore_mobile_continue";
 
 export default function MobileBlocker() {
   const { pathname } = useLocation();
+  const navigate = useNavigate();
   const [width, setWidth] = useState(() =>
     typeof window !== "undefined" ? window.innerWidth : 1280
   );
@@ -56,9 +57,26 @@ export default function MobileBlocker() {
           Metricore
         </p>
         <p style={{ color: "#E1DCC9", fontSize: "0.9375rem", lineHeight: 1.6, margin: 0 }}>
-          Metricore is built for desktop. Open it on your computer for the best
-          experience.
+          Plans and estimates need a computer. On site, use your phone for site visits:
+          photos, sizes and what needs doing, sent straight to the office.
         </p>
+        <button
+          onClick={() => navigate("/site")}
+          style={{
+            marginTop: "1.25rem",
+            width: "100%",
+            background: "#E1DCC9",
+            border: "none",
+            borderRadius: "0.5rem",
+            color: "#0B0704",
+            padding: "0.75rem 1rem",
+            fontSize: "1rem",
+            fontWeight: 600,
+            cursor: "pointer",
+          }}
+        >
+          Open site visits
+        </button>
         <button
           onClick={continueAnyway}
           style={{

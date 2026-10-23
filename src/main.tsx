@@ -22,15 +22,34 @@ if (import.meta.env.VITE_POSTHOG_KEY) {
 }
 
 function isStaleChunkError(msg: string) {
+  // With no signal a chunk can't load either: reloading then would only show Safari's offline page
+  if (typeof navigator !== 'undefined' && navigator.onLine === false) return false;
   return msg.includes('Failed to fetch dynamically imported module') ||
          msg.includes('Importing a module script failed') ||
          msg.includes('error loading dynamically imported module');
 }
 
+// Keep a copy of the app on the device so it opens on site with no signal (production only)
+if (import.meta.env.PROD && 'serviceWorker' in navigator) {
+  window.addEventListener('load', () => { navigator.serviceWorker.register('/sw.js').catch(() => {}); });
+}
+
 // Catch stale-chunk errors that happen outside React (e.g. lazy imports in handlers)
+/** At most two automatic reloads per minute: a slow connection after a deploy must not loop. */
+function reloadOnce() {
+  try {
+    const now = Date.now();
+    const recent = JSON.parse(sessionStorage.getItem('chunk_reloads') || '[]').filter((t: number) => now - t < 60_000);
+    if (recent.length >= 2) return false;
+    sessionStorage.setItem('chunk_reloads', JSON.stringify([...recent, now]));
+  } catch { /* storage blocked: reload once anyway */ }
+  window.location.reload();
+  return true;
+}
+
 window.addEventListener('unhandledrejection', (event) => {
   const msg = event.reason?.message ?? '';
-  if (isStaleChunkError(msg)) window.location.reload();
+  if (isStaleChunkError(msg)) reloadOnce();
 });
 
 class ErrorBoundary extends React.Component<
@@ -43,8 +62,7 @@ class ErrorBoundary extends React.Component<
   }
   static getDerivedStateFromError(error: Error) {
     // Stale chunk after a deploy — reload silently to get the fresh bundle
-    if (isStaleChunkError(error.message)) {
-      window.location.reload();
+    if (isStaleChunkError(error.message) && reloadOnce()) {
       return { error: null };
     }
     return { error };

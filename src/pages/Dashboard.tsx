@@ -24,6 +24,7 @@ import WelcomeOverlay from "@/components/WelcomeOverlay";
 import OnboardingChecklist from "@/components/OnboardingChecklist";
 import { calculateProjectTotals } from "@/lib/pricing/estimatePricing";
 import { readUserPricingDefaults } from "@/lib/pricing/userPricingDefaults";
+import { SiteVisitsInbox } from "@/components/SiteVisitsInbox";
 
 // ── helpers ─────────────────────────────────────────────────────────────────
 
@@ -410,12 +411,14 @@ const Dashboard = () => {
         {/* Hero row */}
         <div className="flex items-start justify-between">
           <div>
-            <h1 className="font-display text-2xl sm:text-3xl font-bold">Welcome back{localUser ? `, ${localUser.displayName}` : ''}</h1>
+            <h1 className="font-display text-2xl sm:text-3xl font-bold">Welcome back{firstName ? `, ${firstName}` : ''}</h1>
             <p className="text-muted-foreground mt-1">
               {projects.length} project{projects.length !== 1 ? 's' : ''} · {fmtCurrency(pipelineValue)} in pipeline
             </p>
           </div>
         </div>
+
+        <SiteVisitsInbox />
 
         {/* Stats row */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">

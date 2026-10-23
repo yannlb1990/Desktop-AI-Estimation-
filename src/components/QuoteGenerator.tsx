@@ -639,6 +639,19 @@ ${clone.outerHTML}
   }
   useEffect(() => { if (open) refreshShares() }, [open, project?.id])
 
+  // Notes from the site visit fill the scope notes when the quote has none yet
+  useEffect(() => {
+    if (!open || scopeNotes) return
+    try {
+      const projects: any[] = JSON.parse(localStorage.getItem(getUserStorageKey("local_projects")) || "[]")
+      const notes = projects.find((x: any) => x.id === project?.id)?.site_scope_notes
+      const usedKey = `site_notes_used_${project?.id}`
+      // Once only: notes the estimator cleared on purpose don't come back every time
+      if (notes && sessionStorage.getItem(usedKey) !== notes) { setScopeNotes(notes); sessionStorage.setItem(usedKey, notes) }
+    } catch { /* no saved notes */ }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, project?.id])
+
   // Same checks as the Estimate tab, so a quote isn't sent with $0 lines or unfinished text
   const estimateIssues = useMemo(() => {
     if (!open) return 0

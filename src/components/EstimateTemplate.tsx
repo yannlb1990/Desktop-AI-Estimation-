@@ -5,6 +5,8 @@ import { syncProjectToSupabase } from "@/lib/db/projects";
 import { supabase } from "@/integrations/supabase/client";
 import { checkEstimate } from "@/lib/estimate/checks";
 import { ServicesDialog, type PricedServiceLine } from "@/components/estimate/ServicesDialog";
+import { SiteVisitPanel } from "@/components/estimate/SiteVisitPanel";
+import type { SiteDraftLine } from "@/lib/site/toEstimate";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -700,6 +702,48 @@ export const EstimateTemplate = ({ projectId, estimateId }: EstimateTemplateProp
     // The calculator stays open so the other tabs (plumbing, air conditioning) can be added too
     toast.success(`${created.length} line${created.length !== 1 ? 's' : ''} added${unpriced ? `, ${unpriced} still need a price` : ''}`);
   };
+
+  // Lines recorded on a site visit: quantity from the room sizes, no price yet
+  const addSiteLines = (lines: SiteDraftLine[]) => {
+    if (lines.length === 0) return;
+    const stamp = Date.now();
+    const created = lines.map((l, i) => ({
+      id: `site-${stamp}-${i}`,
+      source: 'manual',
+      plan_link: null,
+      section_id: null,
+      area: l.roomName,
+      trade: l.trade,
+      scope_of_work: l.scope,
+      material_type: '',
+      quantity: l.quantity,
+      unit: l.unit,
+      unit_price: 0,
+      labour_hours: 0,
+      labour_rate: labourRates[l.trade] || config.defaultLabourRate,
+      labour_rate_override: false,
+      material_wastage_pct: config.materialWastage,
+      labour_wastage_pct: config.labourWastage,
+      markup_pct: config.defaultMarkup,
+      notes: `From site: ${l.basis}`,
+      site_key: l.key,
+      expanded: false,
+      item_number: `${items.length + i + 1}`,
+      isEditing: false,
+      relatedMaterials: [],
+    } as unknown as EstimateItem));
+    const updatedItems = [...items, ...created];
+    setItems(updatedItems);
+    const projects = JSON.parse(localStorage.getItem(getUserStorageKey('local_projects')) || '[]');
+    const projectIndex = projects.findIndex((p: any) => p.id === projectId);
+    if (projectIndex !== -1) {
+      projects[projectIndex].estimate_items = mergeWithSaved(projects[projectIndex].estimate_items, updatedItems);
+      localStorage.setItem(getUserStorageKey('local_projects'), JSON.stringify(projects));
+    }
+    const noQty = lines.filter(l => l.needsQuantity).length;
+    toast.success(`${created.length} line${created.length !== 1 ? 's' : ''} added from site. Price them${noQty ? `, and enter ${noQty} quantit${noQty !== 1 ? 'ies' : 'y'}` : ''} (Check estimate lists them).`);
+  };
+  const siteKeysInEstimate = useMemo(() => new Set(items.map((i: any) => i.site_key).filter(Boolean) as string[]), [items]);
 
   const deleteItem = (id: string) => {
     const updatedItems = items.filter(item => item.id !== id);
@@ -2086,6 +2130,7 @@ export const EstimateTemplate = ({ projectId, estimateId }: EstimateTemplateProp
         {openSections.addItem && (
         <div className="px-6 pb-6 border-t border-border">
         <EstimatePlanPanel projectId={projectId} refreshKey={items} />
+        <SiteVisitPanel projectId={projectId} addedKeys={siteKeysInEstimate} onAdd={lines => addSiteLines(lines)} />
         <div className="mt-3 flex flex-wrap items-center gap-3 rounded-lg border border-border px-4 py-2.5 text-sm">
           <span className="font-medium">Services</span>
           <span className="text-muted-foreground">Electrical per point, plumbing per fixture, air conditioning sized per room</span>

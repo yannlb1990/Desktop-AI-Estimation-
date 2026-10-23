@@ -171,7 +171,8 @@ export async function localSignOut(): Promise<void> {
       localStorage.removeItem(key);
     }
   }
-  await supabase.auth.signOut();
+  // This device only: signing out on the desktop must not sign the phone out mid site visit
+  await supabase.auth.signOut({ scope: 'local' });
   window.dispatchEvent(new Event('metricore:auth'));
 }
 

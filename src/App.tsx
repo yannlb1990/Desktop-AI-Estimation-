@@ -6,12 +6,18 @@ import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter, Routes, Route, Navigate, useNavigate } from "react-router-dom";
+import { BrowserRouter, Routes, Route, Navigate, useNavigate, useLocation } from "react-router-dom";
 import { TourProvider } from "@/context/TourContext";
 import { isSignedIn, getLocalUser, localSignOut } from "@/lib/localAuth";
 import FeedbackWidget from "@/components/FeedbackWidget";
 import { getSubscriptionStatus } from "@/lib/subscription";
 import { syncSubscriptionFromDB } from "@/lib/stripeCheckout";
+
+/** The feedback button covers buttons on the phone's site-visit screens */
+const FeedbackOffSite = () => {
+  const { pathname } = useLocation()
+  return pathname.startsWith('/site') ? null : <FeedbackWidget />
+}
 
 const IDLE_MS = 30 * 60 * 1000
 
@@ -23,7 +29,11 @@ const IdleGuard = () => {
     let t: ReturnType<typeof setTimeout>
     const reset = () => {
       clearTimeout(t)
-      t = setTimeout(async () => { await localSignOut(); navigate('/auth', { replace: true }) }, IDLE_MS)
+      t = setTimeout(async () => {
+        // Never on a site visit: a long walk-through without touching the phone is normal
+        if (window.location.pathname.startsWith('/site')) { reset(); return }
+        await localSignOut(); navigate('/auth', { replace: true })
+      }, IDLE_MS)
     }
     const events = ['mousemove', 'mousedown', 'keydown', 'touchstart', 'scroll'] as const
     events.forEach(e => window.addEventListener(e, reset, { passive: true }))
@@ -33,6 +43,9 @@ const IdleGuard = () => {
   return null
 }
 import { Suspense, lazy } from "react";
+// Site visit screens load with the app, not on demand: on site there may be no signal to fetch them
+import SiteVisits from "./pages/SiteVisits";
+import SiteVisitEditor from "./pages/SiteVisitEditor";
 
 // Route-level code splitting — each page loads only when first visited
 const Index           = lazy(() => import("./pages/Index"));
@@ -84,8 +97,10 @@ function useAuthSync() {
 }
 
 // Guards all protected routes: must be signed in, sync must be complete, trial must not be expired
-const ProtectedRoute = ({ children, syncReady }: { children: React.ReactNode; syncReady: boolean }) => {
+const ProtectedRoute = ({ children, syncReady, offlineOk = false }: { children: React.ReactNode; syncReady: boolean; offlineOk?: boolean }) => {
   if (!isSignedIn()) return <Navigate to="/auth" replace />;
+  // Site visits work from what is on the phone: never wait on the network for them
+  if (offlineOk) return <>{children}</>;
   // Hold rendering until server-side subscription data has been applied to localStorage
   if (!syncReady) {
     return (
@@ -117,7 +132,7 @@ const App = () => {
         <BrowserRouter>
           <MobileBlocker />
           <IdleGuard />
-          {isSignedIn() && <FeedbackWidget />}
+          {isSignedIn() && <FeedbackOffSite />}
           <Suspense fallback={<PageFallback />}>
           <Routes>
             <Route path="/" element={<Index />} />
@@ -134,6 +149,9 @@ const App = () => {
             <Route path="/faq" element={<FAQ />} />
             <Route path="/app" element={<Navigate to="/dashboard" replace />} />
             <Route path="/dashboard" element={<ProtectedRoute syncReady={syncReady}><Dashboard /></ProtectedRoute>} />
+            {/* Phone screens: site visits work on a phone, the rest needs a desktop */}
+            <Route path="/site" element={<ProtectedRoute syncReady={syncReady} offlineOk><SiteVisits /></ProtectedRoute>} />
+            <Route path="/site/:visitId" element={<ProtectedRoute syncReady={syncReady} offlineOk><SiteVisitEditor /></ProtectedRoute>} />
             <Route path="/project/new" element={<ProtectedRoute syncReady={syncReady}><NewProject /></ProtectedRoute>} />
             <Route path="/project/:projectId" element={<ProtectedRoute syncReady={syncReady}><ProjectDetail /></ProtectedRoute>} />
             <Route path="/insights" element={<ProtectedRoute syncReady={syncReady}><MarketInsights /></ProtectedRoute>} />
