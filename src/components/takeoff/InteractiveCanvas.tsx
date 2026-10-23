@@ -297,6 +297,8 @@ interface InteractiveCanvasProps {
   countName?: string;
   /** Called when the canvas wants to switch the active tool (e.g. text → select after placing). */
   onToolChange?: (tool: ToolType) => void;
+  /** Plan revision compare: changes drawn over the sheet (green added, red removed) */
+  compareOverlay?: { dataUrl: string; scale: number } | null;
 }
 
 export const InteractiveCanvas = ({
@@ -330,10 +332,12 @@ export const InteractiveCanvas = ({
   canvasElementRef,
   countName: countNameProp = '',
   onToolChange,
+  compareOverlay = null,
 }: InteractiveCanvasProps) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const fabricCanvasRef = useRef<FabricCanvas | null>(null);
+
   // Cached patched ArrayBuffer for this plan — avoids repeated IndexedDB fetches
   const patchedBufferRef = useRef<ArrayBuffer | null>(null);
   const wallThicknessRef = useRef(wallThickness);
@@ -552,6 +556,30 @@ export const InteractiveCanvas = ({
       if (canvasActionsRef) canvasActionsRef.current = null;
     };
   }, [canvasActionsRef]);
+
+  // Revision changes: an image layered over the canvas (not drawn into it), so exports and the
+  // AI analyser never see it, and it follows pan and zoom by copying Fabric's viewport transform
+  const overlayImgRef = useRef<HTMLImageElement>(null);
+  useEffect(() => {
+    const canvas = fabricCanvasRef.current;
+    const img = overlayImgRef.current;
+    if (!canvas || !img || !compareOverlay) return;
+    const place = () => {
+      const lower = (canvas as any).lowerCanvasEl as HTMLCanvasElement | undefined;
+      const parent = img.parentElement;
+      if (!lower || !parent) return;
+      const lr = lower.getBoundingClientRect();
+      const pr = parent.getBoundingClientRect();
+      const [a, b, c, d, e, f] = canvas.viewportTransform ?? [1, 0, 0, 1, 0, 0];
+      const k = 1 / compareOverlay.scale;
+      img.style.transform = `translate(${lr.left - pr.left}px, ${lr.top - pr.top}px) matrix(${a}, ${b}, ${c}, ${d}, ${e}, ${f}) scale(${k})`;
+    };
+    place();
+    canvas.on('after:render', place);
+    window.addEventListener('resize', place);
+    return () => { canvas.off('after:render', place); window.removeEventListener('resize', place); };
+    // viewport: re-attach once the canvas and page exist (the canvas is re-created per page)
+  }, [compareOverlay, viewport]);
 
   // Expose export handle to parent via canvasExportRef
   useEffect(() => {
@@ -4757,6 +4785,16 @@ export const InteractiveCanvas = ({
       )}
 
       <div ref={containerRef} className="w-full h-full" />
+      {compareOverlay && (
+        <img
+          ref={overlayImgRef}
+          src={compareOverlay.dataUrl}
+          alt=""
+          aria-hidden
+          className="pointer-events-none absolute left-0 top-0 z-[5] max-w-none select-none"
+          style={{ transformOrigin: '0 0', mixBlendMode: 'multiply' }}
+        />
+      )}
     </div>
   );
 };

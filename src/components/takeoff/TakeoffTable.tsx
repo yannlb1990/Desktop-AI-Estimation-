@@ -646,6 +646,12 @@ export const TakeoffTable = ({
         {/* Status + actions */}
         <div className="col-span-2 flex items-center gap-1">
           {estimateStatus(m)}
+          {m.needsRevisionCheck && (
+            <span className="flex items-center gap-1 text-[11px] text-amber-400">
+              Check on new revision
+              <button className="rounded border border-amber-400/40 px-1.5 hover:bg-amber-400/10" onClick={() => onUpdateMeasurement(m.id, { needsRevisionCheck: false })}>Checked</button>
+            </span>
+          )}
           {deleteButton(m)}
         </div>
       </div>
@@ -874,6 +880,12 @@ export const TakeoffTable = ({
           {/* Status + actions */}
           <div className="col-span-2 flex flex-wrap items-center gap-1">
             {estimateStatus(m)}
+            {m.needsRevisionCheck && (
+              <span className="flex items-center gap-1 text-[11px] text-amber-400">
+                Check on new revision
+                <button className="rounded border border-amber-400/40 px-1.5 hover:bg-amber-400/10" onClick={() => onUpdateMeasurement(m.id, { needsRevisionCheck: false })}>Checked</button>
+              </span>
+            )}
             <Button variant="ghost" size="sm" className="h-7 px-2 text-[11px]" onClick={() => toggleExpand(m.id)}>
               {expandedIds.has(m.id) ? 'Close' : 'Notes'}
             </Button>

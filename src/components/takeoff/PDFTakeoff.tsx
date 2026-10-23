@@ -50,6 +50,9 @@ import { useSubscription } from '@/hooks/useSubscription';
 import { UpgradeModal } from '@/components/UpgradeModal';
 import { getCachedPDF } from '@/lib/takeoff/pdfCache';
 import type { ConcreteSetup, PricedConcreteLine } from './ConcreteSetupDialog';
+import { buildRevisionOverlay, type RevisionOverlay } from '@/lib/takeoff/revisionDiff';
+import { previousRevisionOf, recordRevision } from '@/lib/takeoff/planRevisions';
+import { Dialog as RevisionDialog, DialogContent as RevisionDialogContent, DialogHeader as RevisionDialogHeader, DialogTitle as RevisionDialogTitle, DialogFooter as RevisionDialogFooter } from '@/components/ui/dialog';
 
 interface PDFTakeoffProps {
   projectId: string;
@@ -143,6 +146,11 @@ export const PDFTakeoff = ({ projectId, estimateId, onAddCostItems }: PDFTakeoff
   }, [projectId]);
 
   const [activeTab, setActiveTab] = React.useState('upload');
+  // A new plan uploaded over one that already has measurements: ask if it is a revision
+  const [pendingRevision, setPendingRevision] = React.useState<{ pdfFile: any; count: number } | null>(null);
+  const [compareOn, setCompareOn] = React.useState(false);
+  const [compareOverlay, setCompareOverlay] = React.useState<RevisionOverlay | null>(null);
+  const [compareBusy, setCompareBusy] = React.useState(false);
   const [rotation, setRotation] = useState<0 | 90 | 180 | 270>(0);
   const [manualCalibrationPoints, setManualCalibrationPoints] = useState<[WorldPoint, WorldPoint] | null>(null);
   const [manualDistance, setManualDistance] = useState('');
@@ -267,6 +275,55 @@ export const PDFTakeoff = ({ projectId, estimateId, onAddCostItems }: PDFTakeoff
     link.click();
     URL.revokeObjectURL(url);
   };
+
+  // ── Plan revisions ─────────────────────────────────────────────────────────
+  const acceptRevision = () => {
+    if (!pendingRevision) return;
+    const old = state.pdfFile;
+    const next = pendingRevision.pdfFile;
+    dispatch({ type: 'SET_PDF_FILE', payload: next });
+    if (next.file) setUploadedFile(next.file);
+    if (old?.planId && next.planId) {
+      dispatch({ type: 'APPLY_REVISION', payload: { fromPlanId: old.planId, toPlanId: next.planId } });
+      recordRevision(projectId, {
+        toPlanId: next.planId, fromPlanId: old.planId, fromName: old.name,
+        fromStoragePath: old.storagePath ?? (old.url?.startsWith('storage:') ? old.url : undefined),
+        at: new Date().toISOString(), carried: pendingRevision.count,
+      });
+      toast.success(`${pendingRevision.count} measurements carried to the new revision. Use Compare to see what changed.`);
+    }
+    setPendingRevision(null);
+  };
+  const declineRevision = () => {
+    if (!pendingRevision) return;
+    dispatch({ type: 'SET_PDF_FILE', payload: pendingRevision.pdfFile });
+    if (pendingRevision.pdfFile.file) setUploadedFile(pendingRevision.pdfFile.file);
+    setPendingRevision(null);
+  };
+  const previousRevision = React.useMemo(
+    () => previousRevisionOf(projectId, state.pdfFile?.planId),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [projectId, state.pdfFile?.planId, pendingRevision]);
+  // Only PDFs can be overlaid (image and DXF plans have no pages to render)
+  const canCompare = !!previousRevision && /\.pdf$/i.test(state.pdfFile?.name || '') && /\.pdf$/i.test(previousRevision.fromName || '');
+  const revisionChecks = state.measurements.filter(m => m.planId === state.pdfFile?.planId && m.needsRevisionCheck).length;
+
+  // Compare overlay for the page on screen; rebuilt when the page or plan changes
+  React.useEffect(() => {
+    if (!compareOn || !canCompare || !previousRevision || !state.pdfFile) { setCompareOverlay(null); return; }
+    let cancelled = false;
+    setCompareBusy(true);
+    buildRevisionOverlay(
+      { planId: state.pdfFile.planId, url: state.pdfFile.url, storagePath: state.pdfFile.storagePath },
+      { planId: previousRevision.fromPlanId, storagePath: previousRevision.fromStoragePath },
+      state.currentPageIndex,
+      state.rotations?.[state.currentPageIndex] ?? 0,
+    ).then(o => { if (!cancelled) setCompareOverlay(o); })
+      .catch(err => { if (!cancelled) { toast.error(err?.message || 'Could not compare the revisions'); setCompareOn(false); } })
+      .finally(() => { if (!cancelled) setCompareBusy(false); });
+    return () => { cancelled = true; setCompareBusy(false); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [compareOn, previousRevision?.fromPlanId, state.pdfFile?.planId, state.currentPageIndex, state.rotations?.[state.currentPageIndex]]);
 
   // Auto-switch to measure tab only when a NEW pdf URL is loaded.
   // Tracking the URL we already switched for prevents this from firing when the user
@@ -1229,6 +1286,12 @@ export const PDFTakeoff = ({ projectId, estimateId, onAddCostItems }: PDFTakeoff
               <PDFUploadManager
                 projectId={projectId}
                 onUploadComplete={(pdfFile) => {
+                  const oldPlanId = state.pdfFile?.planId;
+                  const onOldPlan = oldPlanId ? state.measurements.filter(m => m.planId === oldPlanId).length : 0;
+                  if (oldPlanId && pdfFile.planId && pdfFile.planId !== oldPlanId && onOldPlan > 0) {
+                    setPendingRevision({ pdfFile, count: onOldPlan });
+                    return;
+                  }
                   dispatch({ type: 'SET_PDF_FILE', payload: pdfFile });
                   if (pdfFile.file) setUploadedFile(pdfFile.file);
                 }}
@@ -1237,6 +1300,24 @@ export const PDFTakeoff = ({ projectId, estimateId, onAddCostItems }: PDFTakeoff
                   toast.error(error);
                 }}
               />
+                    <RevisionDialog open={!!pendingRevision} onOpenChange={v => { if (!v) declineRevision(); }}>
+                      <RevisionDialogContent className="sm:max-w-md z-[10002]">
+                        <RevisionDialogHeader>
+                          <RevisionDialogTitle>New revision of the same plan?</RevisionDialogTitle>
+                        </RevisionDialogHeader>
+                        <p className="text-sm text-muted-foreground">
+                          {pendingRevision?.pdfFile?.name} is replacing {state.pdfFile?.name}, which has {pendingRevision?.count} measurement{pendingRevision?.count !== 1 ? 's' : ''}.
+                        </p>
+                        <p className="text-sm">
+                          If it is a new issue of the same drawing, the measurements move across with their estimate lines still linked, and you can compare the two revisions to see what changed. Pages must be in the same order and at the same scale.
+                        </p>
+                        <RevisionDialogFooter className="gap-2">
+                          <button className="h-9 rounded-md px-3 text-sm text-muted-foreground hover:text-foreground" onClick={declineRevision}>No, a different drawing</button>
+                          <button className="h-9 rounded-md bg-primary px-3 text-sm font-medium text-primary-foreground" onClick={acceptRevision}>Yes, carry my measurements across</button>
+                        </RevisionDialogFooter>
+                      </RevisionDialogContent>
+                    </RevisionDialog>
+
             </div>
           </div>
           {state.pdfFile && (
@@ -1304,6 +1385,16 @@ export const PDFTakeoff = ({ projectId, estimateId, onAddCostItems }: PDFTakeoff
                     <Button variant="outline" size="sm" onClick={handleFitToScreen}>
                       <Maximize2 className="h-4 w-4" />
                     </Button>
+                    {canCompare && (
+                      <Button
+                        variant={compareOn ? 'default' : 'outline'}
+                        size="sm"
+                        onClick={() => setCompareOn(v => !v)}
+                        title={`Compare with the previous revision (${previousRevision.fromName})`}
+                      >
+                        {compareBusy ? 'Comparing...' : compareOn ? 'Hide changes' : 'Compare revisions'}
+                      </Button>
+                    )}
                     <Button
                       variant="default"
                       size="sm"
@@ -1553,8 +1644,27 @@ export const PDFTakeoff = ({ projectId, estimateId, onAddCostItems }: PDFTakeoff
                         <button onClick={() => dispatch({ type: 'SET_ACTIVE_TOOL', payload: 'select' })} className="ml-1 h-6 px-2 rounded text-xs text-muted-foreground hover:text-foreground hover:underline">Close</button>
                       </div>
                     )}
+                    {(compareOverlay || revisionChecks > 0) && (
+                      <div className="pointer-events-none absolute bottom-3 left-3 z-20 max-w-[520px] space-y-1.5">
+                        {compareOverlay && (
+                          <div className="flex flex-wrap items-center gap-x-4 gap-y-1 rounded-md border border-border bg-card/95 px-3 py-1.5 text-xs shadow-lg">
+                            <span><span className="inline-block h-2.5 w-2.5 rounded-sm bg-[#00aa50] align-middle mr-1" />New in this revision</span>
+                            <span><span className="inline-block h-2.5 w-2.5 rounded-sm bg-[#e12828] align-middle mr-1" />Removed since {previousRevision?.fromName}</span>
+                            <span className="text-muted-foreground">
+                              {compareOverlay.added + compareOverlay.removed === 0 ? 'No change on this page' : `About ${Math.max(1, Math.round(compareOverlay.changedShare * 100))}% of the linework on this page changed`}
+                            </span>
+                          </div>
+                        )}
+                        {revisionChecks > 0 && (
+                          <div className="rounded-md border border-amber-400/40 bg-card/95 px-3 py-1.5 text-xs text-amber-400 shadow-lg">
+                            {revisionChecks} measurement{revisionChecks !== 1 ? 's' : ''} carried over from the previous revision: check each against the new sheet (Takeoff Table, Checked) and re-draw any that moved.
+                          </div>
+                        )}
+                      </div>
+                    )}
                     {calibrationBar}
                     <InteractiveCanvas
+                      compareOverlay={compareOverlay}
                       key={`${state.currentPageIndex}-${state.pdfFile?.planId ?? 'none'}`}
                       pdfUrl={state.pdfFile?.url?.startsWith('storage:') ? undefined : state.pdfFile?.url}
                       planId={state.pdfFile?.planId}

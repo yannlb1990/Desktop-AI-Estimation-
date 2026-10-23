@@ -261,7 +261,13 @@ const Dashboard = () => {
   const showPastDueBanner = sub.isPastDue;
 
   // ── render ─────────────────────────────────────────────────────────────────
-  const firstName = (localUser?.displayName ?? localUser?.email ?? "").split(/[\s@]/)[0];
+  // A real name only: the part of an email before the @ is not a name ("yannlb1990")
+  // (with no name given at sign-up, displayName falls back to that email prefix)
+  const emailPrefix = (localUser?.email ?? "").split("@")[0].toLowerCase();
+  const firstName = (localUser?.displayName && !localUser.displayName.includes("@")
+    && localUser.displayName.trim().toLowerCase() !== emailPrefix
+    ? localUser.displayName.trim().split(/\s+/)[0]
+    : "");
   const trialDaysLeft = Math.max(0, sub.daysLeftInTrial ?? 0);
 
   return (

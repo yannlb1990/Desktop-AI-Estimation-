@@ -250,6 +250,17 @@ function takeoffReducer(state: TakeoffState, action: TakeoffAction): TakeoffStat
       };
     }
 
+    case 'APPLY_REVISION': {
+      // A new issue of the same drawing: the measurements move onto it with the same ids,
+      // so every estimate line stays linked, and each is flagged to check against the new sheet
+      const { fromPlanId, toPlanId } = action.payload;
+      const moved = state.measurements.map(m =>
+        m.planId === fromPlanId ? { ...m, planId: toPlanId, needsRevisionCheck: true } : m);
+      // Undo history from before the revision points at the old plan: undoing into it would
+      // hide every carried measurement, so the revision starts a fresh history
+      return { ...state, measurements: moved, history: [moved], historyIndex: 0 };
+    }
+
     case 'SET_UPLOAD_STATUS':
       return { ...state, uploadStatus: action.payload };
 
@@ -325,6 +336,8 @@ function takeoffReducer(state: TakeoffState, action: TakeoffAction): TakeoffStat
       const updatedMeasurements = state.measurements.map(m => {
         if (m.id !== id) return m;
         const next: Measurement = { ...m, ...updates };
+        // Re-drawn on the new revision: nothing left to check
+        if (m.needsRevisionCheck && 'worldPoints' in updates && !('needsRevisionCheck' in updates)) next.needsRevisionCheck = false;
         const lengthChanged = 'realValue' in updates && m.realValue > 0 && updates.realValue !== m.realValue;
         const ratio = lengthChanged ? (updates.realValue as number) / m.realValue : 1;
         if (!('computedM2' in updates) && m.computedM2 != null) {

@@ -146,6 +146,8 @@ export interface Measurement {
   liningFaces?: number;
   /** Wall Setup v2: per-face finishes, openings and follow-on trades (src/lib/takeoff/wallItems.ts) */
   wallBuild?: import('./wallItems').WallBuild;
+  /** Carried over from an earlier revision of the plan: confirm or adjust it against the new drawing */
+  needsRevisionCheck?: boolean;
   /** Slab, footing or trench setup (src/components/takeoff/ConcreteSetupDialog.tsx) */
   concreteSetup?: import('@/components/takeoff/ConcreteSetupDialog').ConcreteSetup;
   customLining?: string;
@@ -390,6 +392,7 @@ export type TakeoffAction =
       pdfUrl?: string;
       pdfPageCount?: number;
     }}
+  | { type: 'APPLY_REVISION'; payload: { fromPlanId: string; toPlanId: string } }
   | { type: 'UNDO' }
   | { type: 'REDO' }
   | { type: 'DELETE_LAST_MEASUREMENT' }
