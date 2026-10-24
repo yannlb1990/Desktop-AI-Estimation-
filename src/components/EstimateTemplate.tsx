@@ -727,6 +727,8 @@ export const EstimateTemplate = ({ projectId, estimateId }: EstimateTemplateProp
       markup_pct: config.defaultMarkup,
       notes: `From site: ${l.basis}`,
       site_key: l.key,
+      site_qty: l.siteQuantity ?? l.quantity,
+      site_scope: l.scope,
       expanded: false,
       item_number: `${items.length + i + 1}`,
       isEditing: false,
@@ -742,6 +744,33 @@ export const EstimateTemplate = ({ projectId, estimateId }: EstimateTemplateProp
     }
     const noQty = lines.filter(l => l.needsQuantity).length;
     toast.success(`${created.length} line${created.length !== 1 ? 's' : ''} added from site. Price them${noQty ? `, and enter ${noQty} quantit${noQty !== 1 ? 'ies' : 'y'}` : ''} (Check estimate lists them).`);
+  };
+  // A visit changed on the phone: lines follow it instead of new ones being added
+  const updateSiteLines = (changes: { id: string; quantity?: number; scope?: string; siteQty?: number; siteScope?: string; remove?: boolean }[], quiet = false) => {
+    if (changes.length === 0) return;
+    const byId = new Map(changes.map(c => [c.id, c]));
+    const updatedItems = items
+      .filter(i => !byId.get(i.id)?.remove)
+      .map(i => {
+        const c = byId.get(i.id);
+        if (!c) return i;
+        return {
+          ...i,
+          ...(c.quantity !== undefined ? { quantity: c.quantity } : {}),
+          ...(c.scope ? { scope_of_work: c.scope } : {}),
+          // what the site says now, so the same change is not applied or offered again
+          ...(c.siteQty !== undefined ? { site_qty: c.siteQty } : {}),
+          ...(c.siteScope !== undefined ? { site_scope: c.siteScope } : {}),
+        } as EstimateItem;
+      });
+    setItems(updatedItems);
+    const projects = JSON.parse(localStorage.getItem(getUserStorageKey('local_projects')) || '[]');
+    const projectIndex = projects.findIndex((p: any) => p.id === projectId);
+    if (projectIndex !== -1) {
+      projects[projectIndex].estimate_items = mergeWithSaved(projects[projectIndex].estimate_items, updatedItems);
+      localStorage.setItem(getUserStorageKey('local_projects'), JSON.stringify(projects));
+    }
+    if (!quiet) toast.success(`${changes.length} line${changes.length !== 1 ? 's' : ''} updated from site`);
   };
   const siteKeysInEstimate = useMemo(() => new Set(items.map((i: any) => i.site_key).filter(Boolean) as string[]), [items]);
 
@@ -2130,7 +2159,7 @@ export const EstimateTemplate = ({ projectId, estimateId }: EstimateTemplateProp
         {openSections.addItem && (
         <div className="px-6 pb-6 border-t border-border">
         <EstimatePlanPanel projectId={projectId} refreshKey={items} />
-        <SiteVisitPanel projectId={projectId} addedKeys={siteKeysInEstimate} onAdd={lines => addSiteLines(lines)} />
+        <SiteVisitPanel projectId={projectId} addedKeys={siteKeysInEstimate} siteItems={items as any} onAdd={lines => addSiteLines(lines)} onUpdate={updateSiteLines} />
         <div className="mt-3 flex flex-wrap items-center gap-3 rounded-lg border border-border px-4 py-2.5 text-sm">
           <span className="font-medium">Services</span>
           <span className="text-muted-foreground">Electrical per point, plumbing per fixture, air conditioning sized per room</span>

@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { newVisit, type SiteVisit } from '@/lib/site/visit';
+import { MetricoreLogoMark } from '@/components/MetricoreLogoMark';
 import { loadLocalVisits, pullVisits, saveLocalVisit, countPending, syncAll, requestPersistentStorage } from '@/lib/site/siteStore';
 
 /** Phone home for site visits: the jobs walked, newest first, and a big button to start one. */
@@ -45,11 +46,15 @@ export default function SiteVisits() {
   };
 
   return (
-    <div className="min-h-screen bg-background text-foreground px-4 pb-24 pt-6 max-w-xl mx-auto">
+    <div className="min-h-screen bg-background text-foreground px-4 max-w-xl mx-auto" style={{ paddingTop: 'max(1.5rem, env(safe-area-inset-top))', paddingBottom: 'calc(7rem + env(safe-area-inset-bottom))' }}>
       <div className="flex items-center justify-between">
-        <h1 className="font-display text-2xl font-bold">Site visits</h1>
-        <button className="text-sm text-muted-foreground underline" onClick={() => navigate('/dashboard')}>Dashboard</button>
+        <span className="flex items-center gap-2.5">
+          <MetricoreLogoMark height={26} />
+          <span className="font-display text-lg font-bold">Metricore</span>
+        </span>
+        <button className="text-sm text-muted-foreground" onClick={() => navigate('/dashboard')}>Dashboard</button>
       </div>
+      <h1 className="mt-6 font-display text-2xl font-bold">Site visits</h1>
       {!online && <p className="mt-2 text-sm text-amber-400">No signal: everything saves on this phone and uploads later.</p>}
       {problem && <p className="mt-2 text-sm text-red-400">{problem}</p>}
 
@@ -69,7 +74,7 @@ export default function SiteVisits() {
             <button key={v.id} onClick={() => navigate(`/site/${v.id}`)} className="w-full rounded-xl border border-border bg-card px-4 py-3 text-left">
               <div className="flex items-center justify-between gap-2">
                 <span className="font-medium truncate">{v.jobName || 'Untitled visit'}</span>
-                <span className={`shrink-0 text-xs ${v.status === 'sent' ? 'text-green-400' : 'text-muted-foreground'}`}>{v.status === 'sent' ? 'Sent to office' : 'Draft'}</span>
+                <span className={`shrink-0 text-xs ${pending ? 'text-amber-400' : 'text-[#D4A045]'}`}>{pending ? 'Waiting for signal' : 'In the office'}</span>
               </div>
               <div className="mt-0.5 text-xs text-muted-foreground">
                 {v.address || 'No address'} · {v.rooms.length} room{v.rooms.length !== 1 ? 's' : ''}

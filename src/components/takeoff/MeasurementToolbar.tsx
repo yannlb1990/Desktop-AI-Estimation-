@@ -176,13 +176,13 @@ export const MeasurementToolbar = ({
     { id: 'count' as const, icon: Hash, label: 'Count', shortcut: 'N', color: 'bg-orange-500', unit: 'EA', desc: 'Doors, windows, posts, fittings' },
     { id: 'wall-line' as const, icon: Columns3, label: 'Wall Line', shortcut: 'T', color: 'bg-amber-700', unit: 'LM', desc: 'Straight walls with thickness' },
     { id: 'arc-wall' as const, icon: Spline, label: 'Arc Wall', shortcut: 'A', color: 'bg-orange-500', unit: 'LM', desc: 'Curved walls — start, end, curve point' },
-    { id: 'offset' as const, icon: Crosshair, label: 'Ref. Line', shortcut: 'G', color: 'bg-sky-400', unit: null as null, desc: 'Guide line, not measured' },
+    { id: 'offset' as const, icon: Crosshair, label: 'Ref. Line', shortcut: 'G', color: 'bg-[#D4A045]', unit: null as null, desc: 'Guide line, not measured' },
     { id: 'text' as const, icon: Type, label: 'Annotation', shortcut: 'X', color: 'bg-yellow-500', unit: null as null, desc: 'Notes and callout labels' },
   ];
 
   const modTools: Array<{ id: ModId; icon: React.ComponentType<{ className?: string }>; label: string; color: string; ring: string }> = [
     { id: 'door', icon: DoorOpen, label: 'Add Door (D)', color: 'bg-violet-500', ring: 'ring-violet-500' },
-    { id: 'window', icon: AppWindow, label: 'Add Window (Q)', color: 'bg-primary', ring: 'ring-cyan-500' },
+    { id: 'window', icon: AppWindow, label: 'Add Window (Q)', color: 'bg-primary', ring: 'ring-[#D4A045]' },
     { id: 'custom', icon: PenLine, label: 'Custom line (draw freely, prompt to add to estimate)', color: 'bg-slate-400', ring: 'ring-slate-400' },
   ];
 
@@ -458,7 +458,7 @@ export const MeasurementToolbar = ({
                       className={cn(
                         'h-7 px-3 rounded text-xs font-medium transition-colors',
                         wallClassification === 'internal'
-                          ? 'bg-sky-600 text-white'
+                          ? 'bg-[#E1DCC9] text-[#0B0704]'
                           : 'bg-muted/60/60 text-foreground/60 hover:bg-slate-600'
                       )}
                     >

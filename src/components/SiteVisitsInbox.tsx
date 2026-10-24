@@ -17,7 +17,7 @@ export function SiteVisitsInbox() {
 
   const [busy, setBusy] = useState(false);
   // Only visits still waiting for a project: linked ones live in their project's estimate
-  useEffect(() => { pullVisits().then(all => setVisits(all.filter(v => v.status === 'sent' && !v.projectId))).catch(() => {}); }, []);
+  useEffect(() => { pullVisits().then(all => setVisits(all.filter(v => v.rooms.length > 0 && !v.projectId))).catch(() => {}); }, []);
   if (visits.length === 0) return null;
 
   const projects: { id: string; name: string }[] = (() => {

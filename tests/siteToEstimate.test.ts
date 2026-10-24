@@ -21,5 +21,12 @@ expect('again gives same keys', draftLinesFromVisit(visit).map(l => l.key).join(
 const text = siteScopeText(visit);
 expect('scope text has notes and rooms', /asbestos/.test(text) && /Bathroom \(2.4 x 1.8 m, 2.4 m high\): Waterproofing/.test(text) && /drummy/.test(text));
 
+// Extra measurements and a typed floor area (24 Oct feedback)
+const deck = { ...newRoom('outdoor', []), areaM2: 15, scope: ['deck'], measures: [{ id: 'm1', label: 'Deck subframe', value: 5, unit: 'lm' as const, trade: 'Carpenter' }, { id: 'm2', label: '', value: null, unit: 'm²' as const, trade: '' }] };
+const dl = draftLinesFromVisit({ ...v, rooms: [deck] });
+expect('typed area drives decking', dl.find(l => l.scope === 'Decking')!.quantity === 15);
+expect('measurement line', dl.some(l => l.scope === 'Deck subframe' && l.quantity === 5 && l.unit === 'lm' && l.trade === 'Carpenter'));
+expect('empty measurement skipped', dl.length === 2);
+
 if (failures) { console.log(`${failures} site to estimate failures`); process.exit(1); }
 console.log('all site to estimate tests passed');

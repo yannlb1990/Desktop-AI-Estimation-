@@ -41,8 +41,9 @@ const Navigation = () => {
   return (
     <nav
       className={`fixed top-0 w-full z-50 transition-all duration-300 ${
-        scrolled
-          ? "bg-background/90 backdrop-blur-xl border-b border-border/40"
+        // An open phone menu needs a solid background, or it lays over the page text
+        scrolled || mobileOpen
+          ? "bg-background/95 backdrop-blur-xl border-b border-border/40"
           : "bg-transparent border-b border-transparent"
       }`}
     >
@@ -129,6 +130,9 @@ const Navigation = () => {
             <div className="flex gap-2 pt-2">
               {signedIn ? (
                 <>
+                  <Button size="sm" className="flex-1 bg-primary text-primary-foreground" onClick={() => navigate("/site")}>
+                    Site visits
+                  </Button>
                   <Button variant="outline" size="sm" className="flex-1" onClick={() => navigate("/dashboard")}>
                     Dashboard
                   </Button>

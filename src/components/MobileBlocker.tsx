@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
+import { MetricoreLogoMark } from "@/components/MetricoreLogoMark";
 
 /** Screens that need a desktop (plan takeoff, estimate tables). Public pages and
  *  the client's quote approval link stay usable on a phone. */
@@ -53,12 +54,14 @@ export default function MobileBlocker() {
           textAlign: "center",
         }}
       >
-        <p style={{ color: "#D4A045", fontWeight: 700, fontSize: "1.5rem", marginBottom: "1rem" }}>
-          Metricore
-        </p>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: "0.6rem", marginBottom: "1.5rem" }}>
+          <MetricoreLogoMark height={30} />
+          <span style={{ color: "#E1DCC9", fontWeight: 700, fontSize: "1.4rem" }}>Metricore</span>
+        </div>
+        <p style={{ color: "#E1DCC9", fontWeight: 700, fontSize: "1.25rem", margin: "0 0 0.75rem" }}>On site with your phone</p>
         <p style={{ color: "#E1DCC9", fontSize: "0.9375rem", lineHeight: 1.6, margin: 0 }}>
-          Plans and estimates need a computer. On site, use your phone for site visits:
-          photos, sizes and what needs doing, sent straight to the office.
+          Walk the job room by room: photos, sizes, what needs doing. It goes straight into the
+          project's estimate on your computer.
         </p>
         <button
           onClick={() => navigate("/site")}
@@ -90,7 +93,7 @@ export default function MobileBlocker() {
             cursor: "pointer",
           }}
         >
-          Continue anyway
+          Open the full app anyway
         </button>
       </div>
     </div>

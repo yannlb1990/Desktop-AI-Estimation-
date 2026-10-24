@@ -1345,7 +1345,7 @@ export const PDFTakeoff = ({ projectId, estimateId, onAddCostItems }: PDFTakeoff
                 <Button
                   variant="outline"
                   size="sm"
-                  className="gap-1.5 border-cyan-700/50 text-cyan-400 hover:bg-cyan-950/40 hover:border-cyan-500/70"
+                  className="gap-1.5 border-[#412D15]/50 text-[#D4A045] hover:bg-[#412D15]/40 hover:border-[#D4A045]/70"
                   onClick={() => { if (!sub.caps.planAnalysis) { setUpgradeModal({ open: true, feature: 'AI Plan Analyser' }); return; } setShowAnalyserModal(true); }}
                 >
                   <ScanLine className="h-3.5 w-3.5" />
@@ -2213,7 +2213,7 @@ export const PDFTakeoff = ({ projectId, estimateId, onAddCostItems }: PDFTakeoff
             })()}
             <button
               onClick={() => { setMeasurementPopup(null); if (!sub.caps.planAnalysis) { setUpgradeModal({ open: true, feature: 'AI Plan Analyser' }); return; } setShowAnalyserModal(true); }}
-              className="mt-2 w-full px-2.5 py-1.5 rounded text-xs font-medium border border-cyan-500/40 text-cyan-400 hover:bg-cyan-950/30 hover:border-cyan-400/70 flex items-center justify-center gap-1.5 transition-colors"
+              className="mt-2 w-full px-2.5 py-1.5 rounded text-xs font-medium border border-[#D4A045]/40 text-[#D4A045] hover:bg-[#412D15]/30 hover:border-[#D4A045]/70 flex items-center justify-center gap-1.5 transition-colors"
             >
               <ScanLine className="h-3.5 w-3.5" />
               AI Plan Analyser

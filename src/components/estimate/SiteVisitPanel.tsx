@@ -5,13 +5,17 @@ import { getUserStorageKey } from '@/lib/localAuth';
 import { syncProjectToSupabase } from '@/lib/db/projects';
 import { projectVisits, photoUrl } from '@/lib/site/siteStore';
 import { draftLinesFromVisit, siteScopeText, type SiteDraftLine } from '@/lib/site/toEstimate';
+import { planSiteUpdates, type SiteLinkedItem, type SiteChange } from '@/lib/site/siteUpdates';
 import type { SitePhoto, SiteVisit } from '@/lib/site/visit';
 
 interface Props {
   projectId: string;
   /** keys of site lines already in this estimate */
   addedKeys: Set<string>;
+  /** estimate lines, to keep the ones from site in step with the visit */
+  siteItems: SiteLinkedItem[];
   onAdd: (lines: SiteDraftLine[], visit: SiteVisit) => void;
+  onUpdate: (changes: SiteChange[], quiet?: boolean) => void;
 }
 
 function Thumb({ photo, onOpen }: { photo: SitePhoto; onOpen: (url: string) => void }) {
@@ -30,9 +34,10 @@ function Thumb({ photo, onOpen }: { photo: SitePhoto; onOpen: (url: string) => v
 }
 
 /** Estimate > Add to estimate: what was recorded on site for this project, ready to price. */
-export function SiteVisitPanel({ projectId, addedKeys, onAdd }: Props) {
+export function SiteVisitPanel({ projectId, addedKeys, siteItems, onAdd, onUpdate }: Props) {
   const [visits, setVisits] = useState<SiteVisit[]>([]);
   const [picked, setPicked] = useState<Set<string>>(new Set());
+  const [qtyOverride, setQtyOverride] = useState<Record<string, string>>({});
   const [bigPhoto, setBigPhoto] = useState<string | null>(null);
 
   useEffect(() => {
@@ -42,7 +47,20 @@ export function SiteVisitPanel({ projectId, addedKeys, onAdd }: Props) {
   }, [projectId]);
 
   const drafts = useMemo(() => visits.map(v => ({ v, lines: draftLinesFromVisit(v) })), [visits]);
+  const plan = useMemo(() => planSiteUpdates(siteItems, drafts.flatMap(d => d.lines), visits.map(v => v.id)), [siteItems, drafts, visits]);
+
+  // Lines nobody touched in the estimate follow the site by themselves
+  useEffect(() => {
+    if (plan.follow.length) onUpdate(plan.follow);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [plan.follow.map(f => `${f.id}:${f.quantity}:${f.scope}:${f.siteQty}`).join('|')]);
+
   if (visits.length === 0) return null;
+  const withQty = (l: SiteDraftLine): SiteDraftLine => {
+    const typed = parseFloat((qtyOverride[l.key] ?? '').replace(',', '.'));
+    // the site's own figure is kept separately, so a later site figure is offered, not forced
+    return Number.isFinite(typed) && typed > 0 ? { ...l, quantity: typed, needsQuantity: false, siteQuantity: l.quantity } : l;
+  };
 
   const copyNotes = (v: SiteVisit) => {
     try {
@@ -59,6 +77,26 @@ export function SiteVisitPanel({ projectId, addedKeys, onAdd }: Props) {
   return (
     <div className="mt-3 rounded-lg border border-border px-4 py-3 text-sm space-y-4">
       <div className="font-medium">From site</div>
+      {(plan.offer.length > 0 || plan.gone.length > 0) && (
+        <div className="rounded-md border border-amber-400/40 bg-amber-400/5 p-3 space-y-1.5">
+          <div className="text-amber-400">Changed on site since you priced it</div>
+          {plan.offer.map(o => (
+            <div key={o.id} className="flex flex-wrap items-center justify-between gap-2">
+              <span>{o.scope}: estimate has {o.current} {o.unit}, site now says {o.site} {o.unit}</span>
+              <span className="flex gap-2">
+                <Button size="sm" variant="outline" onClick={() => onUpdate([{ id: o.id, quantity: o.site, siteQty: o.site }])}>Use {o.site}</Button>
+                <Button size="sm" variant="ghost" onClick={() => onUpdate([{ id: o.id, siteQty: o.site }], true)}>Keep mine</Button>
+              </span>
+            </div>
+          ))}
+          {plan.gone.map(g => (
+            <div key={g.id} className="flex flex-wrap items-center justify-between gap-2">
+              <span>{g.scope}: no longer ticked on site</span>
+              <Button size="sm" variant="outline" onClick={() => onUpdate([{ id: g.id, remove: true }])}>Remove line</Button>
+            </div>
+          ))}
+        </div>
+      )}
       {drafts.map(({ v, lines }) => {
         const fresh = lines.filter(l => !addedKeys.has(l.key));
         const chosen = fresh.filter(l => picked.has(l.key));
@@ -94,9 +132,16 @@ export function SiteVisitPanel({ projectId, addedKeys, onAdd }: Props) {
                         <input type="checkbox" disabled={inEstimate} checked={inEstimate || picked.has(l.key)}
                           onChange={e => setPicked(s => { const n = new Set(s); e.target.checked ? n.add(l.key) : n.delete(l.key); return n; })} />
                         <span className="flex-1">{l.scope} <span className="text-xs text-muted-foreground">({l.trade})</span></span>
-                        <span className={`font-mono text-xs ${l.needsQuantity ? 'text-amber-400' : ''}`}>
-                          {l.needsQuantity ? 'qty to enter' : `${l.quantity} ${l.unit}`}
-                        </span>
+                        {l.needsQuantity && !inEstimate ? (
+                          <span className="flex items-center gap-1" onClick={e => e.preventDefault()}>
+                            <input inputMode="decimal" placeholder="qty" value={qtyOverride[l.key] ?? ''}
+                              onChange={e => setQtyOverride(m => ({ ...m, [l.key]: e.target.value }))}
+                              className="h-7 w-20 rounded border border-amber-400/60 bg-background px-2 text-right font-mono text-xs" />
+                            <span className="text-xs text-muted-foreground">{l.unit}</span>
+                          </span>
+                        ) : (
+                          <span className="font-mono text-xs">{l.quantity} {l.unit}</span>
+                        )}
                         <span className="w-40 text-right text-[11px] text-muted-foreground">{inEstimate ? 'in estimate' : l.basis}</span>
                       </label>
                     );
@@ -106,7 +151,7 @@ export function SiteVisitPanel({ projectId, addedKeys, onAdd }: Props) {
             })}
 
             <div className="flex flex-wrap items-center gap-2">
-              <Button size="sm" disabled={chosen.length === 0} onClick={() => { onAdd(chosen, v); setPicked(new Set()); }}>
+              <Button size="sm" disabled={chosen.length === 0} onClick={() => { onAdd(chosen.map(withQty), v); setPicked(new Set()); }}>
                 Add {chosen.length || ''} selected line{chosen.length === 1 ? '' : 's'}
               </Button>
               <Button size="sm" variant="outline" disabled={fresh.length === 0} onClick={() => setPicked(new Set(fresh.map(l => l.key)))}>

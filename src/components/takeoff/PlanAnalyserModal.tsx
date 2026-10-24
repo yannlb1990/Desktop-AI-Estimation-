@@ -270,7 +270,7 @@ function CategorySection({
                       className={`w-7 h-7 flex items-center justify-center rounded-lg border transition-all ${
                         pushed
                           ? 'border-emerald-500/40 bg-emerald-500/10 text-emerald-400 cursor-default'
-                          : 'border-white/20 text-white/50 hover:border-cyan-400 hover:text-cyan-400 hover:bg-cyan-500/10 group-hover:border-white/30 group-hover:text-white/70'
+                          : 'border-white/20 text-white/50 hover:border-[#D4A045] hover:text-[#D4A045] hover:bg-[#D4A045]/10 group-hover:border-white/30 group-hover:text-white/70'
                       }`}
                       title={pushed ? 'Added to estimate' : 'Add to estimate'}
                     >
@@ -288,7 +288,7 @@ function CategorySection({
                           <Building2 className="h-3 w-3" />
                           Material / Specification
                         </p>
-                        <p className="text-[13px] text-cyan-300 leading-snug">{t.materialSpec}</p>
+                        <p className="text-[13px] text-amber-200 leading-snug">{t.materialSpec}</p>
                       </div>
                     )}
                     {t.nccRef && (
@@ -370,7 +370,7 @@ function ElementRow({ label, value, sub, source }: {
           <TooltipProvider delayDuration={150}>
             <Tooltip>
               <TooltipTrigger asChild>
-                <span className="inline-flex items-center text-[9px] font-medium bg-cyan-500/10 text-cyan-400 border border-cyan-500/20 rounded px-1 py-0.5 cursor-default shrink-0 mt-0.5">
+                <span className="inline-flex items-center text-[9px] font-medium bg-[#D4A045]/10 text-[#D4A045] border border-[#D4A045]/20 rounded px-1 py-0.5 cursor-default shrink-0 mt-0.5">
                   p.{source.pageIndex}
                 </span>
               </TooltipTrigger>
@@ -409,7 +409,7 @@ function ModalElementsPanel({ elements, elementSources }: {
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 gap-4 max-w-4xl">
       {/* Structure */}
-      <ElementCard icon={<Home className="h-4 w-4 text-cyan-400" />} title="Structure" nccRef="NCC Vol 2 H1">
+      <ElementCard icon={<Home className="h-4 w-4 text-[#D4A045]" />} title="Structure" nccRef="NCC Vol 2 H1">
         <ElementRow label="Frame type" value={elements.structureType ? STRUCTURE_LABELS[elements.structureType] : undefined} source={src('structureType')} />
         <ElementRow label="External cladding" value={elements.externalCladding ? CLAD_LABELS[elements.externalCladding] : undefined} source={src('externalCladding')} />
         <ElementRow label="Foundation" value={elements.foundationType ? FOUND_LABELS[elements.foundationType] : undefined} source={src('foundationType')} />
@@ -698,8 +698,8 @@ export function PlanAnalyserModal({
         {/* Header */}
         <div className="flex items-center justify-between px-5 py-3.5 border-b border-white/[0.07] bg-background/90 backdrop-blur shrink-0">
           <div className="flex items-center gap-3">
-            <div className="w-8 h-8 rounded-lg bg-cyan-500/10 border border-cyan-500/20 flex items-center justify-center">
-              <ScanLine className="h-4 w-4 text-cyan-400" />
+            <div className="w-8 h-8 rounded-lg bg-[#D4A045]/10 border border-[#D4A045]/20 flex items-center justify-center">
+              <ScanLine className="h-4 w-4 text-[#D4A045]" />
             </div>
             <div>
               <h2 className="text-sm font-semibold text-white">Plan Intelligence</h2>
@@ -732,7 +732,7 @@ export function PlanAnalyserModal({
             {result && !allPushed && (
               <Button
                 size="sm"
-                className="h-7 gap-1.5 text-xs bg-cyan-500 hover:bg-cyan-400 text-black font-semibold"
+                className="h-7 gap-1.5 text-xs bg-[#E1DCC9] hover:bg-[#E1DCC9]/90 text-[#0B0704] font-semibold"
                 onClick={pushAll}
               >
                 <ArrowUpRight className="h-3 w-3" />
@@ -764,9 +764,9 @@ export function PlanAnalyserModal({
             <div className="flex flex-col items-center justify-center gap-5 h-full min-h-[400px]">
               <div className="relative flex items-center justify-center">
                 {/* Outer pulse ring */}
-                <div className="absolute w-24 h-24 rounded-2xl border border-cyan-400/20 animate-ping" style={{ animationDuration: '2s' }} />
+                <div className="absolute w-24 h-24 rounded-2xl border border-[#D4A045]/20 animate-ping" style={{ animationDuration: '2s' }} />
                 {/* Mid ring */}
-                <div className="absolute w-20 h-20 rounded-2xl border border-cyan-400/10" />
+                <div className="absolute w-20 h-20 rounded-2xl border border-[#D4A045]/10" />
                 {/* Metricore logo */}
                 <div className="relative w-16 h-16 rounded-2xl overflow-hidden"
                   style={{ boxShadow: '0 0 32px rgba(34,211,238,0.15)' }}>
@@ -791,7 +791,7 @@ export function PlanAnalyserModal({
                 {[0, 1, 2].map(i => (
                   <div
                     key={i}
-                    className="w-1.5 h-1.5 rounded-full bg-cyan-400 animate-bounce"
+                    className="w-1.5 h-1.5 rounded-full bg-[#D4A045] animate-bounce"
                     style={{ animationDelay: `${i * 0.18}s` }}
                   />
                 ))}
@@ -837,7 +837,7 @@ export function PlanAnalyserModal({
               {(planId || pdfUrl) && (
                 <Button
                   size="sm"
-                  className="gap-2 bg-cyan-500 hover:bg-cyan-400 text-black font-semibold"
+                  className="gap-2 bg-[#E1DCC9] hover:bg-[#E1DCC9]/90 text-[#0B0704] font-semibold"
                   onClick={handleAnalyse}
                 >
                   <ScanLine className="h-4 w-4" />
@@ -892,7 +892,7 @@ export function PlanAnalyserModal({
                   onClick={() => setActiveTab('quantities')}
                   className={`px-4 py-2 text-xs font-medium border-b-2 transition-colors -mb-px ${
                     activeTab === 'quantities'
-                      ? 'border-cyan-400 text-cyan-400'
+                      ? 'border-[#D4A045] text-[#D4A045]'
                       : 'border-transparent text-white/40 hover:text-white/60'
                   }`}
                 >
@@ -902,7 +902,7 @@ export function PlanAnalyserModal({
                   onClick={() => setActiveTab('elements')}
                   className={`flex items-center gap-1.5 px-4 py-2 text-xs font-medium border-b-2 transition-colors -mb-px ${
                     activeTab === 'elements'
-                      ? 'border-cyan-400 text-cyan-400'
+                      ? 'border-[#D4A045] text-[#D4A045]'
                       : 'border-transparent text-white/40 hover:text-white/60'
                   }`}
                 >
@@ -913,7 +913,7 @@ export function PlanAnalyserModal({
                   onClick={() => setActiveTab('scope')}
                   className={`flex items-center gap-1.5 px-4 py-2 text-xs font-medium border-b-2 transition-colors -mb-px ${
                     activeTab === 'scope'
-                      ? 'border-cyan-400 text-cyan-400'
+                      ? 'border-[#D4A045] text-[#D4A045]'
                       : 'border-transparent text-white/40 hover:text-white/60'
                   }`}
                 >
@@ -1001,7 +1001,7 @@ export function PlanAnalyserModal({
                           <ul className="px-4 py-2 space-y-1.5">
                             {result.notes.map((n, i) => (
                               <li key={i} className="text-[12px] text-white/45 flex items-start gap-2">
-                                <span className="text-cyan-500/60 mt-0.5">·</span>
+                                <span className="text-[#D4A045]/60 mt-0.5">·</span>
                                 <span>{n}</span>
                               </li>
                             ))}
@@ -1047,10 +1047,10 @@ export function PlanAnalyserModal({
 
                   {/* Construction Overview */}
                   {result.constructionOverview && (
-                    <div className="rounded-xl border border-cyan-500/20 bg-cyan-950/20 px-5 py-4">
+                    <div className="rounded-xl border border-[#D4A045]/20 bg-[#412D15]/20 px-5 py-4">
                       <div className="flex items-center gap-2 mb-2">
-                        <Building2 className="h-4 w-4 text-cyan-400" />
-                        <span className="text-xs font-semibold text-cyan-300 uppercase tracking-wider">Construction Overview</span>
+                        <Building2 className="h-4 w-4 text-[#D4A045]" />
+                        <span className="text-xs font-semibold text-amber-200 uppercase tracking-wider">Construction Overview</span>
                       </div>
                       <p className="text-sm text-white/80 leading-relaxed">{result.constructionOverview}</p>
                     </div>
@@ -1067,7 +1067,7 @@ export function PlanAnalyserModal({
                       <ul className="divide-y divide-white/[0.04]">
                         {result.scopeHighlights.map((item, i) => (
                           <li key={i} className="flex items-start gap-3 px-4 py-2.5 hover:bg-white/[0.02]">
-                            <span className="text-cyan-500/50 font-mono text-[11px] mt-0.5 shrink-0 w-5 text-right">{i + 1}.</span>
+                            <span className="text-[#D4A045]/50 font-mono text-[11px] mt-0.5 shrink-0 w-5 text-right">{i + 1}.</span>
                             <span className="text-[13px] text-white/75 leading-snug">{item}</span>
                           </li>
                         ))}
@@ -1165,7 +1165,7 @@ export function PlanAnalyserModal({
                       <p className="text-sm text-white/30">Scope report not available for this analysis.</p>
                       <p className="text-[12px] text-white/20">Re-analyse the plan to generate a full scope report.</p>
                       <button
-                        className="mt-1 text-xs text-cyan-400/60 hover:text-cyan-400 transition-colors"
+                        className="mt-1 text-xs text-[#D4A045]/60 hover:text-[#D4A045] transition-colors"
                         onClick={handleReanalyse}
                       >
                         Re-analyse now

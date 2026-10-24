@@ -123,8 +123,8 @@ function ElementsPanel({ elements }: { elements?: BuildingElements }) {
       {/* Structure */}
       <div className="rounded-md border border-border/30 p-2.5 space-y-0.5">
         <div className="flex items-center gap-1.5 mb-1.5">
-          <Home className="h-3 w-3 text-cyan-400" />
-          <span className="text-[11px] font-semibold text-cyan-400">Structure</span>
+          <Home className="h-3 w-3 text-[#D4A045]" />
+          <span className="text-[11px] font-semibold text-[#D4A045]">Structure</span>
         </div>
         {row('Frame type', elements.structureType ? STRUCTURE_LABELS[elements.structureType] : undefined)}
         {row('External cladding', elements.externalCladding ? CLAD_LABELS[elements.externalCladding] : undefined)}
@@ -464,8 +464,8 @@ export function AIPlanAnalysisPanel({
           {!locked && loading && (
             <div className="flex flex-col items-center gap-3 py-5">
               <div className="relative flex items-center justify-center">
-                <div className="absolute w-16 h-16 rounded-2xl border border-cyan-400/20 animate-ping" style={{ animationDuration: '2s' }} />
-                <div className="absolute w-14 h-14 rounded-2xl border border-cyan-400/10" />
+                <div className="absolute w-16 h-16 rounded-2xl border border-[#D4A045]/20 animate-ping" style={{ animationDuration: '2s' }} />
+                <div className="absolute w-14 h-14 rounded-2xl border border-[#D4A045]/10" />
                 <div className="relative w-10 h-10 rounded-xl overflow-hidden" style={{ boxShadow: '0 0 20px rgba(34,211,238,0.12)' }}>
                   <svg viewBox="-11.25 -52.5 235 235" className="w-full h-full" fill="none" xmlns="http://www.w3.org/2000/svg">
                     <rect x="-11.25" y="-52.5" width="235" height="235" rx="44" fill="#1F150C"/>
@@ -481,7 +481,7 @@ export function AIPlanAnalysisPanel({
               </div>
               <div className="flex gap-1.5">
                 {[0, 1, 2].map(i => (
-                  <div key={i} className="w-1 h-1 rounded-full bg-cyan-400 animate-bounce"
+                  <div key={i} className="w-1 h-1 rounded-full bg-[#D4A045] animate-bounce"
                     style={{ animationDelay: `${i * 0.18}s` }} />
                 ))}
               </div>
@@ -557,7 +557,7 @@ export function AIPlanAnalysisPanel({
                   onClick={() => setActiveTab('quantities')}
                   className={`flex-1 text-[11px] py-1.5 font-medium transition-colors ${
                     activeTab === 'quantities'
-                      ? 'text-cyan-400 border-b-2 border-cyan-400 -mb-px'
+                      ? 'text-[#D4A045] border-b-2 border-[#D4A045] -mb-px'
                       : 'text-muted-foreground hover:text-foreground'
                   }`}
                 >
@@ -567,7 +567,7 @@ export function AIPlanAnalysisPanel({
                   onClick={() => setActiveTab('elements')}
                   className={`flex-1 text-[11px] py-1.5 font-medium transition-colors ${
                     activeTab === 'elements'
-                      ? 'text-cyan-400 border-b-2 border-cyan-400 -mb-px'
+                      ? 'text-[#D4A045] border-b-2 border-[#D4A045] -mb-px'
                       : 'text-muted-foreground hover:text-foreground'
                   }`}
                 >
@@ -667,7 +667,7 @@ export function AIPlanAnalysisPanel({
                                   {t.materialSpec && (
                                     <div>
                                       <p className="text-[9px] text-muted-foreground uppercase tracking-wider mb-0.5">Material / Spec</p>
-                                      <p className="text-[11px] text-cyan-400 leading-snug">{t.materialSpec}</p>
+                                      <p className="text-[11px] text-[#D4A045] leading-snug">{t.materialSpec}</p>
                                     </div>
                                   )}
                                   {t.nccRef && (

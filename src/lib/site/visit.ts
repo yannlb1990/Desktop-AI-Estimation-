@@ -21,6 +21,18 @@ export interface SitePhoto {
   takenAt: string;
 }
 
+/** Any other measurement taken in a room: "Deck subframe 5 lm", "Slab 1.2 m³", "Ceiling height 3.1 m" */
+export interface SiteMeasure {
+  id: string;
+  label: string;
+  value: number | null;
+  unit: 'm²' | 'm³' | 'lm' | 'm' | 'ea';
+  trade: string;
+}
+
+export const MEASURE_UNITS: SiteMeasure['unit'][] = ['m²', 'lm', 'm³', 'm', 'ea'];
+export const SITE_TRADES = ['Carpenter', 'Demolition', 'Plumber', 'Electrician', 'Tiler', 'Waterproofer', 'Plasterer', 'Painter', 'Concreter', 'Roofer', 'Landscaper', 'Flooring', 'Cabinetmaker', 'General'];
+
 export interface SiteRoom {
   id: string;
   name: string;
@@ -28,6 +40,10 @@ export interface SiteRoom {
   lengthM: number | null;
   widthM: number | null;
   heightM: number | null;
+  /** floor area typed directly, for rooms that are not a rectangle */
+  areaM2?: number | null;
+  /** other measurements, each becomes its own estimate line */
+  measures?: SiteMeasure[];
   /** ticked checklist keys */
   scope: string[];
   /** extra scope typed or dictated on site */
@@ -114,9 +130,10 @@ const r2 = (n: number) => Math.round(n * 100) / 100;
 export interface RoomQuantities { floor: number; ceiling: number; walls: number; perimeter: number }
 
 /** Floor, ceiling, wall area and perimeter from length x width x height (openings not deducted). */
-export function roomQuantities(r: Pick<SiteRoom, 'lengthM' | 'widthM' | 'heightM'>): RoomQuantities {
+export function roomQuantities(r: Pick<SiteRoom, 'lengthM' | 'widthM' | 'heightM'> & { areaM2?: number | null }): RoomQuantities {
   const l = Number(r.lengthM) || 0, w = Number(r.widthM) || 0, h = Number(r.heightM) || 0;
-  const floor = l * w;
+  // A typed floor area wins (L-shaped rooms); walls still need length and width
+  const floor = Number(r.areaM2) > 0 ? Number(r.areaM2) : l * w;
   const perimeter = l > 0 && w > 0 ? 2 * (l + w) : 0;
   return { floor: r2(floor), ceiling: r2(floor), walls: r2(perimeter * h), perimeter: r2(perimeter) };
 }

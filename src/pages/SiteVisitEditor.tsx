@@ -2,8 +2,10 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { getUserStorageKey } from '@/lib/localAuth';
 import {
-  ROOM_TYPES, SCOPE_BY_ROOM, newRoom, roomQuantities, type RoomType, type SiteRoom, type SiteVisit,
+  ROOM_TYPES, SCOPE_BY_ROOM, MEASURE_UNITS, SITE_TRADES, newRoom, roomQuantities,
+  type RoomType, type SiteRoom, type SiteVisit, type SiteMeasure,
 } from '@/lib/site/visit';
+import { MetricoreLogoMark } from '@/components/MetricoreLogoMark';
 import {
   loadLocalVisits, saveLocalVisit, syncVisit, syncAll, shrinkPhoto, putPhotoBlob, photoUrl, deletePhotoBlob, deleteVisit, countPending,
   photoTooBig, requestPersistentStorage, StorageFullError, removeUploadedPhoto,
@@ -13,43 +15,87 @@ const field = 'w-full rounded-lg border border-border bg-background px-3 py-2.5 
 const num = (v: string): number | null => { const n = parseFloat(v.replace(',', '.')); return Number.isFinite(n) && n > 0 ? n : null; };
 
 /**
- * Speech to text where Safari offers it (not always in the home-screen app); otherwise the
- * keyboard's own microphone works in any box. One phrase per tap: iOS repeats text in
- * continuous mode.
+ * Talk instead of typing. Shows the words live, keeps listening through pauses (iOS stops
+ * after a silence, so it restarts until Stop), and only adds new final words: Safari can
+ * re-deliver results, so each session commits the difference from what it already added.
+ * Where Safari offers no speech service (some home-screen apps), the keyboard microphone works.
  */
 function useDictation(onText: (t: string) => void) {
   const recRef = useRef<any>(null);
+  const wantRef = useRef(false);
+  const committedRef = useRef(0);        // results committed in this session, by index
+  const lastFinalRef = useRef('');       // Safari can repeat earlier words in a later result
+  const quietRestartsRef = useRef(0);
+  const heardRef = useRef(false);
   const [listening, setListening] = useState(false);
+  const [live, setLive] = useState('');
   const [problem, setProblem] = useState('');
   const Ctor = typeof window !== 'undefined' ? ((window as any).SpeechRecognition || (window as any).webkitSpeechRecognition) : null;
-  useEffect(() => () => { try { recRef.current?.abort(); } catch { /* already stopped */ } }, []);
+
+  const stopAll = () => { wantRef.current = false; try { recRef.current?.stop(); } catch { /* stopped */ } setListening(false); setLive(''); };
+  useEffect(() => () => { wantRef.current = false; try { recRef.current?.abort(); } catch { /* stopped */ } }, []);
+
+  const session = () => {
+    const rec = new Ctor();
+    rec.lang = 'en-AU';
+    rec.continuous = true;
+    rec.interimResults = true;
+    committedRef.current = 0;
+    heardRef.current = false;
+    rec.onresult = (e: any) => {
+      if (recRef.current !== rec) return;
+      let interim = '';
+      for (let i = 0; i < e.results.length; i++) {
+        const t = String(e.results[i][0].transcript || '').trim();
+        if (!e.results[i].isFinal) { interim += ` ${t}`; continue; }
+        if (i < committedRef.current) continue;
+        committedRef.current = i + 1;
+        // drop words Safari repeated from the previous phrase
+        const prev = lastFinalRef.current;
+        const fresh = prev && t.toLowerCase().startsWith(prev.toLowerCase()) ? t.slice(prev.length).trim() : t;
+        lastFinalRef.current = t;
+        if (fresh) { heardRef.current = true; onText(fresh); }
+      }
+      setLive(interim.trim());
+    };
+    rec.onerror = (e: any) => {
+      if (recRef.current !== rec) return;
+      const err = e?.error;
+      if (err === 'not-allowed' || err === 'service-not-allowed') {
+        wantRef.current = false;
+        setProblem('Talking is blocked here: allow the microphone for metricore.com.au in Settings > Safari, or use the microphone on the keyboard.');
+      } else if (err === 'audio-capture' || err === 'network' || err === 'aborted') {
+        wantRef.current = false;
+        setProblem(err === 'audio-capture' ? 'The microphone is busy (a call or another app): try again in a moment.'
+          : err === 'network' ? 'Talking needs signal: type, or use the keyboard microphone.' : '');
+      }
+    };
+    rec.onend = () => {
+      if (recRef.current !== rec) return; // an old session ending late
+      setLive('');
+      quietRestartsRef.current = heardRef.current ? 0 : quietRestartsRef.current + 1;
+      // iOS ends after a pause: carry on, with a short wait, but not forever in silence
+      if (wantRef.current && quietRestartsRef.current < 3) {
+        setTimeout(() => { if (wantRef.current && recRef.current === rec) { try { session(); return; } catch { /* fall through */ } } setListening(false); }, 400);
+        return;
+      }
+      wantRef.current = false;
+      setListening(false);
+    };
+    recRef.current = rec;
+    rec.start();
+  };
+
   const start = () => {
     if (!Ctor || listening) return;
     setProblem('');
-    try {
-      const rec = new Ctor();
-      rec.lang = 'en-AU';
-      rec.continuous = false;
-      rec.interimResults = false;
-      rec.onresult = (e: any) => {
-        for (let i = e.resultIndex; i < e.results.length; i++) {
-          if (e.results[i].isFinal) { const t = String(e.results[i][0].transcript || '').trim(); if (t) onText(t); }
-        }
-      };
-      rec.onend = () => setListening(false);
-      rec.onerror = (e: any) => {
-        setListening(false);
-        setProblem(e?.error === 'not-allowed' || e?.error === 'service-not-allowed'
-          ? 'Dictation is blocked here: use the microphone on the keyboard instead.'
-          : 'Did not catch that: try again or use the keyboard microphone.');
-      };
-      recRef.current = rec;
-      rec.start();
-      setListening(true);
-    } catch { setProblem('Dictation is not available here: use the keyboard microphone.'); }
+    wantRef.current = true;
+    quietRestartsRef.current = 0;
+    lastFinalRef.current = '';
+    try { session(); setListening(true); }
+    catch { wantRef.current = false; setProblem('Talking is not available here: use the microphone on the keyboard.'); }
   };
-  const stop = () => { try { recRef.current?.stop(); } catch { /* stopped */ } setListening(false); };
-  return { supported: !!Ctor, listening, start, stop, problem };
+  return { supported: !!Ctor, listening, live, start, stop: stopAll, problem };
 }
 
 function NotesBox({ value, onChange, placeholder }: { value: string; onChange: (v: string) => void; placeholder: string }) {
@@ -61,18 +107,22 @@ function NotesBox({ value, onChange, placeholder }: { value: string; onChange: (
     onChange(next);
   });
   return (
-    <div className="space-y-1.5">
+    <div className="space-y-2">
       <textarea className={`${field} min-h-[96px]`} value={value} placeholder={placeholder} onChange={e => onChange(e.target.value)} />
+      {d.listening && (
+        <p className="rounded-lg border border-[#D4A045]/40 bg-[#D4A045]/10 px-3 py-2 text-sm text-foreground">
+          {d.live || 'Listening... speak now'}
+        </p>
+      )}
       {d.problem && <p className="text-xs text-amber-400">{d.problem}</p>}
-      <div className="flex items-center justify-between text-xs text-muted-foreground">
-        <span>Tap the microphone on the keyboard to talk instead of typing.</span>
-        {d.supported && (
-          <button type="button" className={`rounded-md border px-2.5 py-1 ${d.listening ? 'border-red-400 text-red-400' : 'border-border text-foreground'}`}
-            onClick={d.listening ? d.stop : d.start}>
-            {d.listening ? 'Stop' : 'Dictate'}
-          </button>
-        )}
-      </div>
+      {d.supported ? (
+        <button type="button" onClick={d.listening ? d.stop : d.start}
+          className={`w-full rounded-lg py-3 text-base font-semibold ${d.listening ? 'bg-red-500/90 text-white' : 'border border-[#D4A045] text-[#D4A045]'}`}>
+          {d.listening ? 'Stop' : 'Talk'}
+        </button>
+      ) : (
+        <p className="text-xs text-muted-foreground">Tap the microphone on the keyboard to talk instead of typing.</p>
+      )}
     </div>
   );
 }
@@ -89,6 +139,27 @@ function PhotoThumb({ photo, onRemove }: { photo: SiteRoom['photos'][number]; on
       {src ? <img src={src} alt="" className="h-full w-full object-cover" /> : <span className="absolute inset-0 grid place-items-center text-[10px] text-muted-foreground">Photo</span>}
       {!photo.path && <span className="absolute left-1 top-1 rounded bg-black/60 px-1 text-[10px] text-amber-300">not uploaded</span>}
       <button type="button" onClick={onRemove} className="absolute right-1 top-1 rounded bg-black/60 px-1.5 text-xs text-white">Remove</button>
+    </div>
+  );
+}
+
+/** One measurement: what it is, how much, which unit, which trade does it */
+function MeasureRow({ m, onChange, onRemove }: { m: SiteMeasure; onChange: (m: SiteMeasure) => void; onRemove: () => void }) {
+  return (
+    <div className="rounded-lg border border-border p-2.5 space-y-2">
+      <input className={field} placeholder="What (deck subframe, slab, ceiling height...)" value={m.label} onChange={e => onChange({ ...m, label: e.target.value })} />
+      <div className="grid grid-cols-[1fr_auto] gap-2">
+        <SizeInput value={m.value} placeholder="Amount" onValue={value => onChange({ ...m, value })} />
+        <select className={`${field} w-24`} value={m.unit} onChange={e => onChange({ ...m, unit: e.target.value as SiteMeasure['unit'] })}>
+          {MEASURE_UNITS.map(u => <option key={u} value={u}>{u}</option>)}
+        </select>
+      </div>
+      <div className="flex items-center gap-2">
+        <select className={field} value={m.trade} onChange={e => onChange({ ...m, trade: e.target.value })}>
+          {SITE_TRADES.map(t => <option key={t} value={t}>{t}</option>)}
+        </select>
+        <button type="button" className="shrink-0 px-2 text-sm text-muted-foreground underline" onClick={onRemove}>Remove</button>
+      </div>
     </div>
   );
 }
@@ -136,11 +207,30 @@ function RoomCard({ room, open, onToggle, onChange, onRemove, onPhotos }: {
                   onValue={n => set({ [k]: n } as Partial<SiteRoom>)} />
               ))}
             </div>
+            <div className="mt-2 flex items-center gap-2">
+              <span className="text-sm text-muted-foreground shrink-0">or floor area</span>
+              <SizeInput value={room.areaM2 ?? null} placeholder="m² (not a rectangle)" onValue={n => set({ areaM2: n })} />
+            </div>
             {q.floor > 0 && (
               <p className="mt-1.5 text-xs text-muted-foreground">
-                Floor {q.floor} m²{q.walls > 0 ? ` · Walls ${q.walls} m²` : ''} · Perimeter {q.perimeter} m
+                Floor {q.floor} m²{q.walls > 0 ? ` · Walls ${q.walls} m²` : ''}{q.perimeter > 0 ? ` · Perimeter ${q.perimeter} m` : ''}
               </p>
             )}
+          </div>
+
+          <div>
+            <div className="mb-1.5 text-sm text-muted-foreground">Other measurements</div>
+            <div className="space-y-2">
+              {(room.measures ?? []).map(m => (
+                <MeasureRow key={m.id} m={m}
+                  onChange={next => onChange(r => ({ ...r, measures: (r.measures ?? []).map(x => (x.id === m.id ? next : x)) }))}
+                  onRemove={() => onChange(r => ({ ...r, measures: (r.measures ?? []).filter(x => x.id !== m.id) }))} />
+              ))}
+            </div>
+            <button type="button" className="mt-2 w-full rounded-lg border border-dashed border-border py-2.5 text-sm"
+              onClick={() => onChange(r => ({ ...r, measures: [...(r.measures ?? []), { id: crypto.randomUUID(), label: '', value: null, unit: 'm²', trade: 'Carpenter' }] }))}>
+              Add a measurement (m², lm, m³, height, count)
+            </button>
           </div>
 
           <div>
@@ -203,6 +293,8 @@ export default function SiteVisitEditor() {
   const [visit, setVisit] = useState<SiteVisit | null>(() => loadLocalVisits().find(v => v.id === visitId) ?? null);
   const [openRoom, setOpenRoom] = useState<string | null>(null);
   const [syncState, setSyncState] = useState<string>('Saved on this phone');
+  // true only when the last upload finished with nothing left to send
+  const [inOffice, setInOffice] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const syncTimer = useRef<number | null>(null);
   const visitRef = useRef(visit);
@@ -216,10 +308,12 @@ export default function SiteVisitEditor() {
     const id = visitRef.current?.id;
     if (!id) return;
     setSyncState('Uploading...');
+    setInOffice(false);
     let r;
     try { r = await syncVisit(id); }
     catch (e) { setSyncState(e instanceof StorageFullError ? e.message : 'Saved on this phone. Upload will retry.'); return; }
-    if (!r.visit) return;
+    if (!r.visit) { setSyncState('Saved on this phone'); return; }
+    setInOffice(!r.error && !r.offline && countPending(r.visit) === 0);
     // keep anything typed while the upload ran; take the photo paths that just landed
     const latest = loadLocalVisits().find(v => v.id === id);
     if (latest) { visitRef.current = latest; setVisit(latest); }
@@ -302,21 +396,49 @@ export default function SiteVisitEditor() {
     setOpenRoom(room.id);
   };
 
-  const [sending, setSending] = useState(false);
-  const sendToOffice = async () => {
-    if (sending) return;
-    setSending(true);
-    update({ status: 'sent' });
+  // Every change already goes to the office by itself; Done confirms and closes the visit
+  const [done, setDone] = useState(false);
+  const finish = async () => {
+    if (visitRef.current?.status !== 'sent') update({ status: 'sent' });
     if (syncTimer.current) window.clearTimeout(syncTimer.current);
+    setDone(true);
     await runSync();
-    setSending(false);
   };
 
+  if (done) {
+    const pending = countPending(visit);
+    const uploaded = inOffice && pending === 0;
+    return (
+      <div className="min-h-screen bg-background text-foreground px-6 max-w-xl mx-auto flex flex-col" style={{ paddingTop: 'max(3rem, env(safe-area-inset-top))', paddingBottom: 'calc(2rem + env(safe-area-inset-bottom))' }}>
+        <div className="flex-1">
+          <div className={`grid h-24 w-24 place-items-center rounded-full ${uploaded ? 'bg-[#D4A045]' : 'bg-[#412D15]'}`}>
+            <span className="text-4xl font-bold text-[#0B0704]">{uploaded ? '✓' : '…'}</span>
+          </div>
+          <h1 className="mt-8 font-display text-4xl font-bold">{uploaded ? 'Sent' : 'Saved'}</h1>
+          <p className="mt-4 text-lg">
+            {visit.jobName || 'This visit'}: {visit.rooms.length} room{visit.rooms.length !== 1 ? 's' : ''}, {visit.rooms.reduce((n, r) => n + r.photos.length, 0)} photos.
+          </p>
+          <p className="mt-3 text-base text-muted-foreground">
+            {uploaded
+              ? 'The office has it. Open the project on your computer: Estimate, Add to estimate, From site.'
+              : `${syncState}. It goes to the office by itself as soon as there is signal.`}
+          </p>
+          <p className="mt-3 text-sm text-muted-foreground">Changes you make later update the same visit in the office. Nothing is added twice.</p>
+        </div>
+        <button type="button" onClick={() => navigate('/site')} className="w-full rounded-xl bg-primary py-4 text-base font-semibold text-primary-foreground">Done</button>
+        <button type="button" onClick={() => setDone(false)} className="mt-4 w-full py-2 text-base text-[#D4A045]">Keep editing this visit</button>
+      </div>
+    );
+  }
+
   return (
-    <div className="min-h-screen bg-background text-foreground px-4 pb-28 pt-5 max-w-xl mx-auto space-y-5">
-      <div className="flex items-center justify-between">
-        <button className="text-sm text-muted-foreground underline" onClick={() => navigate('/site')}>Site visits</button>
-        <span className="text-xs text-muted-foreground">{syncState}</span>
+    <div className="min-h-screen bg-background text-foreground px-4 max-w-xl mx-auto space-y-5" style={{ paddingTop: 'max(1.25rem, env(safe-area-inset-top))', paddingBottom: 'calc(9rem + env(safe-area-inset-bottom))' }}>
+      <div className="flex items-center justify-between gap-3">
+        <button className="flex items-center gap-2" onClick={() => navigate('/site')} aria-label="Back to site visits">
+          <MetricoreLogoMark height={22} />
+          <span className="text-sm text-muted-foreground">Site visits</span>
+        </button>
+        <span className={`text-right text-xs ${/No signal|failed|retry|full/i.test(syncState) ? 'text-amber-400' : 'text-muted-foreground'}`}>{syncState}</span>
       </div>
 
       <div className="space-y-2">
@@ -348,12 +470,12 @@ export default function SiteVisitEditor() {
       </div>
 
       <div className="space-y-3 pt-2">
-        <button type="button" onClick={sendToOffice} disabled={visit.rooms.length === 0 || sending}
+        <button type="button" onClick={finish} disabled={visit.rooms.length === 0}
           className="w-full rounded-xl bg-primary py-4 text-base font-semibold text-primary-foreground disabled:opacity-50">
-          {visit.status === 'sent' ? 'Sent to office (send again with changes)' : 'Send to office'}
+          Done
         </button>
         <p className="text-center text-xs text-muted-foreground">
-          The office sees the rooms, photos and ticks in the project's estimate. It uploads by itself when there is signal.
+          Everything you enter goes to the office by itself, and later changes update it there.
         </p>
         <div className="text-center">
           {confirmDelete ? (

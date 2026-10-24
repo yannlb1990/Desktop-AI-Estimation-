@@ -18,6 +18,7 @@ import { approveQuoteVersion, clearQuoteApproval, loadProject, createQuoteShare,
 import { scaleLinesToTotal, shownTotal, lineAmount } from "@/lib/pricing/quoteLines"
 import { gstOn } from "@/lib/pricing/estimatePricing"
 import { checkEstimate } from "@/lib/estimate/checks"
+import { refreshBrand, saveBrand as saveSharedBrand } from "@/lib/branding"
 
 interface QuoteGeneratorProps {
   project: any
@@ -445,7 +446,8 @@ export const QuoteGenerator = ({ project, estimate, listenForOpen }: QuoteGenera
 
   const saveBrand = () => {
     const data = { logo: logoDataUrl, logoSize, primary: primaryColor, accent: accentColor, tagline: companyTagline, companyName, abn: companyABN, acn: companyACN, licence: builderLicence, phone: companyPhone, email: companyEmail, address: companyAddress, liability: liabilityInsurance }
-    localStorage.setItem(getUserStorageKey("quote_brand"), JSON.stringify(data))
+    // Same place as Settings > Branding, locally and in the cloud
+    saveSharedBrand(data)
     toast.success("Branding saved for all future quotes")
   }
 
@@ -638,6 +640,31 @@ ${clone.outerHTML}
     setShares(await loadQuoteShares(project.id))
   }
   useEffect(() => { if (open) refreshShares() }, [open, project?.id])
+
+  // Branding from Settings, refreshed from the cloud every time the quote opens
+  useEffect(() => {
+    if (!open) return
+    let alive = true
+    // the values when the dialog opened: anything typed since is not overwritten
+    const snap = { logoDataUrl, logoSize, primaryColor, accentColor, companyTagline, companyName, companyABN, companyACN, builderLicence, companyPhone, companyEmail, companyAddress, liabilityInsurance }
+    refreshBrand().then(b => {
+      if (!alive) return
+      if (b.logo !== undefined) setLogoDataUrl(cur => (cur === snap.logoDataUrl ? b.logo || "" : cur))
+      if (b.logoSize) setLogoSize(cur => (cur === snap.logoSize ? b.logoSize : cur))
+      if (b.primary) setPrimaryColor(cur => (cur === snap.primaryColor ? b.primary : cur))
+      if (b.accent) setAccentColor(cur => (cur === snap.accentColor ? b.accent : cur))
+      if (b.tagline !== undefined) setCompanyTagline(cur => (cur === snap.companyTagline ? b.tagline || "" : cur))
+      if (b.companyName) setCompanyName(cur => (cur === snap.companyName ? b.companyName : cur))
+      if (b.abn !== undefined) setCompanyABN(cur => (cur === snap.companyABN ? b.abn || "" : cur))
+      if (b.acn !== undefined) setCompanyACN(cur => (cur === snap.companyACN ? b.acn || "" : cur))
+      if (b.licence !== undefined) setBuilderLicence(cur => (cur === snap.builderLicence ? b.licence || "" : cur))
+      if (b.phone !== undefined) setCompanyPhone(cur => (cur === snap.companyPhone ? b.phone || "" : cur))
+      if (b.email !== undefined) setCompanyEmail(cur => (cur === snap.companyEmail ? b.email || "" : cur))
+      if (b.address !== undefined) setCompanyAddress(cur => (cur === snap.companyAddress ? b.address || "" : cur))
+      if (b.liability !== undefined) setLiabilityInsurance(cur => (cur === snap.liabilityInsurance ? b.liability || "" : cur))
+    })
+    return () => { alive = false }
+  }, [open])
 
   // Notes from the site visit fill the scope notes when the quote has none yet
   useEffect(() => {

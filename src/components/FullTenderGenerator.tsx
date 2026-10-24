@@ -13,6 +13,7 @@ import { UpgradeModal } from "@/components/UpgradeModal"
 import { priceLine, calculateProjectTotals, resolveProjectPricing, projectFfeAllowance, gstOn } from "@/lib/pricing/estimatePricing"
 import { readUserPricingDefaults } from "@/lib/pricing/userPricingDefaults"
 import { scopeForDisplay } from "@/lib/takeoff/scopeLabels"
+import { refreshBrand } from "@/lib/branding"
 
 interface FullTenderProps { project: any; estimate?: any }
 
@@ -145,9 +146,9 @@ export const FullTenderGenerator = ({ project, estimate }: FullTenderProps) => {
   const sub = useSubscription()
 
   const brand = LOAD_BRAND()
-  const [logoDataUrl] = useState<string>(brand.logo || "")
-  const [primaryColor] = useState<string>(brand.primary || "#0f4c81")
-  const [accentColor] = useState<string>(brand.accent || "#f59e0b")
+  const [logoDataUrl, setLogoDataUrl] = useState<string>(brand.logo || "")
+  const [primaryColor, setPrimaryColor] = useState<string>(brand.primary || "#0f4c81")
+  const [accentColor, setAccentColor] = useState<string>(brand.accent || "#f59e0b")
 
   // ── Company ──
   const [companyName, setCompanyName] = useState(brand.companyName || "Your Company Pty Ltd")
@@ -357,6 +358,29 @@ export const FullTenderGenerator = ({ project, estimate }: FullTenderProps) => {
     setBoqItems(newBoqItems)
     setSubtotal(String(exGstTotal))
   }
+
+  // Branding from Settings, refreshed from the cloud each time the tender opens
+  useEffect(() => {
+    if (!open) return
+    let alive = true
+    // the values when the dialog opened: anything typed since is not overwritten
+    const snap = { logoDataUrl, primaryColor, accentColor, companyTagline, companyName, companyABN, companyACN, builderLicence, companyPhone, companyEmail, companyAddress }
+    refreshBrand().then(b => {
+      if (!alive) return
+      if (b.logo !== undefined) setLogoDataUrl(cur => (cur === snap.logoDataUrl ? b.logo || "" : cur))
+      if (b.primary) setPrimaryColor(cur => (cur === snap.primaryColor ? b.primary : cur))
+      if (b.accent) setAccentColor(cur => (cur === snap.accentColor ? b.accent : cur))
+      if (b.companyName) setCompanyName(cur => (cur === snap.companyName ? b.companyName : cur))
+      if (b.abn !== undefined) setCompanyABN(cur => (cur === snap.companyABN ? b.abn || "" : cur))
+      if (b.acn !== undefined) setCompanyACN(cur => (cur === snap.companyACN ? b.acn || "" : cur))
+      if (b.licence !== undefined) setBuilderLicence(cur => (cur === snap.builderLicence ? b.licence || "" : cur))
+      if (b.phone !== undefined) setCompanyPhone(cur => (cur === snap.companyPhone ? b.phone || "" : cur))
+      if (b.email !== undefined) setCompanyEmail(cur => (cur === snap.companyEmail ? b.email || "" : cur))
+      if (b.address !== undefined) setCompanyAddress(cur => (cur === snap.companyAddress ? b.address || "" : cur))
+      if (b.tagline !== undefined) setCompanyTagline(cur => (cur === snap.companyTagline ? b.tagline || "" : cur))
+    })
+    return () => { alive = false }
+  }, [open])
 
   useEffect(() => {
     if (open) loadFromEstimate()
