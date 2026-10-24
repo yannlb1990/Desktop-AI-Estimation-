@@ -33,6 +33,13 @@ export async function xeroStartConnect(returnTo = '/settings?tab=xero'): Promise
   window.location.assign(url);
 }
 
+export interface XeroSyncedInvoice {
+  sourceId: string; projectId: string; invoiceId: string; number: string | null; status: string;
+  total: number | null; amountPaid: number; amountDue: number | null; dueDate: string | null; paidOn: string | null;
+}
+/** Status and payments of the invoices sent (one project, or all), read back from Xero. */
+export const xeroSync = (projectId?: string) => call<{ invoices: XeroSyncedInvoice[] }>({ action: 'sync', ...(projectId ? { projectId } : {}) });
+
 export interface XeroInvoiceResult { invoiceId: string; number?: string; total?: number; url: string; updated: boolean }
 
 export const xeroSendInvoice = (p: {

@@ -64,7 +64,11 @@ export interface ProgressClaimRecord {
   depositPct?: number;
   contractExGst?: number;
   /** the draft invoice in Xero, once sent */
-  xero?: { invoiceId: string; number?: string; url: string; total?: number; sentAt: string };
+  xero?: {
+    invoiceId: string; number?: string; url: string; total?: number; sentAt: string;
+    /** read back from Xero: DRAFT, SUBMITTED, AUTHORISED (awaiting payment), PAID, VOIDED, DELETED */
+    status?: string; amountPaid?: number; amountDue?: number | null; dueDate?: string | null; paidOn?: string | null; checkedAt?: string;
+  };
 }
 
 // ── Project record helpers ────────────────────────────────────────────────────

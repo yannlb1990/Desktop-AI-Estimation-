@@ -1,4 +1,7 @@
 import { useState, useEffect } from "react";
+import { jobMoney } from '@/lib/xero/money';
+import { refreshXeroPayments } from '@/lib/xero/payments';
+import { loadProject as loadLocalProject } from '@/lib/contract';
 import { Skeleton } from "@/components/ui/skeleton";
 import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
@@ -164,6 +167,13 @@ const Dashboard = () => {
     loadProjectsMerged().then(loaded => {
       setProjects(loaded);
       lsSaveProjects(loaded);
+      // payments made in Xero since last time: bring them onto the claims shown here
+      if (loaded.some((p: any) => (p.progress_claims ?? []).some((c: any) => c.xero))) {
+        refreshXeroPayments().then(changed => {
+          if (!changed.length) return;
+          setProjects(prev => prev.map((p: any) => changed.includes(p.id) ? { ...p, progress_claims: loadLocalProject(p.id)?.progress_claims ?? p.progress_claims } : p));
+        }).catch(() => {});
+      }
     }).catch(() => {
       setLoadError(true);
     }).finally(() => {
@@ -609,6 +619,11 @@ const Dashboard = () => {
                   // invoicing: what comes next for this job, and its last invoice in Xero
                   const claimRecs: any[] = (project as any).progress_claims ?? [];
                   const lastXero = [...claimRecs].reverse().find(c => c.xero)?.xero;
+                  const cash = lastXero ? jobMoney(0, claimRecs) : null;
+                  const cashNote = !cash ? null
+                    : cash.owingIncGst > 0.004 ? { text: `${fmtCurrency(cash.owingIncGst)} owing`, late: cash.overdueIncGst > 0.004 }
+                    : cash.paidIncGst > 0.004 ? { text: 'Paid up', late: false }
+                    : { text: lastXero.number ? `${lastXero.number} in Xero` : 'In Xero', late: false };
                   const invoiceLabel = !(project as any).approved_quote ? 'Invoice'
                     : claimRecs.length === 0 ? 'Invoice deposit' : 'Next claim';
                   const openInvoicing = (e: React.MouseEvent) => { e.stopPropagation(); navigate(`/project/${project.id}?tab=progressclaim`); };
@@ -650,7 +665,7 @@ const Dashboard = () => {
                           <div className="flex flex-col items-end gap-2 shrink-0">
                             <ChevronRight className="h-4 w-4 text-muted-foreground" />
                             <Button size="sm" variant="outline" className="h-7 px-2 text-xs" onClick={openInvoicing}>{invoiceLabel}</Button>
-                            {lastXero?.number && <span className="text-[11px] text-[#D4A045]">{lastXero.number}</span>}
+                            {cashNote && <span className={`text-[11px] ${cashNote.late ? 'text-red-400' : 'text-[#D4A045]'}`}>{cashNote.text}</span>}
                             <Button
                               size="sm"
                               variant="ghost"
@@ -719,7 +734,7 @@ const Dashboard = () => {
                               title="Deposit, progress claims and variations, sent to Xero as draft invoices">
                               {invoiceLabel}
                             </Button>
-                            {lastXero?.number && <span className="text-[11px] text-[#D4A045]">{lastXero.number} in Xero</span>}
+                            {cashNote && <span className={`text-[11px] ${cashNote.late ? 'text-red-400' : 'text-[#D4A045]'}`} title={cashNote.late ? 'Part of this is overdue' : undefined}>{cashNote.text}</span>}
                           </span>
                           <Button
                             size="sm"

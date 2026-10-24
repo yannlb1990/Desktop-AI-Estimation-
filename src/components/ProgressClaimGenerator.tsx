@@ -23,6 +23,8 @@ import { lsLoadVariations } from '@/lib/db/variations';
 import { claimInvoiceLines, claimReference, depositCapPct } from '@/lib/xero/claimInvoice';
 import { xeroStatus, xeroSendInvoice, xeroStartConnect, xeroOptions, type XeroStatus, type XeroAccount } from '@/lib/xero/client';
 import { XeroInvoiceDialog } from '@/components/estimate/XeroInvoiceDialog';
+import { jobMoney, xeroStateLabel } from '@/lib/xero/money';
+import { refreshXeroPayments } from '@/lib/xero/payments';
 import type { InvoiceLine } from '@/lib/xero/claimInvoice';
 import { gstOn, roundCents } from '@/lib/pricing/estimatePricing';
 
@@ -88,6 +90,22 @@ export function ProgressClaimGenerator({ projectId, projectName, siteAddress = '
   }, []);
   const [sending, setSending] = useState<string | null>(null);
   const [preview, setPreview] = useState<ProgressClaimRecord | null>(null);
+
+  // Payments made in Xero come back here: on open, when the window comes back, every 5 minutes
+  const [checkedAt, setCheckedAt] = useState<Date | null>(null);
+  const checkPayments = useCallback(() => {
+    if (!loadProgressClaims(projectId).some(c => c.xero)) return;
+    refreshXeroPayments(projectId)
+      .then(changed => { setCheckedAt(new Date()); if (changed.includes(projectId)) setClaims(loadProgressClaims(projectId)); })
+      .catch(() => {});
+  }, [projectId]);
+  useEffect(() => {
+    checkPayments();
+    const t = window.setInterval(checkPayments, 5 * 60_000);
+    window.addEventListener('focus', checkPayments);
+    return () => { window.clearInterval(t); window.removeEventListener('focus', checkPayments); };
+  }, [checkPayments]);
+  const money = useMemo(() => jobMoney(contract.contractIncGst, claims), [contract.contractIncGst, claims]);
   const connectXero = () => xeroStartConnect(window.location.pathname + window.location.search)
     .catch(e => toast.error(e instanceof Error ? e.message : 'Xero did not respond'));
   const clientFor = () => {
@@ -346,6 +364,27 @@ export function ProgressClaimGenerator({ projectId, projectName, siteAddress = '
         </Card>
       )}
 
+      {claims.length > 0 && (
+        <Card className="border-border bg-card/60">
+          <CardHeader className="pb-2">
+            <CardTitle className="flex flex-wrap items-baseline justify-between gap-2 text-sm font-semibold text-foreground">
+              <span>Money on this job (inc GST)</span>
+              {checkedAt && <span className="text-[11px] font-normal text-muted-foreground">Payments checked in Xero {checkedAt.toLocaleTimeString('en-AU', { hour: 'numeric', minute: '2-digit' })}</span>}
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="grid grid-cols-2 gap-4 text-sm md:grid-cols-5">
+            <div><p className="text-xs text-muted-foreground">Contract sum</p><p className="font-semibold">${fmt(money.contractIncGst)}</p></div>
+            <div><p className="text-xs text-muted-foreground">Claimed so far</p><p className="font-semibold">${fmt(money.claimedIncGst)}</p>
+              {money.notIssuedIncGst > 0.004 && <p className="text-[11px] text-muted-foreground">${fmt(money.notIssuedIncGst)} not issued yet</p>}</div>
+            <div><p className="text-xs text-muted-foreground">Paid by the client</p><p className="font-semibold text-[#D4A045]">${fmt(money.paidIncGst)}</p></div>
+            <div><p className="text-xs text-muted-foreground">Owing</p><p className={`font-semibold ${money.overdueIncGst > 0.004 ? 'text-red-400' : ''}`}>${fmt(money.owingIncGst)}</p>
+              {money.overdueIncGst > 0.004 && <p className="text-[11px] text-red-400">${fmt(money.overdueIncGst)} overdue</p>}</div>
+            <div><p className="text-xs text-muted-foreground">Left to claim</p><p className="font-semibold">${fmt(money.leftToClaimIncGst)}</p>
+              {money.retentionHeldExGst > 0.004 && <p className="text-[11px] text-muted-foreground">incl. ${fmt(money.retentionHeldExGst)} retention held (ex GST)</p>}</div>
+          </CardContent>
+        </Card>
+      )}
+
       {approvedVariations.length > 0 && (
         <Card className="border-border bg-card/60">
           <CardHeader className="pb-3">
@@ -532,11 +571,15 @@ export function ProgressClaimGenerator({ projectId, projectName, siteAddress = '
                 <span className="text-muted-foreground">{c.kind ? '' : `to date $${fmt(c.completedToDate)}`}</span>
                 <span className="font-semibold">${fmt(c.thisClaimIncGst)} inc GST</span>
                 <span className="flex items-center gap-2">
-                  {c.xero && (
-                    <a href={c.xero.url} target="_blank" rel="noopener noreferrer" className="text-xs text-[#D4A045] hover:underline">
-                      {c.xero.number || 'Invoice'} in Xero
-                    </a>
-                  )}
+                  {c.xero && (() => {
+                    const st = xeroStateLabel(c.xero);
+                    const tone = st?.tone === 'done' ? 'text-[#D4A045]' : st?.tone === 'late' ? 'text-red-400' : st?.tone === 'wait' ? 'text-foreground' : 'text-muted-foreground';
+                    return (
+                      <a href={c.xero.url} target="_blank" rel="noopener noreferrer" className={`text-xs hover:underline ${tone}`}>
+                        {st?.text ?? `${c.xero.number || 'Invoice'} in Xero`}
+                      </a>
+                    );
+                  })()}
                   <Button size="sm" variant="outline" className="h-7" disabled={sending !== null || xeroOn === null} onClick={() => sendToXero(c)}>
                     {sending === c.id ? 'Sending...' : !xeroOn ? 'Connect Xero' : c.xero ? 'Update in Xero' : 'Send to Xero'}
                   </Button>

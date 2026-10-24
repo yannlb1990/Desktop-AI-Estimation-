@@ -1,7 +1,9 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { priceLine, resolveProjectPricing } from "@/lib/pricing/estimatePricing";
 import { readUserPricingDefaults } from "@/lib/pricing/userPricingDefaults";
-import { contractSummary, syncClientApprovals } from "@/lib/contract";
+import { contractSummary, syncClientApprovals, loadProgressClaims } from "@/lib/contract";
+import { jobMoney } from "@/lib/xero/money";
+import { refreshXeroPayments } from "@/lib/xero/payments";
 import { format, parseISO } from "date-fns";
 import { toast } from "sonner";
 import { getUserStorageKey } from "@/lib/localAuth";
@@ -193,6 +195,15 @@ export default function JobCostTracker({ projectId }: JobCostTrackerProps) {
   const estimateTotal = useMemo(() => estimateItems.reduce((s, i) => s + computeItemCost(i, projectRecord), 0), [estimateItems, projectRecord]);
   const effectiveBudgetTotal = budgetTotal > 0 ? budgetTotal : estimateTotal;
   const actualTotal = useMemo(() => entries.reduce((s, e) => s + e.amount, 0), [entries]);
+  // What the client has actually paid (read back from Xero) against the contract
+  const [claimsVersion, setClaimsVersion] = useState(0);
+  useEffect(() => {
+    refreshXeroPayments(projectId).then(ch => { if (ch.includes(projectId)) setClaimsVersion(v => v + 1); }).catch(() => {});
+  }, [projectId]);
+  const paidMoney = useMemo(() => jobMoney(contract.contractIncGst, loadProgressClaims(projectId)),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [contract.contractIncGst, projectId, claimsVersion]);
+
   // Margin left = what the client pays (ex GST) minus what has been spent (ex GST)
   const marginLeft = contract.contractExGst - actualTotal;
   const variance = effectiveBudgetTotal - actualTotal;
@@ -301,6 +312,12 @@ export default function JobCostTracker({ projectId }: JobCostTrackerProps) {
                   Margin left {aud(marginLeft)}
                   {contract.variationsExGst > 0 && <> · incl. {aud(contract.variationsExGst)} variations</>}
                 </p>
+                {paidMoney.claimedIncGst > 0 && (
+                  <p className="text-[11px] mt-0.5 text-muted-foreground">
+                    Client paid <span className="text-[#D4A045]">{aud(paidMoney.paidIncGst)}</span> of {aud(paidMoney.claimedIncGst)} claimed (inc GST)
+                    {paidMoney.owingIncGst > 0.004 && <> · <span className={paidMoney.overdueIncGst > 0.004 ? "text-red-400" : ""}>{aud(paidMoney.owingIncGst)} owing</span></>}
+                  </p>
+                )}
               </>
             ) : (
               <p className="text-xs text-amber-400 mt-1">No approved quote yet. Approve one in Generate Quote, History.</p>

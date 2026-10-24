@@ -13,6 +13,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2.76.1";
  *   settings   { accountCode, accountCodes{deposit,work,variation,retention}, brandingThemeId, dueDays }
  *   disconnect
  *   invoice    { projectId, sourceId, contact, reference, date, lines[] } -> { number, url, updated }
+ *   sync       { projectId? } -> { invoices[] }   status and payments of invoices sent, read back from Xero
  * Secrets: XERO_CLIENT_ID, XERO_CLIENT_SECRET.
  */
 
@@ -313,6 +314,51 @@ serve(async (req) => {
         url: conn.short_code
           ? `https://go.xero.com/organisationlogin/default.aspx?shortcode=${conn.short_code}&redirecturl=${encodeURIComponent(`/AccountsReceivable/Edit.aspx?InvoiceID=${inv.InvoiceID}`)}`
           : `https://go.xero.com/AccountsReceivable/Edit.aspx?InvoiceID=${inv.InvoiceID}`,
+      });
+    }
+
+    if (action === "sync") {
+      // every invoice this user sent to this organisation (one project, or all)
+      let q = db.from("xero_invoices").select("source_id, project_id, xero_invoice_id, status, synced_at")
+        .eq("user_id", user.id).eq("tenant_id", conn.tenant_id);
+      if (body.projectId) q = q.eq("project_id", String(body.projectId));
+      const { data: rows } = await q;
+      const all = rows ?? [];
+      // paid, voided or deleted and checked since: no need to ask Xero again
+      const settled = (r: any) => ["PAID", "VOIDED", "DELETED"].includes(r.status) && r.synced_at;
+      const ask = all.filter(r => !settled(r)).map(r => r.xero_invoice_id);
+      const xeroDate = (v: unknown) => {
+        const m = /\/Date\((\d+)/.exec(String(v ?? ""));
+        if (m) return new Date(Number(m[1])).toISOString().slice(0, 10);
+        return /^\d{4}-\d{2}-\d{2}/.test(String(v ?? "")) ? String(v).slice(0, 10) : null;
+      };
+      for (let i = 0; i < ask.length; i += 40) {
+        const chunk = ask.slice(i, i + 40);
+        const got = await xero(`Invoices?IDs=${chunk.join(",")}&summaryOnly=true`);
+        for (const inv of got?.Invoices ?? []) {
+          await db.from("xero_invoices").update({
+            status: inv.Status, invoice_number: inv.InvoiceNumber ?? null, total: inv.Total ?? null,
+            amount_paid: inv.AmountPaid ?? 0, amount_due: inv.AmountDue ?? null,
+            due_date: xeroDate(inv.DueDateString ?? inv.DueDate), paid_on: xeroDate(inv.FullyPaidOnDate),
+            synced_at: new Date().toISOString(),
+          }).eq("user_id", user.id).eq("xero_invoice_id", inv.InvoiceID);
+        }
+        // an invoice deleted in Xero no longer comes back by ID
+        const back = new Set((got?.Invoices ?? []).map((v: any) => v.InvoiceID));
+        for (const id of chunk.filter(x => !back.has(x))) {
+          await db.from("xero_invoices").update({ status: "DELETED", synced_at: new Date().toISOString() }).eq("user_id", user.id).eq("xero_invoice_id", id);
+        }
+      }
+      let out = db.from("xero_invoices").select("source_id, project_id, xero_invoice_id, invoice_number, status, total, amount_paid, amount_due, due_date, paid_on")
+        .eq("user_id", user.id).eq("tenant_id", conn.tenant_id);
+      if (body.projectId) out = out.eq("project_id", String(body.projectId));
+      const { data: fresh } = await out;
+      return reply({
+        invoices: (fresh ?? []).map((r: any) => ({
+          sourceId: r.source_id, projectId: r.project_id, invoiceId: r.xero_invoice_id, number: r.invoice_number,
+          status: r.status, total: r.total == null ? null : Number(r.total), amountPaid: Number(r.amount_paid ?? 0),
+          amountDue: r.amount_due == null ? null : Number(r.amount_due), dueDate: r.due_date, paidOn: r.paid_on,
+        })),
       });
     }
 
