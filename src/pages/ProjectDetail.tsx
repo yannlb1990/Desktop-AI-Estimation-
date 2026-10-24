@@ -71,7 +71,11 @@ const ProjectDetail = () => {
   const [analyses, setAnalyses] = useState<any[]>([]);
   const [estimate, setEstimate] = useState<any>(null);
   const [dueDate, setDueDate] = useState<Date | undefined>();
-  const [activeMainTab, setActiveMainTab] = useState("takeoff");
+  // ?tab=progressclaim (from the dashboard's Invoice button) opens that tab straight away
+  const [activeMainTab, setActiveMainTab] = useState(() => {
+    const t = new URLSearchParams(window.location.search).get("tab");
+    return t && ["takeoff", "estimate", "tender", "overheads", "insights", "compliance", "subbies", "ffe", "documents", "schedule", "jobcost", "variations", "progressclaim"].includes(t) ? t : "takeoff";
+  });
   const [showSuppliers, setShowSuppliers] = useState(false);
   const [syncState, setSyncState] = useState<'idle' | 'saving' | 'saved'>('idle');
   const workflowStripRef = useRef<HTMLDivElement>(null);

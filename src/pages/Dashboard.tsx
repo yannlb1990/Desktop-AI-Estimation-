@@ -606,6 +606,12 @@ const Dashboard = () => {
                   const qcfg = QUOTE_STATUS_CONFIG[qs];
                   const completion = getProjectCompletion(project);
                   const allDone = completion.score === completion.total;
+                  // invoicing: what comes next for this job, and its last invoice in Xero
+                  const claimRecs: any[] = (project as any).progress_claims ?? [];
+                  const lastXero = [...claimRecs].reverse().find(c => c.xero)?.xero;
+                  const invoiceLabel = !(project as any).approved_quote ? 'Invoice'
+                    : claimRecs.length === 0 ? 'Invoice deposit' : 'Next claim';
+                  const openInvoicing = (e: React.MouseEvent) => { e.stopPropagation(); navigate(`/project/${project.id}?tab=progressclaim`); };
                   return (
                     <div
                       key={project.id}
@@ -643,6 +649,8 @@ const Dashboard = () => {
                           </div>
                           <div className="flex flex-col items-end gap-2 shrink-0">
                             <ChevronRight className="h-4 w-4 text-muted-foreground" />
+                            <Button size="sm" variant="outline" className="h-7 px-2 text-xs" onClick={openInvoicing}>{invoiceLabel}</Button>
+                            {lastXero?.number && <span className="text-[11px] text-[#D4A045]">{lastXero.number}</span>}
                             <Button
                               size="sm"
                               variant="ghost"
@@ -705,11 +713,18 @@ const Dashboard = () => {
                           <Clock className="h-3 w-3" />
                           {fmtDate(project.updated_at || project.created_at)}
                         </div>
-                        <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                        <div className="flex items-center gap-1">
+                          <span className="flex flex-col items-end">
+                            <Button size="sm" variant="outline" className="h-7 px-2 text-xs" onClick={openInvoicing}
+                              title="Deposit, progress claims and variations, sent to Xero as draft invoices">
+                              {invoiceLabel}
+                            </Button>
+                            {lastXero?.number && <span className="text-[11px] text-[#D4A045]">{lastXero.number} in Xero</span>}
+                          </span>
                           <Button
                             size="sm"
                             variant="ghost"
-                            className="h-7 w-7 p-0"
+                            className="h-7 w-7 p-0 opacity-0 group-hover:opacity-100 transition-opacity"
                             onClick={e => { e.stopPropagation(); navigate(`/project/${project.id}`); }}
                           >
                             <ExternalLink className="h-3.5 w-3.5" />
@@ -717,7 +732,7 @@ const Dashboard = () => {
                           <Button
                             size="sm"
                             variant="ghost"
-                            className="h-7 w-7 p-0 text-destructive hover:text-destructive hover:bg-destructive/10"
+                            className="h-7 w-7 p-0 text-destructive hover:text-destructive hover:bg-destructive/10 opacity-0 group-hover:opacity-100 transition-opacity"
                             onClick={e => handleDeleteProject(e, project.id)}
                           >
                             <Trash2 className="h-3.5 w-3.5" />
