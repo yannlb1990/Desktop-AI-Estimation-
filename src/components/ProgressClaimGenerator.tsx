@@ -20,7 +20,9 @@ import {
   loadProject,
 } from '@/lib/contract';
 import { claimInvoiceLines, claimReference, depositCapPct } from '@/lib/xero/claimInvoice';
-import { xeroStatus, xeroSendInvoice, xeroStartConnect } from '@/lib/xero/client';
+import { xeroStatus, xeroSendInvoice, xeroStartConnect, xeroOptions, type XeroStatus, type XeroAccount } from '@/lib/xero/client';
+import { XeroInvoiceDialog } from '@/components/estimate/XeroInvoiceDialog';
+import type { InvoiceLine } from '@/lib/xero/claimInvoice';
 import { gstOn, roundCents } from '@/lib/pricing/estimatePricing';
 
 interface Props {
@@ -72,27 +74,43 @@ export function ProgressClaimGenerator({ projectId, projectName, siteAddress = '
   const progressClaims = claims.filter(c => c.kind !== 'deposit');
   const claimNumber = progressClaims.length + 1;
 
-  // Xero: is it connected (for the button labels)
-  const [xeroOn, setXeroOn] = useState<boolean | null>(null);
-  useEffect(() => { xeroStatus().then(s => setXeroOn(s.connected)).catch(() => setXeroOn(false)); }, []);
+  // Xero: the connection (organisation name, accounts) for the bar, the buttons and the preview
+  const [xero, setXero] = useState<XeroStatus | null>(null);
+  const [xeroAccounts, setXeroAccounts] = useState<XeroAccount[]>([]);
+  const xeroOn = xero === null ? null : xero.connected;
+  useEffect(() => {
+    xeroStatus().then(s => {
+      setXero(s);
+      if (s.connected) xeroOptions().then(o => setXeroAccounts(o.accounts)).catch(() => {});
+    }).catch(() => setXero({ connected: false }));
+  }, []);
   const [sending, setSending] = useState<string | null>(null);
-
-  async function sendToXero(c: ProgressClaimRecord) {
-    if (!xeroOn) { xeroStartConnect(window.location.pathname + window.location.search).catch(e => toast.error(e instanceof Error ? e.message : 'Xero did not respond')); return; }
-    if (!(c.thisClaimExGst > 0)) { toast.error('There is nothing to invoice on this claim'); return; }
+  const [preview, setPreview] = useState<ProgressClaimRecord | null>(null);
+  const connectXero = () => xeroStartConnect(window.location.pathname + window.location.search)
+    .catch(e => toast.error(e instanceof Error ? e.message : 'Xero did not respond'));
+  const clientFor = () => {
     const project = loadProject(projectId);
-    const name = clientName || project?.client_name || '';
-    if (!name.trim()) { toast.error("Add the client's name to the project first: the invoice goes to them"); return; }
-    const quoteNumber = contract.approvedQuote?.quoteNumber;
+    return { name: (clientName || project?.client_name || '').trim(), email: project?.client_email || undefined };
+  };
+
+  function sendToXero(c: ProgressClaimRecord) {
+    if (!xeroOn) { connectXero(); return; }
+    if (!(c.thisClaimExGst > 0)) { toast.error('There is nothing to invoice on this claim'); return; }
+    if (!clientFor().name) { toast.error("Add the client's name to the project first: the invoice goes to them"); return; }
+    setPreview(c);
+  }
+
+  async function confirmSend(c: ProgressClaimRecord, p: { reference: string; lines: InvoiceLine[] }) {
     setSending(c.id);
     try {
       const r = await xeroSendInvoice({
         projectId, sourceId: c.id,
-        contact: { name, email: project?.client_email || undefined },
-        reference: claimReference(c, quoteNumber, siteAddress),
+        contact: clientFor(),
+        reference: p.reference,
         date: c.date,
-        lines: claimInvoiceLines(c, claims, quoteNumber),
+        lines: p.lines.map(l => ({ description: l.description.trim(), amount: l.amount, kind: l.kind, accountCode: l.accountCode })),
       });
+      setPreview(null);
       const latest = loadProgressClaims(projectId).map(x => x.id === c.id
         ? { ...x, xero: { invoiceId: r.invoiceId, number: r.number, url: r.url, total: r.total, sentAt: new Date().toISOString() } }
         : x);
@@ -118,8 +136,8 @@ export function ProgressClaimGenerator({ projectId, projectName, siteAddress = '
   const depositPct = parseFloat(depositPctInput) || 0;
   const depositExGst = roundCents(contract.contractExGst * depositPct / 100);
   const depositOverCap = state === 'QLD' && depositPct > depositCapPct(contract.contractExGst);
-  function saveDeposit() {
-    if (!(depositExGst > 0)) { toast.error('Enter the deposit %'); return; }
+  function saveDeposit(): ProgressClaimRecord | null {
+    if (!(depositExGst > 0)) { toast.error('Enter the deposit %'); return null; }
     const gst = gstOn(depositExGst, contract.gstPct);
     const record: ProgressClaimRecord = {
       id: crypto.randomUUID(), number: 0, date: claimDate, stages: [], retentionPct: 0,
@@ -130,6 +148,7 @@ export function ProgressClaimGenerator({ projectId, projectName, siteAddress = '
     saveProgressClaims(projectId, updated);
     setClaims(updated);
     toast.success(`Deposit saved ($${fmt(record.thisClaimIncGst)} inc GST). Claims take it off as already claimed.`);
+    return record;
   }
   const parsedRetention = parseFloat(retentionPct) || 0;
   const stagesTotal = stages.reduce((s, st) => s + (st.value || 0), 0);
@@ -199,6 +218,41 @@ export function ProgressClaimGenerator({ projectId, projectName, siteAddress = '
 
   return (
     <div className="space-y-6">
+      {/* Where invoices go */}
+      <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-border bg-card/60 px-4 py-2.5 text-sm">
+        {xero === null ? (
+          <span className="text-muted-foreground">Checking Xero...</span>
+        ) : xero.connected ? (
+          <>
+            <span>Invoices go to <span className="font-medium">{xero.tenantName}</span> in Xero as drafts. Use Send to Xero on the deposit or a claim below.</span>
+            <a href="/settings?tab=xero" className="text-xs text-[#D4A045] hover:underline">Accounts and branding</a>
+          </>
+        ) : (
+          <>
+            <span className="text-muted-foreground">Connect Xero to send the deposit and each claim as a draft invoice.</span>
+            <Button size="sm" variant="outline" onClick={connectXero}>Connect Xero</Button>
+          </>
+        )}
+      </div>
+
+      {preview && xero?.connected && (
+        <XeroInvoiceDialog
+          open={!!preview}
+          onOpenChange={v => { if (!v) setPreview(null); }}
+          title={preview.kind === 'deposit' ? 'Deposit invoice' : `Progress claim ${preview.number} invoice`}
+          status={xero}
+          accounts={xeroAccounts}
+          clientName={clientFor().name}
+          reference={claimReference(preview, contract.approvedQuote?.quoteNumber, siteAddress)}
+          date={preview.date}
+          lines={claimInvoiceLines(preview, claims, contract.approvedQuote?.quoteNumber)}
+          gstPct={contract.gstPct}
+          existingNumber={preview.xero?.number}
+          busy={sending === preview.id}
+          onSend={p => confirmSend(preview, p)}
+        />
+      )}
+
       {/* Contract the claims work off */}
       {contract.approvedQuote ? (
         <Card className="border-border bg-card/60">
@@ -243,7 +297,10 @@ export function ProgressClaimGenerator({ projectId, projectName, siteAddress = '
               <p className="text-xs text-muted-foreground">Deposit</p>
               <p className="font-semibold">${fmt(depositExGst)} ex GST, ${fmt(roundCents(depositExGst + gstOn(depositExGst, contract.gstPct)))} inc GST</p>
             </div>
-            <Button size="sm" variant="outline" onClick={saveDeposit}>Save deposit</Button>
+            <Button size="sm" variant="outline" onClick={() => saveDeposit()}>Save deposit</Button>
+            {xeroOn && (
+              <Button size="sm" onClick={() => { const r = saveDeposit(); if (r) sendToXero(r); }}>Save and send to Xero</Button>
+            )}
             {depositOverCap && (
               <p className="basis-full text-xs text-amber-400">
                 Over the usual QLD limit for domestic building work: {depositCapPct(contract.contractExGst)}% for a contract of this size. Check your contract before invoicing it.
@@ -379,6 +436,11 @@ export function ProgressClaimGenerator({ projectId, projectName, siteAddress = '
           <FileDown className="h-4 w-4" />
           Save and Generate PDF
         </Button>
+        {xeroOn && (
+          <Button onClick={() => { const r = saveClaim(); if (r) sendToXero(r); }} disabled={stages.length === 0}>
+            Save and send to Xero
+          </Button>
+        )}
       </div>
 
       {/* Claim history */}

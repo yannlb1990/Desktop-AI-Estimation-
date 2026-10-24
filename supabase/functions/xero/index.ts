@@ -8,8 +8,9 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2.76.1";
  * Actions (POST JSON { action, ... }):
  *   start      -> { url }               Xero sign-in link (state is signed, 15 minutes)
  *   callback   { code, state }          exchange the code, keep the tokens (server only)
- *   status     -> { connected, tenantName, accountCode, dueDays }
- *   settings   { accountCode, dueDays }
+ *   status     -> { connected, tenantName, accountCode, accountCodes, brandingThemeId, dueDays }
+ *   options    -> { accounts[], brandingThemes[] }   from their Xero, to pick from
+ *   settings   { accountCode, accountCodes{deposit,work,variation,retention}, brandingThemeId, dueDays }
  *   disconnect
  *   invoice    { projectId, sourceId, contact, reference, date, lines[] } -> { number, url, updated }
  * Secrets: XERO_CLIENT_ID, XERO_CLIENT_SECRET.
@@ -114,7 +115,7 @@ serve(async (req) => {
 
     if (action === "status") {
       return reply(conn
-        ? { connected: true, tenantName: conn.tenant_name, accountCode: conn.account_code, dueDays: conn.due_days }
+        ? { connected: true, tenantName: conn.tenant_name, accountCode: conn.account_code, accountCodes: conn.account_codes ?? {}, brandingThemeId: conn.branding_theme_id ?? null, dueDays: conn.due_days }
         : { connected: false });
     }
     if (!conn) throw new UserError("Connect Xero first (Settings > Xero)");
@@ -144,21 +145,55 @@ serve(async (req) => {
       return t.access_token;
     };
 
+    const xeroGet = async (path: string) => {
+      const access0 = await freshAccess();
+      const r = await fetch(`https://api.xero.com/api.xro/2.0/${path}`, {
+        headers: { authorization: `Bearer ${access0}`, "xero-tenant-id": conn.tenant_id, accept: "application/json" },
+      });
+      if (r.status === 401 || r.status === 403) throw new UserError("Xero refused: connect Xero again (Settings > Xero)");
+      return r.ok ? r.json() : null;
+    };
+
+    if (action === "options") {
+      const [acc, themes] = await Promise.all([xeroGet("Accounts"), xeroGet("BrandingThemes")]);
+      const accounts = (acc?.Accounts ?? [])
+        .filter((a: any) => a.Status === "ACTIVE" && a.Code && (a.Class === "REVENUE" || a.Class === "LIABILITY"))
+        .map((a: any) => ({ code: a.Code, name: a.Name, class: a.Class, taxType: a.TaxType }))
+        .sort((x: any, y: any) => (x.class === y.class ? String(x.code).localeCompare(String(y.code), undefined, { numeric: true }) : x.class === "REVENUE" ? -1 : 1));
+      const brandingThemes = (themes?.BrandingThemes ?? [])
+        .map((t: any) => ({ id: t.BrandingThemeID, name: t.Name, sortOrder: t.SortOrder }))
+        .sort((x: any, y: any) => (x.sortOrder ?? 0) - (y.sortOrder ?? 0));
+      return reply({ accounts, brandingThemes });
+    }
+
     if (action === "settings") {
+      const codeOk = (c: unknown) => typeof c === "string" && /^[A-Za-z0-9.\-]{1,10}$/.test(c.trim());
       const accountCode = String(body.accountCode ?? "").trim();
       const dueDays = Math.round(Number(body.dueDays));
-      if (!/^[A-Za-z0-9.\-]{1,10}$/.test(accountCode)) throw new UserError("Enter the Xero account code, e.g. 200");
+      if (!codeOk(accountCode)) throw new UserError("Choose the income account for invoices");
       if (!(dueDays >= 0 && dueDays <= 120)) throw new UserError("Days to pay must be 0 to 120");
-      // check the code in their chart of accounts before any invoice uses it
-      const access0 = await freshAccess();
-      const acc = await fetch(`https://api.xero.com/api.xro/2.0/Accounts?where=${encodeURIComponent(`Code=="${accountCode}"`)}`, {
-        headers: { authorization: `Bearer ${access0}`, "xero-tenant-id": conn.tenant_id, accept: "application/json" },
-      }).then(r => r.ok ? r.json() : null).catch(() => null);
-      const account = acc?.Accounts?.[0];
-      if (acc && !account) throw new UserError(`There is no account ${accountCode} in your Xero chart of accounts`);
-      if (account && account.Status !== "ACTIVE") throw new UserError(`Account ${accountCode} is archived in Xero`);
-      await db.from("xero_connections").update({ account_code: accountCode, due_days: dueDays, updated_at: new Date().toISOString() }).eq("user_id", user.id);
-      return reply({ ok: true, accountName: account?.Name ?? null, accountTax: account?.TaxType ?? null });
+      const kinds = ["deposit", "work", "variation", "retention"];
+      const accountCodes: Record<string, string> = {};
+      for (const k of kinds) {
+        const c = body.accountCodes?.[k];
+        if (c == null || c === "") continue;
+        if (!codeOk(c)) throw new UserError(`The ${k} account code is not valid`);
+        accountCodes[k] = String(c).trim();
+      }
+      // every code used must be an active account in their chart
+      const acc = await xeroGet("Accounts");
+      if (acc) {
+        const active = new Set((acc.Accounts ?? []).filter((a: any) => a.Status === "ACTIVE").map((a: any) => a.Code));
+        for (const c of [accountCode, ...Object.values(accountCodes)]) {
+          if (!active.has(c)) throw new UserError(`There is no active account ${c} in your Xero chart of accounts`);
+        }
+      }
+      const brandingThemeId = typeof body.brandingThemeId === "string" && /^[0-9a-f-]{36}$/i.test(body.brandingThemeId) ? body.brandingThemeId : null;
+      await db.from("xero_connections").update({
+        account_code: accountCode, account_codes: accountCodes, branding_theme_id: brandingThemeId,
+        due_days: dueDays, updated_at: new Date().toISOString(),
+      }).eq("user_id", user.id);
+      return reply({ ok: true });
     }
 
     if (action === "disconnect") {
@@ -193,7 +228,7 @@ serve(async (req) => {
       const { projectId, sourceId, contact, reference, date } = body as {
         projectId: string; sourceId: string; contact: { name: string; email?: string }; reference: string; date: string;
       };
-      const lines = (Array.isArray(body.lines) ? body.lines : []) as { description: string; amount: number }[];
+      const lines = (Array.isArray(body.lines) ? body.lines : []) as { description: string; amount: number; accountCode?: string; kind?: string }[];
       if (!projectId || !sourceId) throw new UserError("Missing project or claim");
       if (!contact?.name?.trim()) throw new UserError("Add the client's name to the project first");
       if (!lines.length || lines.some(l => !String(l.description ?? "").trim() || !Number.isFinite(Number(l.amount)))) throw new UserError("The invoice has no lines");
@@ -219,13 +254,19 @@ serve(async (req) => {
         DueDate: due.toISOString().slice(0, 10),
         Reference: String(reference ?? "").slice(0, 255),
         LineAmountTypes: "Exclusive",
-        LineItems: lines.map(l => ({
-          Description: String(l.description).slice(0, 4000),
-          Quantity: 1,
-          UnitAmount: Math.round(Number(l.amount) * 100) / 100,
-          AccountCode: conn.account_code,
-          TaxType: "OUTPUT", // GST on Income (Australia)
-        })),
+        ...(conn.branding_theme_id ? { BrandingThemeID: conn.branding_theme_id } : {}),
+        LineItems: lines.map(l => {
+          // the line's own code, else the default for its kind, else the main income account
+          const pick = [l.accountCode, l.kind ? (conn.account_codes ?? {})[l.kind] : undefined, conn.account_code]
+            .find(c => typeof c === "string" && /^[A-Za-z0-9.\-]{1,10}$/.test(c));
+          return {
+            Description: String(l.description).slice(0, 4000),
+            Quantity: 1,
+            UnitAmount: Math.round(Number(l.amount) * 100) / 100,
+            AccountCode: pick,
+            TaxType: "OUTPUT", // GST on Income (Australia)
+          };
+        }),
       };
 
       // sent before: update that draft instead of adding another invoice
