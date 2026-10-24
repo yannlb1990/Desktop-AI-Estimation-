@@ -52,8 +52,15 @@ export interface ProgressClaimRecord {
   thisClaimExGst: number;
   gst: number;
   thisClaimIncGst: number;
-  /** a deposit invoice (no stages); later claims take it off as already claimed */
-  kind?: 'deposit';
+  /**
+   * deposit: no stages; later claims take it off as already claimed.
+   * variation: an approved variation invoiced on its own as additional works; claims leave
+   * that variation out and do not count this invoice as claimed (so it is never billed twice).
+   */
+  kind?: 'deposit' | 'variation';
+  variationId?: string;
+  variationLabel?: string;
+  variationItems?: { description: string; qty: number; unit: string; rate: number; amount: number }[];
   depositPct?: number;
   contractExGst?: number;
   /** the draft invoice in Xero, once sent */
@@ -187,7 +194,11 @@ export function stagesFromContract(projectId: string): ClaimStage[] {
   const stages: ClaimStage[] = [...byTrade.entries()].map(([trade, value]) => ({
     id: `trade-${trade}`, name: trade, value: roundCents(value), percentComplete: 0,
   }));
-  approvedVariationsExGst(projectId).items.forEach(v => stages.push({ id: v.id, name: v.name, value: v.amount, percentComplete: 0 }));
+  // a variation invoiced on its own is not claimed again
+  const invoicedOnItsOwn = new Set(loadProgressClaims(projectId).filter(c => c.kind === 'variation').map(c => `vo-${c.variationId}`));
+  approvedVariationsExGst(projectId).items
+    .filter(v => !invoicedOnItsOwn.has(v.id))
+    .forEach(v => stages.push({ id: v.id, name: v.name, value: v.amount, percentComplete: 0 }));
   return stages;
 }
 
@@ -197,8 +208,9 @@ export function stagesForNextClaim(projectId: string, previous: ProgressClaimRec
   if (!previous) return fresh;
   const lastPct = new Map(previous.stages.map(s => [s.id, s.percentComplete]));
   const merged = fresh.map(s => ({ ...s, percentComplete: lastPct.get(s.id) ?? 0 }));
-  // Stages added by hand on earlier claims are kept
-  previous.stages.filter(s => !fresh.some(f => f.id === s.id)).forEach(s => merged.push({ ...s }));
+  // Stages added by hand on earlier claims are kept (variations invoiced on their own are not)
+  const invoicedOnItsOwn = new Set(loadProgressClaims(projectId).filter(c => c.kind === 'variation').map(c => `vo-${c.variationId}`));
+  previous.stages.filter(s => !fresh.some(f => f.id === s.id) && !invoicedOnItsOwn.has(s.id)).forEach(s => merged.push({ ...s }));
   return merged;
 }
 

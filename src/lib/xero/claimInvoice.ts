@@ -23,8 +23,22 @@ export function claimInvoiceLines(record: ProgressClaimRecord, allClaims: Progre
   if (record.kind === 'deposit') {
     return [{ description: `Deposit: ${pct(record.depositPct ?? 0)} of the contract sum of $${money(record.contractExGst ?? 0)} ex GST${quote}`, amount: record.thisClaimExGst, kind: 'deposit' }];
   }
+  if (record.kind === 'variation') {
+    const items = (record.variationItems ?? []).filter(i => Math.abs(i.amount) >= 0.005);
+    const head = `${record.variationLabel ?? 'Variation'}, additional works`;
+    const lines: InvoiceLine[] = items.length
+      ? items.map(i => ({
+          description: `${head}: ${i.description}${i.qty !== 1 || i.unit !== 'ls' ? ` (${Math.round(i.qty * 100) / 100} ${i.unit} at $${money(i.rate)})` : ''}`,
+          amount: roundCents(i.amount),
+          kind: 'variation' as const,
+        }))
+      : [{ description: head, amount: record.thisClaimExGst, kind: 'variation' }];
+    const rest = roundCents(record.thisClaimExGst - lines.reduce((s, l) => s + l.amount, 0));
+    if (Math.abs(rest) >= 0.005) lines.push({ description: `${head}: rounding`, amount: rest, kind: 'variation' });
+    return lines;
+  }
   const before = allClaims.slice(0, Math.max(0, allClaims.findIndex(c => c.id === record.id)));
-  const lastProgress = [...before].reverse().find(c => c.kind !== 'deposit');
+  const lastProgress = [...before].reverse().find(c => !c.kind);
   const lastPct = new Map((lastProgress?.stages ?? []).map(s => [s.id, s.percentComplete || 0]));
 
   const lines: InvoiceLine[] = [];
@@ -55,6 +69,6 @@ export function claimInvoiceLines(record: ProgressClaimRecord, allClaims: Progre
 }
 
 export function claimReference(record: ProgressClaimRecord, quoteNumber?: string, siteAddress?: string): string {
-  const what = record.kind === 'deposit' ? 'Deposit' : `Progress claim ${record.number}`;
+  const what = record.kind === 'deposit' ? 'Deposit' : record.kind === 'variation' ? `${record.variationLabel ?? 'Variation'}, additional works` : `Progress claim ${record.number}`;
   return [what, quoteNumber ? `quote ${quoteNumber}` : '', siteAddress || ''].filter(Boolean).join(', ');
 }

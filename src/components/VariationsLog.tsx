@@ -586,6 +586,7 @@ Please respond to approve or reject this variation.`;
                       <CheckCircle className="w-3.5 h-3.5" />
                       Approved{v.approvedAt ? ` ${format(parseISO(v.approvedAt), "dd MMM yyyy")}` : ""}
                     </span>
+                    <span className="text-xs text-muted-foreground">Goes on the next progress claim, or invoice it on its own from Progress Claims.</span>
                     <Button
                       size="sm"
                       variant="ghost"

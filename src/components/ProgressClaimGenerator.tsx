@@ -19,6 +19,7 @@ import {
   type ProgressClaimRecord,
   loadProject,
 } from '@/lib/contract';
+import { lsLoadVariations } from '@/lib/db/variations';
 import { claimInvoiceLines, claimReference, depositCapPct } from '@/lib/xero/claimInvoice';
 import { xeroStatus, xeroSendInvoice, xeroStartConnect, xeroOptions, type XeroStatus, type XeroAccount } from '@/lib/xero/client';
 import { XeroInvoiceDialog } from '@/components/estimate/XeroInvoiceDialog';
@@ -46,7 +47,8 @@ function fmt(n: number) {
 export function ProgressClaimGenerator({ projectId, projectName, siteAddress = '', clientName = '', state = 'NSW' }: Props) {
   const [contract, setContract] = useState(() => contractSummary(projectId));
   const [claims, setClaims] = useState<ProgressClaimRecord[]>(() => loadProgressClaims(projectId));
-  const lastClaim = claims[claims.length - 1];
+  // stages carry on from the last progress claim (not a deposit or a variation invoice)
+  const lastClaim = [...claims].reverse().find(c => !c.kind);
 
   const [claimDate, setClaimDate] = useState(() => new Date().toISOString().split('T')[0]);
   // retention carries on from the last progress claim (a deposit has none)
@@ -60,7 +62,7 @@ export function ProgressClaimGenerator({ projectId, projectName, siteAddress = '
     const latestClaims = loadProgressClaims(projectId);
     setContract(contractSummary(projectId));
     setClaims(latestClaims);
-    setStages(stagesForNextClaim(projectId, latestClaims[latestClaims.length - 1]));
+    setStages(stagesForNextClaim(projectId, [...latestClaims].reverse().find(c => !c.kind)));
   }, [projectId]);
   useEffect(() => {
     // A client may have approved through their link since this was last opened
@@ -71,7 +73,7 @@ export function ProgressClaimGenerator({ projectId, projectName, siteAddress = '
   }, [projectId, refresh]);
 
   // the deposit is not a numbered claim
-  const progressClaims = claims.filter(c => c.kind !== 'deposit');
+  const progressClaims = claims.filter(c => !c.kind);
   const claimNumber = progressClaims.length + 1;
 
   // Xero: the connection (organisation name, accounts) for the bar, the buttons and the preview
@@ -129,6 +131,38 @@ export function ProgressClaimGenerator({ projectId, projectName, siteAddress = '
     }
   }
 
+  // Approved variations: on the next claim (default), or invoiced on their own as additional works
+  const approvedVariations = useMemo(
+    () => lsLoadVariations(projectId).filter((v: any) => v.status === 'approved').sort((a: any, b: any) => a.number - b.number),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [projectId, claims, contract],
+  );
+  const voLabel = (v: any) => `Variation VO-${String(v.number).padStart(3, '0')}: ${v.title || 'Untitled'}`;
+  function invoiceVariation(v: any) {
+    const amount = roundCents(Number(v.totalAmount) || 0);
+    if (!(amount > 0)) { toast.error('This variation has no amount to invoice'); return; }
+    const gst = gstOn(amount, contract.gstPct);
+    const record: ProgressClaimRecord = {
+      id: crypto.randomUUID(), number: 0, date: claimDate, stages: [], retentionPct: 0,
+      completedToDate: 0, retentionHeld: 0, thisClaimExGst: amount, gst, thisClaimIncGst: roundCents(amount + gst),
+      kind: 'variation', variationId: v.id, variationLabel: voLabel(v),
+      variationItems: (v.items ?? []).map((i: any) => ({ description: i.description || 'Item', qty: Number(i.qty) || 0, unit: i.unit || 'ea', rate: Number(i.rate) || 0, amount: (Number(i.qty) || 0) * (Number(i.rate) || 0) })),
+    };
+    const updated = [...claims, record];
+    saveProgressClaims(projectId, updated);
+    setClaims(updated);
+    setStages(st => st.filter(x => x.id !== `vo-${v.id}`));
+    if (xeroOn) sendToXero(record);
+    else toast.success(`${voLabel(v)} set to invoice on its own. Claims leave it out.`);
+  }
+  function putBackOnClaims(record: ProgressClaimRecord) {
+    const updated = claims.filter(c => c.id !== record.id);
+    saveProgressClaims(projectId, updated);
+    setClaims(updated);
+    setStages(stagesForNextClaim(projectId, [...updated].reverse().find(c => !c.kind)));
+    toast.success('Back on the next claim');
+  }
+
   // Deposit: before any progress claim, off the approved contract
   const hasDeposit = claims.some(c => c.kind === 'deposit');
   const [depositPctInput, setDepositPctInput] = useState(() =>
@@ -156,7 +190,9 @@ export function ProgressClaimGenerator({ projectId, projectName, siteAddress = '
     () => computeClaim(stages, parsedRetention, claims, contract.gstPct),
     [stages, parsedRetention, claims, contract.gstPct],
   );
-  const stagesMismatch = contract.approvedQuote && Math.abs(stagesTotal - contract.contractExGst) > 1;
+  // variations invoiced on their own are outside the claim stages
+  const invoicedVariationsExGst = claims.filter(c => c.kind === 'variation').reduce((s, c) => s + c.thisClaimExGst, 0);
+  const stagesMismatch = contract.approvedQuote && Math.abs(stagesTotal - (contract.contractExGst - invoicedVariationsExGst)) > 1;
 
   function addStage() {
     setStages(prev => [...prev, { id: `custom-${Date.now()}`, name: 'New stage', value: 0, percentComplete: 0 }]);
@@ -239,7 +275,7 @@ export function ProgressClaimGenerator({ projectId, projectName, siteAddress = '
         <XeroInvoiceDialog
           open={!!preview}
           onOpenChange={v => { if (!v) setPreview(null); }}
-          title={preview.kind === 'deposit' ? 'Deposit invoice' : `Progress claim ${preview.number} invoice`}
+          title={preview.kind === 'deposit' ? 'Deposit invoice' : preview.kind === 'variation' ? `${preview.variationLabel ?? 'Variation'}: additional works invoice` : `Progress claim ${preview.number} invoice`}
           status={xero}
           accounts={xeroAccounts}
           clientName={clientFor().name}
@@ -306,6 +342,46 @@ export function ProgressClaimGenerator({ projectId, projectName, siteAddress = '
                 Over the usual QLD limit for domestic building work: {depositCapPct(contract.contractExGst)}% for a contract of this size. Check your contract before invoicing it.
               </p>
             )}
+          </CardContent>
+        </Card>
+      )}
+
+      {approvedVariations.length > 0 && (
+        <Card className="border-border bg-card/60">
+          <CardHeader className="pb-3">
+            <CardTitle className="text-sm font-semibold text-foreground">Approved variations</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-1 text-sm">
+            <p className="mb-2 text-xs text-muted-foreground">
+              Each approved variation goes on the next claim as its own line. To bill one straight away, invoice it on its own as additional works: claims then leave it out.
+            </p>
+            {approvedVariations.map((v: any) => {
+              const own = claims.find(c => c.kind === 'variation' && c.variationId === v.id);
+              const onClaim = progressClaims.find(c => c.stages.some(st => st.id === `vo-${v.id}` && (st.percentComplete || 0) > 0));
+              return (
+                <div key={v.id} className="flex flex-wrap items-center justify-between gap-2 border-b border-border/40 py-1.5">
+                  <span className="min-w-48 flex-1">{voLabel(v)}</span>
+                  <span className="font-mono">${fmt(Number(v.totalAmount) || 0)} ex GST</span>
+                  <span className="flex items-center gap-2">
+                    {own ? (
+                      <>
+                        <span className="text-xs text-[#D4A045]">{own.xero ? `Invoiced on its own (${own.xero.number ?? 'in Xero'})` : 'Invoiced on its own'}</span>
+                        {!own.xero && <Button size="sm" variant="ghost" className="h-7" onClick={() => putBackOnClaims(own)}>Put back on claims</Button>}
+                      </>
+                    ) : onClaim ? (
+                      <span className="text-xs text-muted-foreground">On claim {onClaim.number}</span>
+                    ) : (
+                      <>
+                        <span className="text-xs text-muted-foreground">On the next claim</span>
+                        <Button size="sm" variant="outline" className="h-7" disabled={sending !== null} onClick={() => invoiceVariation(v)}>
+                          {xeroOn ? 'Invoice now as additional works' : 'Invoice on its own'}
+                        </Button>
+                      </>
+                    )}
+                  </span>
+                </div>
+              );
+            })}
           </CardContent>
         </Card>
       )}
@@ -452,8 +528,8 @@ export function ProgressClaimGenerator({ projectId, projectName, siteAddress = '
           <CardContent className="space-y-1 text-sm">
             {[...claims].reverse().map(c => (
               <div key={c.id} className="flex flex-wrap items-center justify-between gap-2 border-b border-border/40 py-1.5">
-                <span className="min-w-36">{c.kind === 'deposit' ? `Deposit (${c.depositPct}%)` : `Claim ${c.number}`}, {new Date(c.date).toLocaleDateString('en-AU')}</span>
-                <span className="text-muted-foreground">{c.kind === 'deposit' ? '' : `to date $${fmt(c.completedToDate)}`}</span>
+                <span className="min-w-36">{c.kind === 'deposit' ? `Deposit (${c.depositPct}%)` : c.kind === 'variation' ? (c.variationLabel ?? 'Variation') : `Claim ${c.number}`}, {new Date(c.date).toLocaleDateString('en-AU')}</span>
+                <span className="text-muted-foreground">{c.kind ? '' : `to date $${fmt(c.completedToDate)}`}</span>
                 <span className="font-semibold">${fmt(c.thisClaimIncGst)} inc GST</span>
                 <span className="flex items-center gap-2">
                   {c.xero && (
