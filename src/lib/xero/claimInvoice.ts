@@ -11,6 +11,8 @@ export type InvoiceLineKind = 'deposit' | 'work' | 'variation' | 'retention';
 export interface InvoiceLine { description: string; amount: number; kind: InvoiceLineKind; accountCode?: string }
 
 const pct = (n: number) => `${Math.round(n * 100) / 100}%`;
+// trades typed in lower case ("temporary fencing") read better capitalised on an invoice
+const cap = (t: string) => t.trim().replace(/^\p{Ll}/u, c => c.toUpperCase());
 const money = (n: number) => n.toLocaleString('en-AU', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
 /** The usual cap on a deposit for domestic building work in QLD: 10% under $20,000, else 5%. */
@@ -47,7 +49,7 @@ export function claimInvoiceLines(record: ProgressClaimRecord, allClaims: Progre
     const amount = roundCents((st.value || 0) * (((st.percentComplete || 0) - was) / 100));
     if (Math.abs(amount) < 0.005) continue;
     lines.push({
-      description: `${st.name}: ${pct(st.percentComplete || 0)} complete to date${was ? ` (${pct(was)} claimed before)` : ''}`,
+      description: `${cap(st.name)}: ${pct(st.percentComplete || 0)} complete to date${was ? ` (${pct(was)} claimed before)` : ''}`,
       amount,
       kind: st.id.startsWith('vo-') ? 'variation' : 'work',
     });

@@ -243,6 +243,19 @@ serve(async (req) => {
       }
       if (!contactId) throw new UserError("Could not add the client in Xero");
 
+      // GST as Metricore works it out (10% of the total, rounded once), shared over the lines,
+      // so Xero's total is the claim's to the cent (Xero would otherwise round each line)
+      const cents = (n: number) => Math.round(n * 100);
+      const amounts = lines.map(l => cents(Number(l.amount)));
+      const gstTotal = Math.round(amounts.reduce((a, b) => a + b, 0) * 0.1);
+      const lineGstCents = amounts.map(a => Math.round(a * 0.1));
+      const diff = gstTotal - lineGstCents.reduce((a, b) => a + b, 0);
+      if (diff !== 0) {
+        const biggest = amounts.reduce((bi, a, k) => (Math.abs(a) > Math.abs(amounts[bi]) ? k : bi), 0);
+        lineGstCents[biggest] += diff;
+      }
+      const lineGst = lineGstCents.map(c => c / 100);
+
       const day = /^\d{4}-\d{2}-\d{2}$/.test(date) ? date : new Date().toISOString().slice(0, 10);
       const due = new Date(`${day}T00:00:00Z`);
       due.setUTCDate(due.getUTCDate() + Number(conn.due_days ?? 10));
@@ -255,7 +268,7 @@ serve(async (req) => {
         Reference: String(reference ?? "").slice(0, 255),
         LineAmountTypes: "Exclusive",
         ...(conn.branding_theme_id ? { BrandingThemeID: conn.branding_theme_id } : {}),
-        LineItems: lines.map(l => {
+        LineItems: lines.map((l, i) => {
           // the line's own code, else the default for its kind, else the main income account
           const pick = [l.accountCode, l.kind ? (conn.account_codes ?? {})[l.kind] : undefined, conn.account_code]
             .find(c => typeof c === "string" && /^[A-Za-z0-9.\-]{1,10}$/.test(c));
@@ -265,6 +278,7 @@ serve(async (req) => {
             UnitAmount: Math.round(Number(l.amount) * 100) / 100,
             AccountCode: pick,
             TaxType: "OUTPUT", // GST on Income (Australia)
+            TaxAmount: lineGst[i],
           };
         }),
       };
