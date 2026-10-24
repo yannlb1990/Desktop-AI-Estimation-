@@ -388,8 +388,8 @@ export const InteractiveCanvas = ({
   const midpointSnapRef = useRef<WorldPoint | null>(null);
   // Endpoint snap indicator — set to the endpoint world position when cursor is snapping to an endpoint
   const endpointSnapIndicatorRef = useRef<WorldPoint | null>(null);
-  // last drawn outline of each room floor area, to notice a re-shape
-  const roomShapeSigRef = useRef<Map<string, string>>(new Map());
+  // last drawn outline of each room floor area and wall, to notice a re-shape from outside
+  const shapeSigRef = useRef<Map<string, string>>(new Map());
   // corner angle readout while drawing a wall: the angle and where the cursor is
   const angleHudRef = useRef<{ deg: number; at: WorldPoint } | null>(null);
   const activeToolRef = useRef(activeTool);
@@ -1130,13 +1130,13 @@ export const InteractiveCanvas = ({
       });
     }
 
-    // Floor areas made from walls can be re-shaped from outside (Rooms from walls > Update
-    // area): drop the old drawing so it is drawn again from the new points
+    // Room floor areas and walls can be re-shaped from outside (Rooms from walls > Update
+    // area; a joined wall following a moved one): drop the old drawing so it is drawn again
     measurements.forEach(m => {
-      if (!m.roomKey) return;
+      if (!m.roomKey && !(m.wallThickness && m.type === 'line' && !m.arcControlPoint)) return;
       const sig = JSON.stringify(m.worldPoints);
-      const was = roomShapeSigRef.current.get(m.id);
-      roomShapeSigRef.current.set(m.id, sig);
+      const was = shapeSigRef.current.get(m.id);
+      shapeSigRef.current.set(m.id, sig);
       if (was === undefined || was === sig || !objectsMap.has(m.id)) return;
       objectsMap.get(m.id)!.forEach(o => canvas.remove(o));
       objectsMap.delete(m.id);
@@ -2290,6 +2290,23 @@ export const InteractiveCanvas = ({
         }
       }
 
+      // Midpoint handle of the selected wall: drag the wall from here to slide it (Shift: straight out)
+      {
+        const act: any = canvas.getActiveObject?.();
+        if (act && act._isWallPrimary) {
+          const mx = tpx(act.left ?? 0), my = tpy(act.top ?? 0), d = 7 * dpr;
+          ctx.save();
+          ctx.setLineDash([]);
+          ctx.fillStyle = '#2563eb';
+          ctx.strokeStyle = '#ffffff';
+          ctx.lineWidth = 1.5 * dpr;
+          ctx.beginPath();
+          ctx.moveTo(mx, my - d); ctx.lineTo(mx + d, my); ctx.lineTo(mx, my + d); ctx.lineTo(mx - d, my);
+          ctx.closePath(); ctx.fill(); ctx.stroke();
+          ctx.restore();
+        }
+      }
+
       // Angle readout next to the cursor while drawing a wall: green when square (within 2°)
       const hud = angleHudRef.current;
       if (hud && activeToolRef.current === 'wall-line') {
@@ -2783,12 +2800,41 @@ export const InteractiveCanvas = ({
         if (objects) syncWallFromRect(target, objects, wallThickness, _vUpm);
 
         const result = calculateLinearWorld(axisP1, axisP2, effectiveUnits);
+        // this wall's drawing already matches: no redraw (keeps it selected)
+        shapeSigRef.current.set(measurementId, JSON.stringify([axisP1, axisP2]));
         onMeasurementUpdate(measurementId, {
           worldPoints: [axisP1, axisP2],
           worldValue: result.worldValue,
           realValue: isCalibrated ? result.realValue : result.worldValue,
           label: '',
         });
+
+        // Walls joined at a moved end follow it, so corners (and rooms) stay closed
+        const oldPts = existingMeasurement?.worldPoints;
+        if (oldPts && oldPts.length >= 2) {
+          const joinTol = Math.max(0.02 * effectiveUnits, 2 / (zoomRef.current || 1));
+          const moves: [WorldPoint, WorldPoint][] = [[oldPts[0], axisP1], [oldPts[oldPts.length - 1], axisP2]];
+          measurementMapRef.current.forEach((other, otherId) => {
+            if (otherId === measurementId || !(other as any).wallThickness || other.type !== 'line' || (other as any).arcControlPoint) return;
+            const pts = other.worldPoints;
+            if (!pts || pts.length !== 2) return;
+            let changed = false;
+            const next = pts.map(p => {
+              for (const [from, to] of moves) {
+                const moved = Math.hypot(to.x - from.x, to.y - from.y) > 1e-9;
+                if (moved && Math.hypot(p.x - from.x, p.y - from.y) <= joinTol) { changed = true; return { x: to.x, y: to.y }; }
+              }
+              return p;
+            });
+            if (!changed || Math.hypot(next[1].x - next[0].x, next[1].y - next[0].y) < 1e-6) return;
+            const r = calculateLinearWorld(next[0], next[1], effectiveUnits);
+            onMeasurementUpdate(otherId, {
+              worldPoints: next,
+              worldValue: r.worldValue,
+              realValue: isCalibrated ? r.realValue : r.worldValue,
+            });
+          });
+        }
 
       } else if (target.type === 'rect' && (Math.abs(((target.angle ?? 0) % 360 + 360) % 360) > 1e-6 || measurementMapRef.current.get(measurementId)?.type === 'polygon')) {
         // A turned rectangle can no longer be stored as two corners: keep it as its 4 corners
@@ -2924,6 +2970,16 @@ export const InteractiveCanvas = ({
     const syncWall = (e: any) => {
       const target = e.target;
       if (!target || !(target as any)._isWallPrimary) return;
+      // Shift while sliding a wall: only straight out from it (square to the wall), never along
+      const orig = e.transform?.original;
+      if (e.e?.shiftKey && orig && e.transform?.action === 'drag') {
+        const a = ((target.angle ?? 0) * Math.PI) / 180;
+        const nx = -Math.sin(a), ny = Math.cos(a);
+        const dx = (target.left ?? 0) - orig.left, dy = (target.top ?? 0) - orig.top;
+        const d = dx * nx + dy * ny;
+        target.set({ left: orig.left + nx * d, top: orig.top + ny * d });
+        target.setCoords();
+      }
       const measurementId = shapeToMeasurementIdRef.current.get(target);
       if (!measurementId) return;
       const objects = measurementObjectsRef.current.get(measurementId);
