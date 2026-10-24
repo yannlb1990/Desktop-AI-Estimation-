@@ -52,6 +52,12 @@ export interface ProgressClaimRecord {
   thisClaimExGst: number;
   gst: number;
   thisClaimIncGst: number;
+  /** a deposit invoice (no stages); later claims take it off as already claimed */
+  kind?: 'deposit';
+  depositPct?: number;
+  contractExGst?: number;
+  /** the draft invoice in Xero, once sent */
+  xero?: { invoiceId: string; number?: string; url: string; total?: number; sentAt: string };
 }
 
 // ── Project record helpers ────────────────────────────────────────────────────
@@ -170,18 +176,7 @@ export function saveProgressClaims(projectId: string, claims: ProgressClaimRecor
   patchProject(projectId, { progress_claims: claims });
 }
 
-/**
- * SOPA-style claim maths: value of work completed to date, less retention held,
- * less the net amount already claimed, equals this claim (plus GST).
- */
-export function computeClaim(stages: ClaimStage[], retentionPct: number, previousClaims: ProgressClaimRecord[], gstPct: number) {
-  const completedToDate = roundCents(stages.reduce((s, st) => s + (st.value || 0) * ((st.percentComplete || 0) / 100), 0));
-  const retentionHeld = roundCents(completedToDate * (retentionPct / 100));
-  const previouslyClaimedExGst = roundCents(previousClaims.reduce((s, c) => s + c.thisClaimExGst, 0));
-  const thisClaimExGst = roundCents(completedToDate - retentionHeld - previouslyClaimedExGst);
-  const gst = gstOn(thisClaimExGst, gstPct);
-  return { completedToDate, retentionHeld, previouslyClaimedExGst, thisClaimExGst, gst, thisClaimIncGst: roundCents(thisClaimExGst + gst) };
-}
+export { computeClaim } from './contractMath';
 
 /** Stages for a first claim: the approved quote's lines grouped by trade, plus approved variations. */
 export function stagesFromContract(projectId: string): ClaimStage[] {

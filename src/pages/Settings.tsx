@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from "react";
+import { XeroSettings } from '@/components/settings/XeroSettings';
 import { useNavigate } from "react-router-dom";
 import { getLocalUser, isSignedIn, getUserStorageKey } from "@/lib/localAuth";
 import { getSubscriptionStatus, PLAN_NAMES, PLAN_PRICES, loadSubscription } from "@/lib/subscription";
@@ -520,7 +521,7 @@ const Settings = () => {
     return <div className="flex min-h-screen items-center justify-center"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>;
   }
 
-  const tabCount = isBusinessPlan ? 9 : 8;
+  const tabCount = isBusinessPlan ? 10 : 9;
 
   return (
     <div className="min-h-screen bg-muted/30">
@@ -538,7 +539,7 @@ const Settings = () => {
           <p className="text-muted-foreground">Manage your account, subscription, and preferences</p>
         </div>
 
-        <Tabs defaultValue="profile" className="space-y-6">
+        <Tabs defaultValue={new URLSearchParams(window.location.search).get('tab') || 'profile'} className="space-y-6">
           <div className="overflow-x-auto">
             <TabsList className={`grid w-full min-w-max`} style={{ gridTemplateColumns: `repeat(${tabCount}, minmax(0, 1fr))` }}>
               <TabsTrigger value="profile"><Building2 className="h-4 w-4 mr-1.5 hidden sm:inline" />Profile</TabsTrigger>
@@ -549,6 +550,7 @@ const Settings = () => {
               <TabsTrigger value="regional"><MapPin className="h-4 w-4 mr-1.5 hidden sm:inline" />Regional</TabsTrigger>
               <TabsTrigger value="notifications"><Bell className="h-4 w-4 mr-1.5 hidden sm:inline" />Alerts</TabsTrigger>
               <TabsTrigger value="billing"><CreditCard className="h-4 w-4 mr-1.5 hidden sm:inline" />Billing</TabsTrigger>
+              <TabsTrigger value="xero">Xero</TabsTrigger>
               {isBusinessPlan && (
                 <TabsTrigger value="team"><Users className="h-4 w-4 mr-1.5 hidden sm:inline" />Team</TabsTrigger>
               )}
@@ -1093,6 +1095,10 @@ const Settings = () => {
           </TabsContent>
 
           {/* ── Subscription & Billing ─────────────────────────────────────────── */}
+          <TabsContent value="xero" className="space-y-4">
+            <XeroSettings />
+          </TabsContent>
+
           <TabsContent value="billing" className="space-y-4">
             <Card className="p-5">
               <h3 className="font-display text-base font-bold mb-4 flex items-center gap-2">

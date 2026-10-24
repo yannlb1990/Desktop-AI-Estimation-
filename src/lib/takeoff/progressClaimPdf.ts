@@ -18,6 +18,8 @@ export interface ProgressClaimOptions {
   contractSum: number;
   retentionPct: number;
   previouslyClaimed: number;
+  /** each stage's % complete at the last progress claim: stage columns then show work, not money (a deposit is not work) */
+  previousStagePct?: Record<string, number>;
   /** GST % from the project's pricing settings (default 10) */
   gstPct?: number;
   stages: ProgressClaimStage[];
@@ -164,7 +166,9 @@ export function generateProgressClaimPdf(options: ProgressClaimOptions): void {
     const valueClaimed = stage.value * (stage.percentComplete / 100);
     // Apportion previous claims across stages by value weighting
     const stageWeight = contractSum > 0 ? stage.value / contractSum : 0;
-    const stagePrevious = previouslyClaimed * stageWeight;
+    const stagePrevious = options.previousStagePct
+      ? stage.value * ((options.previousStagePct[stage.id] ?? 0) / 100)
+      : previouslyClaimed * stageWeight;
     const thisClaim = Math.max(0, valueClaimed - stagePrevious);
     return [
       stage.name,

@@ -46,6 +46,7 @@ import { Suspense, lazy } from "react";
 // Site visit screens load with the app, not on demand: on site there may be no signal to fetch them
 import SiteVisits from "./pages/SiteVisits";
 import SiteVisitEditor from "./pages/SiteVisitEditor";
+import XeroCallback from "./pages/XeroCallback";
 
 // Route-level code splitting — each page loads only when first visited
 const Index           = lazy(() => import("./pages/Index"));
@@ -152,6 +153,7 @@ const App = () => {
             {/* Phone screens: site visits work on a phone, the rest needs a desktop */}
             <Route path="/site" element={<ProtectedRoute syncReady={syncReady} offlineOk><SiteVisits /></ProtectedRoute>} />
             <Route path="/site/:visitId" element={<ProtectedRoute syncReady={syncReady} offlineOk><SiteVisitEditor /></ProtectedRoute>} />
+            <Route path="/xero/callback" element={<ProtectedRoute syncReady={syncReady}><XeroCallback /></ProtectedRoute>} />
             <Route path="/project/new" element={<ProtectedRoute syncReady={syncReady}><NewProject /></ProtectedRoute>} />
             <Route path="/project/:projectId" element={<ProtectedRoute syncReady={syncReady}><ProjectDetail /></ProtectedRoute>} />
             <Route path="/insights" element={<ProtectedRoute syncReady={syncReady}><MarketInsights /></ProtectedRoute>} />

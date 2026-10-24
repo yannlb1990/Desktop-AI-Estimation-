@@ -17,7 +17,11 @@ import {
   syncClientApprovals,
   type ClaimStage,
   type ProgressClaimRecord,
+  loadProject,
 } from '@/lib/contract';
+import { claimInvoiceLines, claimReference, depositCapPct } from '@/lib/xero/claimInvoice';
+import { xeroStatus, xeroSendInvoice, xeroStartConnect } from '@/lib/xero/client';
+import { gstOn, roundCents } from '@/lib/pricing/estimatePricing';
 
 interface Props {
   projectId: string;
@@ -43,7 +47,8 @@ export function ProgressClaimGenerator({ projectId, projectName, siteAddress = '
   const lastClaim = claims[claims.length - 1];
 
   const [claimDate, setClaimDate] = useState(() => new Date().toISOString().split('T')[0]);
-  const [retentionPct, setRetentionPct] = useState(() => String(lastClaim?.retentionPct ?? 5));
+  // retention carries on from the last progress claim (a deposit has none)
+  const [retentionPct, setRetentionPct] = useState(() => String([...claims].reverse().find(c => c.kind !== 'deposit')?.retentionPct ?? 5));
   const [contractorName, setContractorName] = useState('');
   const [contractorAbn, setContractorAbn] = useState('');
   const [stages, setStages] = useState<ClaimStage[]>(() => stagesForNextClaim(projectId, lastClaim));
@@ -63,7 +68,69 @@ export function ProgressClaimGenerator({ projectId, projectName, siteAddress = '
     return () => window.removeEventListener('focus', check);
   }, [projectId, refresh]);
 
-  const claimNumber = claims.length + 1;
+  // the deposit is not a numbered claim
+  const progressClaims = claims.filter(c => c.kind !== 'deposit');
+  const claimNumber = progressClaims.length + 1;
+
+  // Xero: is it connected (for the button labels)
+  const [xeroOn, setXeroOn] = useState<boolean | null>(null);
+  useEffect(() => { xeroStatus().then(s => setXeroOn(s.connected)).catch(() => setXeroOn(false)); }, []);
+  const [sending, setSending] = useState<string | null>(null);
+
+  async function sendToXero(c: ProgressClaimRecord) {
+    if (!xeroOn) { xeroStartConnect(window.location.pathname + window.location.search).catch(e => toast.error(e instanceof Error ? e.message : 'Xero did not respond')); return; }
+    if (!(c.thisClaimExGst > 0)) { toast.error('There is nothing to invoice on this claim'); return; }
+    const project = loadProject(projectId);
+    const name = clientName || project?.client_name || '';
+    if (!name.trim()) { toast.error("Add the client's name to the project first: the invoice goes to them"); return; }
+    const quoteNumber = contract.approvedQuote?.quoteNumber;
+    setSending(c.id);
+    try {
+      const r = await xeroSendInvoice({
+        projectId, sourceId: c.id,
+        contact: { name, email: project?.client_email || undefined },
+        reference: claimReference(c, quoteNumber, siteAddress),
+        date: c.date,
+        lines: claimInvoiceLines(c, claims, quoteNumber),
+      });
+      const latest = loadProgressClaims(projectId).map(x => x.id === c.id
+        ? { ...x, xero: { invoiceId: r.invoiceId, number: r.number, url: r.url, total: r.total, sentAt: new Date().toISOString() } }
+        : x);
+      saveProgressClaims(projectId, latest);
+      setClaims(latest);
+      // Xero works GST out line by line; ours is on the total: say so if they differ
+      const centsOff = r.total != null ? Math.round((r.total - c.thisClaimIncGst) * 100) / 100 : 0;
+      toast.success(`${r.updated ? 'Updated' : 'Draft'} invoice ${r.number ?? ''} in Xero`, {
+        description: centsOff ? `Xero's total is $${fmt(r.total!)}, ${Math.abs(centsOff)} ${centsOff > 0 ? 'more' : 'less'} than the claim (GST rounded per line). Check before approving.` : undefined,
+        action: { label: 'Open in Xero', onClick: () => window.open(r.url, '_blank', 'noopener') },
+      });
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Xero did not take the invoice');
+    } finally {
+      setSending(null);
+    }
+  }
+
+  // Deposit: before any progress claim, off the approved contract
+  const hasDeposit = claims.some(c => c.kind === 'deposit');
+  const [depositPctInput, setDepositPctInput] = useState(() =>
+    String(contract.approvedQuote?.paymentSchedule?.depositPct || depositCapPct(contract.contractExGst)));
+  const depositPct = parseFloat(depositPctInput) || 0;
+  const depositExGst = roundCents(contract.contractExGst * depositPct / 100);
+  const depositOverCap = state === 'QLD' && depositPct > depositCapPct(contract.contractExGst);
+  function saveDeposit() {
+    if (!(depositExGst > 0)) { toast.error('Enter the deposit %'); return; }
+    const gst = gstOn(depositExGst, contract.gstPct);
+    const record: ProgressClaimRecord = {
+      id: crypto.randomUUID(), number: 0, date: claimDate, stages: [], retentionPct: 0,
+      completedToDate: 0, retentionHeld: 0, thisClaimExGst: depositExGst, gst, thisClaimIncGst: roundCents(depositExGst + gst),
+      kind: 'deposit', depositPct, contractExGst: contract.contractExGst,
+    };
+    const updated = [...claims, record];
+    saveProgressClaims(projectId, updated);
+    setClaims(updated);
+    toast.success(`Deposit saved ($${fmt(record.thisClaimIncGst)} inc GST). Claims take it off as already claimed.`);
+  }
   const parsedRetention = parseFloat(retentionPct) || 0;
   const stagesTotal = stages.reduce((s, st) => s + (st.value || 0), 0);
   const summary = useMemo(
@@ -83,8 +150,11 @@ export function ProgressClaimGenerator({ projectId, projectName, siteAddress = '
   }
 
   function saveClaim(): ProgressClaimRecord | null {
-    if (summary.thisClaimExGst < 0) {
-      toast.error('This claim is negative: the % complete is lower than already claimed.');
+    if (summary.thisClaimExGst <= 0) {
+      const depositOnly = claims.length > 0 && claims.every(c => c.kind === 'deposit');
+      toast.error(summary.thisClaimExGst === 0 ? 'Nothing to claim: no new work since the last claim.'
+        : depositOnly ? 'The deposit already covers the work done so far: claim when the work is worth more than the deposit.'
+        : 'This claim is negative: the % complete is lower than already claimed.');
       return null;
     }
     const record: ProgressClaimRecord = {
@@ -121,6 +191,7 @@ export function ProgressClaimGenerator({ projectId, projectName, siteAddress = '
       previouslyClaimed: summary.previouslyClaimedExGst,
       gstPct: contract.gstPct,
       stages: record.stages,
+      previousStagePct: Object.fromEntries(([...claims].reverse().find(c => c.kind !== 'deposit')?.stages ?? []).map(s => [s.id, s.percentComplete || 0])),
       contractorName,
       contractorAbn,
     });
@@ -154,6 +225,30 @@ export function ProgressClaimGenerator({ projectId, projectName, siteAddress = '
                 Claims will then use that quote's amounts and trades. Until then you can enter stages by hand.
               </p>
             </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {contract.approvedQuote && !hasDeposit && progressClaims.length === 0 && (
+        <Card className="border-border bg-card/60">
+          <CardHeader className="pb-3">
+            <CardTitle className="text-sm font-semibold text-foreground">Deposit</CardTitle>
+          </CardHeader>
+          <CardContent className="flex flex-wrap items-end gap-4 text-sm">
+            <div className="space-y-1">
+              <Label className="text-xs text-muted-foreground">Deposit % of contract sum</Label>
+              <Input inputMode="decimal" value={depositPctInput} onChange={e => setDepositPctInput(e.target.value)} className="h-8 w-28 text-sm" />
+            </div>
+            <div>
+              <p className="text-xs text-muted-foreground">Deposit</p>
+              <p className="font-semibold">${fmt(depositExGst)} ex GST, ${fmt(roundCents(depositExGst + gstOn(depositExGst, contract.gstPct)))} inc GST</p>
+            </div>
+            <Button size="sm" variant="outline" onClick={saveDeposit}>Save deposit</Button>
+            {depositOverCap && (
+              <p className="basis-full text-xs text-amber-400">
+                Over the usual QLD limit for domestic building work: {depositCapPct(contract.contractExGst)}% for a contract of this size. Check your contract before invoicing it.
+              </p>
+            )}
           </CardContent>
         </Card>
       )}
@@ -256,7 +351,7 @@ export function ProgressClaimGenerator({ projectId, projectName, siteAddress = '
             {[
               { label: 'Work completed to date', value: summary.completedToDate, className: 'text-foreground' },
               { label: `Retention held (${parsedRetention}%)`, value: -summary.retentionHeld, className: '' },
-              { label: `Previously claimed (${claims.length} claim${claims.length === 1 ? '' : 's'})`, value: -summary.previouslyClaimedExGst, className: '' },
+              { label: `Previously claimed (${[progressClaims.length ? `${progressClaims.length} claim${progressClaims.length === 1 ? '' : 's'}` : '', hasDeposit ? 'deposit' : ''].filter(Boolean).join(' and ') || 'none'})`, value: -summary.previouslyClaimedExGst, className: '' },
               { label: 'This claim (ex GST)', value: summary.thisClaimExGst, className: 'text-foreground font-semibold border-t border-border pt-2 mt-2' },
               { label: `GST (${contract.gstPct}%)`, value: summary.gst, className: 'text-muted-foreground text-xs' },
             ].map(({ label, value, className }) => (
@@ -294,10 +389,20 @@ export function ProgressClaimGenerator({ projectId, projectName, siteAddress = '
           </CardHeader>
           <CardContent className="space-y-1 text-sm">
             {[...claims].reverse().map(c => (
-              <div key={c.id} className="flex justify-between border-b border-border/40 py-1.5">
-                <span>Claim {c.number}, {new Date(c.date).toLocaleDateString('en-AU')}</span>
-                <span className="text-muted-foreground">to date ${fmt(c.completedToDate)}</span>
+              <div key={c.id} className="flex flex-wrap items-center justify-between gap-2 border-b border-border/40 py-1.5">
+                <span className="min-w-36">{c.kind === 'deposit' ? `Deposit (${c.depositPct}%)` : `Claim ${c.number}`}, {new Date(c.date).toLocaleDateString('en-AU')}</span>
+                <span className="text-muted-foreground">{c.kind === 'deposit' ? '' : `to date $${fmt(c.completedToDate)}`}</span>
                 <span className="font-semibold">${fmt(c.thisClaimIncGst)} inc GST</span>
+                <span className="flex items-center gap-2">
+                  {c.xero && (
+                    <a href={c.xero.url} target="_blank" rel="noopener noreferrer" className="text-xs text-[#D4A045] hover:underline">
+                      {c.xero.number || 'Invoice'} in Xero
+                    </a>
+                  )}
+                  <Button size="sm" variant="outline" className="h-7" disabled={sending !== null || xeroOn === null} onClick={() => sendToXero(c)}>
+                    {sending === c.id ? 'Sending...' : !xeroOn ? 'Connect Xero' : c.xero ? 'Update in Xero' : 'Send to Xero'}
+                  </Button>
+                </span>
               </div>
             ))}
           </CardContent>
