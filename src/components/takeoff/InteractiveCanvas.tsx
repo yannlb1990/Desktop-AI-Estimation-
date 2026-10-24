@@ -384,6 +384,8 @@ export const InteractiveCanvas = ({
   const midpointSnapRef = useRef<WorldPoint | null>(null);
   // Endpoint snap indicator — set to the endpoint world position when cursor is snapping to an endpoint
   const endpointSnapIndicatorRef = useRef<WorldPoint | null>(null);
+  // last drawn outline of each room floor area, to notice a re-shape
+  const roomShapeSigRef = useRef<Map<string, string>>(new Map());
   // Arc wall control-point drag state (select mode)
   const arcDragRef = useRef<{ id: string; p1: WorldPoint; p2: WorldPoint; ctrl: WorldPoint } | null>(null);
   // Chain wall drawing: endpoint of last completed wall — auto-starts next wall from here
@@ -1119,6 +1121,21 @@ export const InteractiveCanvas = ({
         });
       });
     }
+
+    // Floor areas made from walls can be re-shaped from outside (Rooms from walls > Update
+    // area): drop the old drawing so it is drawn again from the new points
+    measurements.forEach(m => {
+      if (!m.roomKey) return;
+      const sig = JSON.stringify(m.worldPoints);
+      const was = roomShapeSigRef.current.get(m.id);
+      roomShapeSigRef.current.set(m.id, sig);
+      if (was === undefined || was === sig || !objectsMap.has(m.id)) return;
+      objectsMap.get(m.id)!.forEach(o => canvas.remove(o));
+      objectsMap.delete(m.id);
+      Array.from(shapeToMeasurementIdRef.current.entries()).forEach(([shape, mid]) => {
+        if (mid === m.id) shapeToMeasurementIdRef.current.delete(shape);
+      });
+    });
 
     const strokeWidth = getZoomAwareSize(2);
 
@@ -4024,6 +4041,12 @@ export const InteractiveCanvas = ({
       if (e.e.shiftKey) {
         currentWorldPoint = snapEndpointToAngle(startPoint, currentWorldPoint, 45);
         snappedWallEndRef.current = null;
+        perpSnapRef.current = null;
+      } else if (endpointSnapIndicatorRef.current) {
+        // Snapped onto the end of another wall: keep exactly that point, so walls join
+        // (rooms close); this wins over the 90° snap, which would pull the end off it
+        currentWorldPoint = endpointSnapIndicatorRef.current;
+        snappedWallEndRef.current = endpointSnapIndicatorRef.current;
         perpSnapRef.current = null;
       } else {
         // Perpendicular snap: check all existing wall measurements for a 90° alignment

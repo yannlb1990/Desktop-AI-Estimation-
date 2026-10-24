@@ -50,6 +50,8 @@ import { useSubscription } from '@/hooks/useSubscription';
 import { UpgradeModal } from '@/components/UpgradeModal';
 import { getCachedPDF } from '@/lib/takeoff/pdfCache';
 import type { ConcreteSetup, PricedConcreteLine } from './ConcreteSetupDialog';
+import { RoomsFromWallsDialog } from './RoomsFromWallsDialog';
+import { wallsForRooms } from '@/lib/takeoff/wallRooms';
 import { buildRevisionOverlay, type RevisionOverlay } from '@/lib/takeoff/revisionDiff';
 import { previousRevisionOf, recordRevision } from '@/lib/takeoff/planRevisions';
 import { Dialog as RevisionDialog, DialogContent as RevisionDialogContent, DialogHeader as RevisionDialogHeader, DialogTitle as RevisionDialogTitle, DialogFooter as RevisionDialogFooter } from '@/components/ui/dialog';
@@ -149,6 +151,11 @@ export const PDFTakeoff = ({ projectId, estimateId, onAddCostItems }: PDFTakeoff
   // A new plan uploaded over one that already has measurements: ask if it is a revision
   const [pendingRevision, setPendingRevision] = React.useState<{ pdfFile: any; count: number } | null>(null);
   const [compareOn, setCompareOn] = React.useState(false);
+  const [roomsOpen, setRoomsOpen] = React.useState(false);
+  const hasWallsOnPage = React.useMemo(
+    () => wallsForRooms(state.measurements, state.currentPageIndex, state.pdfFile?.planId).length >= 3,
+    [state.measurements, state.currentPageIndex, state.pdfFile?.planId],
+  );
   const [compareOverlay, setCompareOverlay] = React.useState<RevisionOverlay | null>(null);
   const [compareBusy, setCompareBusy] = React.useState(false);
   const [rotation, setRotation] = useState<0 | 90 | 180 | 270>(0);
@@ -1206,6 +1213,23 @@ export const PDFTakeoff = ({ projectId, estimateId, onAddCostItems }: PDFTakeoff
 
   return (
     <>
+    <RoomsFromWallsDialog
+      open={roomsOpen}
+      onOpenChange={setRoomsOpen}
+      measurements={state.measurements}
+      pageIndex={state.currentPageIndex}
+      planId={state.pdfFile?.planId}
+      unitsPerMetre={state.currentScale?.unitsPerMetre || null}
+      onAdd={rooms => {
+        rooms.forEach(m => dispatch({ type: 'ADD_MEASUREMENT', payload: m }));
+        toast.success(`${rooms.length} room${rooms.length !== 1 ? 's' : ''} added as floor areas`);
+      }}
+      onUpdate={(id, updates) => {
+        dispatch({ type: 'UPDATE_MEASUREMENT', payload: { id, updates } });
+        toast.success('Room area updated');
+      }}
+      onRemove={id => dispatch({ type: 'DELETE_MEASUREMENT', payload: id })}
+    />
     {/* Verify Scale Dialog */}
     <Dialog open={!!verifyMeasurement} onOpenChange={(open) => { if (!open) setVerifyMeasurement(null); }}>
       <DialogContent className="sm:max-w-md">
@@ -1385,6 +1409,11 @@ export const PDFTakeoff = ({ projectId, estimateId, onAddCostItems }: PDFTakeoff
                     <Button variant="outline" size="sm" onClick={handleFitToScreen}>
                       <Maximize2 className="h-4 w-4" />
                     </Button>
+                    {hasWallsOnPage && (
+                      <Button variant="outline" size="sm" onClick={() => setRoomsOpen(true)} title="Find rooms closed by walls and add them as floor areas">
+                        Rooms from walls
+                      </Button>
+                    )}
                     {canCompare && (
                       <Button
                         variant={compareOn ? 'default' : 'outline'}
@@ -1542,6 +1571,9 @@ export const PDFTakeoff = ({ projectId, estimateId, onAddCostItems }: PDFTakeoff
                           <Button variant="ghost" size="sm" onClick={handleZoomIn} className="h-8 text-foreground/80 hover:bg-accent"><ZoomIn className="h-4 w-4" /></Button>
                           <Button variant="ghost" size="sm" onClick={handleRotate} className="h-8 text-foreground/80 hover:bg-accent"><RotateCw className="h-4 w-4" /></Button>
                           <Button variant="ghost" size="sm" onClick={handleFitToScreen} className="h-8 text-foreground/80 hover:bg-accent" title="Fit to screen"><Maximize2 className="h-4 w-4" /></Button>
+                          {hasWallsOnPage && (
+                            <Button variant="ghost" size="sm" onClick={() => setRoomsOpen(true)} className="h-8 text-foreground/80 hover:bg-accent">Rooms from walls</Button>
+                          )}
                         </div>
                         <div className="flex items-center gap-1 border-l border-border pl-2 ml-1">
                           {state.isCalibrated ? (

@@ -124,6 +124,8 @@ export interface Measurement {
   arcControlPoint?: WorldPoint; // control point for arc-wall tool (passes through this point)
   modSubtype?: string;          // subtype for door/window mark-as (e.g. 'Internal', 'Awning')
   doorFlipped?: boolean;        // mirror the door swing symbol (swaps hinge endpoint)
+  roomKey?: string;             // floor area made by 'Rooms from walls': the walls that close it
+  roomPerimeterM?: number;      // its inside perimeter (skirting, cornice)
   timestamp: string;   // ISO 8601 — JSON-safe (Date objects don't survive JSON.parse)
   wallOpenings?: WallOpening[];  // door/window openings for BOM deductions
 
