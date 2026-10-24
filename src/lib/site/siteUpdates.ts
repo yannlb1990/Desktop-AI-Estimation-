@@ -34,6 +34,8 @@ export function planSiteUpdates(items: SiteLinkedItem[], drafts: SiteDraftLine[]
   const plan: SitePlan = { follow: [], offer: [], gone: [] };
   for (const it of items) {
     if (!it.site_key || !visitIds.some(v => it.site_key!.startsWith(`${v}:`))) continue;
+    // AI suggestions are one-off drafts, not part of what the phone keeps in step
+    if (it.site_key.includes(':ai:')) continue;
     const d = byKey.get(it.site_key);
     if (!d) { plan.gone.push({ id: it.id, scope: it.scope_of_work || 'Site line' }); continue; }
     const legacy = it.site_qty === undefined;

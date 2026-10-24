@@ -4,7 +4,8 @@ import { toast } from 'sonner';
 import { getUserStorageKey } from '@/lib/localAuth';
 import { syncProjectToSupabase } from '@/lib/db/projects';
 import { projectVisits, photoUrl } from '@/lib/site/siteStore';
-import { draftLinesFromVisit, siteScopeText, type SiteDraftLine } from '@/lib/site/toEstimate';
+import { draftLinesFromVisit, siteScopeText, siteReviewSummary, aiDraftLines, type SiteDraftLine, type SiteAiSuggestion, type SiteAiCheck } from '@/lib/site/toEstimate';
+import { supabase } from '@/integrations/supabase/client';
 import { planSiteUpdates, type SiteLinkedItem, type SiteChange } from '@/lib/site/siteUpdates';
 import type { SitePhoto, SiteVisit } from '@/lib/site/visit';
 
@@ -39,6 +40,35 @@ export function SiteVisitPanel({ projectId, addedKeys, siteItems, onAdd, onUpdat
   const [picked, setPicked] = useState<Set<string>>(new Set());
   const [qtyOverride, setQtyOverride] = useState<Record<string, string>>({});
   const [bigPhoto, setBigPhoto] = useState<string | null>(null);
+  // AI review per visit, kept on the project so it is not run again on every open
+  type Review = { at: string; suggestions: SiteAiSuggestion[]; checks: SiteAiCheck[] };
+  const readReviews = (): Record<string, Review> => {
+    try { return JSON.parse(localStorage.getItem(getUserStorageKey('local_projects')) || '[]').find((p: any) => p.id === projectId)?.site_ai ?? {}; } catch { return {}; }
+  };
+  const [reviews, setReviews] = useState<Record<string, Review>>(readReviews);
+  const [reviewing, setReviewing] = useState<string | null>(null);
+  const runReview = async (v: SiteVisit) => {
+    setReviewing(v.id);
+    try {
+      const { data, error } = await supabase.functions.invoke('analyse-site', { body: { visitId: v.id, summary: siteReviewSummary(v) } });
+      if (error || !data?.result) {
+        const msg = (data && data.error) || (error && (await (error as any).context?.json?.().then((j: any) => j.error).catch(() => null))) || error?.message || 'The review failed';
+        toast.error(/upgrade/i.test(msg) ? 'AI review is part of the Pro plan' : msg);
+        return;
+      }
+      const review: Review = { at: new Date().toISOString(), suggestions: data.result.suggestions ?? [], checks: data.result.checks ?? [] };
+      const projects = JSON.parse(localStorage.getItem(getUserStorageKey('local_projects')) || '[]');
+      const idx = projects.findIndex((p: any) => p.id === projectId);
+      if (idx !== -1) {
+        projects[idx].site_ai = { ...(projects[idx].site_ai ?? {}), [v.id]: review };
+        localStorage.setItem(getUserStorageKey('local_projects'), JSON.stringify(projects));
+        syncProjectToSupabase(projects[idx]);
+      }
+      setReviews(r => ({ ...r, [v.id]: review }));
+      toast.success(`${review.suggestions.length} suggestion${review.suggestions.length !== 1 ? 's' : ''}, ${review.checks.length} thing${review.checks.length !== 1 ? 's' : ''} to check`);
+    } catch { toast.error('The review failed: try again'); }
+    finally { setReviewing(null); }
+  };
 
   useEffect(() => {
     let alive = true;
@@ -98,7 +128,13 @@ export function SiteVisitPanel({ projectId, addedKeys, siteItems, onAdd, onUpdat
         </div>
       )}
       {drafts.map(({ v, lines }) => {
-        const fresh = lines.filter(l => !addedKeys.has(l.key));
+        const review = reviews[v.id];
+        // a suggestion for something already ticked on site (same room, same work) is dropped
+        const norm = (s: string) => s.toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+        const aiLines = review ? aiDraftLines(v, review.suggestions).filter(a => !lines.some(l => l.roomId === a.roomId && norm(l.scope) === norm(a.scope))) : [];
+        const stale = !!review && v.updatedAt > review.at;
+        const fresh = [...lines, ...aiLines].filter(l => !addedKeys.has(l.key));
+        const freshSite = lines.filter(l => !addedKeys.has(l.key));
         const chosen = fresh.filter(l => picked.has(l.key));
         return (
           <div key={v.id} className="space-y-3">
@@ -107,7 +143,14 @@ export function SiteVisitPanel({ projectId, addedKeys, siteItems, onAdd, onUpdat
                 <span className="font-medium">{v.jobName || 'Site visit'}</span>
                 <span className="ml-2 text-muted-foreground">{new Date(v.updatedAt).toLocaleDateString('en-AU')} · {v.status === 'sent' ? 'sent from site' : 'draft on the phone'}</span>
               </span>
-              <button type="button" className="text-xs text-[#D4A045] hover:underline" onClick={() => copyNotes(v)}>Use notes for the quote's scope</button>
+              <span className="flex flex-wrap items-center gap-3">
+                {(!review || stale) && (
+                  <Button size="sm" variant="outline" disabled={reviewing !== null} onClick={() => runReview(v)}>
+                    {reviewing === v.id ? 'Reading photos and notes (about a minute)...' : review ? 'Review again: the visit changed' : 'Review with AI'}
+                  </Button>
+                )}
+                <button type="button" className="text-xs text-[#D4A045] hover:underline" onClick={() => copyNotes(v)}>Use notes for the quote's scope</button>
+              </span>
             </div>
             {v.notes && <p className="text-muted-foreground whitespace-pre-line">{v.notes}</p>}
 
@@ -150,12 +193,57 @@ export function SiteVisitPanel({ projectId, addedKeys, siteItems, onAdd, onUpdat
               );
             })}
 
+            {review && (aiLines.length > 0 || review.checks.length > 0) && (
+              <div className="rounded-md border border-[#D4A045]/40 bg-[#D4A045]/5 p-3 space-y-2">
+                <div className="flex items-baseline justify-between gap-2">
+                  <span className="font-medium">Suggested by AI from the photos and notes</span>
+                  <span className="text-xs text-muted-foreground">
+                    {new Date(review.at).toLocaleString('en-AU')}{stale ? ' · the visit changed since' : ''} · check before adding
+                  </span>
+                </div>
+                {aiLines.map(l => {
+                  const inEstimate = addedKeys.has(l.key);
+                  return (
+                    <label key={l.key} className={`flex items-start gap-3 ${inEstimate ? 'opacity-60' : 'cursor-pointer'}`}>
+                      <input type="checkbox" className="mt-1" disabled={inEstimate} checked={inEstimate || picked.has(l.key)}
+                        onChange={e => setPicked(st => { const n = new Set(st); e.target.checked ? n.add(l.key) : n.delete(l.key); return n; })} />
+                      <span className="flex-1">
+                        {l.scope} <span className="text-xs text-muted-foreground">({l.trade}, {l.roomName})</span>
+                        <span className="block text-[11px] text-muted-foreground">{l.basis}</span>
+                      </span>
+                      {l.needsQuantity && !inEstimate ? (
+                        <span className="flex items-center gap-1" onClick={e => e.preventDefault()}>
+                          <input inputMode="decimal" placeholder="qty" value={qtyOverride[l.key] ?? ''}
+                            onChange={e => setQtyOverride(m => ({ ...m, [l.key]: e.target.value }))}
+                            className="h-7 w-20 rounded border border-amber-400/60 bg-background px-2 text-right font-mono text-xs" />
+                          <span className="text-xs text-muted-foreground">{l.unit}</span>
+                        </span>
+                      ) : (
+                        <span className="font-mono text-xs">{inEstimate ? 'in estimate' : `${l.quantity} ${l.unit}`}</span>
+                      )}
+                    </label>
+                  );
+                })}
+                {review.checks.length > 0 && (
+                  <div className="border-t border-[#D4A045]/20 pt-2">
+                    <div className="mb-1 text-xs font-medium text-amber-400">Check before quoting</div>
+                    <ul className="space-y-1 text-sm">
+                      {review.checks.map((c, i) => (
+                        <li key={i}>{c.room && c.room !== 'Whole job' ? <span className="text-muted-foreground">{c.room}: </span> : null}{c.text}{c.standard ? <span className="text-xs text-muted-foreground"> ({c.standard})</span> : null}</li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+              </div>
+            )}
+
             <div className="flex flex-wrap items-center gap-2">
               <Button size="sm" disabled={chosen.length === 0} onClick={() => { onAdd(chosen.map(withQty), v); setPicked(new Set()); }}>
                 Add {chosen.length || ''} selected line{chosen.length === 1 ? '' : 's'}
               </Button>
-              <Button size="sm" variant="outline" disabled={fresh.length === 0} onClick={() => setPicked(new Set(fresh.map(l => l.key)))}>
-                Select all {fresh.length}
+              {/* AI suggestions are ticked one by one, never in bulk */}
+              <Button size="sm" variant="outline" disabled={freshSite.length === 0} onClick={() => setPicked(p => new Set([...p, ...freshSite.map(l => l.key)]))}>
+                Select all {freshSite.length} from site
               </Button>
               <span className="text-xs text-muted-foreground">Lines come in without a price: price them in the estimate, or from your library.</span>
             </div>

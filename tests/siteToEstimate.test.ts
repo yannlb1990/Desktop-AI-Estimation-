@@ -1,4 +1,4 @@
-import { draftLinesFromVisit, siteScopeText } from '@/lib/site/toEstimate';
+import { draftLinesFromVisit, siteScopeText, aiDraftLines } from '@/lib/site/toEstimate';
 import { newVisit, newRoom } from '@/lib/site/visit';
 
 let failures = 0;
@@ -27,6 +27,16 @@ const dl = draftLinesFromVisit({ ...v, rooms: [deck] });
 expect('typed area drives decking', dl.find(l => l.scope === 'Decking')!.quantity === 15);
 expect('measurement line', dl.some(l => l.scope === 'Deck subframe' && l.quantity === 5 && l.unit === 'lm' && l.trade === 'Carpenter'));
 expect('empty measurement skipped', dl.length === 2);
+
+// AI suggestions: room names with the type echoed, unknown rooms, repeated wording
+const ai = aiDraftLines(visit, [
+  { room: 'Bathroom (bathroom)', scope: 'Remove old vanity', trade: 'Demolition', unit: 'ea', quantity: 1, reason: 'photo', confidence: 'high' },
+  { room: 'Bathroom', scope: 'Remove old vanity', trade: 'Demolition', unit: 'ea', quantity: 1, reason: 'dup', confidence: 'low' },
+  { room: 'Garage', scope: 'Skip bin', trade: 'General', unit: 'item', quantity: 0, reason: 'strip out', confidence: 'medium' },
+]);
+expect('room matched despite (type)', ai[0].roomId === bath.id);
+expect('repeated wording gets its own key', ai[0].key !== ai[1].key);
+expect('unknown room keeps its name', ai[2].roomName === 'Garage' && ai[2].needsQuantity);
 
 if (failures) { console.log(`${failures} site to estimate failures`); process.exit(1); }
 console.log('all site to estimate tests passed');

@@ -76,3 +76,49 @@ export function siteScopeText(v: SiteVisit): string {
   }
   return parts.join('\n');
 }
+
+/** What the AI reviewer reads: each room with its sizes, ticks (with quantities) and notes. */
+export function siteReviewSummary(v: SiteVisit): string {
+  const lines: string[] = [];
+  lines.push(`Job: ${v.jobName || 'untitled'}${v.address ? `, ${v.address}` : ''}`);
+  if (v.notes.trim()) lines.push(`Whole-job notes: ${v.notes.trim()}`);
+  const drafts = draftLinesFromVisit(v);
+  for (const room of v.rooms) {
+    const q = roomQuantities(room);
+    lines.push('');
+    lines.push(`Room: ${room.name} (${room.type})`);
+    if (room.lengthM && room.widthM) lines.push(`Size: ${room.lengthM} x ${room.widthM} m${room.heightM ? `, ${room.heightM} m high` : ''}`);
+    if (q.floor > 0) lines.push(`Floor ${q.floor} m², walls ${q.walls} m², perimeter ${q.perimeter} m`);
+    const mine = drafts.filter(d => d.roomId === room.id);
+    if (mine.length) lines.push(`Already listed: ${mine.map(d => `${d.scope} ${d.quantity} ${d.unit}`).join('; ')}`);
+    if (room.notes.trim()) lines.push(`Notes: ${room.notes.trim()}`);
+  }
+  return lines.join('\n');
+}
+
+export interface SiteAiSuggestion { room: string; scope: string; trade: string; unit: string; quantity: number; reason: string; confidence: 'high' | 'medium' | 'low' }
+export interface SiteAiCheck { room: string; text: string; standard?: string }
+
+/** AI suggestions as draft lines (keys stay stable for the same room and scope). */
+export function aiDraftLines(v: SiteVisit, suggestions: SiteAiSuggestion[]): SiteDraftLine[] {
+  const slug = (s: string) => s.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 60);
+  // the model may echo "Main bath (bathroom)": compare names without the type in brackets
+  const clean = (s: string) => s.toLowerCase().replace(/\s*\([^)]*\)\s*$/, '').trim();
+  const seen = new Set<string>();
+  return suggestions.map(s => {
+    const room = v.rooms.find(r => clean(r.name) === clean(s.room || ''));
+    const roomId = room?.id ?? 'job';
+    const qty = Number(s.quantity) > 0 ? Math.round(Number(s.quantity) * 100) / 100 : 0;
+    let key = `${v.id}:${roomId}:ai:${slug(s.scope)}`;
+    for (let n = 2; seen.has(key); n++) key = `${v.id}:${roomId}:ai:${slug(s.scope)}-${n}`;
+    seen.add(key);
+    return {
+      key,
+      roomId, roomName: room?.name ?? (s.room && !/whole job/i.test(s.room) ? s.room : 'Whole job'),
+      scope: s.scope, trade: s.trade || 'General', unit: s.unit || 'item',
+      quantity: qty,
+      basis: `suggested (${s.confidence}): ${s.reason}`,
+      needsQuantity: qty <= 0,
+    };
+  });
+}
