@@ -135,6 +135,12 @@ serve(async (req) => {
     // The client sends a readable summary (labels, sizes, quantities); the data above is the source of truth for photos
     const text = `${PROMPT}\n\nSITE VISIT\n${String(summary ?? "").slice(0, 12000)}`;
 
+    // the model service's own short reason, e.g. "credit balance too low" (no secrets in it)
+    const why = (status: number, body: string) => {
+      // customers get a plain message; only the owner sees the service's own reason (billing etc.)
+      if (user.email !== OWNER_EMAIL) return "the AI service is unavailable right now, contact support if it continues";
+      try { return `${status}: ${JSON.parse(body)?.error?.message ?? ''}`.slice(0, 160); } catch { return String(status); }
+    };
     const call = (model: string) => fetch("https://api.anthropic.com/v1/messages", {
       method: "POST",
       signal: AbortSignal.timeout(120_000),
@@ -153,11 +159,12 @@ serve(async (req) => {
       // model name not available on this key: the plan analyser's model works
       const firstErr = await res.text();
       if (/model/i.test(firstErr)) res = await call("claude-sonnet-4-6");
-      else { console.error("[analyse-site] model error", res.status, firstErr); throw new Error("The review could not run: try again"); }
+      else { console.error("[analyse-site] model error", res.status, firstErr); throw new Error(`The review could not run (${why(res.status, firstErr)})`); }
     }
     if (!res.ok) {
-      console.error("[analyse-site] model error", res.status, await res.text());
-      throw new Error(res.status === 429 || res.status === 529 ? "The AI is busy right now: try again in a minute" : "The review could not run: try again");
+      const body = await res.text();
+      console.error("[analyse-site] model error", res.status, body);
+      throw new Error(res.status === 429 || res.status === 529 ? "The AI is busy right now: try again in a minute" : `The review could not run (${why(res.status, body)})`);
     }
     const out = await res.json();
     if (out.stop_reason === "max_tokens") throw new Error("This visit is too large to review in one go: try again, or review fewer rooms");
