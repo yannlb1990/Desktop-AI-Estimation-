@@ -1,4 +1,5 @@
 import { useEffect, useLayoutEffect, useRef, useState, useCallback } from 'react';
+import { drawingCornerAngle, wallCorners, squareness } from '@/lib/takeoff/wallAngles';
 import { toast } from 'sonner';
 import { Canvas as FabricCanvas, FabricImage, Circle, Line, Path, Rect, Polygon, Text, IText, Point as FabricPoint, util as fabricUtil } from 'fabric';
 import * as pdfjsLib from 'pdfjs-dist';
@@ -13,6 +14,9 @@ import { patchPaletteJP2Tiles } from '@/lib/takeoff/jp2Patch';
 
 // PDF.js worker served from /public — no CDN, no Vite ?url magic
 pdfjsLib.GlobalWorkerOptions.workerSrc = '/pdf.worker.min.mjs';
+
+/** A label that is just the shape's area number ("12.40 m²", "830 px²"), not a name. */
+const isAreaText = (t: string) => /^\s*[\d.,]+\s*(m²|m2|px²)\s*$/i.test(t);
 
 // ─── Snap helpers (module-level, no closure risk) ────────────────────────────
 
@@ -386,6 +390,10 @@ export const InteractiveCanvas = ({
   const endpointSnapIndicatorRef = useRef<WorldPoint | null>(null);
   // last drawn outline of each room floor area, to notice a re-shape
   const roomShapeSigRef = useRef<Map<string, string>>(new Map());
+  // corner angle readout while drawing a wall: the angle and where the cursor is
+  const angleHudRef = useRef<{ deg: number; at: WorldPoint } | null>(null);
+  const activeToolRef = useRef(activeTool);
+  activeToolRef.current = activeTool;
   // Arc wall control-point drag state (select mode)
   const arcDragRef = useRef<{ id: string; p1: WorldPoint; p2: WorldPoint; ctrl: WorldPoint } | null>(null);
   // Chain wall drawing: endpoint of last completed wall — auto-starts next wall from here
@@ -2250,6 +2258,45 @@ export const InteractiveCanvas = ({
         ctx.restore();
       }
 
+      // Squareness: corners at rest. Nearly-but-not square corners get their angle (worth a
+      // look); with the wall tool on, true 90 degree corners get a small square mark.
+      {
+        const upmC = unitsPerMetreRef.current;
+        if (upmC && upmC > 0) {
+          const walls = Array.from(measurementMapRef.current.values());
+          const corners = wallCorners(walls, Math.max(0.1 * upmC, 4 / zoom), upmC);
+          const wallTool = activeToolRef.current === 'wall-line';
+          for (const c of corners) {
+            const kind = squareness(c.deg);
+            if (!kind) continue;
+            const base = { x: c.at.x + c.dirA.x * c.halfB + c.dirB.x * c.halfA, y: c.at.y + c.dirA.y * c.halfB + c.dirB.y * c.halfA };
+            if (kind === 'square' && wallTool) {
+              const sz = 6 / zoom;
+              ctx.save();
+              ctx.strokeStyle = '#4ade80';
+              ctx.lineWidth = 1.2 * dpr;
+              ctx.setLineDash([]);
+              ctx.beginPath();
+              ctx.moveTo(tpx(base.x + c.dirA.x * sz), tpy(base.y + c.dirA.y * sz));
+              ctx.lineTo(tpx(base.x + (c.dirA.x + c.dirB.x) * sz), tpy(base.y + (c.dirA.y + c.dirB.y) * sz));
+              ctx.lineTo(tpx(base.x + c.dirB.x * sz), tpy(base.y + c.dirB.y * sz));
+              ctx.stroke();
+              ctx.restore();
+            } else if (kind === 'off') {
+              const off = 16 / zoom;
+              drawLabel(`${(Math.round(c.deg * 10) / 10).toFixed(1)}°`, base.x + (c.dirA.x + c.dirB.x) * off, base.y + (c.dirA.y + c.dirB.y) * off, '#D4A045');
+            }
+          }
+        }
+      }
+
+      // Angle readout next to the cursor while drawing a wall: green when square (within 2°)
+      const hud = angleHudRef.current;
+      if (hud && activeToolRef.current === 'wall-line') {
+        const ok = Math.abs(hud.deg - 90) <= 2;
+        drawLabel(`${(Math.round(hud.deg * 10) / 10).toFixed(1)}°`, hud.at.x + 18 / zoom, hud.at.y - 18 / zoom, ok ? '#4ade80' : '#D4A045');
+      }
+
       // Draw midpoint-snap triangle indicator (yellow triangle = AutoCAD midpoint style)
       const midSnap = midpointSnapRef.current;
       if (midSnap) {
@@ -2517,12 +2564,14 @@ export const InteractiveCanvas = ({
           });
         } else {
           const isRegularLine = !!(obj as any).calcLinePoints && !(obj as any)._isWallPrimary;
+          // areas turn too (handle above the shape; Shift locks to 45°): plans are often a little skew
+          const canTurn = isRegularLine || ((obj.type === 'polygon' || obj.type === 'rect') && !(obj as any)._isWallPrimary);
           obj.set({
             selectable: isSelectMode,
             evented: isSelectMode,
             hasControls: isSelectMode,
             hasBorders: isSelectMode,
-            lockRotation: !isRegularLine,
+            lockRotation: !canTurn,
             cornerColor: '#2563eb',
             cornerStyle: 'circle',
             cornerSize: 10,
@@ -2741,6 +2790,26 @@ export const InteractiveCanvas = ({
           label: '',
         });
 
+      } else if (target.type === 'rect' && (Math.abs(((target.angle ?? 0) % 360 + 360) % 360) > 1e-6 || measurementMapRef.current.get(measurementId)?.type === 'polygon')) {
+        // A turned rectangle can no longer be stored as two corners: keep it as its 4 corners
+        const matrix = target.calcTransformMatrix();
+        const hw = target.width / 2, hh = target.height / 2;
+        const corners: WorldPoint[] = [[-hw, -hh], [hw, -hh], [hw, hh], [-hw, hh]].map(([x, y]) => {
+          const tp = fabricUtil.transformPoint({ x, y }, matrix);
+          return { x: tp.x, y: tp.y };
+        });
+        const result = calculatePolygonAreaWorld(corners, effectiveUnits);
+        const prev = measurementMapRef.current.get(measurementId);
+        const labelText = prev?.label && !isAreaText(prev.label) ? prev.label
+          : isCalibrated ? `${result.realValue.toFixed(2)} m²` : `${result.worldValue.toFixed(0)} px²`;
+        onMeasurementUpdate(measurementId, {
+          type: 'polygon',
+          worldPoints: corners,
+          worldValue: result.worldValue,
+          realValue: isCalibrated ? result.realValue : result.worldValue,
+          label: labelText,
+        } as any);
+
       } else if (target.type === 'rect') {
         // For rectangles, calculate from bounding box after transform
         const left = target.left;
@@ -2807,8 +2876,10 @@ export const InteractiveCanvas = ({
         // actual world positions by applying the transform matrix.
         const matrix = target.calcTransformMatrix();
         const rawPoints: { x: number; y: number }[] = (target as any).points || [];
+        // Fabric keeps polygon points about pathOffset: take it off before the transform
+        const po = (target as any).pathOffset ?? { x: 0, y: 0 };
         const worldPts: WorldPoint[] = rawPoints.map((p: { x: number; y: number }) => {
-          const tp = fabricUtil.transformPoint({ x: p.x, y: p.y }, matrix);
+          const tp = fabricUtil.transformPoint({ x: p.x - po.x, y: p.y - po.y }, matrix);
           return { x: tp.x, y: tp.y };
         });
 
@@ -2818,12 +2889,17 @@ export const InteractiveCanvas = ({
 
         if (worldPts.length >= 3) {
           const result = calculatePolygonAreaWorld(worldPts, effectiveUnits);
-          const labelText = isCalibrated ? `${result.realValue.toFixed(2)} m²` : `${result.worldValue.toFixed(0)} px²`;
+          const prev = measurementMapRef.current.get(measurementId);
+          // a named area (a room) keeps its name; only an area-number label is refreshed
+          const labelText = prev?.label && !isAreaText(prev.label) ? prev.label
+            : isCalibrated ? `${result.realValue.toFixed(2)} m²` : `${result.worldValue.toFixed(0)} px²`;
+          // moving or turning keeps the area: a room's net area (walled boxes taken off) stays
+          const sameShape = prev?.roomKey && Math.abs(result.worldValue - (prev.worldValue || 0)) <= 1e-6 * Math.max(1, result.worldValue);
 
           onMeasurementUpdate(measurementId, {
             worldPoints: worldPts,
             worldValue: result.worldValue,
-            realValue: isCalibrated ? result.realValue : result.worldValue,
+            realValue: sameShape ? prev!.realValue : isCalibrated ? result.realValue : result.worldValue,
             label: labelText,
           });
         }
@@ -2948,11 +3024,20 @@ export const InteractiveCanvas = ({
     canvas.on('object:moving', syncLineMidHandle);
     canvas.on('object:scaling', syncLineMidHandle);
     canvas.on('object:rotating', syncLineMidHandle);
+    // Shift while turning: lock to 45° steps
+    const snapTurn = (opt: any) => {
+      const t = opt?.target;
+      if (!t || !opt?.e?.shiftKey) return;
+      const a = Math.round((t.angle ?? 0) / 45) * 45;
+      if (a !== t.angle) { t.rotate(a); t.setCoords(); }
+    };
+    canvas.on('object:rotating', snapTurn);
 
     return () => {
       canvas.off('object:moving', syncLineMidHandle);
       canvas.off('object:scaling', syncLineMidHandle);
       canvas.off('object:rotating', syncLineMidHandle);
+      canvas.off('object:rotating', snapTurn);
     };
   }, [isCalibrated]);
 
@@ -3023,8 +3108,10 @@ export const InteractiveCanvas = ({
       } else if (target.type === 'polygon') {
         const matrix = target.calcTransformMatrix();
         const rawPoints: { x: number; y: number }[] = (target as any).points || [];
+        // Fabric keeps polygon points about pathOffset: take it off before the transform
+        const po = (target as any).pathOffset ?? { x: 0, y: 0 };
         const worldPts: WorldPoint[] = rawPoints.map((p: { x: number; y: number }) => {
-          const tp = fabricUtil.transformPoint({ x: p.x, y: p.y }, matrix);
+          const tp = fabricUtil.transformPoint({ x: p.x - po.x, y: p.y - po.y }, matrix);
           return { x: tp.x, y: tp.y };
         });
         if (worldPts.length >= 3) {
@@ -4093,6 +4180,10 @@ export const InteractiveCanvas = ({
         }
       }
       const eu = unitsPerMetreRef.current || 1;
+      {
+        const deg = drawingCornerAngle(startPoint, currentWorldPoint, measurementMapRef.current.values(), Math.max(0.1 * eu, 12 / transform.zoom));
+        angleHudRef.current = deg === null ? null : { deg, at: currentWorldPoint };
+      }
       const wdx = currentWorldPoint.x - startPoint.x;
       const wdy = currentWorldPoint.y - startPoint.y;
       const wallLength = Math.sqrt(wdx * wdx + wdy * wdy) || 0.001;
@@ -4283,7 +4374,7 @@ export const InteractiveCanvas = ({
     // Helper: abort drawing cleanly (clears preview label + ghost state)
     const abortDraw = () => {
       previewLabelRef.current = null;
-      perpSnapRef.current = null;
+      perpSnapRef.current = null; angleHudRef.current = null;
       canvas.requestRenderAll();
       setIsDrawing(false);
       setStartPoint(null);
@@ -4584,7 +4675,7 @@ export const InteractiveCanvas = ({
     }
 
     previewLabelRef.current = null;
-    perpSnapRef.current = null;
+    perpSnapRef.current = null; angleHudRef.current = null;
     snappedWallEndRef.current = null;
     midpointSnapRef.current = null;
     setIsDrawing(false);
