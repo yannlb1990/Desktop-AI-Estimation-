@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef, useMemo } from "react";
+import { StickyXScroll } from '@/components/ui/sticky-x-scroll';
 import { ESTIMATE_TEMPLATES, EstimateTemplateData } from "@/data/estimateTemplates";
 import { getUserStorageKey } from "@/lib/localAuth";
 import { syncProjectToSupabase } from "@/lib/db/projects";
@@ -191,28 +192,40 @@ function TradeCombobox({ value, onChange }: { value: string; onChange: (v: strin
 const AU_TRADES = AU_TRADES_BASE;
 
 // Scope of work combobox — shows predefined scopes for the trade + accepts free-text
-function ScopeCombobox({ value, onChange, trade, extra = [], placeholder = 'Select scope', compact = false }: {
+function ScopeCombobox({ value, onChange, trade, extra = [], placeholder = 'Select scope', compact = false, asText = false }: {
   value: string; onChange: (v: string) => void; trade: string;
   /** Suggestions shown first, e.g. from what was measured */
   extra?: string[]; placeholder?: string; compact?: boolean;
+  /** shown as the line's scope text; clicking it opens the editor with that text ready to change */
+  asText?: boolean;
 }) {
   const [open, setOpen] = React.useState(false);
   const [search, setSearch] = React.useState('');
   const presets: string[] = [...new Set([...extra, ...((SCOPE_OF_WORK as Record<string, string[]>)[trade] ?? [])])];
   const filtered = presets.filter(s => s.toLowerCase().includes(search.toLowerCase()));
-  const isNew = search.trim() !== '' && !presets.some(s => s.toLowerCase() === search.trim().toLowerCase());
+  const isNew = search.trim() !== '' && search.trim() !== value && !presets.some(s => s.toLowerCase() === search.trim().toLowerCase());
+  // the current wording is in the box when it opens: change a word instead of retyping it all
+  const editingText = asText || !!value;
+  const shown = editingText && search === value ? presets : filtered;
 
   return (
-    <Popover open={open} onOpenChange={(o) => { setOpen(o); if (!o) setSearch(''); }}>
+    <Popover open={open} onOpenChange={(o) => { setOpen(o); setSearch(o && editingText ? value : ''); }}>
       <PopoverTrigger asChild>
+        {asText ? (
+          <button type="button" title="Click to change the scope of work"
+            className="block w-full min-w-[180px] max-w-[320px] rounded px-1 -mx-1 text-left whitespace-normal leading-snug hover:bg-muted/50 hover:underline decoration-dotted underline-offset-2">
+            {value || <span className="text-muted-foreground">Add scope of work</span>}
+          </button>
+        ) : (
         <button type="button" disabled={!trade && extra.length === 0}
           className={cn('w-full flex items-center justify-between gap-1 rounded-md border bg-background hover:bg-accent transition-colors', compact ? 'h-8 px-2 text-xs border-amber-500/50 text-amber-400' : 'h-10 px-3 text-sm border-input', !trade && extra.length === 0 && 'opacity-50 cursor-not-allowed')}
         >
           <span className={cn('truncate text-left', !value && !compact && 'text-muted-foreground')}>{value || placeholder}</span>
           <ChevronDown className="h-4 w-4 shrink-0 opacity-50" />
         </button>
+        )}
       </PopoverTrigger>
-      <PopoverContent className="w-64 p-0" align="start" side="bottom">
+      <PopoverContent className="w-72 p-0" align="start" side="bottom">
         <div className="p-2 border-b border-border">
           <Input
             className="h-8 text-sm"
@@ -223,25 +236,27 @@ function ScopeCombobox({ value, onChange, trade, extra = [], placeholder = 'Sele
               if (e.key === 'Enter' && search.trim()) { onChange(search.trim()); setSearch(''); setOpen(false); }
               if (e.key === 'Escape') setOpen(false);
             }}
+            onFocus={e => { if (editingText) e.currentTarget.select(); }}
             autoFocus
           />
+          {editingText && <p className="mt-1 px-0.5 text-[10px] text-muted-foreground">Edit the wording and press Enter, or pick below</p>}
         </div>
         <div className="max-h-52 overflow-y-auto py-1">
-          {filtered.map(s => (
-            <button key={s} type="button"
-              className={cn('w-full text-left px-3 py-2 text-sm hover:bg-accent transition-colors', value === s && 'bg-accent font-medium')}
-              onClick={() => { onChange(s); setOpen(false); setSearch(''); }}
-            >{s}</button>
-          ))}
           {isNew && (
             <button type="button"
-              className="w-full text-left px-3 py-2 text-sm text-primary hover:bg-accent border-t border-border flex items-center gap-1.5"
+              className="w-full text-left px-3 py-2 text-sm text-primary hover:bg-accent border-b border-border flex items-center gap-1.5"
               onClick={() => { onChange(search.trim()); setOpen(false); setSearch(''); }}
             >
               <Plus className="h-3.5 w-3.5 shrink-0" />
               Use &ldquo;{search.trim()}&rdquo;
             </button>
           )}
+          {shown.map(s => (
+            <button key={s} type="button"
+              className={cn('w-full text-left px-3 py-2 text-sm hover:bg-accent transition-colors', value === s && 'bg-accent font-medium')}
+              onClick={() => { onChange(s); setOpen(false); setSearch(''); }}
+            >{s}</button>
+          ))}
           {presets.length === 0 && !search && (
             <p className="px-3 py-2 text-xs text-muted-foreground">Type to enter a custom scope</p>
           )}
@@ -273,6 +288,80 @@ const ESTIMATE_AREAS = [
   'Site', 'Structure', 'Envelope', 'Roof', 'Internal', 'Wet Areas',
   'External', 'Finishes', 'Services', 'Fitout', 'Landscaping', 'Other',
 ];
+
+const ROOM_AREAS = [
+  'Kitchen', 'Bathroom', 'Ensuite', 'Laundry', 'WC', 'Living', 'Dining', 'Family', 'Rumpus',
+  'Bedroom 1', 'Bedroom 2', 'Bedroom 3', 'Master bedroom', 'Study', 'Hallway', 'Entry', 'Stairs',
+  'Garage', 'Alfresco', 'Deck', 'Patio', 'Balcony', 'Pool', 'Driveway',
+];
+
+/** Area combobox: rooms, building parts, areas used on this job, or any name typed (kept for next time). */
+function AreaCombobox({ value, onChange, used = [], compact = false }: {
+  value: string; onChange: (v: string) => void; used?: string[]; compact?: boolean;
+}) {
+  const [open, setOpen] = React.useState(false);
+  const [search, setSearch] = React.useState('');
+  const customKey = getUserStorageKey('user_custom_areas');
+  const custom: string[] = React.useMemo(() => {
+    try { return JSON.parse(localStorage.getItem(customKey) || '[]'); } catch { return []; }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open]);
+  const q = search.trim().toLowerCase();
+  const match = (a: string) => !q || a.toLowerCase().includes(q);
+  const project = [...new Set(used.filter(Boolean))];
+  const sections: { title: string; list: string[] }[] = [
+    { title: 'In this project', list: project.filter(match) },
+    { title: 'Your areas', list: custom.filter(a => !project.includes(a)).filter(match) },
+    { title: 'Rooms', list: ROOM_AREAS.filter(a => !project.includes(a) && !custom.includes(a)).filter(match) },
+    { title: 'Building parts', list: ESTIMATE_AREAS.filter(a => !project.includes(a) && !custom.includes(a)).filter(match) },
+  ].filter(x => x.list.length);
+  const all = [...project, ...custom, ...ROOM_AREAS, ...ESTIMATE_AREAS];
+  const isNew = q !== '' && !all.some(a => a.toLowerCase() === q);
+  const pick = (a: string) => { onChange(a); setOpen(false); setSearch(''); };
+  const keep = (a: string) => {
+    try { if (![...ROOM_AREAS, ...ESTIMATE_AREAS, ...custom].includes(a)) localStorage.setItem(customKey, JSON.stringify([...custom, a].slice(-60))); } catch { /* fine */ }
+    pick(a);
+  };
+  return (
+    <Popover open={open} onOpenChange={o => { setOpen(o); if (!o) setSearch(''); }}>
+      <PopoverTrigger asChild>
+        <button type="button"
+          className={cn('flex items-center justify-between gap-1 rounded-md text-left transition-colors',
+            compact ? 'h-8 w-[112px] px-2 text-sm hover:bg-muted/50' : 'h-10 w-full border border-input bg-background px-3 text-sm hover:bg-accent')}>
+          <span className={cn('truncate', !value && 'text-muted-foreground')}>{value || (compact ? 'Area...' : 'Select or type an area')}</span>
+          <ChevronDown className="h-3.5 w-3.5 shrink-0 opacity-50" />
+        </button>
+      </PopoverTrigger>
+      <PopoverContent className="w-60 p-0" align="start" side="bottom">
+        <div className="p-2 border-b border-border">
+          <Input className="h-8 text-sm" placeholder="Search or type, e.g. Bedroom 4" value={search} autoFocus
+            onChange={e => setSearch(e.target.value)}
+            onKeyDown={e => {
+              if (e.key === 'Enter' && search.trim()) keep(search.trim());
+              if (e.key === 'Escape') setOpen(false);
+            }} />
+        </div>
+        <div className="max-h-64 overflow-y-auto py-1">
+          {isNew && (
+            <button type="button" onClick={() => keep(search.trim())}
+              className="w-full text-left px-3 py-2 text-sm text-primary hover:bg-accent border-b border-border flex items-center gap-1.5">
+              <Plus className="h-3.5 w-3.5 shrink-0" />Use &ldquo;{search.trim()}&rdquo;
+            </button>
+          )}
+          {sections.map(sec => (
+            <div key={sec.title}>
+              <p className="px-3 pt-2 pb-1 text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">{sec.title}</p>
+              {sec.list.map(a => (
+                <button key={a} type="button" onClick={() => pick(a)}
+                  className={cn('w-full text-left px-3 py-1.5 text-sm hover:bg-accent transition-colors', value === a && 'bg-accent font-medium')}>{a}</button>
+              ))}
+            </div>
+          ))}
+        </div>
+      </PopoverContent>
+    </Popover>
+  );
+}
 
 const SCOPE_OF_WORK = {
   Carpenter: ["Framing", "Fix out", "Cladding", "Decking", "Stairs"],
@@ -897,6 +986,21 @@ export const EstimateTemplate = ({ projectId, estimateId }: EstimateTemplateProp
     }
   };
 
+  // Markup on every line at once (Estimate Configuration > Apply to all lines)
+  const [confirmMarkupAll, setConfirmMarkupAll] = useState(false);
+  const applyMarkupToAll = (pct: number) => {
+    const updatedItems = items.map(item => ({ ...item, markup_pct: pct }));
+    setItems(updatedItems);
+    const projects = JSON.parse(localStorage.getItem(getUserStorageKey('local_projects')) || '[]');
+    const projectIndex = projects.findIndex((p: any) => p.id === projectId);
+    if (projectIndex !== -1) {
+      projects[projectIndex].estimate_items = mergeWithSaved(projects[projectIndex].estimate_items, updatedItems);
+      localStorage.setItem(getUserStorageKey('local_projects'), JSON.stringify(projects));
+    }
+    setConfirmMarkupAll(false);
+    toast.success(`${pct}% markup on all ${updatedItems.length} lines`);
+  };
+
   const handleRatesChange = (newRates: Record<string, number>) => {
     const changedTrades = Object.keys(newRates).filter(trade => newRates[trade] !== labourRates[trade]);
     if (changedTrades.length > 0) {
@@ -1321,23 +1425,18 @@ export const EstimateTemplate = ({ projectId, estimateId }: EstimateTemplateProp
             {sourceLabel(item)}
           </TableCell>
           <TableCell>
-            <Select
+            <AreaCombobox
+              compact
               value={isEditing ? (editValues.area ?? item.area ?? '') : (item.area ?? '')}
-              onValueChange={(v) => {
+              used={items.map(i => i.area)}
+              onChange={(v) => {
                 if (isEditing) {
                   setEditValues({ ...editValues, area: v });
                 } else {
                   updateItemField(item.id, 'area', v);
                 }
               }}
-            >
-              <SelectTrigger className="h-8 w-[104px] border-0 shadow-none hover:bg-muted/50 focus:ring-0 px-2 text-sm [&>span]:truncate">
-                <SelectValue placeholder="Area..." />
-              </SelectTrigger>
-              <SelectContent>
-                {ESTIMATE_AREAS.map(a => <SelectItem key={a} value={a}>{a}</SelectItem>)}
-              </SelectContent>
-            </Select>
+            />
           </TableCell>
           <TableCell>
             {isEditing ? (
@@ -1374,8 +1473,14 @@ export const EstimateTemplate = ({ projectId, estimateId }: EstimateTemplateProp
                 )}
               </div>
             ) : (
-              // Room to read: scope wraps onto a second line instead of squeezing
-              <span className="block min-w-[180px] max-w-[320px] whitespace-normal leading-snug">{item.scope_of_work}</span>
+              // Room to read: scope wraps onto a second line; click it to change the wording
+              <ScopeCombobox
+                asText
+                value={item.scope_of_work ?? ''}
+                trade={item.trade}
+                extra={scopesForLine(item)}
+                onChange={(v) => { if (v !== item.scope_of_work) updateItemField(item.id, 'scope_of_work', v); }}
+              />
             )}
           </TableCell>
           <TableCell>
@@ -1757,7 +1862,7 @@ export const EstimateTemplate = ({ projectId, estimateId }: EstimateTemplateProp
           <span className="font-semibold text-base">Estimate Configuration</span>
           <div className="flex items-center gap-3">
             {!openSections.config && (
-              <span className="text-sm text-muted-foreground">{config.overheadPct}% overhead · {config.marginPct}% markup · GST {config.gstPct}%</span>
+              <span className="text-sm text-muted-foreground">{config.overheadPct}% overhead · {config.marginPct}% margin · {config.defaultMarkup}% markup on new lines · GST {config.gstPct}%</span>
             )}
             <ChevronDown className={`h-4 w-4 transition-transform duration-200 ${openSections.config ? 'rotate-180' : ''}`} />
           </div>
@@ -1843,15 +1948,29 @@ export const EstimateTemplate = ({ projectId, estimateId }: EstimateTemplateProp
             />
           </div>
           <div>
-            <Label htmlFor="defaultMarkup">Default Markup %</Label>
+            <Label htmlFor="defaultMarkup">Markup on new lines %</Label>
             <Input
               id="defaultMarkup"
               type="number"
               min="0"
               step="0.1"
               value={config.defaultMarkup}
-              onChange={(e) => setConfig({ ...config, defaultMarkup: parseFloat(e.target.value) || 0 })}
+              onChange={(e) => { setConfig({ ...config, defaultMarkup: parseFloat(e.target.value) || 0 }); setConfirmMarkupAll(false); }}
             />
+            <p className="mt-1 text-[11px] text-muted-foreground">Every new line starts with this: from the plan, site visits, services or added here.</p>
+            {items.length > 0 && items.some(i => (i.markup_pct ?? 0) !== config.defaultMarkup) && (
+              confirmMarkupAll ? (
+                <div className="mt-1.5 flex flex-wrap items-center gap-2 text-xs">
+                  <span>Change all {items.length} lines to {config.defaultMarkup}%?</span>
+                  <Button size="sm" className="h-7" onClick={() => applyMarkupToAll(config.defaultMarkup)}>Yes, change all</Button>
+                  <Button size="sm" variant="ghost" className="h-7" onClick={() => setConfirmMarkupAll(false)}>Cancel</Button>
+                </div>
+              ) : (
+                <Button size="sm" variant="outline" className="mt-1.5 h-7 text-xs" onClick={() => setConfirmMarkupAll(true)}>
+                  Apply {config.defaultMarkup}% to all {items.length} lines
+                </Button>
+              )
+            )}
           </div>
           
           {/* Custom Config Items */}
@@ -2200,19 +2319,11 @@ export const EstimateTemplate = ({ projectId, estimateId }: EstimateTemplateProp
           )}
           <div className="col-span-2">
             <Label>Area *</Label>
-            <Select
+            <AreaCombobox
               value={newItem.area}
-              onValueChange={(v) => setNewItem({ ...newItem, area: v })}
-            >
-              <SelectTrigger>
-                <SelectValue placeholder="Select area" />
-              </SelectTrigger>
-              <SelectContent>
-                {ESTIMATE_AREAS.map(a => (
-                  <SelectItem key={a} value={a}>{a}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+              used={items.map(i => i.area)}
+              onChange={(v) => setNewItem({ ...newItem, area: v })}
+            />
           </div>
           <div className="col-span-2">
             <Label>Trade *</Label>
@@ -2360,7 +2471,7 @@ export const EstimateTemplate = ({ projectId, estimateId }: EstimateTemplateProp
       </Card>
 
       {/* 9. Line Items table */}
-      <Card className="overflow-hidden">
+      <Card className="overflow-clip">
         <button
           onClick={() => toggleSection('lineItems')}
           className="w-full flex items-center justify-between px-6 py-4 hover:bg-muted/20 transition-colors text-left"
@@ -2483,7 +2594,7 @@ export const EstimateTemplate = ({ projectId, estimateId }: EstimateTemplateProp
           </div>
         )}
 
-        <div className="overflow-x-auto">
+        <StickyXScroll>
           {/* Tighter cell padding: 15 columns need the room for scope and material text */}
           <Table className="[&_td]:px-2.5 [&_th]:px-2.5">
             <TableHeader>
@@ -2543,7 +2654,7 @@ export const EstimateTemplate = ({ projectId, estimateId }: EstimateTemplateProp
               }
             </TableBody>
           </Table>
-        </div>
+        </StickyXScroll>
         </div>
         )}
       </Card>

@@ -35,7 +35,26 @@ interface QuoteLine {
   included: boolean
   fromEstimate: boolean
   trade?: string
+  /** the estimate line's area (room), for grouping the quote by area */
+  area?: string
   isEditing?: boolean
+}
+
+type QuoteGroupBy = "trade" | "area" | "none"
+const GROUP_KEY = () => getUserStorageKey("quote_group_by")
+/** Lines in groups, in the order they first appear: by trade, by area (room), or one list. */
+function groupQuoteLines<T extends QuoteLine>(lines: T[], by: QuoteGroupBy): { key: string; lines: T[] }[] {
+  if (by === "none") return [{ key: "", lines }]
+  const order: string[] = []
+  const groups: Record<string, T[]> = {}
+  for (const line of lines) {
+    const k = by === "area"
+      ? (line.area?.trim() || (line.fromEstimate ? "General" : "Other"))
+      : (line.trade || (line.fromEstimate ? "General" : "Manual"))
+    if (!groups[k]) { groups[k] = []; order.push(k) }
+    groups[k].push(line)
+  }
+  return order.map(k => ({ key: k, lines: groups[k] }))
 }
 
 const DEFAULT_INCLUSIONS = [
@@ -272,6 +291,7 @@ export const QuoteGenerator = ({ project, estimate, listenForOpen }: QuoteGenera
         included: true,
         fromEstimate: true,
         trade: item.trade || "General",
+        area: item.area || "",
       })
     })
 
@@ -411,6 +431,10 @@ export const QuoteGenerator = ({ project, estimate, listenForOpen }: QuoteGenera
   }
 
   // Totals derived from included lines
+  const [groupBy, setGroupByState] = useState<QuoteGroupBy>(() => {
+    try { const v = localStorage.getItem(GROUP_KEY()); return v === "area" || v === "none" ? v : "trade" } catch { return "trade" }
+  })
+  const setGroupBy = (v: QuoteGroupBy) => { setGroupByState(v); try { localStorage.setItem(GROUP_KEY(), v) } catch { /* fine */ } }
   const includedLines = quoteLines.filter(l => l.included)
   const subtotalNum = shownTotal(includedLines)
   // Same GST % as the Estimate tab (10% unless the estimator changed it)
@@ -947,30 +971,34 @@ ${clone.outerHTML}
                     </p>
                   ) : (
                     <>
-                      <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                      <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
                         <span className="font-medium text-foreground">{includedLines.length}/{quoteLines.length} included</span>
                         <span>·</span>
                         <button className="underline hover:text-foreground" onClick={() => toggleAll(true)}>All on</button>
                         <span>·</span>
                         <button className="underline hover:text-foreground" onClick={() => toggleAll(false)}>All off</button>
+                        <span className="ml-auto flex items-center gap-1">
+                          Group by
+                          <select value={groupBy} onChange={e => setGroupBy(e.target.value as QuoteGroupBy)}
+                            className="h-7 rounded-md border border-input bg-background px-1.5 text-xs text-foreground">
+                            <option value="trade">Trade</option>
+                            <option value="area">Area</option>
+                            <option value="none">No grouping</option>
+                          </select>
+                        </span>
                       </div>
 
                       <div className="space-y-3">
                         {(() => {
-                          const tradeOrder: string[] = []
-                          const tradeGroups: Record<string, QuoteLine[]> = {}
-                          quoteLines.forEach(line => {
-                            const t = line.trade || (line.fromEstimate ? "General" : "Manual")
-                            if (!tradeGroups[t]) { tradeGroups[t] = []; tradeOrder.push(t) }
-                            tradeGroups[t].push(line)
-                          })
-                          return tradeOrder.map(trade => (
-                            <div key={`grp-${trade}`}>
-                              <div className="px-2 py-1 mb-1.5 text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
-                                {trade}
-                              </div>
+                          return groupQuoteLines(quoteLines, groupBy).map(({ key: trade, lines: groupLines }) => (
+                            <div key={`grp-${trade || "all"}`}>
+                              {trade && (
+                                <div className="px-2 py-1 mb-1.5 text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
+                                  {trade}
+                                </div>
+                              )}
                               <div className="space-y-1.5">
-                                {tradeGroups[trade].map(line => (
+                                {groupLines.map(line => (
                           <div key={line.id} className={`rounded-lg border text-xs transition-colors ${line.included ? "bg-background" : "bg-muted/30 opacity-55"}`}>
                             {editingLineId === line.id ? (
                               /* ── EDIT MODE ── */
@@ -1284,23 +1312,17 @@ ${clone.outerHTML}
                         </thead>
                         <tbody>
                           {(() => {
-                            const tradeOrder: string[] = []
-                            const tradeGroups: Record<string, typeof includedLines> = {}
-                            includedLines.forEach(line => {
-                              const t = line.trade || "General"
-                              if (!tradeGroups[t]) { tradeGroups[t] = []; tradeOrder.push(t) }
-                              tradeGroups[t].push(line)
-                            })
-                            return tradeOrder.map((trade, sectionIdx) => {
-                              const sectionLines = tradeGroups[trade]
+                            return groupQuoteLines(includedLines, groupBy).map(({ key: trade, lines: sectionLines }, sectionIdx) => {
                               const sectionSubtotal = shownTotal(sectionLines)
                               return (
                                 <>
+                                  {trade && (
                                   <tr key={`sec-${trade}`}>
                                     <td colSpan={5} className="py-2 px-3 text-xs font-bold uppercase tracking-wide" style={{ background: primaryColor + "18", color: primaryColor }}>
                                       {trade}
                                     </td>
                                   </tr>
+                                  )}
                                   {sectionLines.map((line, lineIdx) => (
                                     <tr key={line.id} className={lineIdx % 2 === 1 ? "bg-gray-50/60" : ""}>
                                       <td className="py-2.5 px-3 text-gray-800 border-b border-gray-100">
@@ -1313,10 +1335,12 @@ ${clone.outerHTML}
                                       <td className="py-2.5 px-3 text-right font-semibold border-b border-gray-100 font-mono text-xs" style={{ color: primaryColor }}>{au$(lineAmount(line))}</td>
                                     </tr>
                                   ))}
+                                  {trade && (
                                   <tr key={`sub-${trade}`}>
                                     <td colSpan={4} className="py-1.5 px-3 text-right text-xs font-medium text-gray-400 italic">{trade} subtotal</td>
                                     <td className="py-1.5 px-3 text-right font-mono text-xs font-semibold" style={{ color: primaryColor + "cc" }}>{au$(sectionSubtotal)}</td>
                                   </tr>
+                                  )}
                                 </>
                               )
                             })

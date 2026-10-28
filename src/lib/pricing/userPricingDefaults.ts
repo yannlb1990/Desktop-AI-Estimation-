@@ -26,6 +26,9 @@ export function readUserPricingDefaults(project?: any): UserPricingDefaults {
       if (!isNaN(labourRate) && labourRate > 0) defaults.config.defaultLabourRate = labourRate;
       if (parseFloat(r.overhead)) defaults.config.overheadPct = parseFloat(r.overhead);
       if (parseFloat(r.margin)) defaults.config.marginPct = parseFloat(r.margin);
+      // Settings > Rates "Material markup" is the markup new lines start with
+      const mk = parseFloat(r.materialMarkup);
+      if (!isNaN(mk) && mk >= 0) defaults.config.defaultMarkup = mk;
     }
     // Settings presets win over everything else (names matched to trades loosely)
     Object.assign(defaults.labourRates, getSettingsPresetRates());

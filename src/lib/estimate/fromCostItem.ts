@@ -26,7 +26,7 @@ export const CATEGORY_TO_TRADE: Record<string, string> = {
 export function costItemToEstimateLine(
   item: CostItem,
   measurements: Measurement[],
-  opts: { itemNumber: number; materialWastePct: number; labourWastePct: number },
+  opts: { itemNumber: number; materialWastePct: number; labourWastePct: number; markupPct?: number },
 ): any {
   const linkedIds = item.linkedMeasurements ?? [];
   const link = linkedIds.length ? createPlanLink(linkedIds, item.quantity, measurements, item.unit, !!item.followsDrawnQuantity) : null;
@@ -64,7 +64,8 @@ export function costItemToEstimateLine(
     labour_rate_override: !!item.hourlyRateOverride,
     material_wastage_pct: item.materialWastePercent ?? opts.materialWastePct,
     labour_wastage_pct: item.labourWastePercent ?? opts.labourWastePct,
-    markup_pct: item.markupPercent ?? 0,
+    // the project's markup on new lines (Estimate Configuration), unless the item set its own
+    markup_pct: item.markupPercent ?? opts.markupPct ?? 0,
     notes: item.description || item.notes || (namedAfterMeasurement && source?.label ? source.label : ''),
     expanded: false,
     item_number: `${opts.itemNumber}`,
@@ -94,6 +95,7 @@ export function addCostItemsToEstimate(projectId: string, items: CostItem[], mea
   const have = new Set(existing.map(e => e._costItemId).filter(Boolean));
   const materialWastePct = project.estimate_config?.materialWastage ?? 10;
   const labourWastePct = project.estimate_config?.labourWastage ?? 5;
+  const markupPct = resolveProjectPricing(project, readUserPricingDefaults(project)).config.defaultMarkup;
 
   const added: any[] = [];
   for (const item of items) {
@@ -103,6 +105,7 @@ export function addCostItemsToEstimate(projectId: string, items: CostItem[], mea
       itemNumber: existing.length + added.length + 1,
       materialWastePct,
       labourWastePct,
+      markupPct,
     }));
   }
   if (added.length === 0) return [];
