@@ -591,6 +591,8 @@ export const EstimateTemplate = ({ projectId, estimateId }: EstimateTemplateProp
     labour_rate: "",
   });
   const qtyInputRef = useRef<HTMLInputElement>(null);
+  // Waste % for the line being added only ('' = the project's default); markup is the project's markup on new lines
+  const [newLineWaste, setNewLineWaste] = useState<{ mat: string; lab: string }>({ mat: '', lab: '' });
   /** Measurement the new line takes its quantity from (kept linked), or '' for a typed quantity */
   const [newItemMeasurement, setNewItemMeasurement] = useState('');
 
@@ -709,8 +711,8 @@ export const EstimateTemplate = ({ projectId, estimateId }: EstimateTemplateProp
       labour_rate: parseFloat(newItem.labour_rate) || labourRates[newItem.trade] || config.defaultLabourRate,
       labour_rate_override: parseFloat(newItem.labour_rate) > 0
         && parseFloat(newItem.labour_rate) !== (labourRates[newItem.trade] || config.defaultLabourRate),
-      material_wastage_pct: config.materialWastage,
-      labour_wastage_pct: config.labourWastage,
+      material_wastage_pct: newLineMatWaste,
+      labour_wastage_pct: newLineLabWaste,
       markup_pct: config.defaultMarkup,
       notes: "",
       expanded: false,
@@ -1220,28 +1222,23 @@ export const EstimateTemplate = ({ projectId, estimateId }: EstimateTemplateProp
     });
   };
 
+  const newLineMatWaste = newLineWaste.mat === '' ? config.materialWastage : (parseFloat(newLineWaste.mat) || 0);
+  const newLineLabWaste = newLineWaste.lab === '' ? config.labourWastage : (parseFloat(newLineWaste.lab) || 0);
+  // The new line priced exactly as it will be once added (same pricing function as the table)
   const calculateLineTotal = () => {
-    const qty = parseFloat(newItem.quantity) || 0;
-    const unitPrice = parseFloat(newItem.unit_price) || 0;
-    const labourHrs = parseFloat(newItem.labour_hours) || 0;
-
-    // Material with wastage
-    const matBase = qty * unitPrice;
-    const matWithWaste = matBase * (1 + config.materialWastage / 100);
-
-    // Labour with wastage — use custom rate if set, otherwise trade preset, then global default
-    const tradeRate = parseFloat(newItem.labour_rate) || labourRates[newItem.trade] || config.defaultLabourRate;
-    const labBase = labourHrs * tradeRate;
-    const labWithWaste = labBase * (1 + config.labourWastage / 100);
-
-    const subtotal = matWithWaste + labWithWaste;
-    const markupAmt = subtotal * (config.defaultMarkup / 100);
-    return {
-      materials: matWithWaste,
-      labour: labWithWaste,
-      markup: markupAmt,
-      total: subtotal + markupAmt
-    };
+    const typedRate = parseFloat(newItem.labour_rate);
+    const p = priceLine({
+      trade: newItem.trade,
+      quantity: parseFloat(newItem.quantity) || 0,
+      unit_price: parseFloat(newItem.unit_price) || 0,
+      labour_hours: parseFloat(newItem.labour_hours) || 0,
+      labour_rate: typedRate > 0 ? typedRate : (labourRates[newItem.trade] || config.defaultLabourRate),
+      labour_rate_override: typedRate > 0 && typedRate !== (labourRates[newItem.trade] || config.defaultLabourRate),
+      material_wastage_pct: newLineMatWaste,
+      labour_wastage_pct: newLineLabWaste,
+      markup_pct: config.defaultMarkup,
+    }, config, labourRates);
+    return { materials: p.materials, labour: p.labour, markup: p.markup, total: p.total };
   };
 
   const getGroups = (mode: 'trade' | 'room'): { order: string[]; groups: Record<string, EstimateItem[]> } => {
@@ -2423,41 +2420,57 @@ export const EstimateTemplate = ({ projectId, estimateId }: EstimateTemplateProp
           </div>
         </div>
 
-        <div className="col-span-full mt-6 p-4 bg-accent/10 rounded-lg flex items-center justify-between">
-          <div className="space-y-1.5">
-            <div className="flex items-center gap-1.5 text-sm">
-              <span className="text-muted-foreground">Materials:</span>
-              <span>${calculateLineTotal().materials.toFixed(2)}</span>
-              <span className="text-xs text-muted-foreground">(incl.</span>
-              <input
-                type="number" min="0" max="100" step="0.1"
-                value={config.materialWastage}
-                onChange={(e) => setConfig({ ...config, materialWastage: parseFloat(e.target.value) || 0 })}
-                className="w-12 h-5 text-right text-xs border border-input rounded px-1 bg-background font-mono focus:outline-none focus:ring-1 focus:ring-primary"
-              />
-              <span className="text-xs text-muted-foreground">% waste)</span>
-            </div>
-            <div className="flex items-center gap-1.5 text-sm">
-              <span className="text-muted-foreground">Labour:</span>
-              <span>${calculateLineTotal().labour.toFixed(2)}</span>
-              <span className="text-xs text-muted-foreground">(incl.</span>
-              <input
-                type="number" min="0" max="100" step="0.1"
-                value={config.labourWastage}
-                onChange={(e) => setConfig({ ...config, labourWastage: parseFloat(e.target.value) || 0 })}
-                className="w-12 h-5 text-right text-xs border border-input rounded px-1 bg-background font-mono focus:outline-none focus:ring-1 focus:ring-primary"
-              />
-              <span className="text-xs text-muted-foreground">% waste)</span>
-            </div>
-            <div className="flex items-center gap-1.5 text-sm">
-              <span className="text-muted-foreground">Markup:</span>
-              <span>${calculateLineTotal().markup.toFixed(2)}</span>
-              <span className="text-xs text-muted-foreground">({config.defaultMarkup}%)</span>
-            </div>
-            <div className="text-lg font-bold">
-              Line Total: <span className="text-accent">${calculateLineTotal().total.toFixed(2)}</span>
-            </div>
+        <div className="col-span-full mt-6 rounded-lg border border-border bg-accent/10 p-4">
+          <div className="flex flex-wrap items-end gap-4 text-sm">
+            <label className="space-y-1">
+              <span className="block text-xs text-muted-foreground">Material waste %</span>
+              <input type="number" min="0" max="100" step="0.1" inputMode="decimal"
+                value={newLineWaste.mat} placeholder={String(config.materialWastage)}
+                onChange={(e) => setNewLineWaste(w => ({ ...w, mat: e.target.value }))}
+                className="h-8 w-20 rounded-md border border-input bg-background px-2 text-right font-mono text-sm focus:outline-none focus:ring-1 focus:ring-primary" />
+            </label>
+            <label className="space-y-1">
+              <span className="block text-xs text-muted-foreground">Labour waste %</span>
+              <input type="number" min="0" max="100" step="0.1" inputMode="decimal"
+                value={newLineWaste.lab} placeholder={String(config.labourWastage)}
+                onChange={(e) => setNewLineWaste(w => ({ ...w, lab: e.target.value }))}
+                className="h-8 w-20 rounded-md border border-input bg-background px-2 text-right font-mono text-sm focus:outline-none focus:ring-1 focus:ring-primary" />
+            </label>
+            <label className="space-y-1">
+              <span className="block text-xs text-muted-foreground">Markup %</span>
+              <input type="number" min="0" step="0.1" inputMode="decimal"
+                value={config.defaultMarkup}
+                onChange={(e) => setConfig({ ...config, defaultMarkup: parseFloat(e.target.value) || 0 })}
+                className="h-8 w-20 rounded-md border border-input bg-background px-2 text-right font-mono text-sm focus:outline-none focus:ring-1 focus:ring-primary" />
+            </label>
+            <p className="pb-1.5 text-[11px] leading-snug text-muted-foreground max-w-[240px]">
+              Waste is for this line. New lines will use {config.defaultMarkup}% markup.
+            </p>
           </div>
+
+          <div className="mt-3 flex flex-wrap items-center justify-between gap-3 border-t border-border/60 pt-3">
+            {(() => {
+              const t = calculateLineTotal();
+              const qty = parseFloat(newItem.quantity) || 0;
+              if (!(t.total > 0)) {
+                return <p className="text-sm text-muted-foreground">Enter quantity and price, or hours, to see the price of this line.</p>;
+              }
+              const money = (n: number) => n.toLocaleString('en-AU', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+              return (
+                <div className="text-sm">
+                  <p className="text-muted-foreground">
+                    {t.materials > 0 && <>Materials ${money(t.materials)}</>}
+                    {t.materials > 0 && t.labour > 0 && ' + '}
+                    {t.labour > 0 && <>Labour ${money(t.labour)}</>}
+                    {t.markup > 0 && <> + Markup ${money(t.markup)}</>}
+                  </p>
+                  <p className="mt-0.5">
+                    <span className="text-lg font-bold text-[#D4A045]">${money(t.total)}</span>
+                    <span className="ml-1.5 text-xs text-muted-foreground">ex GST{qty > 0 && qty !== 1 ? `, $${money(t.total / qty)} per ${newItem.unit}` : ''}</span>
+                  </p>
+                </div>
+              );
+            })()}
           <Button
             onClick={addItem}
             disabled={!newItem.area || !newItem.trade || !newItem.material_type}
@@ -2465,6 +2478,7 @@ export const EstimateTemplate = ({ projectId, estimateId }: EstimateTemplateProp
           >
             Add to estimate
           </Button>
+          </div>
         </div>
         </div>
         )}
