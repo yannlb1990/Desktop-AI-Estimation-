@@ -474,7 +474,7 @@ const Auth = () => {
                     id="email"
                     type="email"
                     value={email}
-                    onChange={(e) => { setEmail(e.target.value); setSignInErrors(p => ({ ...p, email: undefined })); }}
+                    onChange={(e) => { setEmail(e.target.value); setSignInErrors(p => (p.email ? { ...p, email: undefined } : p)); }}
                     placeholder="builder@example.com.au"
                     error={!!signInErrors.email}
                     maxLength={255}
@@ -487,7 +487,7 @@ const Auth = () => {
                     id="password"
                     type="password"
                     value={password}
-                    onChange={(e) => { setPassword(e.target.value); setSignInErrors(p => ({ ...p, password: undefined })); }}
+                    onChange={(e) => { setPassword(e.target.value); setSignInErrors(p => (p.password ? { ...p, password: undefined } : p)); }}
                     placeholder="••••••••"
                     error={!!signInErrors.password}
                     maxLength={100}
@@ -525,7 +525,7 @@ const Auth = () => {
                     id="name"
                     type="text"
                     value={name}
-                    onChange={(e) => { setName(e.target.value); setSignUpErrors(p => ({ ...p, name: undefined })); }}
+                    onChange={(e) => { setName(e.target.value); setSignUpErrors(p => (p.name ? { ...p, name: undefined } : p)); }}
                     placeholder="John Smith"
                     error={!!signUpErrors.name}
                     maxLength={100}
@@ -538,7 +538,7 @@ const Auth = () => {
                     id="email-signup"
                     type="email"
                     value={email}
-                    onChange={(e) => { setEmail(e.target.value); setSignUpErrors(p => ({ ...p, email: undefined })); }}
+                    onChange={(e) => { setEmail(e.target.value); setSignUpErrors(p => (p.email ? { ...p, email: undefined } : p)); }}
                     placeholder="john@company.com.au"
                     error={!!signUpErrors.email}
                     maxLength={255}
@@ -553,7 +553,7 @@ const Auth = () => {
                       id="phone"
                       type="tel"
                       value={phone}
-                      onChange={(e) => { setPhone(e.target.value); setSignUpErrors(p => ({ ...p, phone: undefined })); }}
+                      onChange={(e) => { setPhone(e.target.value); setSignUpErrors(p => (p.phone ? { ...p, phone: undefined } : p)); }}
                       placeholder="04XX XXX XXX"
                       error={!!signUpErrors.phone}
                       maxLength={30}
@@ -569,7 +569,7 @@ const Auth = () => {
                       id="signup-password"
                       type={showSignupPassword ? "text" : "password"}
                       value={signupPassword}
-                      onChange={(e) => { setSignupPassword(e.target.value); setSignUpErrors(p => ({ ...p, password: undefined })); }}
+                      onChange={(e) => { setSignupPassword(e.target.value); setSignUpErrors(p => (p.password ? { ...p, password: undefined } : p)); }}
                       placeholder="At least 8 characters"
                       error={!!signUpErrors.password}
                       maxLength={100}
@@ -592,7 +592,7 @@ const Auth = () => {
                     id="signup-confirm-password"
                     type={showSignupPassword ? "text" : "password"}
                     value={signupConfirmPassword}
-                    onChange={(e) => { setSignupConfirmPassword(e.target.value); setSignUpErrors(p => ({ ...p, confirmPassword: undefined })); }}
+                    onChange={(e) => { setSignupConfirmPassword(e.target.value); setSignUpErrors(p => (p.confirmPassword ? { ...p, confirmPassword: undefined } : p)); }}
                     placeholder="Repeat your password"
                     error={!!signUpErrors.confirmPassword}
                     maxLength={100}
@@ -606,7 +606,7 @@ const Auth = () => {
                       <button
                         key={type}
                         type="button"
-                        onClick={() => { setProjectType(type); setSignUpErrors(p => ({ ...p, projectType: undefined })); }}
+                        onClick={() => { setProjectType(type); setSignUpErrors(p => (p.projectType ? { ...p, projectType: undefined } : p)); }}
                         className={`flex items-center gap-2 px-4 py-3 rounded-lg border text-sm font-medium transition-all ${
                           projectType === type
                             ? "border-primary bg-primary/5 text-foreground"
