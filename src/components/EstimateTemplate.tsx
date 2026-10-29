@@ -266,6 +266,33 @@ function ScopeCombobox({ value, onChange, trade, extra = [], placeholder = 'Sele
   );
 }
 
+/** A line's markup %: shown as text, click to type a new one (Enter or click away saves, Esc cancels). */
+function InlineMarkup({ value, onSave }: { value: number; onSave: (v: number) => void }) {
+  const [editing, setEditing] = React.useState(false);
+  const [text, setText] = React.useState('');
+  if (!editing) {
+    return (
+      <button type="button" title="Click to change this line's markup"
+        onClick={() => { setText(String(value)); setEditing(true); }}
+        className="rounded px-1 font-mono text-xs hover:bg-muted/60 hover:underline decoration-dotted underline-offset-2">
+        {value}
+      </button>
+    );
+  }
+  const commit = () => {
+    const v = parseFloat(text);
+    setEditing(false);
+    if (Number.isFinite(v) && v >= 0 && v !== value) onSave(Math.round(v * 100) / 100);
+  };
+  return (
+    <input autoFocus type="number" min="0" step="0.1" inputMode="decimal" aria-label="Markup %"
+      value={text} onChange={(e) => setText(e.target.value)} onFocus={(e) => e.currentTarget.select()}
+      onBlur={commit}
+      onKeyDown={(e) => { if (e.key === 'Enter') commit(); if (e.key === 'Escape') setEditing(false); }}
+      className="h-6 w-14 rounded border border-input bg-background px-1 text-right font-mono text-xs focus:outline-none focus:ring-1 focus:ring-primary" />
+  );
+}
+
 /** Scopes that fit what was measured, offered first on lines that come from the plan */
 const SCOPES_BY_MEASUREMENT: Record<string, string[]> = {
   Wall: ['Wall framing', 'Plasterboard lining', 'Wall insulation', 'Painting walls', 'Wall tiling', 'External cladding', 'Skirting'],
@@ -908,6 +935,16 @@ export const EstimateTemplate = ({ projectId, estimateId }: EstimateTemplateProp
 
   const startEditing = (item: EstimateItem) => {
     setEditingId(item.id);
+    // bring the Cost column (with markup) into view, clear of the pinned Total and buttons
+    requestAnimationFrame(() => requestAnimationFrame(() => {
+      const row = document.getElementById(`est-row-${item.id}`);
+      const cell = row?.querySelector<HTMLElement>('td[data-col="cost"]');
+      const scroller = cell?.closest('table')?.parentElement;
+      if (!row || !cell || !scroller) return;
+      const pinned = [...row.querySelectorAll<HTMLElement>('td.sticky')].reduce((w, td) => w + td.offsetWidth, 0);
+      const over = cell.getBoundingClientRect().right - (scroller.getBoundingClientRect().right - pinned) + 12;
+      if (over > 0) scroller.scrollBy({ left: over, behavior: 'smooth' });
+    }));
     setEditValues({
       quantity: item.quantity,
       unit_price: item.unit_price,
@@ -1582,7 +1619,7 @@ export const EstimateTemplate = ({ projectId, estimateId }: EstimateTemplateProp
               </div>
             )}
           </TableCell>
-          <TableCell className="text-right">
+          <TableCell className="text-right" data-col="cost">
             <div className="whitespace-nowrap leading-tight" title="Materials (incl. waste), labour and markup for this line">
               <div><span className="mr-1 text-[10px] text-muted-foreground">Mat</span><span className="font-mono text-sm">${matTotalWithRelated.toFixed(2)}</span></div>
               {relatedMatsTotal > 0 && (
@@ -1592,30 +1629,24 @@ export const EstimateTemplate = ({ projectId, estimateId }: EstimateTemplateProp
               {/* Markup lives here, not in its own column: the column next to the pinned Total gets hidden when the table scrolls */}
               <div className="mt-0.5 flex items-center justify-end gap-1">
                 <span className="text-[10px] text-muted-foreground">Markup</span>
-                <span className="font-mono text-xs">{(isEditing && editValues.markup_pct !== undefined ? editValues.markup_pct : item.markup_pct) || 0}%</span>
+                {isEditing ? (
+                  <Input
+                    type="number" step="0.1" min="0" aria-label="Markup %"
+                    value={editValues.markup_pct !== undefined ? editValues.markup_pct : item.markup_pct}
+                    onChange={(e) => setEditValues({ ...editValues, markup_pct: e.target.value === '' ? undefined : parseFloat(e.target.value) })}
+                    onBlur={(e) => { if (e.target.value === '') setEditValues({ ...editValues, markup_pct: 0 }); }}
+                    onKeyDown={(e) => { if (e.key === 'Enter') saveEdit(item.id); }}
+                    className="h-7 w-16 px-1.5 text-right text-xs"
+                  />
+                ) : (
+                  <InlineMarkup value={item.markup_pct || 0} onSave={(v) => updateItemField(item.id, 'markup_pct', v)} />
+                )}
+                <span className="text-[10px] text-muted-foreground">%</span>
               </div>
             </div>
           </TableCell>
           <TableCell className="text-right font-mono font-bold sticky right-[140px] z-10 bg-card shadow-[-6px_0_8px_-6px_rgba(0,0,0,0.6)]">${lineTotal.toFixed(2)}</TableCell>
           <TableCell className="sticky right-0 z-10 bg-card w-[140px] min-w-[140px]">
-            {isEditing && (
-              // pinned on the right, so markup can always be reached while editing, whatever the screen width
-              <label className="mb-1 flex items-center gap-1 text-[10px] text-muted-foreground">
-                Markup
-                <Input
-                  type="number"
-                  step="0.1"
-                  min="0"
-                  aria-label="Markup %"
-                  value={editValues.markup_pct !== undefined ? editValues.markup_pct : item.markup_pct}
-                  onChange={(e) => setEditValues({ ...editValues, markup_pct: e.target.value === '' ? undefined : parseFloat(e.target.value) })}
-                  onBlur={(e) => { if (e.target.value === '') setEditValues({ ...editValues, markup_pct: 0 }); }}
-                  onKeyDown={(e) => { if (e.key === 'Enter') saveEdit(item.id); }}
-                  className="h-7 w-16 px-1.5 text-right text-xs"
-                />
-                %
-              </label>
-            )}
             <div className="flex gap-0.5">
               {isEditing ? (
                 <>
