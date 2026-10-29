@@ -1485,7 +1485,7 @@ export const EstimateTemplate = ({ projectId, estimateId }: EstimateTemplateProp
               <Input
                 value={editValues.material_type}
                 onChange={(e) => setEditValues({ ...editValues, material_type: e.target.value })}
-                className="h-8 min-w-[220px]"
+                className="h-8 min-w-[160px]"
               />
             ) : (
               <span className="block min-w-[200px] max-w-[360px] whitespace-normal leading-snug text-foreground/90" title={item.material_type}>
@@ -1500,7 +1500,7 @@ export const EstimateTemplate = ({ projectId, estimateId }: EstimateTemplateProp
                 step="0.01"
                 value={editValues.quantity}
                 onChange={(e) => setEditValues({ ...editValues, quantity: parseFloat(e.target.value) })}
-                className="h-8 w-24 text-right"
+                className="h-8 w-20 px-2 text-right"
               />
             ) : (
               <span className="whitespace-nowrap">
@@ -1544,7 +1544,7 @@ export const EstimateTemplate = ({ projectId, estimateId }: EstimateTemplateProp
                 step="0.01"
                 value={editValues.unit_price}
                 onChange={(e) => setEditValues({ ...editValues, unit_price: parseFloat(e.target.value) })}
-                className="h-8 w-24 text-right"
+                className="h-8 w-20 px-2 text-right"
               />
             ) : <span className="font-mono">${item.unit_price.toFixed(2)}</span>}
           </TableCell>
@@ -1556,7 +1556,7 @@ export const EstimateTemplate = ({ projectId, estimateId }: EstimateTemplateProp
                   step="0.5"
                   value={editValues.labour_hours}
                   onChange={(e) => setEditValues({ ...editValues, labour_hours: parseFloat(e.target.value) })}
-                  className="h-8 w-24 text-right"
+                  className="h-8 w-[72px] px-2 text-right"
                   placeholder="hrs"
                 />
                 <Input
@@ -1592,27 +1592,30 @@ export const EstimateTemplate = ({ projectId, estimateId }: EstimateTemplateProp
               {/* Markup lives here, not in its own column: the column next to the pinned Total gets hidden when the table scrolls */}
               <div className="mt-0.5 flex items-center justify-end gap-1">
                 <span className="text-[10px] text-muted-foreground">Markup</span>
-                {isEditing ? (
-                  <Input
-                    type="number"
-                    step="0.1"
-                    min="0"
-                    aria-label="Markup %"
-                    value={editValues.markup_pct !== undefined ? editValues.markup_pct : item.markup_pct}
-                    onChange={(e) => {
-                      setEditValues({ ...editValues, markup_pct: e.target.value === '' ? undefined : parseFloat(e.target.value) });
-                    }}
-                    onBlur={(e) => {
-                      if (e.target.value === '') setEditValues({ ...editValues, markup_pct: 0 });
-                    }}
-                    className="h-6 w-16 text-right text-xs"
-                  />
-                ) : <span className="font-mono text-xs">{item.markup_pct || 0}%</span>}
+                <span className="font-mono text-xs">{(isEditing && editValues.markup_pct !== undefined ? editValues.markup_pct : item.markup_pct) || 0}%</span>
               </div>
             </div>
           </TableCell>
           <TableCell className="text-right font-mono font-bold sticky right-[140px] z-10 bg-card shadow-[-6px_0_8px_-6px_rgba(0,0,0,0.6)]">${lineTotal.toFixed(2)}</TableCell>
           <TableCell className="sticky right-0 z-10 bg-card w-[140px] min-w-[140px]">
+            {isEditing && (
+              // pinned on the right, so markup can always be reached while editing, whatever the screen width
+              <label className="mb-1 flex items-center gap-1 text-[10px] text-muted-foreground">
+                Markup
+                <Input
+                  type="number"
+                  step="0.1"
+                  min="0"
+                  aria-label="Markup %"
+                  value={editValues.markup_pct !== undefined ? editValues.markup_pct : item.markup_pct}
+                  onChange={(e) => setEditValues({ ...editValues, markup_pct: e.target.value === '' ? undefined : parseFloat(e.target.value) })}
+                  onBlur={(e) => { if (e.target.value === '') setEditValues({ ...editValues, markup_pct: 0 }); }}
+                  onKeyDown={(e) => { if (e.key === 'Enter') saveEdit(item.id); }}
+                  className="h-7 w-16 px-1.5 text-right text-xs"
+                />
+                %
+              </label>
+            )}
             <div className="flex gap-0.5">
               {isEditing ? (
                 <>
