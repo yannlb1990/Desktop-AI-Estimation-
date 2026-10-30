@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.76.1";
+import { claudeKeyFor, claudeRefusal } from "../_shared/aiKey.ts";
 
 const ALLOWED_ORIGINS = [
   "https://www.metricore.com.au",
@@ -875,8 +876,8 @@ serve(async (req) => {
       }
     }
 
-    const anthropicKey = Deno.env.get("ANTHROPIC_API_KEY");
-    if (!anthropicKey) throw new Error("ANTHROPIC_API_KEY is not configured");
+    // the customer's own Claude key when they saved one (billed to them), else Metricore's
+    const { key: anthropicKey, own: ownKey } = await claudeKeyFor(supabase, user.id);
 
     const body = await req.json();
     const { pages, imageBase64, projectContext, focusCategory, isScanned } = body as {
@@ -1011,7 +1012,13 @@ serve(async (req) => {
 
     if (!anthropicResponse.ok) {
       const errText = await anthropicResponse.text();
-      throw new Error(`Anthropic API error: ${anthropicResponse.status} ${errText}`);
+      const plain = claudeRefusal(anthropicResponse.status, errText, ownKey);
+      if (plain) throw new Error(plain);
+      console.error("[analyse-plan] Anthropic", anthropicResponse.status, errText.slice(0, 300));
+      // the owner sees the service's reason; customers a plain message (no billing details)
+      throw new Error(user.email === OWNER_EMAIL
+        ? `Anthropic API error: ${anthropicResponse.status} ${errText.slice(0, 200)}`
+        : "The AI analyser is unavailable right now. Try again shortly, or contact support if it continues.");
     }
 
     const anthropicData = await anthropicResponse.json();

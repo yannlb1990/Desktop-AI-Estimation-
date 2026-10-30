@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.76.1";
+import { claudeKeyFor, claudeRefusal } from "../_shared/aiKey.ts";
 
 /**
  * Site visit review: reads a builder's site visit (rooms, sizes, ticks, notes, measurements
@@ -98,8 +99,8 @@ serve(async (req) => {
       }
     }
 
-    const anthropicKey = Deno.env.get("ANTHROPIC_API_KEY");
-    if (!anthropicKey) throw new Error("ANTHROPIC_API_KEY is not configured");
+    // the customer's own Claude key when they saved one (billed to them), else Metricore's
+    const { key: anthropicKey, own: ownKey } = await claudeKeyFor(supabase, user.id);
 
     const { visitId, summary } = await req.json() as { visitId?: string; summary?: string };
     if (!visitId) throw new Error("visitId is required");
@@ -137,6 +138,8 @@ serve(async (req) => {
 
     // the model service's own short reason, e.g. "credit balance too low" (no secrets in it)
     const why = (status: number, body: string) => {
+      const plain = claudeRefusal(status, body, ownKey);
+      if (plain) return plain;
       // customers get a plain message; only the owner sees the service's own reason (billing etc.)
       if (user.email !== OWNER_EMAIL) return "the AI service is unavailable right now, contact support if it continues";
       try { return `${status}: ${JSON.parse(body)?.error?.message ?? ''}`.slice(0, 160); } catch { return String(status); }

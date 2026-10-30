@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { XeroSettings } from '@/components/settings/XeroSettings';
+import { AiKeySettings } from '@/components/settings/AiKeySettings';
 import { useNavigate } from "react-router-dom";
 import { getLocalUser, isSignedIn, getUserStorageKey } from "@/lib/localAuth";
 import { getSubscriptionStatus, PLAN_NAMES, PLAN_PRICES, loadSubscription } from "@/lib/subscription";
@@ -521,7 +522,7 @@ const Settings = () => {
     return <div className="flex min-h-screen items-center justify-center"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>;
   }
 
-  const tabCount = isBusinessPlan ? 10 : 9;
+  const tabCount = isBusinessPlan ? 11 : 10;
 
   return (
     <div className="min-h-screen bg-muted/30">
@@ -551,6 +552,7 @@ const Settings = () => {
               <TabsTrigger value="notifications"><Bell className="h-4 w-4 mr-1.5 hidden sm:inline" />Alerts</TabsTrigger>
               <TabsTrigger value="billing"><CreditCard className="h-4 w-4 mr-1.5 hidden sm:inline" />Billing</TabsTrigger>
               <TabsTrigger value="xero">Xero</TabsTrigger>
+              <TabsTrigger value="ai">AI</TabsTrigger>
               {isBusinessPlan && (
                 <TabsTrigger value="team"><Users className="h-4 w-4 mr-1.5 hidden sm:inline" />Team</TabsTrigger>
               )}
@@ -1095,6 +1097,10 @@ const Settings = () => {
           </TabsContent>
 
           {/* ── Subscription & Billing ─────────────────────────────────────────── */}
+          <TabsContent value="ai" className="space-y-4">
+            <AiKeySettings />
+          </TabsContent>
+
           <TabsContent value="xero" className="space-y-4">
             <XeroSettings />
           </TabsContent>
