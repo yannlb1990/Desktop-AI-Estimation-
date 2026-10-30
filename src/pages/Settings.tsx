@@ -542,7 +542,8 @@ const Settings = () => {
 
         <Tabs defaultValue={new URLSearchParams(window.location.search).get('tab') || 'profile'} className="space-y-6">
           <div className="overflow-x-auto">
-            <TabsList className={`grid w-full min-w-max`} style={{ gridTemplateColumns: `repeat(${tabCount}, minmax(0, 1fr))` }}>
+            {/* wraps onto a second row instead of hiding tabs off the right edge */}
+            <TabsList className="flex h-auto w-full flex-wrap justify-start gap-1" data-tabs={tabCount}>
               <TabsTrigger value="profile"><Building2 className="h-4 w-4 mr-1.5 hidden sm:inline" />Profile</TabsTrigger>
               <TabsTrigger value="branding"><Palette className="h-4 w-4 mr-1.5 hidden sm:inline" />Branding</TabsTrigger>
               <TabsTrigger value="rates"><DollarSign className="h-4 w-4 mr-1.5 hidden sm:inline" />Rates</TabsTrigger>
