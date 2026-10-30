@@ -19,26 +19,35 @@ const FeedbackOffSite = () => {
   return pathname.startsWith('/site') ? null : <FeedbackWidget />
 }
 
-const IDLE_MS = 30 * 60 * 1000
+// Signed out after this long with no activity in ANY Metricore tab (shared through
+// localStorage): a forgotten background tab must not sign out the tab being worked in.
+const IDLE_MS = 4 * 60 * 60 * 1000
+const LAST_ACTIVE_KEY = 'metricore_last_active'
+const lastActive = () => { try { return Number(localStorage.getItem(LAST_ACTIVE_KEY)) || 0 } catch { return 0 } }
 
 const IdleGuard = () => {
   const navigate = useNavigate()
   useEffect(() => {
     const user = getLocalUser()
     if (!user) return
-    let t: ReturnType<typeof setTimeout>
-    const reset = () => {
-      clearTimeout(t)
-      t = setTimeout(async () => {
-        // Never on a site visit: a long walk-through without touching the phone is normal
-        if (window.location.pathname.startsWith('/site')) { reset(); return }
-        await localSignOut(); navigate('/auth', { replace: true })
-      }, IDLE_MS)
+    let lastWrite = 0
+    const mark = () => {
+      const now = Date.now()
+      if (now - lastWrite < 15_000) return // a write every 15 s is plenty
+      lastWrite = now
+      try { localStorage.setItem(LAST_ACTIVE_KEY, String(now)) } catch { /* fine */ }
+    }
+    const check = async () => {
+      // Never on a site visit: a long walk-through without touching the phone is normal
+      if (window.location.pathname.startsWith('/site')) return
+      const last = lastActive()
+      if (last && Date.now() - last > IDLE_MS) { await localSignOut(); navigate('/auth', { replace: true }) }
     }
     const events = ['mousemove', 'mousedown', 'keydown', 'touchstart', 'scroll'] as const
-    events.forEach(e => window.addEventListener(e, reset, { passive: true }))
-    reset()
-    return () => { clearTimeout(t); events.forEach(e => window.removeEventListener(e, reset)) }
+    events.forEach(e => window.addEventListener(e, mark, { passive: true }))
+    lastWrite = 0; mark()
+    const every = window.setInterval(check, 60_000)
+    return () => { window.clearInterval(every); events.forEach(e => window.removeEventListener(e, mark)) }
   }, [navigate])
   return null
 }
