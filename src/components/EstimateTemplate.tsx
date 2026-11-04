@@ -814,7 +814,7 @@ export const EstimateTemplate = ({ projectId, estimateId }: EstimateTemplateProp
         && parseFloat(newItem.labour_rate) !== (labourRateForTrade(newItem.trade, labourRates) || config.defaultLabourRate),
       material_wastage_pct: newLineMatWaste,
       labour_wastage_pct: newLineLabWaste,
-      markup_pct: config.defaultMarkup,
+      markup_pct: newItem.allowance ? 0 : config.defaultMarkup,
       ...(newItem.allowance ? { allowance: newItem.allowance } : {}),
       notes: "",
       expanded: false,
@@ -919,7 +919,8 @@ export const EstimateTemplate = ({ projectId, estimateId }: EstimateTemplateProp
       labour_rate_override: false,
       material_wastage_pct: 0,
       labour_wastage_pct: 0,
-      markup_pct: config.defaultMarkup,
+      // an allowance is the amount the client gets to spend: no markup on it (margin goes on any overrun)
+      markup_pct: l.allowance ? 0 : config.defaultMarkup,
       ...(l.allowance ? { allowance: l.allowance } : {}),
       notes: '',
       expanded: false,
@@ -1150,11 +1151,27 @@ export const EstimateTemplate = ({ projectId, estimateId }: EstimateTemplateProp
     }
   };
 
+  // PC or PS: the allowance is what the client gets to spend, so it carries no markup
+  const setLineAllowance = (id: string, allowance: 'PC' | 'PS' | undefined) => {
+    if (blockedWhenLocked()) return;
+    const updatedItems = items.map(item => item.id === id
+      ? { ...item, allowance, markup_pct: allowance ? 0 : (item.allowance ? config.defaultMarkup : item.markup_pct) }
+      : item);
+    setItems(updatedItems);
+    const projects = JSON.parse(localStorage.getItem(getUserStorageKey('local_projects')) || '[]');
+    const projectIndex = projects.findIndex((p: any) => p.id === projectId);
+    if (projectIndex !== -1) {
+      projects[projectIndex].estimate_items = mergeWithSaved(projects[projectIndex].estimate_items, updatedItems);
+      localStorage.setItem(getUserStorageKey('local_projects'), JSON.stringify(projects));
+    }
+  };
+
   // Markup on every line at once (Estimate Configuration > Apply to all lines)
   const [confirmMarkupAll, setConfirmMarkupAll] = useState(false);
   const applyMarkupToAll = (pct: number) => {
     if (blockedWhenLocked()) return;
-    const updatedItems = items.map(item => ({ ...item, markup_pct: pct }));
+    // PC and PS allowances keep no markup
+    const updatedItems = items.map(item => item.allowance ? item : ({ ...item, markup_pct: pct }));
     setItems(updatedItems);
     const projects = JSON.parse(localStorage.getItem(getUserStorageKey('local_projects')) || '[]');
     const projectIndex = projects.findIndex((p: any) => p.id === projectId);
@@ -1649,7 +1666,7 @@ export const EstimateTemplate = ({ projectId, estimateId }: EstimateTemplateProp
                   extra={scopesForLine(item)}
                   onChange={(v) => { if (v !== item.scope_of_work) updateItemField(item.id, 'scope_of_work', v); }}
                 />
-                <AllowanceTag value={item.allowance} onChange={(v) => updateItemField(item.id, 'allowance', v)} />
+                <AllowanceTag value={item.allowance} onChange={(v) => setLineAllowance(item.id, v)} />
               </div>
             )}
           </TableCell>

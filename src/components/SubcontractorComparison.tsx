@@ -349,7 +349,7 @@ export const SubcontractorComparison = ({ projectId }: { projectId: string }) =>
           <DialogHeader><DialogTitle>Add a price for {addFor}</DialogTitle></DialogHeader>
           <div className="grid gap-3 py-1 sm:grid-cols-2">
             <label className="block space-y-1 sm:col-span-2"><span className="text-xs text-muted-foreground">Company</span>
-              <Input value={form.company} onChange={e => setForm({ ...form, company: e.target.value })} placeholder="Smith Tiling Pty Ltd" /></label>
+              <Input value={form.company} onChange={e => setForm({ ...form, company: e.target.value })} placeholder="Company name" /></label>
             <label className="block space-y-1"><span className="text-xs text-muted-foreground">Contact</span>
               <Input value={form.contact} onChange={e => setForm({ ...form, contact: e.target.value })} /></label>
             <label className="block space-y-1"><span className="text-xs text-muted-foreground">Phone</span>
