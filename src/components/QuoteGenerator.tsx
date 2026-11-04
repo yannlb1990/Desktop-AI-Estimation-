@@ -37,6 +37,8 @@ interface QuoteLine {
   trade?: string
   /** the estimate line's area (room), for grouping the quote by area */
   area?: string
+  /** a prime cost (PC) or provisional sum (PS) allowance, listed apart on the quote */
+  allowance?: "PC" | "PS"
   isEditing?: boolean
 }
 
@@ -283,8 +285,10 @@ export const QuoteGenerator = ({ project, estimate, listenForOpen }: QuoteGenera
         // A measured size ("19.98 m²") is never shown to the client as the description
         description: (() => {
           const scope = scopeForDisplay(item)
-          return item.material_type && item.material_type !== scope ? `${scope} (${item.material_type})` : scope
+          const text = item.material_type && item.material_type !== scope && item.material_type !== "Supply and install" ? `${scope} (${item.material_type})` : scope
+          return item.allowance === "PC" || item.allowance === "PS" ? `${item.allowance} allowance: ${text}` : text
         })(),
+        ...(item.allowance === "PC" || item.allowance === "PS" ? { allowance: item.allowance } : {}),
         qty,
         unit: item.unit || "m²",
         unitPrice: Math.round((lineTotal / qty) * 100) / 100,
@@ -1393,6 +1397,29 @@ ${clone.outerHTML}
                       </div>
                     </div>
                     {scopeNotes && <div className="mt-4 p-3 bg-amber-50 border border-amber-100 rounded-lg text-sm text-gray-700"><strong className="text-amber-700">Notes: </strong>{scopeNotes}</div>}
+                    {(() => {
+                      const allowances = includedLines.filter(l => l.allowance)
+                      if (!allowances.length) return null
+                      return (
+                        <div className="mt-4 rounded-lg border border-gray-200 p-3 text-sm text-gray-700">
+                          <h3 className="mb-2 font-semibold text-gray-800">Prime cost (PC) and provisional sum (PS) allowances</h3>
+                          <table className="w-full">
+                            <tbody>
+                              {allowances.map(l => (
+                                <tr key={l.id} className="border-t border-gray-100">
+                                  <td className="py-1 pr-2 w-10 font-medium">{l.allowance}</td>
+                                  <td className="py-1 pr-2">{l.description.replace(/^P[CS] allowance: /, "")}</td>
+                                  <td className="py-1 text-right whitespace-nowrap">{au$(l.qty * l.unitPrice)}</td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                          <p className="mt-2 text-xs text-gray-500">
+                            These amounts are allowances, included in the price above. A PC item is a fixture or fitting you choose; a PS covers work that cannot be priced exactly yet. When the final cost is known, the difference is adjusted by a variation, with the builder's margin on any increase.
+                          </p>
+                        </div>
+                      )
+                    })()}
                   </section>
 
                   {/* Payment schedule — hidden on simple template */}

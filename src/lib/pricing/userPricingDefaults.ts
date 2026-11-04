@@ -12,11 +12,16 @@ import { stateFromAddress, profileState } from '@/lib/defaultState';
  *   2. market typical for the project's state (national typical × state factor)
  *   3. built-in fallback in estimatePricing.ts
  */
-export function readUserPricingDefaults(project?: any): UserPricingDefaults {
-  const state = stateFromAddress(project?.site_address || project?.address)
+/** The state a project is priced for: its site address, else its state, else the profile's. */
+export function projectStateOf(project?: any): string {
+  return stateFromAddress(project?.site_address || project?.address)
     ?? stateFromAddress(project?.state)
     ?? profileState()
     ?? 'NSW';
+}
+
+export function readUserPricingDefaults(project?: any): UserPricingDefaults {
+  const state = projectStateOf(project);
   const defaults: UserPricingDefaults = { config: {}, labourRates: { ...marketLabourRatesForState(state), ...getCustomRates() } };
   try {
     const savedRates = localStorage.getItem(getUserStorageKey('default_rates'));

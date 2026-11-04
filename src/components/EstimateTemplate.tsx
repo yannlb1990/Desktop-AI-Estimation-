@@ -6,6 +6,8 @@ import { syncProjectToSupabase } from "@/lib/db/projects";
 import { supabase } from "@/integrations/supabase/client";
 import { checkEstimate } from "@/lib/estimate/checks";
 import { ServicesDialog, type PricedServiceLine } from "@/components/estimate/ServicesDialog";
+import { RoomPackDialog } from "@/components/estimate/RoomPackDialog";
+import type { PackLine } from "@/lib/estimate/roomPacks";
 import { SiteVisitPanel } from "@/components/estimate/SiteVisitPanel";
 import type { SiteDraftLine } from "@/lib/site/toEstimate";
 import { Button } from "@/components/ui/button";
@@ -47,8 +49,9 @@ import {
   resolveProjectPricing,
   projectFfeAllowance,
 } from "@/lib/pricing/estimatePricing";
-import { readUserPricingDefaults } from "@/lib/pricing/userPricingDefaults";
+import { readUserPricingDefaults, projectStateOf } from "@/lib/pricing/userPricingDefaults";
 import { renameLineTrades } from "@/lib/estimate/tradeNames";
+import { scopesForTrade, findScope, scopeRate } from "@/data/tradeScopes";
 import { TRADES, normaliseTrade, labourRateForTrade, labourTradeFor } from "@/lib/trades";
 import { isMeasurementValueLabel, isGenericScope } from "@/lib/takeoff/scopeLabels";
 import { lineSource, relinkWithQuantity, createPlanLink, measuredValueFor, type EstimateLineSource, type PlanLink } from "@/lib/estimate/planLinks";
@@ -189,6 +192,25 @@ function TradeCombobox({ value, onChange }: { value: string; onChange: (v: strin
 // Keep backwards-compat alias for places that still reference AU_TRADES directly
 const AU_TRADES = AU_TRADES_BASE;
 
+const ALLOWANCE_LABEL = { PC: 'PC allowance', PS: 'PS allowance' } as const;
+
+/**
+ * Marks a line as a prime cost (fixture the client picks) or provisional sum (work not yet
+ * priced exactly): the quote lists these apart, and the difference later goes through a
+ * variation. Click to go through none, PC, PS.
+ */
+function AllowanceTag({ value, onChange }: { value?: 'PC' | 'PS'; onChange: (v: 'PC' | 'PS' | undefined) => void }) {
+  const next = !value ? 'PC' : value === 'PC' ? 'PS' : undefined;
+  return (
+    <button type="button"
+      title={value ? 'Click to change: PC, PS or not an allowance' : 'Mark as a prime cost (PC) or provisional sum (PS) allowance'}
+      onClick={() => onChange(next)}
+      className={cn('mt-0.5 rounded px-1 text-[10px] leading-4', value ? 'border border-amber-500/50 text-amber-400' : 'text-muted-foreground/60 opacity-0 group-hover:opacity-100 hover:text-foreground')}>
+      {value ? ALLOWANCE_LABEL[value] : 'Mark PC / PS'}
+    </button>
+  );
+}
+
 // Scope of work combobox — shows predefined scopes for the trade + accepts free-text
 function ScopeCombobox({ value, onChange, trade, extra = [], placeholder = 'Select scope', compact = false, asText = false }: {
   value: string; onChange: (v: string) => void; trade: string;
@@ -199,7 +221,8 @@ function ScopeCombobox({ value, onChange, trade, extra = [], placeholder = 'Sele
 }) {
   const [open, setOpen] = React.useState(false);
   const [search, setSearch] = React.useState('');
-  const presets: string[] = [...new Set([...extra, ...((SCOPE_OF_WORK as Record<string, string[]>)[normaliseTrade(trade)] ?? [])])];
+  // the trade's scope library first, then the short older names
+  const presets: string[] = [...new Set([...extra, ...scopesForTrade(trade).map(x => x.name), ...((SCOPE_OF_WORK as Record<string, string[]>)[normaliseTrade(trade)] ?? [])])];
   const filtered = presets.filter(s => s.toLowerCase().includes(search.toLowerCase()));
   const isNew = search.trim() !== '' && search.trim() !== value && !presets.some(s => s.toLowerCase() === search.trim().toLowerCase());
   // the current wording is in the box when it opens: change a word instead of retyping it all
@@ -476,6 +499,8 @@ interface EstimateItem {
   isEditing?: boolean;
   product_url?: string;
   relatedMaterials?: RelatedMaterial[];
+  /** a prime cost (PC) or provisional sum (PS) allowance: listed apart on the quote */
+  allowance?: 'PC' | 'PS';
 }
 
 interface ConsumableItem {
@@ -544,6 +569,7 @@ export const EstimateTemplate = ({ projectId, estimateId }: EstimateTemplateProp
   const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set());
   const [checksOpen, setChecksOpen] = useState(false);
   const [servicesOpen, setServicesOpen] = useState(false);
+  const [packOpen, setPackOpen] = useState(false);
   const [flashRowId, setFlashRowId] = useState<string | null>(null);
   const [showTemplateModal, setShowTemplateModal] = useState(false);
   const [customTemplates, setCustomTemplates] = useState<EstimateTemplateData[]>(() => loadCustomTemplates());
@@ -614,7 +640,15 @@ export const EstimateTemplate = ({ projectId, estimateId }: EstimateTemplateProp
     unit_price: "",
     labour_hours: "",
     labour_rate: "",
+    /** 'PC' or 'PS' when the line is an allowance, from the scope library or chosen */
+    allowance: "" as '' | 'PC' | 'PS',
   });
+  const projectState = useMemo(() => {
+    try {
+      const p = JSON.parse(localStorage.getItem(getUserStorageKey('local_projects')) || '[]').find((x: any) => x.id === projectId);
+      return projectStateOf(p);
+    } catch { return 'NSW'; }
+  }, [projectId]);
   const qtyInputRef = useRef<HTMLInputElement>(null);
   // Waste % for the line being added only ('' = the project's default); markup is the project's markup on new lines
   const [newLineWaste, setNewLineWaste] = useState<{ mat: string; lab: string }>({ mat: '', lab: '' });
@@ -749,6 +783,7 @@ export const EstimateTemplate = ({ projectId, estimateId }: EstimateTemplateProp
       material_wastage_pct: newLineMatWaste,
       labour_wastage_pct: newLineLabWaste,
       markup_pct: config.defaultMarkup,
+      ...(newItem.allowance ? { allowance: newItem.allowance } : {}),
       notes: "",
       expanded: false,
       item_number: `${items.length + 1}`,
@@ -775,7 +810,7 @@ export const EstimateTemplate = ({ projectId, estimateId }: EstimateTemplateProp
     // several rooms is the common case. Only the per-instance amounts reset, and focus
     // jumps straight back to Qty so entering the next line needs no mouse at all.
     // With a measurement picked, keep it: framing, lining and insulation off the same wall
-    setNewItem(prev => ({ ...prev, quantity: newItemMeasurement ? measuredFor(newItemMeasurement, prev.unit) : "", labour_hours: "" }));
+    setNewItem(prev => ({ ...prev, quantity: newItemMeasurement ? measuredFor(newItemMeasurement, prev.unit) : "", labour_hours: "", allowance: "" }));
     qtyInputRef.current?.focus();
   };
 
@@ -827,6 +862,47 @@ export const EstimateTemplate = ({ projectId, estimateId }: EstimateTemplateProp
     const unpriced = created.filter(c => !(c.unit_price > 0)).length;
     // The calculator stays open so the other tabs (plumbing, air conditioning) can be added too
     toast.success(`${created.length} line${created.length !== 1 ? 's' : ''} added${unpriced ? `, ${unpriced} still need a price` : ''}`);
+  };
+
+  // A room pack (kitchen, bathroom, laundry, robes): all-in subcontract prices, no waste on top
+  const addPackLines = (lines: PackLine[]) => {
+    if (lines.length === 0) return;
+    const stamp = Date.now();
+    const created: EstimateItem[] = lines.map((l, i) => ({
+      id: `pack-${stamp}-${i}`,
+      source: 'manual',
+      plan_link: null,
+      section_id: null,
+      area: l.area,
+      trade: l.trade,
+      scope_of_work: l.scope,
+      material_type: 'Supply and install',
+      quantity: l.quantity,
+      unit: l.unit,
+      unit_price: l.unitPrice,
+      labour_hours: 0,
+      labour_rate: labourRateForTrade(l.trade, labourRates) || config.defaultLabourRate,
+      labour_rate_override: false,
+      material_wastage_pct: 0,
+      labour_wastage_pct: 0,
+      markup_pct: config.defaultMarkup,
+      ...(l.allowance ? { allowance: l.allowance } : {}),
+      notes: '',
+      expanded: false,
+      item_number: `${items.length + i + 1}`,
+      isEditing: false,
+      relatedMaterials: [],
+    } as EstimateItem));
+    const updatedItems = [...items, ...created];
+    setItems(updatedItems);
+    const projects = JSON.parse(localStorage.getItem(getUserStorageKey('local_projects')) || '[]');
+    const projectIndex = projects.findIndex((p: any) => p.id === projectId);
+    if (projectIndex !== -1) {
+      projects[projectIndex].estimate_items = mergeWithSaved(projects[projectIndex].estimate_items, updatedItems);
+      localStorage.setItem(getUserStorageKey('local_projects'), JSON.stringify(projects));
+    }
+    setPackOpen(false);
+    toast.success(`${created.length} lines added to ${lines[0].area}`);
   };
 
   // Lines recorded on a site visit: quantity from the room sizes, no price yet
@@ -1516,13 +1592,16 @@ export const EstimateTemplate = ({ projectId, estimateId }: EstimateTemplateProp
               </div>
             ) : (
               // Room to read: scope wraps onto a second line; click it to change the wording
-              <ScopeCombobox
-                asText
-                value={item.scope_of_work ?? ''}
-                trade={item.trade}
-                extra={scopesForLine(item)}
-                onChange={(v) => { if (v !== item.scope_of_work) updateItemField(item.id, 'scope_of_work', v); }}
-              />
+              <div>
+                <ScopeCombobox
+                  asText
+                  value={item.scope_of_work ?? ''}
+                  trade={item.trade}
+                  extra={scopesForLine(item)}
+                  onChange={(v) => { if (v !== item.scope_of_work) updateItemField(item.id, 'scope_of_work', v); }}
+                />
+                <AllowanceTag value={item.allowance} onChange={(v) => updateItemField(item.id, 'allowance', v)} />
+              </div>
             )}
           </TableCell>
           <TableCell>
@@ -2324,6 +2403,13 @@ export const EstimateTemplate = ({ projectId, estimateId }: EstimateTemplateProp
           <Button variant="outline" size="sm" className="ml-auto" onClick={() => setServicesOpen(true)}>Open services calculator</Button>
         </div>
         <ServicesDialog open={servicesOpen} measurements={takeoffMeasurements} onAdd={addServiceLines} onClose={() => setServicesOpen(false)} />
+        <div className="mt-3 flex flex-wrap items-center gap-3 rounded-lg border border-border px-4 py-2.5 text-sm">
+          <span className="font-medium">Room packs</span>
+          <span className="text-muted-foreground">Kitchen, bathroom, laundry or robes in one go: every trade the room needs, priced for {projectState}</span>
+          <Button variant="outline" size="sm" className="ml-auto" onClick={() => setPackOpen(true)}>Open room packs</Button>
+        </div>
+        <RoomPackDialog open={packOpen} onOpenChange={setPackOpen} state={projectState}
+          rooms={[...new Set(items.map(i => i.area).filter(Boolean))]} onAdd={addPackLines} />
         <div className="grid grid-cols-12 gap-3 mt-4">
           {takeoffMeasurements.length > 0 && (
             <div className="col-span-12">
@@ -2368,14 +2454,27 @@ export const EstimateTemplate = ({ projectId, estimateId }: EstimateTemplateProp
             <Label>Trade *</Label>
             <TradeCombobox
               value={newItem.trade}
-              onChange={(value) => setNewItem({ ...newItem, trade: value, scope_of_work: "" })}
+              onChange={(value) => setNewItem({ ...newItem, trade: value, scope_of_work: "", allowance: "" })}
             />
           </div>
           <div className="col-span-4">
             <Label>Scope of Work *</Label>
             <ScopeCombobox
               value={newItem.scope_of_work}
-              onChange={(v) => setNewItem({ ...newItem, scope_of_work: v })}
+              onChange={(v) => {
+                // a scope from the library brings its unit and typical price, unless already typed
+                const lib = findScope(newItem.trade, v);
+                setNewItem(prev => ({
+                  ...prev,
+                  scope_of_work: v,
+                  ...(lib ? {
+                    unit: lib.unit,
+                    unit_price: prev.unit_price && parseFloat(prev.unit_price) > 0 ? prev.unit_price : scopeRate(lib, projectState).toFixed(2),
+                    material_type: prev.material_type || 'Supply and install',
+                    allowance: lib.allowance ?? '',
+                  } : {}),
+                }));
+              }}
               trade={newItem.trade}
               extra={pickedMeasurement ? (SCOPES_BY_MEASUREMENT[measurementKind(pickedMeasurement)] ?? []) : []}
             />
@@ -2425,6 +2524,7 @@ export const EstimateTemplate = ({ projectId, estimateId }: EstimateTemplateProp
                 <SelectItem value="lm">lm</SelectItem>
                 <SelectItem value="m³">m³</SelectItem>
                 <SelectItem value="ea">ea</SelectItem>
+                <SelectItem value="item">item</SelectItem>
                 <SelectItem value="sets">sets</SelectItem>
               </SelectContent>
             </Select>
