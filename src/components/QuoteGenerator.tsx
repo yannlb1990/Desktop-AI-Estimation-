@@ -719,6 +719,11 @@ ${clone.outerHTML}
     } catch { return 0 }
   }, [open, project?.id, quoteLines])
 
+  // The quote goes to the client only once the estimate is checked, or the builder says so
+  const [issuesChecked, setIssuesChecked] = useState(false)
+  useEffect(() => { if (open) setIssuesChecked(false) }, [open])
+  const readyToSend = estimateIssues === 0 || issuesChecked
+
   const sendApprovalLink = async (v: typeof versions[0]) => {
     if (!project?.id) return
     setSharing(v.id)
@@ -790,9 +795,13 @@ ${clone.outerHTML}
               </div>
             </div>
             {estimateIssues > 0 && (
-              <p className="mt-2 rounded-md border border-red-400/40 bg-red-400/5 px-3 py-1.5 text-xs text-red-300">
-                The estimate has {estimateIssues} {estimateIssues === 1 ? 'line' : 'lines'} to fix (no price, scope not chosen or unfinished text). Open the Estimate tab and use Check estimate before sending.
-              </p>
+              <div className="mt-2 rounded-md border border-red-400/40 bg-red-400/5 px-3 py-1.5 text-xs text-red-300">
+                <p>The estimate has {estimateIssues} {estimateIssues === 1 ? 'line' : 'lines'} to fix (no price, scope not chosen or unfinished text). Fix them in the Estimate tab (Check estimate) before the client sees this quote. Sending and approving stay off until then.</p>
+                <label className="mt-1 flex items-center gap-2 text-foreground/80">
+                  <input type="checkbox" checked={issuesChecked} onChange={e => setIssuesChecked(e.target.checked)} />
+                  I have checked these lines and want to send the quote as it is
+                </label>
+              </div>
             )}
           </DialogHeader>
 
@@ -1203,7 +1212,7 @@ ${clone.outerHTML}
                                 )
                               })()}
                               <div className="flex gap-1 mt-1.5 flex-wrap justify-end">
-                                <Button size="sm" variant="outline" className="h-6 text-[10px] px-2" disabled={sharing === v.id} onClick={() => sendApprovalLink(v)}>
+                                <Button size="sm" variant="outline" className="h-6 text-[10px] px-2" disabled={sharing === v.id || !readyToSend} title={readyToSend ? undefined : 'Fix the estimate first'} onClick={() => sendApprovalLink(v)}>
                                   {sharing === v.id ? 'Creating...' : 'Send approval link'}
                                 </Button>
                                 {approvedVersionId === v.id ? (
@@ -1211,7 +1220,7 @@ ${clone.outerHTML}
                                     Undo approval
                                   </Button>
                                 ) : (
-                                  <Button size="sm" variant="outline" className="h-6 text-[10px] px-2" onClick={() => markApproved(v)}>
+                                  <Button size="sm" variant="outline" className="h-6 text-[10px] px-2" disabled={!readyToSend} title={readyToSend ? undefined : 'Fix the estimate first'} onClick={() => markApproved(v)}>
                                     <Check className="h-2.5 w-2.5 mr-0.5" />Mark as approved by client
                                   </Button>
                                 )}

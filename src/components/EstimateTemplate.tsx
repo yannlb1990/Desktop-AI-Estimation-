@@ -5,6 +5,7 @@ import { getUserStorageKey } from "@/lib/localAuth";
 import { syncProjectToSupabase } from "@/lib/db/projects";
 import { supabase } from "@/integrations/supabase/client";
 import { checkEstimate } from "@/lib/estimate/checks";
+import { loadQuoteShares, syncClientApprovals } from "@/lib/contract";
 import { ServicesDialog, type PricedServiceLine } from "@/components/estimate/ServicesDialog";
 import { RoomPackDialog } from "@/components/estimate/RoomPackDialog";
 import type { PackLine } from "@/lib/estimate/roomPacks";
@@ -649,6 +650,36 @@ export const EstimateTemplate = ({ projectId, estimateId }: EstimateTemplateProp
       return projectStateOf(p);
     } catch { return 'NSW'; }
   }, [projectId]);
+  // Where the job is: Draft (lines to fix), Checked, Quote sent, Approved. Once the client
+  // has approved, the estimate is locked: the approved quote is the contract and client
+  // changes go through Variations. Unlocking lets you change your costs (the budget) only.
+  const [approval, setApproval] = useState<{ quoteNumber: string; approvedAt: string; approvedBy?: string } | null>(null);
+  const [quoteSent, setQuoteSent] = useState(false);
+  const [unlocked, setUnlocked] = useState(false);
+  const [confirmUnlock, setConfirmUnlock] = useState(false);
+  useEffect(() => {
+    const read = () => {
+      try {
+        const p = JSON.parse(localStorage.getItem(getUserStorageKey('local_projects')) || '[]').find((x: any) => x.id === projectId);
+        const a = p?.approved_quote;
+        setApproval(a ? { quoteNumber: a.quoteNumber, approvedAt: a.approvedAt, approvedBy: a.approvedBy } : null);
+      } catch { setApproval(null); }
+      loadQuoteShares(projectId).then(rows => setQuoteSent(rows.length > 0)).catch(() => {});
+    };
+    read();
+    // a client approval through their link lands here too
+    syncClientApprovals(projectId).catch(() => {});
+    const onChange = (e: Event) => { if ((e as CustomEvent).detail?.projectId === projectId) { read(); setUnlocked(false); } };
+    window.addEventListener('contract-changed', onChange);
+    return () => window.removeEventListener('contract-changed', onChange);
+  }, [projectId]);
+  const locked = !!approval && !unlocked;
+  /** true (and says why) when a change would be made to an approved estimate */
+  const blockedWhenLocked = (): boolean => {
+    if (!locked) return false;
+    toast.info('The client approved this quote, so the estimate is locked. Client changes go through Variations, or unlock it to change your costs.');
+    return true;
+  };
   const qtyInputRef = useRef<HTMLInputElement>(null);
   // Waste % for the line being added only ('' = the project's default); markup is the project's markup on new lines
   const [newLineWaste, setNewLineWaste] = useState<{ mat: string; lab: string }>({ mat: '', lab: '' });
@@ -750,6 +781,7 @@ export const EstimateTemplate = ({ projectId, estimateId }: EstimateTemplateProp
   };
 
   const addItem = () => {
+    if (blockedWhenLocked()) return;
     if (!newItem.area || !newItem.trade || !newItem.material_type) {
       toast.error("Please fill in required fields");
       return;
@@ -816,6 +848,7 @@ export const EstimateTemplate = ({ projectId, estimateId }: EstimateTemplateProp
 
   // Lines from the Services calculator: per point / per fixture, all-in prices (no waste on top)
   const addServiceLines = (all: PricedServiceLine[]) => {
+    if (blockedWhenLocked()) return;
     // A count marker already priced in the estimate would be charged twice: skip those lines
     const linkedAlready = new Set(items.flatMap(i => i.plan_link?.measurementIds ?? []));
     const skipped = all.filter(l => l.measurementIds?.some(id => linkedAlready.has(id)));
@@ -866,6 +899,7 @@ export const EstimateTemplate = ({ projectId, estimateId }: EstimateTemplateProp
 
   // A room pack (kitchen, bathroom, laundry, robes): all-in subcontract prices, no waste on top
   const addPackLines = (lines: PackLine[]) => {
+    if (blockedWhenLocked()) return;
     if (lines.length === 0) return;
     const stamp = Date.now();
     const created: EstimateItem[] = lines.map((l, i) => ({
@@ -907,6 +941,7 @@ export const EstimateTemplate = ({ projectId, estimateId }: EstimateTemplateProp
 
   // Lines recorded on a site visit: quantity from the room sizes, no price yet
   const addSiteLines = (lines: SiteDraftLine[]) => {
+    if (blockedWhenLocked()) return;
     if (lines.length === 0) return;
     const stamp = Date.now();
     const created = lines.map((l, i) => ({
@@ -949,6 +984,7 @@ export const EstimateTemplate = ({ projectId, estimateId }: EstimateTemplateProp
   };
   // A visit changed on the phone: lines follow it instead of new ones being added
   const updateSiteLines = (changes: { id: string; quantity?: number; scope?: string; siteQty?: number; siteScope?: string; remove?: boolean }[], quiet = false) => {
+    if (blockedWhenLocked()) return;
     if (changes.length === 0) return;
     const byId = new Map(changes.map(c => [c.id, c]));
     const updatedItems = items
@@ -977,6 +1013,7 @@ export const EstimateTemplate = ({ projectId, estimateId }: EstimateTemplateProp
   const siteKeysInEstimate = useMemo(() => new Set(items.map((i: any) => i.site_key).filter(Boolean) as string[]), [items]);
 
   const deleteItem = (id: string) => {
+    if (blockedWhenLocked()) return;
     const updatedItems = items.filter(item => item.id !== id);
     setItems(updatedItems);
 
@@ -993,6 +1030,7 @@ export const EstimateTemplate = ({ projectId, estimateId }: EstimateTemplateProp
   };
 
   const duplicateItem = (item: EstimateItem) => {
+    if (blockedWhenLocked()) return;
     const idx = items.findIndex(i => i.id === item.id);
     const copy: EstimateItem = {
       ...item,
@@ -1018,6 +1056,7 @@ export const EstimateTemplate = ({ projectId, estimateId }: EstimateTemplateProp
   };
 
   const startEditing = (item: EstimateItem) => {
+    if (blockedWhenLocked()) return;
     setEditingId(item.id);
     // bring the Cost column (with markup) into view, clear of the pinned Total and buttons
     requestAnimationFrame(() => requestAnimationFrame(() => {
@@ -1050,6 +1089,7 @@ export const EstimateTemplate = ({ projectId, estimateId }: EstimateTemplateProp
   };
 
   const saveEdit = (id: string) => {
+    if (blockedWhenLocked()) return;
     // Update in local state
     const updatedItems = items.map(item => {
       if (item.id === id) {
@@ -1099,6 +1139,7 @@ export const EstimateTemplate = ({ projectId, estimateId }: EstimateTemplateProp
   };
 
   const updateItemField = (id: string, field: keyof EstimateItem, value: any) => {
+    if (blockedWhenLocked()) return;
     const updatedItems = items.map(item => item.id === id ? { ...item, [field]: value } : item);
     setItems(updatedItems);
     const projects = JSON.parse(localStorage.getItem(getUserStorageKey('local_projects')) || '[]');
@@ -1112,6 +1153,7 @@ export const EstimateTemplate = ({ projectId, estimateId }: EstimateTemplateProp
   // Markup on every line at once (Estimate Configuration > Apply to all lines)
   const [confirmMarkupAll, setConfirmMarkupAll] = useState(false);
   const applyMarkupToAll = (pct: number) => {
+    if (blockedWhenLocked()) return;
     const updatedItems = items.map(item => ({ ...item, markup_pct: pct }));
     setItems(updatedItems);
     const projects = JSON.parse(localStorage.getItem(getUserStorageKey('local_projects')) || '[]');
@@ -1125,6 +1167,7 @@ export const EstimateTemplate = ({ projectId, estimateId }: EstimateTemplateProp
   };
 
   const handleRatesChange = (newRates: Record<string, number>) => {
+    if (blockedWhenLocked()) return;
     const changedTrades = Object.keys(newRates).filter(trade => newRates[trade] !== labourRates[trade]);
     if (changedTrades.length > 0) {
       // Lines with their own rate keep it when the trade rate changes.
@@ -1151,6 +1194,7 @@ export const EstimateTemplate = ({ projectId, estimateId }: EstimateTemplateProp
   };
 
   const addRelatedMaterial = (itemId: string, materialName: string) => {
+    if (blockedWhenLocked()) return;
     setItems(items.map(item => {
       if (item.id === itemId) {
         const newMaterial: RelatedMaterial = {
@@ -1173,6 +1217,7 @@ export const EstimateTemplate = ({ projectId, estimateId }: EstimateTemplateProp
   };
 
   const updateRelatedMaterial = (itemId: string, materialId: string, field: keyof RelatedMaterial, value: any) => {
+    if (blockedWhenLocked()) return;
     setItems(items.map(item => {
       if (item.id === itemId && item.relatedMaterials) {
         return {
@@ -1187,6 +1232,7 @@ export const EstimateTemplate = ({ projectId, estimateId }: EstimateTemplateProp
   };
 
   const deleteRelatedMaterial = (itemId: string, materialId: string) => {
+    if (blockedWhenLocked()) return;
     setItems(items.map(item => {
       if (item.id === itemId && item.relatedMaterials) {
         return {
@@ -1199,6 +1245,7 @@ export const EstimateTemplate = ({ projectId, estimateId }: EstimateTemplateProp
   };
 
   const toggleRelatedMaterialConfirmed = (itemId: string, materialId: string) => {
+    if (blockedWhenLocked()) return;
     setItems(items.map(item => {
       if (item.id === itemId) {
         return {
@@ -1224,6 +1271,7 @@ export const EstimateTemplate = ({ projectId, estimateId }: EstimateTemplateProp
   };
 
   const saveUrl = () => {
+    if (blockedWhenLocked()) return;
     if (urlDialog.type === 'item' && urlDialog.itemId) {
       setItems(items.map(item => 
         item.id === urlDialog.itemId ? { ...item, product_url: urlDialog.url } : item
@@ -1297,7 +1345,7 @@ export const EstimateTemplate = ({ projectId, estimateId }: EstimateTemplateProp
   let totals = { totalMaterials: 0, totalLabour: 0, totalMarkup: 0, baseSubtotal: 0, supervision: 0, overheadsPct: 0, overheadTotal: 0, totalOverheads: 0, prelimsTotal: 0, ffeTotal: 0, preMargin: 0, contingency: 0, customConfigsTotal: 0, margin: 0, taxable: 0, gst: 0, totalPrice: 0 };
   try { totals = calculateTotals(); } catch { /* corrupted item data — show zeros */ }
   // Profit is the overall margin plus any per-line markup, as a share of the ex-GST price.
-  const estimateChecks = useMemo(() => checkEstimate(items as any, config, labourRates), [items, config, labourRates]);
+  const estimateChecks = useMemo(() => checkEstimate(items as any, config, labourRates, { state: projectState }), [items, config, labourRates, projectState]);
   const showLine = (itemId: string) => {
     setCollapsedGroups(new Set());
     setOpenSections(prev => ({ ...prev, lineItems: true }));
@@ -1382,6 +1430,7 @@ export const EstimateTemplate = ({ projectId, estimateId }: EstimateTemplateProp
   };
 
   const loadTemplate = (template: EstimateTemplateData) => {
+    if (blockedWhenLocked()) return;
     const newItems: EstimateItem[] = template.items.map((ti, idx) => ({
       id: `item-${Date.now()}-${idx}`,
       section_id: null,
@@ -2644,6 +2693,56 @@ export const EstimateTemplate = ({ projectId, estimateId }: EstimateTemplateProp
         <div className="px-6 pb-6 border-t border-border">
         {items.length > 0 && (() => {
           const fixes = estimateChecks.filter(c => c.level === 'fix').length;
+          const stage = approval ? 3 : quoteSent ? 2 : fixes === 0 ? 1 : 0;
+          const steps = ['Draft', 'Checked', 'Quote sent', 'Approved'];
+          const next = [
+            `Fix the ${fixes} line${fixes !== 1 ? 's' : ''} marked Fix below, then the estimate is checked.`,
+            'Ready to quote: generate the quote and send the client the approval link.',
+            'Waiting for the client to approve the quote.',
+            approval ? `Quote ${approval.quoteNumber} approved${approval.approvedBy ? ` by ${approval.approvedBy}` : ''} on ${new Date(approval.approvedAt).toLocaleDateString('en-AU')}. It is the contract now.` : '',
+          ][stage];
+          return (
+            <div className={cn('mt-3 rounded-lg border px-4 py-2.5 text-sm', approval ? 'border-[#D4A045]/50 bg-[#D4A045]/5' : 'border-border')}>
+              <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                {steps.map((st, i) => (
+                  <span key={st} className="flex items-center gap-2">
+                    {i > 0 && <span className="text-muted-foreground/50">/</span>}
+                    <span className={cn(i === stage ? 'font-semibold text-[#D4A045]' : i < stage ? 'text-foreground/70' : 'text-muted-foreground/60')}>{st}</span>
+                  </span>
+                ))}
+              </div>
+              <p className="mt-1 text-muted-foreground">{next}</p>
+              {approval && (
+                <div className="mt-2 flex flex-wrap items-center gap-2">
+                  <span className="text-xs">
+                    {unlocked
+                      ? 'Unlocked: changes here change your costs and budget, not what the client pays.'
+                      : 'The estimate is locked. Changes the client asks for go through Variations.'}
+                  </span>
+                  <Button size="sm" variant="outline" className="h-7" onClick={() => window.dispatchEvent(new CustomEvent('go-to-tab', { detail: { tab: 'variations' } }))}>Add a variation</Button>
+                  {unlocked
+                    ? <Button size="sm" variant="ghost" className="h-7" onClick={() => setUnlocked(false)}>Lock again</Button>
+                    : <Button size="sm" variant="ghost" className="h-7" onClick={() => setConfirmUnlock(true)}>Unlock to change costs</Button>}
+                </div>
+              )}
+            </div>
+          );
+        })()}
+        <Dialog open={confirmUnlock} onOpenChange={setConfirmUnlock}>
+          <DialogContent className="sm:max-w-md">
+            <DialogHeader><DialogTitle>Unlock the approved estimate?</DialogTitle></DialogHeader>
+            <div className="space-y-2 text-sm text-muted-foreground">
+              <p>The approved quote stays the contract. Changing the estimate now changes your costs and Job Cost budget, not what the client pays or what you claim.</p>
+              <p>For anything the client asked for, add a variation instead, so it is approved, invoiced and claimed properly.</p>
+            </div>
+            <div className="flex justify-end gap-2 pt-2">
+              <Button variant="outline" onClick={() => setConfirmUnlock(false)}>Keep locked</Button>
+              <Button onClick={() => { setUnlocked(true); setConfirmUnlock(false); }}>Unlock to change costs</Button>
+            </div>
+          </DialogContent>
+        </Dialog>
+        {items.length > 0 && (() => {
+          const fixes = estimateChecks.filter(c => c.level === 'fix').length;
           const looks = estimateChecks.length - fixes;
           const lineFor = (id: string) => items.find(i => i.id === id);
           return (
@@ -2668,10 +2767,12 @@ export const EstimateTemplate = ({ projectId, estimateId }: EstimateTemplateProp
                       <li key={`${c.itemId}-${i}`} className="flex items-baseline justify-between gap-3 border-t border-border/50 pt-1">
                         <span>
                           <span className={c.level === 'fix' ? 'text-red-400' : 'text-amber-400'}>{c.level === 'fix' ? 'Fix' : 'Check'}</span>
-                          <span className="ml-2 text-muted-foreground">Line {line?.item_number ?? ''}{line?.scope_of_work && !/^\d/.test(line.scope_of_work) ? ` ${line.scope_of_work}` : ''}:</span>
+                          {line
+                            ? <span className="ml-2 text-muted-foreground">Line {line.item_number ?? ''}{line.scope_of_work && !/^\d/.test(line.scope_of_work) ? ` ${line.scope_of_work}` : ''}:</span>
+                            : <span className="ml-2 text-muted-foreground">Whole job:</span>}
                           <span className="ml-1">{c.message}</span>
                         </span>
-                        <button type="button" className="shrink-0 text-xs text-[#D4A045] hover:underline" onClick={() => showLine(c.itemId)}>Show line</button>
+                        {line && <button type="button" className="shrink-0 text-xs text-[#D4A045] hover:underline" onClick={() => showLine(c.itemId)}>Show line</button>}
                       </li>
                     );
                   })}
@@ -3338,6 +3439,7 @@ export const EstimateTemplate = ({ projectId, estimateId }: EstimateTemplateProp
         open={showCustomMaterialDialog}
         onOpenChange={setShowCustomMaterialDialog}
         onAdd={(material) => {
+          if (blockedWhenLocked()) return;
           const newItem: EstimateItem = {
             id: crypto.randomUUID(),
             section_id: null,

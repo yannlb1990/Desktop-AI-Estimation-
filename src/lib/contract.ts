@@ -91,6 +91,10 @@ function patchProject(projectId: string, patch: Record<string, unknown>): any | 
   projects[idx] = { ...projects[idx], ...patch };
   localStorage.setItem(key, JSON.stringify(projects));
   syncProjectToSupabase(projects[idx]);
+  // the estimate locks or unlocks when the client's approval changes
+  if ('approved_quote' in patch && typeof window !== 'undefined') {
+    window.dispatchEvent(new CustomEvent('contract-changed', { detail: { projectId } }));
+  }
   return projects[idx];
 }
 

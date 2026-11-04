@@ -352,7 +352,10 @@ const ProjectDetail = () => {
   useEffect(() => {
     const handler = () => setActiveMainTab("estimate");
     window.addEventListener("go-to-estimate-tab", handler);
-    return () => window.removeEventListener("go-to-estimate-tab", handler);
+    // any screen can open another tab: dispatch 'go-to-tab' with { tab: 'variations' }
+    const toTab = (e: Event) => { const tab = (e as CustomEvent).detail?.tab; if (typeof tab === "string") setActiveMainTab(tab); };
+    window.addEventListener("go-to-tab", toTab);
+    return () => { window.removeEventListener("go-to-estimate-tab", handler); window.removeEventListener("go-to-tab", toTab); };
   }, []);
 
   const checkWorkflowScroll = () => {

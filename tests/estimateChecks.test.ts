@@ -34,3 +34,28 @@ expect('placeholder "Floor - Kitchen" still flagged', has(run({ scope_of_work: '
 
 if (failures) { console.log(`${failures} estimate check failures`); process.exit(1); }
 console.log('all estimate check tests passed');
+
+// ── duplicates, typical prices, trades missing ──
+{
+  const { checkEstimate: ce, missingTrades } = await import('@/lib/estimate/checks');
+  const { DEFAULT_ESTIMATE_CONFIG: cfg } = await import('@/lib/pricing/estimatePricing');
+  const L = (id: string, o: any) => ({ id, trade: 'Tiling', quantity: 10, unit: 'm²', unit_price: 75, labour_hours: 0, scope_of_work: 'Floor tiling (lay only)', material_type: 'Supply and install', area: 'Bathroom', ...o });
+  const msgs = (items: any[]) => ce(items, cfg, {}, { state: 'NSW' }).map(c => c.message);
+  const dup = msgs([L('a', {}), L('b', {})]);
+  if (!dup.some(m => m.startsWith('Same work twice in Bathroom'))) { console.log('FAIL duplicate', dup); process.exitCode = 1; }
+  const typo = msgs([L('a', { unit_price: 750 })]);
+  if (!typo.some(m => m.includes('against a typical $75'))) { console.log('FAIL typical price', typo); process.exitCode = 1; }
+  const okPrice = msgs([L('a', { unit_price: 90 })]);
+  if (okPrice.some(m => m.includes('typical'))) { console.log('FAIL normal price flagged', okPrice); process.exitCode = 1; }
+  const pc = msgs([L('a', { scope_of_work: 'Tile supply allowance', unit_price: 300, allowance: 'PC' })]);
+  if (pc.some(m => m.includes('typical'))) { console.log('FAIL allowance price flagged', pc); process.exitCode = 1; }
+  const wet = missingTrades([L('a', {})], 1000).map(c => c.message);
+  if (!wet.some(m => m.startsWith('Bathroom: no waterproofing'))) { console.log('FAIL waterproofing gap', wet); process.exitCode = 1; }
+  const wetOk = missingTrades([L('a', {}), L('w', { trade: 'Waterproofer', scope_of_work: 'Wet area floor' })], 1000);
+  if (wetOk.length) { console.log('FAIL waterproofing found', wetOk); process.exitCode = 1; }
+  const big = missingTrades([L('a', { area: 'Living', trade: 'Carpentry', scope_of_work: 'Wall framing' })], 60000).map(c => c.message);
+  if (!(big.some(m => m.includes('Home warranty')) && big.some(m => m.includes('skip bins')) && big.some(m => m.includes('preliminaries')))) { console.log('FAIL big job gaps', big); process.exitCode = 1; }
+  const kitchen = missingTrades([L('a', { area: 'Kitchen', trade: 'Electrical', scope_of_work: 'Power point (double)' })], 1000).map(c => c.message);
+  if (!kitchen.some(m => m.startsWith('Kitchen: no cabinetry'))) { console.log('FAIL kitchen gap', kitchen); process.exitCode = 1; }
+  if (!process.exitCode) console.log('all scope check tests passed');
+}
