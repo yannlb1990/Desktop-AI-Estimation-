@@ -3,6 +3,7 @@ import { format, parseISO } from "date-fns";
 import { toast } from "sonner";
 import { getUserStorageKey } from "@/lib/localAuth";
 import { projectGstPct } from "@/lib/contract";
+import { TRADES, normaliseTrade } from "@/lib/trades";
 import { gstOn } from "@/lib/pricing/estimatePricing";
 import { loadVariationsMerged, lsSaveVariations, syncVariationsToSupabase } from "@/lib/db/variations";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
@@ -69,6 +70,10 @@ interface Variation {
   items: VariationItem[];
   notes: string;
   totalAmount: number;
+  /** trade from the one trade list: an approved variation adds to its Job Cost budget */
+  trade?: string;
+  /** what the work costs you, ex GST (optional) */
+  costAmount?: number;
   createdAt: string;
   approvedAt?: string;
   rejectedAt?: string;
@@ -155,6 +160,8 @@ export default function VariationsLog({
   const [formReason, setFormReason] = useState(REASONS[0]);
   const [formDescription, setFormDescription] = useState("");
   const [formNotes, setFormNotes] = useState("");
+  const [formTrade, setFormTrade] = useState("");
+  const [formCost, setFormCost] = useState("");
   const [formItems, setFormItems] = useState<VariationItem[]>([makeBlankItem()]);
 
   // Load merged from DB + localStorage
@@ -197,6 +204,8 @@ export default function VariationsLog({
     setFormReason(REASONS[0]);
     setFormDescription("");
     setFormNotes("");
+    setFormTrade("");
+    setFormCost("");
     setFormItems([makeBlankItem()]);
     setDialogOpen(true);
   };
@@ -207,6 +216,8 @@ export default function VariationsLog({
     setFormReason(variation.reason);
     setFormDescription(variation.description);
     setFormNotes(variation.notes);
+    setFormTrade(variation.trade ? normaliseTrade(variation.trade) : "");
+    setFormCost(variation.costAmount != null ? String(variation.costAmount) : "");
     setFormItems(variation.items.length ? variation.items : [makeBlankItem()]);
     setDialogOpen(true);
   };
@@ -228,6 +239,9 @@ export default function VariationsLog({
 
     const finalItems = computeItems(formItems);
     const total = totalFromItems(formItems);
+    const cost = parseFloat(formCost);
+    const trade = formTrade || undefined;
+    const costAmount = formCost.trim() !== "" && !isNaN(cost) ? Math.round(cost * 100) / 100 : undefined;
 
     if (editingVariation) {
       const updated = variations.map((v) =>
@@ -240,6 +254,8 @@ export default function VariationsLog({
               notes: formNotes.trim(),
               items: finalItems,
               totalAmount: total,
+              trade,
+              costAmount,
             }
           : v
       );
@@ -260,6 +276,8 @@ export default function VariationsLog({
         items: finalItems,
         notes: formNotes.trim(),
         totalAmount: total,
+        trade,
+        costAmount,
         createdAt: new Date().toISOString(),
       };
       saveVariations([newVariation, ...variations]);
@@ -437,6 +455,8 @@ Please respond to approve or reject this variation.`;
                   )}
                   <div className="flex items-center gap-4 mt-1.5 text-xs text-muted-foreground">
                     <span>Reason: {v.reason}</span>
+                    {v.trade && <span>Trade: {normaliseTrade(v.trade)}</span>}
+                    {v.costAmount != null && <span>Your cost: {aud(v.costAmount)}</span>}
                     <span>Created: {format(parseISO(v.createdAt), "dd MMM yyyy")}</span>
                   </div>
                 </div>
@@ -692,6 +712,30 @@ Please respond to approve or reject this variation.`;
                     ))}
                   </SelectContent>
                 </Select>
+              </div>
+              <div>
+                <Label className="text-xs text-muted-foreground mb-1 block">Trade</Label>
+                <Select value={formTrade || "none"} onValueChange={v => setFormTrade(v === "none" ? "" : v)}>
+                  <SelectTrigger className="bg-card/90 border-border text-foreground">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent className="bg-card/90 border-border max-h-72">
+                    <SelectItem value="none" className="text-muted-foreground">Not set</SelectItem>
+                    {TRADES.map((t) => (
+                      <SelectItem key={t} value={t} className="text-foreground hover:bg-muted/60">{t}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="col-span-2">
+                <Label className="text-xs text-muted-foreground mb-1 block">Your cost ex GST (optional)</Label>
+                <Input
+                  inputMode="decimal"
+                  value={formCost}
+                  onChange={(e) => setFormCost(e.target.value)}
+                  placeholder="What this work costs you. Once approved it adds to the trade's budget in Job Cost."
+                  className="bg-card/90 border-border text-foreground"
+                />
               </div>
             </div>
 

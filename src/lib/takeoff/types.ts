@@ -1,3 +1,4 @@
+import { TRADES } from '@/lib/trades';
 // Core TypeScript interfaces for PDF Takeoff system with unified coordinate system
 
 // === COORDINATE TYPES ===
@@ -255,35 +256,8 @@ export interface ConsumableItem {
 }
 
 // Trade options for construction - matching UI dropdown
-export const TRADE_OPTIONS = [
-  'Preliminaries',
-  'Site Works',
-  'Demolition',
-  'Concrete',
-  'Structural Steel',
-  'Carpentry',
-  'Brickwork',
-  'Roofing',
-  'Windows & Doors',
-  'Waterproofing',
-  'Plasterboard',
-  'Insulation',
-  'Joinery',
-  'Painting',
-  'Tiling',
-  'Floor Coverings',
-  'Epoxy Flooring',
-  'Plumbing',
-  'Electrical',
-  'HVAC',
-  'Fire Services',
-  'Landscaping',
-  'Crane / Lifting',
-  'External Works',
-  'Certifications',
-  'General',
-  'Other',
-] as const;
+/** The one trade list (src/lib/trades.ts), kept under its old name for existing imports. */
+export const TRADE_OPTIONS = TRADES;
 
 export type Trade = typeof TRADE_OPTIONS[number];
 

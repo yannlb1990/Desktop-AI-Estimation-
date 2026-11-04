@@ -7,6 +7,8 @@
  * which screen was opened last.
  */
 
+import { labourRateForTrade } from '@/lib/trades';
+
 export interface PricingRelatedMaterial {
   quantity?: number;
   unit_price?: number;
@@ -78,7 +80,8 @@ export function resolveLabourRate(
   defaultLabourRate: number,
 ): number {
   if (item.labour_rate_override && item.labour_rate) return item.labour_rate;
-  return labourRates[item.trade] || item.labour_rate || defaultLabourRate;
+  // A trade's lines use the rate of the person doing it: Carpentry lines, the Carpenter rate
+  return labourRateForTrade(item.trade, labourRates) || item.labour_rate || defaultLabourRate;
 }
 
 export interface LinePricing {

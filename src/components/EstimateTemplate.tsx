@@ -48,6 +48,8 @@ import {
   projectFfeAllowance,
 } from "@/lib/pricing/estimatePricing";
 import { readUserPricingDefaults } from "@/lib/pricing/userPricingDefaults";
+import { renameLineTrades } from "@/lib/estimate/tradeNames";
+import { TRADES, normaliseTrade, labourRateForTrade, labourTradeFor } from "@/lib/trades";
 import { isMeasurementValueLabel, isGenericScope } from "@/lib/takeoff/scopeLabels";
 import { lineSource, relinkWithQuantity, createPlanLink, measuredValueFor, type EstimateLineSource, type PlanLink } from "@/lib/estimate/planLinks";
 import { acknowledgePlanChange } from "@/lib/estimate/planLinkSync";
@@ -91,11 +93,7 @@ function persistCustomTemplates(list: EstimateTemplateData[]) {
   localStorage.setItem(getUserStorageKey(CUSTOM_TPL_KEY), JSON.stringify(list));
 }
 
-const AU_TRADES_BASE = [
-  "Carpenter", "Plumber", "Electrician", "Bricklayer", "Plasterer",
-  "Painter", "Tiler", "Concreter", "Roofer", "Landscaper",
-  "Demolition",
-];
+const AU_TRADES_BASE: string[] = [...TRADES];
 
 function getAllTrades(): string[] {
   try {
@@ -104,8 +102,8 @@ function getAllTrades(): string[] {
       ? (JSON.parse(raw) as Array<{ trade_name: string }>).map(c => c.trade_name).filter(Boolean)
       : [];
     const combined = [...AU_TRADES_BASE];
-    for (const c of custom) {
-      if (!combined.includes(c)) combined.push(c);
+    for (const c of custom.map(normaliseTrade)) {
+      if (c && !combined.includes(c)) combined.push(c);
     }
     return combined;
   } catch {
@@ -201,7 +199,7 @@ function ScopeCombobox({ value, onChange, trade, extra = [], placeholder = 'Sele
 }) {
   const [open, setOpen] = React.useState(false);
   const [search, setSearch] = React.useState('');
-  const presets: string[] = [...new Set([...extra, ...((SCOPE_OF_WORK as Record<string, string[]>)[trade] ?? [])])];
+  const presets: string[] = [...new Set([...extra, ...((SCOPE_OF_WORK as Record<string, string[]>)[normaliseTrade(trade)] ?? [])])];
   const filtered = presets.filter(s => s.toLowerCase().includes(search.toLowerCase()));
   const isNew = search.trim() !== '' && search.trim() !== value && !presets.some(s => s.toLowerCase() === search.trim().toLowerCase());
   // the current wording is in the box when it opens: change a word instead of retyping it all
@@ -391,16 +389,16 @@ function AreaCombobox({ value, onChange, used = [], compact = false }: {
 }
 
 const SCOPE_OF_WORK = {
-  Carpenter: ["Framing", "Fix out", "Cladding", "Decking", "Stairs"],
-  Plumber: ["Rough-in", "Fix out", "Drainage", "Gas"],
-  Electrician: ["Rough-in", "Fit-off", "Solar", "Data"],
-  Bricklayer: ["External walls", "Fencing", "Paving"],
-  Plasterer: ["Internal walls", "Ceilings", "Cornice"],
-  Painter: ["Interior", "Exterior", "Preparation"],
-  Tiler: ["Floor tiling", "Wall tiling", "Splashbacks"],
-  Concreter: ["Footings", "Slab", "Driveway", "Paths"],
-  Roofer: ["Roof frame", "Tiles/Metal", "Gutters", "Flashings"],
-  Landscaper: ["Retaining walls", "Fencing", "Gardens", "Paving"],
+  'Carpentry': ["Framing", "Fix out", "Cladding", "Decking", "Stairs"],
+  'Plumbing': ["Rough-in", "Fix out", "Drainage", "Gas"],
+  'Electrical': ["Rough-in", "Fit-off", "Solar", "Data"],
+  'Brickwork': ["External walls", "Fencing", "Paving"],
+  'Plasterboard': ["Internal walls", "Ceilings", "Cornice"],
+  'Painting': ["Interior", "Exterior", "Preparation"],
+  'Tiling': ["Floor tiling", "Wall tiling", "Splashbacks"],
+  'Concrete': ["Footings", "Slab", "Driveway", "Paths"],
+  'Roofing': ["Roof frame", "Tiles/Metal", "Gutters", "Flashings"],
+  'Landscaping': ["Retaining walls", "Fencing", "Gardens", "Paving"],
   Demolition: ["Strip out", "Partial demolition", "Full demolition", "Skip bin removal", "Asbestos removal", "Site clearance", "Concrete breaking"],
 };
 
@@ -662,7 +660,17 @@ export const EstimateTemplate = ({ projectId, estimateId }: EstimateTemplateProp
     }
 
     // Always sync items from storage so transfers are reflected immediately
-    const estimateItems = project.estimate_items || [];
+    let estimateItems = project.estimate_items || [];
+    // Lines under an older trade name ("Carpenter") move to the trade list's name ("Carpentry"),
+    // priced exactly as before, so Job Cost, claims and quote requests meet under one name
+    const pricing = resolveProjectPricing(project, readUserPricingDefaults(project));
+    const renamed = renameLineTrades(estimateItems, pricing.labourRates, pricing.config.defaultLabourRate);
+    if (renamed !== estimateItems) {
+      estimateItems = renamed;
+      project.estimate_items = renamed;
+      localStorage.setItem(getUserStorageKey('local_projects'), JSON.stringify(projects));
+      syncProjectToSupabase(project);
+    }
     setItems(estimateItems);
     if (estimateItems.length > 0) {
       const cutoff = Date.now() - 60_000;
@@ -735,9 +743,9 @@ export const EstimateTemplate = ({ projectId, estimateId }: EstimateTemplateProp
       unit: newItem.unit,
       unit_price: unitPrice,
       labour_hours: labourHrs,
-      labour_rate: parseFloat(newItem.labour_rate) || labourRates[newItem.trade] || config.defaultLabourRate,
+      labour_rate: parseFloat(newItem.labour_rate) || labourRateForTrade(newItem.trade, labourRates) || config.defaultLabourRate,
       labour_rate_override: parseFloat(newItem.labour_rate) > 0
-        && parseFloat(newItem.labour_rate) !== (labourRates[newItem.trade] || config.defaultLabourRate),
+        && parseFloat(newItem.labour_rate) !== (labourRateForTrade(newItem.trade, labourRates) || config.defaultLabourRate),
       material_wastage_pct: newLineMatWaste,
       labour_wastage_pct: newLineLabWaste,
       markup_pct: config.defaultMarkup,
@@ -796,7 +804,7 @@ export const EstimateTemplate = ({ projectId, estimateId }: EstimateTemplateProp
         unit,
         unit_price: l.unitPrice,
         labour_hours: 0,
-        labour_rate: labourRates[l.trade] || config.defaultLabourRate,
+        labour_rate: labourRateForTrade(l.trade, labourRates) || config.defaultLabourRate,
         labour_rate_override: false,
         material_wastage_pct: 0,
         labour_wastage_pct: 0,
@@ -838,7 +846,7 @@ export const EstimateTemplate = ({ projectId, estimateId }: EstimateTemplateProp
       unit: l.unit,
       unit_price: 0,
       labour_hours: 0,
-      labour_rate: labourRates[l.trade] || config.defaultLabourRate,
+      labour_rate: labourRateForTrade(l.trade, labourRates) || config.defaultLabourRate,
       labour_rate_override: false,
       material_wastage_pct: config.materialWastage,
       labour_wastage_pct: config.labourWastage,
@@ -971,7 +979,7 @@ export const EstimateTemplate = ({ projectId, estimateId }: EstimateTemplateProp
       if (item.id === id) {
         // Typing a $/hr that differs from the trade rate makes it this line's own rate.
         const trade = editValues.trade ?? item.trade;
-        const tradeRate = labourRates[trade] || config.defaultLabourRate;
+        const tradeRate = labourRateForTrade(trade, labourRates) || config.defaultLabourRate;
         const rateEdited = editValues.labour_rate !== undefined && !isNaN(editValues.labour_rate);
         const labour_rate_override = rateEdited
           ? editValues.labour_rate !== tradeRate
@@ -1045,8 +1053,8 @@ export const EstimateTemplate = ({ projectId, estimateId }: EstimateTemplateProp
     if (changedTrades.length > 0) {
       // Lines with their own rate keep it when the trade rate changes.
       const updatedItems = items.map(item =>
-        changedTrades.includes(item.trade) && !item.labour_rate_override
-          ? { ...item, labour_rate: newRates[item.trade] }
+        (changedTrades.includes(item.trade) || changedTrades.includes(labourTradeFor(item.trade) ?? '')) && !item.labour_rate_override
+          ? { ...item, labour_rate: labourRateForTrade(item.trade, newRates) ?? item.labour_rate }
           : item
       );
       setItems(updatedItems);
@@ -1269,8 +1277,8 @@ export const EstimateTemplate = ({ projectId, estimateId }: EstimateTemplateProp
       quantity: parseFloat(newItem.quantity) || 0,
       unit_price: parseFloat(newItem.unit_price) || 0,
       labour_hours: parseFloat(newItem.labour_hours) || 0,
-      labour_rate: typedRate > 0 ? typedRate : (labourRates[newItem.trade] || config.defaultLabourRate),
-      labour_rate_override: typedRate > 0 && typedRate !== (labourRates[newItem.trade] || config.defaultLabourRate),
+      labour_rate: typedRate > 0 ? typedRate : (labourRateForTrade(newItem.trade, labourRates) || config.defaultLabourRate),
+      labour_rate_override: typedRate > 0 && typedRate !== (labourRateForTrade(newItem.trade, labourRates) || config.defaultLabourRate),
       material_wastage_pct: newLineMatWaste,
       labour_wastage_pct: newLineLabWaste,
       markup_pct: config.defaultMarkup,
@@ -1309,7 +1317,7 @@ export const EstimateTemplate = ({ projectId, estimateId }: EstimateTemplateProp
       unit: ti.unit,
       unit_price: ti.unit_price,
       labour_hours: ti.labour_hours,
-      labour_rate: labourRates[ti.trade] || config.defaultLabourRate,
+      labour_rate: labourRateForTrade(ti.trade, labourRates) || config.defaultLabourRate,
       material_wastage_pct: ti.material_wastage_pct,
       labour_wastage_pct: ti.labour_wastage_pct,
       markup_pct: ti.markup_pct,
@@ -2449,7 +2457,7 @@ export const EstimateTemplate = ({ projectId, estimateId }: EstimateTemplateProp
               min="0"
               value={newItem.labour_rate}
               onChange={(e) => setNewItem({ ...newItem, labour_rate: e.target.value })}
-              placeholder={`${labourRates[newItem.trade] || config.defaultLabourRate} (trade default)`}
+              placeholder={`${labourRateForTrade(newItem.trade, labourRates) || config.defaultLabourRate} (trade default)`}
             />
           </div>
         </div>
@@ -3241,7 +3249,7 @@ export const EstimateTemplate = ({ projectId, estimateId }: EstimateTemplateProp
             unit: material.unit,
             unit_price: material.unit_cost,
             labour_hours: material.labour_hours,
-            labour_rate: labourRates[material.trade] || config.defaultLabourRate,
+            labour_rate: labourRateForTrade(material.trade, labourRates) || config.defaultLabourRate,
             material_wastage_pct: config.materialWastage,
             labour_wastage_pct: config.labourWastage,
             markup_pct: config.defaultMarkup,

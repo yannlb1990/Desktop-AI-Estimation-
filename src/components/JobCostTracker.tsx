@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { priceLine, resolveProjectPricing } from "@/lib/pricing/estimatePricing";
 import { readUserPricingDefaults } from "@/lib/pricing/userPricingDefaults";
-import { contractSummary, syncClientApprovals, loadProgressClaims } from "@/lib/contract";
+import { contractSummary, syncClientApprovals, loadProgressClaims, approvedVariationCostsByTrade } from "@/lib/contract";
 import { jobMoney } from "@/lib/xero/money";
 import { refreshXeroPayments } from "@/lib/xero/payments";
 import { format, parseISO } from "date-fns";
@@ -22,6 +22,7 @@ import {
 } from "@/components/ui/select";
 import { Plus, Trash2, TrendingUp, TrendingDown, DollarSign, Percent, Pencil } from "lucide-react";
 import { TRADE_OPTIONS } from "@/lib/takeoff/types";
+import { normaliseTrade, sumByTrade } from "@/lib/trades";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -109,17 +110,19 @@ export default function JobCostTracker({ projectId }: JobCostTrackerProps) {
       setContract(contractSummary(projectId));
 
       const saved = localStorage.getItem(getUserStorageKey(BUDGET_LS_KEY(projectId)));
+      // Budgets kept under older names ("Carpenter") join their trade ("Carpentry")
       if (saved) {
-        setManualBudgets(JSON.parse(saved));
+        setManualBudgets(sumByTrade(JSON.parse(saved)));
       } else if (project?.trade_budgets && Object.keys(project.trade_budgets).length > 0) {
         // Restored from Supabase — write back to standalone key for future fast reads
-        setManualBudgets(project.trade_budgets);
+        setManualBudgets(sumByTrade(project.trade_budgets));
         localStorage.setItem(getUserStorageKey(BUDGET_LS_KEY(projectId)), JSON.stringify(project.trade_budgets));
       } else if (items.length > 0) {
         // Pre-fill from estimate items on first open
         const init: Record<string, number> = {};
         items.forEach((item: any) => {
-          if (item.trade) init[item.trade] = (init[item.trade] || 0) + computeItemCost(item, project);
+          const t = normaliseTrade(item.trade);
+          if (t) init[t] = (init[t] || 0) + computeItemCost(item, project);
         });
         setManualBudgets(init);
       }
@@ -127,7 +130,7 @@ export default function JobCostTracker({ projectId }: JobCostTrackerProps) {
       // Corrupted localStorage — start with empty state
     }
 
-    loadJobCostsMerged(projectId).then(setEntries);
+    loadJobCostsMerged(projectId).then(list => setEntries(list.map(e => ({ ...e, trade: normaliseTrade(e.trade) || e.trade }))));
     // Pick up a quote the client approved through their link
     syncClientApprovals(projectId).then(() => setContract(contractSummary(projectId)));
   }, [projectId]);
@@ -159,7 +162,8 @@ export default function JobCostTracker({ projectId }: JobCostTrackerProps) {
   const resetBudgetsFromEstimate = () => {
     const init: Record<string, number> = {};
     estimateItems.forEach((item: any) => {
-      if (item.trade) init[item.trade] = Math.round(((init[item.trade] || 0) + computeItemCost(item, projectRecord)) * 100) / 100;
+      const t = normaliseTrade(item.trade);
+      if (t) init[t] = Math.round(((init[t] || 0) + computeItemCost(item, projectRecord)) * 100) / 100;
     });
     saveBudgets(init);
     toast.success("Budgets rebuilt from the estimate's cost");
@@ -167,16 +171,21 @@ export default function JobCostTracker({ projectId }: JobCostTrackerProps) {
 
   // ─── Derived values ───────────────────────────────────────────────────────
 
-  // Active trades = those with a manual budget OR with cost entries
+  // Approved variations add what they cost you to their trade's budget
+  const variationCosts = useMemo(() => approvedVariationCostsByTrade(projectId),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [projectId, contract]);
+
+  // Active trades = those with a budget (own or from variations) OR with cost entries
   const activeTrades = useMemo(() => {
-    const withBudget = new Set(Object.keys(manualBudgets));
+    const withBudget = new Set([...Object.keys(manualBudgets), ...Object.keys(variationCosts.byTrade)]);
     const withSpend = new Set(entries.map(e => e.trade));
     const all = new Set([...withBudget, ...withSpend]);
     return [
       ...TRADE_OPTIONS.filter(t => all.has(t)),
       ...Array.from(all).filter(t => !TRADE_OPTIONS.includes(t as any)).sort(),
     ];
-  }, [manualBudgets, entries]);
+  }, [manualBudgets, entries, variationCosts]);
 
   const availableTrades = useMemo(
     () => TRADE_OPTIONS.filter(t => !activeTrades.includes(t)),
@@ -184,14 +193,18 @@ export default function JobCostTracker({ projectId }: JobCostTrackerProps) {
   );
 
   const tradeBreakdown = useMemo(() => activeTrades.map(trade => {
-    const budget = manualBudgets[trade] ?? 0;
+    const manual = manualBudgets[trade] ?? 0;
+    const fromVariations = variationCosts.byTrade[trade] ?? 0;
+    const budget = Math.round((manual + fromVariations) * 100) / 100;
     const spent = entries.filter(e => e.trade === trade).reduce((s, e) => s + e.amount, 0);
     const remaining = budget - spent;
     const pctUsed = budget > 0 ? (spent / budget) * 100 : spent > 0 ? 100 : 0;
-    return { trade, budget, spent, remaining, pctUsed };
-  }), [activeTrades, manualBudgets, entries]);
+    return { trade, budget, manual, fromVariations, spent, remaining, pctUsed };
+  }), [activeTrades, manualBudgets, entries, variationCosts]);
 
-  const budgetTotal = useMemo(() => Object.values(manualBudgets).reduce((s, v) => s + v, 0), [manualBudgets]);
+  const budgetTotal = useMemo(
+    () => Object.values(manualBudgets).reduce((s, v) => s + v, 0) + Object.values(variationCosts.byTrade).reduce((s, v) => s + v, 0),
+    [manualBudgets, variationCosts]);
   const estimateTotal = useMemo(() => estimateItems.reduce((s, i) => s + computeItemCost(i, projectRecord), 0), [estimateItems, projectRecord]);
   const effectiveBudgetTotal = budgetTotal > 0 ? budgetTotal : estimateTotal;
   const actualTotal = useMemo(() => entries.reduce((s, e) => s + e.amount, 0), [entries]);
@@ -459,6 +472,11 @@ export default function JobCostTracker({ projectId }: JobCostTrackerProps) {
             <CardTitle className="text-sm text-foreground">Trade Budget Control</CardTitle>
             <p className="text-xs text-muted-foreground">Click any budget to edit · Tab to move between rows</p>
           </div>
+          {variationCosts.missing > 0 && (
+            <p className="mt-1 text-xs text-amber-400">
+              {variationCosts.missing === 1 ? '1 approved variation has' : `${variationCosts.missing} approved variations have`} no trade or no cost entered, so {variationCosts.missing === 1 ? 'it is' : 'they are'} not in the budgets yet. Add them in Variations.
+            </p>
+          )}
         </CardHeader>
         <CardContent className="p-0 mt-3">
           {activeTrades.length === 0 ? (
@@ -545,12 +563,14 @@ export default function JobCostTracker({ projectId }: JobCostTrackerProps) {
                           />
                         ) : (
                           <button
-                            onClick={() => { setEditingTrade(row.trade); setEditingValue(String(row.budget)); }}
+                            onClick={() => { setEditingTrade(row.trade); setEditingValue(String(row.manual)); }}
                             className="group/btn flex items-center gap-1.5 ml-auto text-foreground/60 hover:text-foreground transition-colors"
                             title="Click to set budget"
                           >
                             {row.budget > 0
-                              ? <span className="font-mono">{aud(row.budget)}</span>
+                              ? <span className="font-mono text-right">{aud(row.budget)}
+                                  {row.fromVariations !== 0 && <span className="block text-[10px] text-muted-foreground">incl. {aud(row.fromVariations)} variations</span>}
+                                </span>
                               : <span className="text-muted-foreground text-xs italic">set budget</span>}
                             <Pencil className="w-3 h-3 opacity-0 group-hover/btn:opacity-50 transition-opacity" />
                           </button>

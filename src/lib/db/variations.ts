@@ -23,6 +23,10 @@ export interface Variation {
   items: VariationItem[];
   notes: string;
   totalAmount: number;
+  /** trade from the one trade list; an approved variation adds to its budget */
+  trade?: string;
+  /** what the work costs the builder, ex GST; empty means not entered */
+  costAmount?: number;
   createdAt: string;
   approvedAt?: string;
   rejectedAt?: string;
@@ -58,6 +62,8 @@ function toRow(v: Variation, projectId: string, userId: string) {
     items: v.items as unknown as any,
     notes: v.notes,
     total_amount: v.totalAmount,
+    trade: v.trade ?? null,
+    cost_amount: v.costAmount ?? null,
     approved_at: v.approvedAt ?? null,
     rejected_at: v.rejectedAt ?? null,
     updated_at: new Date().toISOString(),
@@ -75,6 +81,8 @@ function fromRow(row: any): Variation {
     items: (row.items as VariationItem[]) ?? [],
     notes: row.notes,
     totalAmount: Number(row.total_amount),
+    trade: row.trade ?? undefined,
+    costAmount: row.cost_amount == null ? undefined : Number(row.cost_amount),
     createdAt: row.created_at,
     approvedAt: row.approved_at ?? undefined,
     rejectedAt: row.rejected_at ?? undefined,
@@ -92,7 +100,12 @@ export async function syncVariationsToSupabase(projectId: string, variations: Va
       .eq('user_id', userId);
     if (delErr) return;
     if (variations.length === 0) return;
-    await supabase.from('variations').insert(variations.map(v => toRow(v, projectId, userId)));
+    const rows = variations.map(v => toRow(v, projectId, userId));
+    const { error } = await supabase.from('variations').insert(rows);
+    // Before the trade/cost columns exist (migration 20261105000000), save everything else
+    if (error && /trade|cost_amount|column/i.test(error.message)) {
+      await supabase.from('variations').insert(rows.map(({ trade: _t, cost_amount: _c, ...r }) => r));
+    }
   } catch (e) {
     console.error('[syncVariations] Supabase sync failed:', e instanceof Error ? e.message : e);
   }
@@ -119,8 +132,15 @@ export async function loadVariationsMerged(projectId: string): Promise<Variation
     Promise.resolve(lsLoadVariations(projectId)),
   ]);
   if (dbVars.length > 0) {
-    lsSaveVariations(projectId, dbVars);
-    return dbVars;
+    // keep a trade or cost this device knows when the cloud copy has none
+    const local = new Map(lsVars.map(v => [v.id, v]));
+    const merged = dbVars.map(v => ({
+      ...v,
+      trade: v.trade ?? local.get(v.id)?.trade,
+      costAmount: v.costAmount ?? local.get(v.id)?.costAmount,
+    }));
+    lsSaveVariations(projectId, merged);
+    return merged;
   }
   if (lsVars.length > 0) {
     syncVariationsToSupabase(projectId, lsVars);

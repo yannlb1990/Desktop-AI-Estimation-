@@ -8,6 +8,7 @@
 import { getUserStorageKey } from '@/lib/localAuth';
 import { syncProjectToSupabase } from '@/lib/db/projects';
 import { lsLoadVariations } from '@/lib/db/variations';
+import { normaliseTrade } from '@/lib/trades';
 import { calculateProjectTotals, resolveProjectPricing, roundCents, gstOn } from '@/lib/pricing/estimatePricing';
 import { readUserPricingDefaults } from '@/lib/pricing/userPricingDefaults';
 import { supabase } from '@/integrations/supabase/client';
@@ -145,6 +146,22 @@ export function approvedVariationsExGst(projectId: string): { total: number; ite
     amount: Number(v.totalAmount) || 0,
   }));
   return { total: roundCents(items.reduce((s, i) => s + i.amount, 0)), items };
+}
+
+/**
+ * What approved variations cost the builder, by trade (variations with a trade and a cost
+ * entered), and how many approved ones are missing either, so Job Cost can say so.
+ */
+export function approvedVariationCostsByTrade(projectId: string): { byTrade: Record<string, number>; missing: number } {
+  const byTrade: Record<string, number> = {};
+  let missing = 0;
+  for (const v of lsLoadVariations(projectId).filter((v: any) => v.status === 'approved') as any[]) {
+    const trade = normaliseTrade(v.trade);
+    const cost = Number(v.costAmount);
+    if (!trade || v.costAmount == null || !Number.isFinite(cost)) { missing++; continue; }
+    byTrade[trade] = roundCents((byTrade[trade] || 0) + cost);
+  }
+  return { byTrade, missing };
 }
 
 export interface ContractSummary {

@@ -13,6 +13,7 @@ import { readUserPricingDefaults } from '@/lib/pricing/userPricingDefaults';
 import { isMeasurementValueLabel, workLabelForMeasurement, isGenericScope } from '@/lib/takeoff/scopeLabels';
 import { createPlanLink } from './planLinks';
 import { knownTradeName } from '@/data/labourRates';
+import { normaliseTrade } from '@/lib/trades';
 
 /** Map a CostItem category to the nearest AU trade */
 export const CATEGORY_TO_TRADE: Record<string, string> = {
@@ -52,7 +53,8 @@ export function costItemToEstimateLine(
     area: item.area || '',
     // The item's own trade wins when it is a real labour trade (batts: Insulation, trench: Civil /
     // Excavation); 'General' or an AI category falls back to the category map as before
-    trade: knownTradeName(item.trade) ?? CATEGORY_TO_TRADE[item.category] ?? item.trade ?? 'Carpenter',
+    // named as in the one trade list ("Carpentry", not "Carpenter")
+    trade: normaliseTrade(knownTradeName(item.trade) ?? CATEGORY_TO_TRADE[item.category] ?? item.trade ?? 'Carpenter'),
     // The scope says what the work is, never the measured size or its name
     scope_of_work: scope,
     material_type: item.customMaterial || item.material || (isMeasurementValueLabel(item.name) || namedAfterMeasurement ? '' : item.name) || '',

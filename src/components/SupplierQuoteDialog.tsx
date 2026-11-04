@@ -13,6 +13,7 @@ import { CostItem, TRADE_OPTIONS } from '@/lib/takeoff/types';
 import { loadSuppliers, addSupplier, removeSupplier, type SavedSupplier } from '@/lib/suppliers';
 import { getUserStorageKey } from '@/lib/localAuth';
 import { cn } from '@/lib/utils';
+import { normaliseTrade } from '@/lib/trades';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import ExcelJS from 'exceljs';
@@ -84,13 +85,13 @@ export function SupplierQuoteDialog({ open, onClose, items, projectName = '', si
   }, [open, projectName, siteAddress, items]);
 
   const tradeOptions = useMemo(() => {
-    const trades = new Set(items.map(i => i.trade || i.category || 'General').filter(Boolean));
+    const trades = new Set(items.map(i => normaliseTrade(i.trade || i.category || 'General')).filter(Boolean));
     return Array.from(trades);
   }, [items]);
 
   const relevantSuppliers = useMemo(() => {
     if (!tradeOptions.length) return suppliers;
-    return suppliers.filter(s => s.trades.length === 0 || s.trades.some(t => tradeOptions.includes(t)));
+    return suppliers.filter(s => s.trades.length === 0 || s.trades.some(t => tradeOptions.includes(normaliseTrade(t))));
   }, [suppliers, tradeOptions]);
 
   const selectedSupplier = suppliers.find(s => s.id === selectedSupplierId);
@@ -98,7 +99,7 @@ export function SupplierQuoteDialog({ open, onClose, items, projectName = '', si
   const allSelected = selectedItemIds.size === items.length;
 
   const selectedTrades = useMemo(() => {
-    const trades = new Set(selectedItems.map(i => i.trade || i.category || 'General').filter(Boolean));
+    const trades = new Set(selectedItems.map(i => normaliseTrade(i.trade || i.category || 'General')).filter(Boolean));
     return Array.from(trades);
   }, [selectedItems]);
 
@@ -160,7 +161,7 @@ export function SupplierQuoteDialog({ open, onClose, items, projectName = '', si
 
   const buildQuoteItems = () =>
     selectedItems.map(item => ({
-      trade: item.trade || item.category || 'General',
+      trade: normaliseTrade(item.trade || item.category || 'General'),
       description: item.name + (item.description ? ` — ${item.description}` : ''),
       unit: item.unit,
       quantity: item.quantity,
