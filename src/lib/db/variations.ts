@@ -103,7 +103,7 @@ export async function syncVariationsToSupabase(projectId: string, variations: Va
     const rows = variations.map(v => toRow(v, projectId, userId));
     const { error } = await supabase.from('variations').insert(rows);
     // Before the trade/cost columns exist (migration 20261105000000), save everything else
-    if (error && /trade|cost_amount|column/i.test(error.message)) {
+    if (error && /\b(trade|cost_amount)\b/i.test(error.message)) {
       await supabase.from('variations').insert(rows.map(({ trade: _t, cost_amount: _c, ...r }) => r));
     }
   } catch (e) {
