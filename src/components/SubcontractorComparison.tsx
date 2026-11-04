@@ -1,18 +1,22 @@
-import { useState, useEffect, useRef } from "react"
+import { useState, useEffect, useMemo, useRef } from "react"
 import { supabase } from "@/integrations/supabase/client"
 import { getUserStorageKey } from "@/lib/localAuth"
 import { syncProjectToSupabase } from "@/lib/db/projects"
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
-import { Badge } from "@/components/ui/badge"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog"
 import { toast } from "sonner"
-import { Plus, Trash2, CheckCircle2, Users, Phone, ChevronDown, ChevronRight, Building2 } from "lucide-react"
-import { TRADE_OPTIONS } from "@/lib/takeoff/types"
+import { normaliseTrade, sortTrades } from "@/lib/trades"
+import { SupplierQuoteDialog } from "@/components/SupplierQuoteDialog"
+import { estimateLinesAsCostItems } from "@/lib/estimate/fromCostItem"
+import { resolveProjectPricing } from "@/lib/pricing/estimatePricing"
+import { readUserPricingDefaults } from "@/lib/pricing/userPricingDefaults"
+import { tradeCost, applySubbieQuote } from "@/lib/estimate/subbieAward"
+import { setTradeBudget } from "@/lib/jobCostBudgets"
+import { cn } from "@/lib/utils"
+
+export type SubbieStatus = "requested" | "received" | "declined" | "awarded"
 
 export interface SubbieQuote {
   id: string
@@ -20,18 +24,19 @@ export interface SubbieQuote {
   company: string
   contact?: string
   phone?: string
+  email?: string
+  /** their price, ex GST; 0 while waiting for it */
   amount: number
   notes?: string
   submittedAt: string
   usedInEstimate?: boolean
-}
-
-interface SubcontractorComparisonProps {
-  projectId: string
-  onUsePrice?: (trade: string, company: string, amount: number) => void
+  /** a quote entered by hand, before this existed, is 'received' */
+  status?: SubbieStatus
+  requestedAt?: string
 }
 
 const STORAGE_KEY = (pid: string) => `subcontractor_quotes_${pid}`
+const statusOf = (q: SubbieQuote): SubbieStatus => q.status ?? "received"
 
 const loadQuotes = (pid: string): SubbieQuote[] => {
   try {
@@ -45,27 +50,55 @@ const loadQuotes = (pid: string): SubbieQuote[] => {
 
 const saveQuotes = (pid: string, quotes: SubbieQuote[]) => {
   localStorage.setItem(getUserStorageKey(STORAGE_KEY(pid)), JSON.stringify(quotes))
-  // Embed in project record so Supabase sync picks it up
+  // Embed in project record so Supabase sync picks it up (with status, email and dates)
   try {
-    const projectsRaw = localStorage.getItem(getUserStorageKey("local_projects")) || "[]"
-    const projects = JSON.parse(projectsRaw)
+    const projects = JSON.parse(localStorage.getItem(getUserStorageKey("local_projects")) || "[]")
     const idx = projects.findIndex((p: any) => p.id === pid)
     if (idx !== -1) {
       projects[idx].subcontractor_quotes = quotes
       localStorage.setItem(getUserStorageKey("local_projects"), JSON.stringify(projects))
       syncProjectToSupabase(projects[idx])
     }
-  } catch { /* localStorage read error — standalone key still saved */ }
+  } catch { /* localStorage read error: standalone key still saved */ }
 }
 
-const fmtAUD = (n: number) =>
-  new Intl.NumberFormat("en-AU", { style: "currency", currency: "AUD", maximumFractionDigits: 0 }).format(n)
+const readProject = (pid: string): any => {
+  try { return JSON.parse(localStorage.getItem(getUserStorageKey("local_projects")) || "[]").find((p: any) => p.id === pid) ?? null }
+  catch { return null }
+}
 
-export const SubcontractorComparison = ({ projectId, onUsePrice }: SubcontractorComparisonProps) => {
+const aud = (n: number) => new Intl.NumberFormat("en-AU", { style: "currency", currency: "AUD", maximumFractionDigits: 0 }).format(n)
+const dateText = (iso?: string) => iso ? new Date(iso).toLocaleDateString("en-AU", { day: "numeric", month: "short" }) : ""
+const STATUS_TEXT: Record<SubbieStatus, string> = { requested: "Waiting for price", received: "Price received", declined: "Declined", awarded: "Awarded" }
+
+const EMPTY_FORM = { company: "", contact: "", phone: "", email: "", amount: "", notes: "" }
+
+/**
+ * Quotes from subcontractors, trade by trade: request them by email straight from the
+ * estimate's lines, see who has replied, compare against your own estimate, and award one.
+ * Awarding brings the trade's estimate lines to that price (before the client approves)
+ * and sets the trade's Job Cost budget.
+ */
+export const SubcontractorComparison = ({ projectId }: { projectId: string }) => {
   const [quotes, setQuotes] = useState<SubbieQuote[]>(() => loadQuotes(projectId))
-  const [addOpen, setAddOpen] = useState(false)
-  const [expandedTrades, setExpandedTrades] = useState<Set<string>>(new Set())
+  const [project, setProject] = useState<any>(() => readProject(projectId))
+  const [rfqTrade, setRfqTrade] = useState<string | null>(null)
+  const [addFor, setAddFor] = useState<string | null>(null)
+  const [form, setForm] = useState(EMPTY_FORM)
+  const [priceDraft, setPriceDraft] = useState<Record<string, string>>({})
+  const [awarding, setAwarding] = useState<SubbieQuote | null>(null)
+  const [award, setAward] = useState({ updateEstimate: true, setBudget: true })
   const suppressSave = useRef(false)
+
+  // The estimate changes elsewhere (lines added, client approval): keep this screen current
+  useEffect(() => {
+    const refresh = (e: Event) => { if ((e as CustomEvent).detail?.projectId === projectId) setProject(readProject(projectId)) }
+    const onFocus = () => setProject(readProject(projectId))
+    window.addEventListener("estimate-updated", refresh)
+    window.addEventListener("contract-changed", refresh)
+    window.addEventListener("focus", onFocus)
+    return () => { window.removeEventListener("estimate-updated", refresh); window.removeEventListener("contract-changed", refresh); window.removeEventListener("focus", onFocus) }
+  }, [projectId])
 
   // ── Supabase: load quotes on mount / projectId change ────────────────────────
   useEffect(() => {
@@ -83,7 +116,10 @@ export const SubcontractorComparison = ({ projectId, onUsePrice }: Subcontractor
           .order('submitted_at', { ascending: true })
         if (cancelled) return
         if (data && data.length > 0) {
+          // the table has no status or email: keep what this device or the project record knows
+          const local = new Map(loadQuotes(projectId).map(q => [q.id, q]))
           const cloud: SubbieQuote[] = data.map((r: any) => ({
+            ...local.get(r.id),
             id: r.id, trade: r.trade, company: r.company,
             contact: r.contact ?? undefined, phone: r.phone ?? undefined,
             amount: Number(r.amount), notes: r.notes ?? undefined,
@@ -92,7 +128,7 @@ export const SubcontractorComparison = ({ projectId, onUsePrice }: Subcontractor
           setQuotes(cloud)
           localStorage.setItem(getUserStorageKey(STORAGE_KEY(projectId)), JSON.stringify(cloud))
         }
-      } catch {}
+      } catch { /* offline: local copy stands */ }
       if (!cancelled) suppressSave.current = false
     }
     loadCloud()
@@ -114,297 +150,254 @@ export const SubcontractorComparison = ({ projectId, onUsePrice }: Subcontractor
               id: q.id, project_id: projectId, user_id: session.user.id,
               trade: q.trade, company: q.company, contact: q.contact ?? null,
               phone: q.phone ?? null, amount: q.amount, notes: q.notes ?? null,
-              submitted_at: q.submittedAt, used_in_estimate: q.usedInEstimate ?? false,
+              submitted_at: q.submittedAt, used_in_estimate: statusOf(q) === "awarded",
             } as any))
           )
         }
-      } catch {}
+      } catch { /* retried on the next change */ }
     }, 1500)
     return () => clearTimeout(timer)
   }, [quotes, projectId])
-
-  // New quote form state
-  const [newTrade, setNewTrade] = useState<string>(TRADE_OPTIONS[0])
-  const [newCompany, setNewCompany] = useState("")
-  const [newContact, setNewContact] = useState("")
-  const [newPhone, setNewPhone] = useState("")
-  const [newAmount, setNewAmount] = useState("")
-  const [newNotes, setNewNotes] = useState("")
 
   const persist = (updated: SubbieQuote[]) => {
     setQuotes(updated)
     saveQuotes(projectId, updated)
   }
 
-  const handleAdd = () => {
-    if (!newCompany.trim()) { toast.error("Company name is required"); return }
-    const amount = parseFloat(newAmount)
-    if (isNaN(amount) || amount < 0) { toast.error("Enter a valid amount"); return }
+  // ── What the estimate says, per trade ───────────────────────────────────────
+  const pricing = useMemo(() => project ? resolveProjectPricing(project, readUserPricingDefaults(project)) : null, [project])
+  const approved = !!project?.approved_quote
+  const estimateItems: any[] = project?.estimate_items ?? []
+  const costFor = (trade: string) => pricing ? tradeCost(estimateItems, trade, pricing.config, pricing.labourRates) : 0
+  const linesFor = (trade: string) => estimateItems.filter(i => normaliseTrade(i.trade) === normaliseTrade(trade))
 
-    const entry: SubbieQuote = {
-      id: crypto.randomUUID(),
-      trade: newTrade,
-      company: newCompany.trim(),
-      contact: newContact.trim() || undefined,
-      phone: newPhone.trim() || undefined,
-      amount,
-      notes: newNotes.trim() || undefined,
-      submittedAt: new Date().toISOString(),
+  const trades = useMemo(() => sortTrades(new Set([
+    ...estimateItems.map(i => normaliseTrade(i.trade)).filter(Boolean),
+    ...quotes.map(q => normaliseTrade(q.trade)),
+  ])), [estimateItems, quotes])
+
+  const rfqItems = useMemo(() => {
+    if (!rfqTrade || !project) return []
+    return estimateLinesAsCostItems(project).filter((ci: any) => normaliseTrade(ci.trade || ci.category) === normaliseTrade(rfqTrade))
+  }, [rfqTrade, project])
+
+  // ── Actions ─────────────────────────────────────────────────────────────────
+  const onRequestsSent = (trade: string, sent: { supplier: { name: string; email: string; phone?: string }; sentAt: string }[]) => {
+    let updated = [...quotes]
+    for (const { supplier, sentAt } of sent) {
+      const open = updated.find(q => normaliseTrade(q.trade) === trade && q.email === supplier.email && statusOf(q) === "requested")
+      if (open) { updated = updated.map(q => q === open ? { ...q, requestedAt: sentAt } : q); continue }
+      updated.push({
+        id: crypto.randomUUID(), trade, company: supplier.name, email: supplier.email, phone: supplier.phone,
+        amount: 0, submittedAt: sentAt, requestedAt: sentAt, status: "requested",
+      })
     }
-    persist([...quotes, entry])
-    setExpandedTrades(prev => new Set(prev).add(newTrade))
-    setAddOpen(false)
-    setNewCompany("")
-    setNewContact("")
-    setNewPhone("")
-    setNewAmount("")
-    setNewNotes("")
-    toast.success(`Quote from ${entry.company} added`)
-  }
-
-  const handleDelete = (id: string) => {
-    persist(quotes.filter(q => q.id !== id))
-    toast.success("Quote removed")
-  }
-
-  const handleUsePrice = (q: SubbieQuote) => {
-    if (!onUsePrice) return
-    onUsePrice(q.trade, q.company, q.amount)
-    // Mark quote as used in state + localStorage
-    const updated = quotes.map(qq => qq.id === q.id ? { ...qq, usedInEstimate: true } : qq)
     persist(updated)
-    toast.success(`${fmtAUD(q.amount)} from ${q.company} added to estimate`)
   }
 
-  // Group by trade
-  const byTrade = quotes.reduce((acc, q) => {
-    if (!acc[q.trade]) acc[q.trade] = []
-    acc[q.trade].push(q)
-    return acc
-  }, {} as Record<string, SubbieQuote[]>)
-
-  const tradesWithQuotes = Object.keys(byTrade).sort()
-
-  const toggleTrade = (trade: string) => {
-    setExpandedTrades(prev => {
-      const next = new Set(prev)
-      if (next.has(trade)) next.delete(trade)
-      else next.add(trade)
-      return next
-    })
+  const addManual = () => {
+    if (!addFor) return
+    if (!form.company.trim()) { toast.error("Company name is required"); return }
+    const amount = parseFloat(form.amount)
+    if (isNaN(amount) || amount < 0) { toast.error("Enter their price"); return }
+    persist([...quotes, {
+      id: crypto.randomUUID(), trade: addFor, company: form.company.trim(),
+      contact: form.contact.trim() || undefined, phone: form.phone.trim() || undefined, email: form.email.trim() || undefined,
+      amount, notes: form.notes.trim() || undefined, submittedAt: new Date().toISOString(), status: "received",
+    }])
+    setAddFor(null)
+    setForm(EMPTY_FORM)
   }
+
+  const enterPrice = (q: SubbieQuote) => {
+    const amount = parseFloat(priceDraft[q.id] ?? "")
+    if (isNaN(amount) || amount <= 0) { toast.error("Enter their price, ex GST"); return }
+    persist(quotes.map(x => x.id === q.id ? { ...x, amount, status: "received", submittedAt: new Date().toISOString() } : x))
+    setPriceDraft(d => { const n = { ...d }; delete n[q.id]; return n })
+  }
+
+  const setStatus = (q: SubbieQuote, status: SubbieStatus) => persist(quotes.map(x => x.id === q.id ? { ...x, status } : x))
+
+  const startAward = (q: SubbieQuote) => {
+    setAward({ updateEstimate: !approved, setBudget: true })
+    setAwarding(q)
+  }
+
+  const confirmAward = () => {
+    const q = awarding
+    if (!q) return
+    const trade = normaliseTrade(q.trade)
+    if (award.updateEstimate && !approved && pricing) {
+      const projects: any[] = JSON.parse(localStorage.getItem(getUserStorageKey("local_projects")) || "[]")
+      const idx = projects.findIndex(p => p.id === projectId)
+      if (idx !== -1) {
+        projects[idx].estimate_items = applySubbieQuote(projects[idx].estimate_items || [], trade, q.amount, q.company, pricing.config, pricing.labourRates)
+        localStorage.setItem(getUserStorageKey("local_projects"), JSON.stringify(projects))
+        syncProjectToSupabase(projects[idx])
+        window.dispatchEvent(new CustomEvent("estimate-updated", { detail: { projectId } }))
+        setProject(projects[idx])
+      }
+    }
+    if (award.setBudget) setTradeBudget(projectId, trade, q.amount)
+    // one subbie per trade: an earlier award in this trade goes back to a received price
+    persist(quotes.map(x => x.id === q.id ? { ...x, status: "awarded" } :
+      normaliseTrade(x.trade) === trade && statusOf(x) === "awarded" ? { ...x, status: "received" } : x))
+    setAwarding(null)
+    toast.success(`${trade} awarded to ${q.company}`)
+  }
+
+  const awardCost = awarding ? costFor(awarding.trade) : 0
+  const awardDiff = awarding ? awarding.amount - awardCost : 0
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <div>
-          <h3 className="font-display text-lg font-bold">Subcontractor Quotes</h3>
-          <p className="text-sm text-muted-foreground mt-0.5">
-            Compare subbies for each trade and use the best price in your estimate
-          </p>
-        </div>
-        <Button onClick={() => setAddOpen(true)} size="sm">
-          <Plus className="h-4 w-4 mr-1.5" />
-          Add Quote
-        </Button>
+      <div>
+        <h3 className="font-display text-lg font-bold">Subcontractor quotes</h3>
+        <p className="mt-0.5 text-sm text-muted-foreground">
+          Trade by trade: email the estimate's lines to your subbies, enter their prices as they come back, compare them with your estimate and award one.
+        </p>
       </div>
 
-      {tradesWithQuotes.length === 0 ? (
-        <Card className="p-10 text-center">
-          <Users className="h-10 w-10 mx-auto text-muted-foreground mb-3" />
-          <p className="font-semibold">No subcontractor quotes yet</p>
-          <p className="text-sm text-muted-foreground mt-1 mb-4">
-            Add quotes from multiple subbies per trade to compare prices side-by-side
-          </p>
-          <Button variant="outline" onClick={() => setAddOpen(true)}>
-            <Plus className="h-4 w-4 mr-1.5" />
-            Add First Quote
-          </Button>
+      {trades.length === 0 ? (
+        <Card className="p-8 text-center text-sm text-muted-foreground">
+          Add lines to the estimate first: each trade on it shows here, ready to ask your subbies for a price.
         </Card>
-      ) : (
-        <div className="space-y-3">
-          {tradesWithQuotes.map(trade => {
-            const tradeQuotes = byTrade[trade].sort((a, b) => a.amount - b.amount)
-            const lowest = tradeQuotes[0]
-            const expanded = expandedTrades.has(trade)
+      ) : trades.map(trade => {
+        const list = quotes.filter(q => normaliseTrade(q.trade) === trade)
+          .sort((a, b) => (statusOf(a) === "requested" ? 1 : 0) - (statusOf(b) === "requested" ? 1 : 0) || a.amount - b.amount)
+        const priced = list.filter(q => ["received", "awarded"].includes(statusOf(q)))
+        const lowest = priced.length ? Math.min(...priced.map(q => q.amount)) : null
+        const waiting = list.filter(q => statusOf(q) === "requested").length
+        const awarded = list.find(q => statusOf(q) === "awarded")
+        const cost = costFor(trade)
+        const lineCount = linesFor(trade).length
+        return (
+          <Card key={trade} className="overflow-hidden">
+            <div className="flex flex-wrap items-center gap-x-4 gap-y-2 px-5 py-3">
+              <span className="font-semibold">{trade}</span>
+              <span className="text-sm text-muted-foreground">
+                Your estimate: <span className="font-mono text-foreground">{aud(cost)}</span> cost{lineCount ? `, ${lineCount} line${lineCount !== 1 ? "s" : ""}` : ""}
+              </span>
+              <span className="text-sm text-muted-foreground">
+                {awarded ? <>Awarded to <span className="text-[#D4A045]">{awarded.company}</span> at <span className="font-mono">{aud(awarded.amount)}</span></>
+                  : [priced.length ? `${priced.length} priced, lowest ${aud(lowest!)}` : "", waiting ? `${waiting} waiting` : ""].filter(Boolean).join(", ") || "No quotes yet"}
+              </span>
+              <span className="ml-auto flex gap-2">
+                <Button size="sm" variant="outline" disabled={!lineCount} title={lineCount ? undefined : "No estimate lines for this trade to send"} onClick={() => setRfqTrade(trade)}>Request quotes</Button>
+                <Button size="sm" variant="ghost" onClick={() => { setForm(EMPTY_FORM); setAddFor(trade) }}>Add a price</Button>
+              </span>
+            </div>
+            {list.length > 0 && (
+              <div className="border-t border-border text-sm">
+                {list.map(q => {
+                  const st = statusOf(q)
+                  const diff = q.amount - cost
+                  return (
+                    <div key={q.id} className={cn("grid grid-cols-1 gap-2 border-b border-border/50 px-5 py-2 last:border-0 sm:grid-cols-[1fr_9rem_10rem_auto] sm:items-center", st === "declined" && "opacity-50", st === "awarded" && "bg-[#D4A045]/5")}>
+                      <div className="min-w-0">
+                        <span className="font-medium">{q.company}</span>
+                        <span className="block truncate text-xs text-muted-foreground">
+                          {[q.contact, q.email, q.phone].filter(Boolean).join(" · ")}{q.notes ? ` · ${q.notes}` : ""}
+                        </span>
+                      </div>
+                      <div className="text-xs">
+                        <span className={cn(st === "awarded" ? "text-[#D4A045]" : st === "requested" ? "text-amber-400" : "text-muted-foreground")}>{STATUS_TEXT[st]}</span>
+                        <span className="block text-muted-foreground">{st === "requested" ? `asked ${dateText(q.requestedAt)}` : dateText(q.submittedAt)}</span>
+                      </div>
+                      <div className="sm:text-right">
+                        {st === "requested" ? (
+                          <span className="flex gap-1">
+                            <Input className="h-8 font-mono" inputMode="decimal" placeholder="Their price ex GST" value={priceDraft[q.id] ?? ""}
+                              onChange={e => setPriceDraft(d => ({ ...d, [q.id]: e.target.value }))}
+                              onKeyDown={e => { if (e.key === "Enter") enterPrice(q) }} />
+                            <Button size="sm" variant="outline" className="h-8" onClick={() => enterPrice(q)}>Save</Button>
+                          </span>
+                        ) : st !== "declined" && (
+                          <>
+                            <span className="font-mono font-semibold">{aud(q.amount)}</span>
+                            {cost > 0 && <span className={cn("block text-xs", diff > 0 ? "text-red-400" : "text-emerald-400")}>{diff > 0 ? "+" : ""}{aud(diff)} on your estimate</span>}
+                          </>
+                        )}
+                      </div>
+                      <div className="flex flex-wrap justify-end gap-1">
+                        {st === "received" && <Button size="sm" className="h-7" onClick={() => startAward(q)}>Award</Button>}
+                        {st === "requested" && <Button size="sm" variant="ghost" className="h-7" onClick={() => setStatus(q, "declined")}>Declined</Button>}
+                        {st === "declined" && <Button size="sm" variant="ghost" className="h-7" onClick={() => setStatus(q, "requested")}>Undo</Button>}
+                        <Button size="sm" variant="ghost" className="h-7 text-muted-foreground" onClick={() => persist(quotes.filter(x => x.id !== q.id))}>Remove</Button>
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            )}
+          </Card>
+        )
+      })}
 
-            return (
-              <Card key={trade} className="overflow-hidden">
-                <button
-                  className="w-full flex items-center justify-between px-5 py-3.5 hover:bg-muted/40 transition-colors text-left"
-                  onClick={() => toggleTrade(trade)}
-                >
-                  <div className="flex items-center gap-3">
-                    {expanded ? <ChevronDown className="h-4 w-4 text-muted-foreground" /> : <ChevronRight className="h-4 w-4 text-muted-foreground" />}
-                    <Building2 className="h-4 w-4 text-muted-foreground" />
-                    <span className="font-semibold text-sm">{trade}</span>
-                    <Badge variant="outline" className="text-xs">{tradeQuotes.length} quote{tradeQuotes.length !== 1 ? "s" : ""}</Badge>
-                  </div>
-                  <div className="flex items-center gap-3 text-sm">
-                    <span className="text-muted-foreground">Lowest:</span>
-                    <span className="font-mono font-bold text-[#E1DCC9]/80">{fmtAUD(lowest.amount)}</span>
-                    <span className="text-muted-foreground text-xs">— {lowest.company}</span>
-                  </div>
-                </button>
+      <SupplierQuoteDialog
+        open={rfqTrade !== null}
+        onClose={() => setRfqTrade(null)}
+        items={rfqItems}
+        projectName={project?.name}
+        siteAddress={project?.site_address || project?.address}
+        onSent={sent => rfqTrade && onRequestsSent(rfqTrade, sent)}
+      />
 
-                {expanded && (
-                  <div className="border-t border-border">
-                    <Table>
-                      <TableHeader>
-                        <TableRow className="text-xs">
-                          <TableHead>Company</TableHead>
-                          <TableHead>Contact</TableHead>
-                          <TableHead className="text-right">Amount</TableHead>
-                          <TableHead>Notes</TableHead>
-                          <TableHead>Date</TableHead>
-                          <TableHead></TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {tradeQuotes.map((q, i) => (
-                          <TableRow key={q.id} className={i === 0 ? "bg-muted/100/5" : ""}>
-                            <TableCell>
-                              <div className="flex items-center gap-2">
-                                {i === 0 && <CheckCircle2 className="h-3.5 w-3.5 text-[#E1DCC9]/80 shrink-0" />}
-                                <span className="font-medium text-sm">{q.company}</span>
-                              </div>
-                            </TableCell>
-                            <TableCell className="text-xs text-muted-foreground">
-                              {q.contact && <div>{q.contact}</div>}
-                              {q.phone && (
-                                <div className="flex items-center gap-1">
-                                  <Phone className="h-3 w-3" />
-                                  {q.phone}
-                                </div>
-                              )}
-                            </TableCell>
-                            <TableCell className="text-right">
-                              <span className={`font-mono font-bold text-sm ${i === 0 ? "text-[#E1DCC9]/80" : ""}`}>
-                                {fmtAUD(q.amount)}
-                              </span>
-                              {i > 0 && (
-                                <div className="text-xs text-red-400 text-right">
-                                  +{fmtAUD(q.amount - tradeQuotes[0].amount)}
-                                </div>
-                              )}
-                            </TableCell>
-                            <TableCell className="text-xs text-muted-foreground max-w-[160px] truncate">
-                              {q.notes || "—"}
-                            </TableCell>
-                            <TableCell className="text-xs text-muted-foreground">
-                              {new Date(q.submittedAt).toLocaleDateString("en-AU", { day: "numeric", month: "short" })}
-                            </TableCell>
-                            <TableCell>
-                              <div className="flex items-center gap-1">
-                                {q.usedInEstimate ? (
-                                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-medium bg-muted/100/15 text-[#E1DCC9]/80 border border-[#E1DCC9]/20">
-                                    <CheckCircle2 className="h-3 w-3" /> In estimate
-                                  </span>
-                                ) : (
-                                  <Button
-                                    size="sm"
-                                    variant={i === 0 ? "default" : "outline"}
-                                    className={`h-7 text-xs ${i === 0 ? "bg-primary hover:bg-primary/90 text-primary-foreground" : ""}`}
-                                    onClick={() => handleUsePrice(q)}
-                                  >
-                                    Use this
-                                  </Button>
-                                )}
-                                <Button
-                                  size="sm"
-                                  variant="ghost"
-                                  className="h-7 w-7 p-0 text-destructive hover:text-destructive"
-                                  onClick={() => handleDelete(q.id)}
-                                >
-                                  <Trash2 className="h-3.5 w-3.5" />
-                                </Button>
-                              </div>
-                            </TableCell>
-                          </TableRow>
-                        ))}
-                      </TableBody>
-                    </Table>
-                  </div>
-                )}
-              </Card>
-            )
-          })}
-        </div>
-      )}
-
-      {/* Add Quote Dialog */}
-      <Dialog open={addOpen} onOpenChange={setAddOpen}>
+      {/* A price that came back by phone, text or email */}
+      <Dialog open={addFor !== null} onOpenChange={o => { if (!o) setAddFor(null) }}>
         <DialogContent className="max-w-md">
-          <DialogHeader>
-            <DialogTitle>Add Subcontractor Quote</DialogTitle>
-          </DialogHeader>
-          <div className="space-y-4 py-2">
-            <div>
-              <Label>Trade</Label>
-              <Select value={newTrade} onValueChange={setNewTrade}>
-                <SelectTrigger className="mt-1">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {TRADE_OPTIONS.map(t => (
-                    <SelectItem key={t} value={t}>{t}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div>
-              <Label>Company Name <span className="text-destructive">*</span></Label>
-              <Input
-                className="mt-1"
-                placeholder="e.g. Smith Tiling Pty Ltd"
-                value={newCompany}
-                onChange={e => setNewCompany(e.target.value)}
-              />
-            </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <Label>Contact Person</Label>
-                <Input
-                  className="mt-1"
-                  placeholder="John Smith"
-                  value={newContact}
-                  onChange={e => setNewContact(e.target.value)}
-                />
-              </div>
-              <div>
-                <Label>Phone</Label>
-                <Input
-                  className="mt-1"
-                  placeholder="0400 000 000"
-                  value={newPhone}
-                  onChange={e => setNewPhone(e.target.value)}
-                />
-              </div>
-            </div>
-            <div>
-              <Label>Quote Amount (AUD, ex GST) <span className="text-destructive">*</span></Label>
-              <Input
-                className="mt-1 font-mono"
-                type="number"
-                placeholder="12500"
-                value={newAmount}
-                onChange={e => setNewAmount(e.target.value)}
-              />
-            </div>
-            <div>
-              <Label>Notes</Label>
-              <Input
-                className="mt-1"
-                placeholder="Inclusions, conditions, lead time..."
-                value={newNotes}
-                onChange={e => setNewNotes(e.target.value)}
-              />
-            </div>
-            <div className="flex gap-2 pt-2">
-              <Button onClick={handleAdd} className="flex-1">Add Quote</Button>
-              <Button variant="outline" onClick={() => setAddOpen(false)}>Cancel</Button>
-            </div>
+          <DialogHeader><DialogTitle>Add a price for {addFor}</DialogTitle></DialogHeader>
+          <div className="grid gap-3 py-1 sm:grid-cols-2">
+            <label className="block space-y-1 sm:col-span-2"><span className="text-xs text-muted-foreground">Company</span>
+              <Input value={form.company} onChange={e => setForm({ ...form, company: e.target.value })} placeholder="Smith Tiling Pty Ltd" /></label>
+            <label className="block space-y-1"><span className="text-xs text-muted-foreground">Contact</span>
+              <Input value={form.contact} onChange={e => setForm({ ...form, contact: e.target.value })} /></label>
+            <label className="block space-y-1"><span className="text-xs text-muted-foreground">Phone</span>
+              <Input value={form.phone} onChange={e => setForm({ ...form, phone: e.target.value })} /></label>
+            <label className="block space-y-1 sm:col-span-2"><span className="text-xs text-muted-foreground">Email</span>
+              <Input value={form.email} onChange={e => setForm({ ...form, email: e.target.value })} /></label>
+            <label className="block space-y-1 sm:col-span-2"><span className="text-xs text-muted-foreground">Their price, ex GST</span>
+              <Input className="font-mono" inputMode="decimal" value={form.amount} onChange={e => setForm({ ...form, amount: e.target.value })} /></label>
+            <label className="block space-y-1 sm:col-span-2"><span className="text-xs text-muted-foreground">Notes (inclusions, exclusions, lead time)</span>
+              <Input value={form.notes} onChange={e => setForm({ ...form, notes: e.target.value })} /></label>
           </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setAddFor(null)}>Cancel</Button>
+            <Button onClick={addManual}>Add price</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Award: shows the difference first, then changes the estimate and budget */}
+      <Dialog open={awarding !== null} onOpenChange={o => { if (!o) setAwarding(null) }}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader><DialogTitle>Award {awarding && normaliseTrade(awarding.trade)} to {awarding?.company}?</DialogTitle></DialogHeader>
+          {awarding && (
+            <div className="space-y-3 text-sm">
+              <div className="grid grid-cols-[1fr_auto] gap-x-4 gap-y-1 rounded-lg border border-border px-3 py-2">
+                <span className="text-muted-foreground">{awarding.company}</span><span className="text-right font-mono">{aud(awarding.amount)}</span>
+                <span className="text-muted-foreground">Your estimate (cost before markup)</span><span className="text-right font-mono">{aud(awardCost)}</span>
+                <span className="font-medium">Difference</span>
+                <span className={cn("text-right font-mono font-medium", awardDiff > 0 ? "text-red-400" : "text-emerald-400")}>{awardDiff > 0 ? "+" : ""}{aud(awardDiff)}</span>
+              </div>
+              {approved ? (
+                <p className="text-muted-foreground">The client has approved the quote, so the estimate and the contract stay as they are. {awardDiff > 0 ? "If the client asked for extra work, add a variation." : ""}</p>
+              ) : (
+                <label className="flex items-start gap-2">
+                  <input type="checkbox" className="mt-1" checked={award.updateEstimate} onChange={e => setAward({ ...award, updateEstimate: e.target.checked })} />
+                  <span>Update the estimate: the {linesFor(awarding.trade).length || "new"} {normaliseTrade(awarding.trade)} line{linesFor(awarding.trade).length === 1 ? "" : "s"} come to this price, keeping rooms, quantities and your markup. The quote follows when you next generate it.</span>
+                </label>
+              )}
+              <label className="flex items-start gap-2">
+                <input type="checkbox" className="mt-1" checked={award.setBudget} onChange={e => setAward({ ...award, setBudget: e.target.checked })} />
+                <span>Set the {normaliseTrade(awarding.trade)} budget in Job Cost to {aud(awarding.amount)}</span>
+              </label>
+            </div>
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setAwarding(null)}>Cancel</Button>
+            <Button onClick={confirmAward}>Award</Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
     </div>

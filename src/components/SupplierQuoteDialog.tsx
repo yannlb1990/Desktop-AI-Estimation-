@@ -24,6 +24,8 @@ interface SupplierQuoteDialogProps {
   items: CostItem[];
   projectName?: string;
   siteAddress?: string;
+  /** called once per supplier the request reached, so the trade's quote tracker can list them */
+  onSent?: (sent: { supplier: SavedSupplier; trades: string[]; sentAt: string }[]) => void;
 }
 
 interface Brand {
@@ -56,9 +58,11 @@ function bufferToBase64(buffer: ArrayBuffer): string {
   return btoa(binary);
 }
 
-export function SupplierQuoteDialog({ open, onClose, items, projectName = '', siteAddress = '' }: SupplierQuoteDialogProps) {
+export function SupplierQuoteDialog({ open, onClose, items, projectName = '', siteAddress = '', onSent }: SupplierQuoteDialogProps) {
   const [suppliers, setSuppliers] = useState<SavedSupplier[]>([]);
-  const [selectedSupplierId, setSelectedSupplierId] = useState<string>('');
+  // several subbies can get the same request: each gets their own email and attachments
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const toggleSupplier = (id: string) => setSelectedIds(prev => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n; });
   const [showAddForm, setShowAddForm] = useState(false);
   const [newSupplier, setNewSupplier] = useState(EMPTY_NEW_SUPPLIER);
   const [projectNameVal, setProjectNameVal] = useState(projectName);
@@ -75,7 +79,7 @@ export function SupplierQuoteDialog({ open, onClose, items, projectName = '', si
       loadSuppliers().then(setSuppliers);
       setProjectNameVal(projectName);
       setSiteAddressVal(siteAddress);
-      setSelectedSupplierId('');
+      setSelectedIds(new Set());
       setShowAddForm(false);
       setNewSupplier(EMPTY_NEW_SUPPLIER);
       setMessage('');
@@ -94,7 +98,8 @@ export function SupplierQuoteDialog({ open, onClose, items, projectName = '', si
     return suppliers.filter(s => s.trades.length === 0 || s.trades.some(t => tradeOptions.includes(normaliseTrade(t))));
   }, [suppliers, tradeOptions]);
 
-  const selectedSupplier = suppliers.find(s => s.id === selectedSupplierId);
+  const selectedList = suppliers.filter(s => selectedIds.has(s.id));
+  const selectedSupplier = selectedList[0];
   const selectedItems = items.filter(i => selectedItemIds.has(i.id));
   const allSelected = selectedItemIds.size === items.length;
 
@@ -140,7 +145,7 @@ export function SupplierQuoteDialog({ open, onClose, items, projectName = '', si
         trades: newSupplier.trades,
       });
       setSuppliers(await loadSuppliers());
-      setSelectedSupplierId(saved.id);
+      setSelectedIds(prev => new Set(prev).add(saved.id));
       setShowAddForm(false);
       setNewSupplier(EMPTY_NEW_SUPPLIER);
       toast.success(`${saved.name} saved`);
@@ -153,7 +158,7 @@ export function SupplierQuoteDialog({ open, onClose, items, projectName = '', si
     try {
       await removeSupplier(id);
       setSuppliers(await loadSuppliers());
-      if (selectedSupplierId === id) setSelectedSupplierId('');
+      setSelectedIds(prev => { const n = new Set(prev); n.delete(id); return n; });
     } catch {
       toast.error('Failed to remove supplier');
     }
@@ -167,10 +172,10 @@ export function SupplierQuoteDialog({ open, onClose, items, projectName = '', si
       quantity: item.quantity,
     }));
 
-  const fileBaseName = () =>
-    `Quote_${(projectNameVal || 'Project').replace(/\s+/g, '_')}_${selectedSupplier?.name?.replace(/\s+/g, '_') ?? 'Supplier'}`;
+  const fileBaseName = (to: SavedSupplier | undefined = selectedSupplier) =>
+    `Quote_${(projectNameVal || 'Project').replace(/\s+/g, '_')}_${to?.name?.replace(/\s+/g, '_') ?? 'Supplier'}`;
 
-  const buildPDFBuffer = (): ArrayBuffer => {
+  const buildPDFBuffer = (to: SavedSupplier | undefined = selectedSupplier): ArrayBuffer => {
     const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
     const primary = hexToRgb(brand.primary || '#1a110a');
     const accent = hexToRgb(brand.accent || '#d4a045');
@@ -218,7 +223,7 @@ export function SupplierQuoteDialog({ open, onClose, items, projectName = '', si
     doc.setFont('helvetica', 'normal');
     if (projectNameVal) { doc.text(`Project: ${projectNameVal}`, 14, y); y += 6; }
     if (siteAddressVal) { doc.text(`Site: ${siteAddressVal}`, 14, y); y += 6; }
-    if (selectedSupplier) { doc.text(`To: ${selectedSupplier.name} <${selectedSupplier.email}>`, 14, y); y += 6; }
+    if (to) { doc.text(`To: ${to.name} <${to.email}>`, 14, y); y += 6; }
 
     doc.setTextColor(120, 100, 80);
     doc.text('Please fill in your price (excl. GST) for each item and return this document.', 14, y + 2);
@@ -236,7 +241,7 @@ export function SupplierQuoteDialog({ open, onClose, items, projectName = '', si
     return doc.output('arraybuffer');
   };
 
-  const buildExcelBuffer = async (): Promise<ArrayBuffer> => {
+  const buildExcelBuffer = async (to: SavedSupplier | undefined = selectedSupplier): Promise<ArrayBuffer> => {
     const wb = new ExcelJS.Workbook();
     const ws = wb.addWorksheet('Quote Request');
     const primaryHex = (brand.primary || '#1a110a').replace('#', 'FF').toUpperCase().padStart(8, 'F');
@@ -257,7 +262,7 @@ export function SupplierQuoteDialog({ open, onClose, items, projectName = '', si
     if (brand.phone) { const r = ws.addRow(['Phone:', brand.phone]); r.getCell(1).style = headerStyle; }
     if (projectNameVal) { const r = ws.addRow(['Project:', projectNameVal]); r.getCell(1).style = headerStyle; }
     if (siteAddressVal) { const r = ws.addRow(['Site:', siteAddressVal]); r.getCell(1).style = headerStyle; }
-    if (selectedSupplier) { const r = ws.addRow(['To:', `${selectedSupplier.name} <${selectedSupplier.email}>`]); r.getCell(1).style = headerStyle; }
+    if (to) { const r = ws.addRow(['To:', `${to.name} <${to.email}>`]); r.getCell(1).style = headerStyle; }
     ws.addRow(['Instructions:', 'Fill in your price (excl. GST) for each item and return this file.']).getCell(1).style = headerStyle;
     ws.addRow([]);
 
@@ -282,7 +287,7 @@ export function SupplierQuoteDialog({ open, onClose, items, projectName = '', si
   };
 
   const handleSend = async () => {
-    if (!selectedSupplier) { toast.error('Select a supplier'); return; }
+    if (selectedList.length === 0) { toast.error('Select at least one supplier'); return; }
     if (!contractorEmail.trim() || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(contractorEmail)) {
       toast.error('Enter a valid reply-to email address');
       return;
@@ -290,70 +295,75 @@ export function SupplierQuoteDialog({ open, onClose, items, projectName = '', si
     if (selectedItems.length === 0) { toast.error('Select at least one item'); return; }
 
     setSending(true);
-    try {
-      const [pdfBuffer, xlsxBuffer] = await Promise.all([
-        Promise.resolve(buildPDFBuffer()),
-        buildExcelBuffer(),
-      ]);
-
-      const base = fileBaseName();
-      const attachments = [
-        { filename: `${base}.pdf`, content: bufferToBase64(pdfBuffer) },
-        { filename: `${base}.xlsx`, content: bufferToBase64(xlsxBuffer) },
-      ];
-
-      const { data: sendData, error } = await supabase.functions.invoke('send-supplier-quote-request', {
-        body: {
-          supplierEmail: selectedSupplier.email,
-          supplierName: selectedSupplier.name,
-          projectName: projectNameVal,
-          siteAddress: siteAddressVal,
-          trades: selectedTrades,
-          contractorName: contractorName || brand.companyName || 'Estimator',
-          contractorEmail,
-          message: message || undefined,
-          brand: {
-            companyName: brand.companyName,
-            logo: brand.logo,
-            primary: brand.primary,
-            accent: brand.accent,
-            abn: brand.abn,
-            phone: brand.phone,
+    const sent: { supplier: SavedSupplier; trades: string[]; sentAt: string }[] = [];
+    const failed: string[] = [];
+    const { data: { user } } = await supabase.auth.getUser();
+    for (const to of selectedList) {
+      try {
+        const [pdfBuffer, xlsxBuffer] = await Promise.all([
+          Promise.resolve(buildPDFBuffer(to)),
+          buildExcelBuffer(to),
+        ]);
+        const base = fileBaseName(to);
+        const attachments = [
+          { filename: `${base}.pdf`, content: bufferToBase64(pdfBuffer) },
+          { filename: `${base}.xlsx`, content: bufferToBase64(xlsxBuffer) },
+        ];
+        const { data: sendData, error } = await supabase.functions.invoke('send-supplier-quote-request', {
+          body: {
+            supplierEmail: to.email,
+            supplierName: to.name,
+            projectName: projectNameVal,
+            siteAddress: siteAddressVal,
+            trades: selectedTrades,
+            contractorName: contractorName || brand.companyName || 'Estimator',
+            contractorEmail,
+            message: message || undefined,
+            brand: {
+              companyName: brand.companyName,
+              logo: brand.logo,
+              primary: brand.primary,
+              accent: brand.accent,
+              abn: brand.abn,
+              phone: brand.phone,
+            },
+            attachments,
           },
-          attachments,
-        },
-      });
-      if (error) throw new Error(error.message);
-
-      // Persist to Supabase — fire-and-forget (don't block the success UX)
-      const { data: { user } } = await supabase.auth.getUser();
-      if (user) {
-        supabase.from('supplier_quote_requests').insert({
-          user_id: user.id,
-          status: 'sent',
-          items: buildQuoteItems() as unknown as import('@/integrations/supabase/types').Json,
-          delivery_address: siteAddressVal || null,
-          project_name: projectNameVal || null,
-          site_address: siteAddressVal || null,
-          trades: selectedTrades,
-          supplier_name: selectedSupplier.name,
-          supplier_email: selectedSupplier.email,
-          contractor_name: contractorName || brand.companyName || null,
-          contractor_email: contractorEmail,
-          message: message || null,
-          resend_id: (sendData as { id?: string } | null)?.id ?? null,
-          sent_at: new Date().toISOString(),
-        }).then(({ error: dbErr }) => {
-          if (dbErr) console.error('Quote request save failed:', dbErr.message);
         });
+        if (error) throw new Error(error.message);
+        const sentAt = new Date().toISOString();
+        sent.push({ supplier: to, trades: selectedTrades, sentAt });
+        // Persist to Supabase: fire-and-forget (don't block the success UX)
+        if (user) {
+          supabase.from('supplier_quote_requests').insert({
+            user_id: user.id,
+            status: 'sent',
+            items: buildQuoteItems() as unknown as import('@/integrations/supabase/types').Json,
+            delivery_address: siteAddressVal || null,
+            project_name: projectNameVal || null,
+            site_address: siteAddressVal || null,
+            trades: selectedTrades,
+            supplier_name: to.name,
+            supplier_email: to.email,
+            contractor_name: contractorName || brand.companyName || null,
+            contractor_email: contractorEmail,
+            message: message || null,
+            resend_id: (sendData as { id?: string } | null)?.id ?? null,
+            sent_at: sentAt,
+          }).then(({ error: dbErr }) => {
+            if (dbErr) console.error('Quote request save failed:', dbErr.message);
+          });
+        }
+      } catch (e: unknown) {
+        failed.push(`${to.name}: ${e instanceof Error ? e.message : 'not sent'}`);
       }
-
-      toast.success(`Quote request sent to ${selectedSupplier.name}`);
-      onClose();
-    } catch (e: unknown) {
-      toast.error(e instanceof Error ? e.message : 'Failed to send quote request');
-    } finally {
-      setSending(false);
+    }
+    setSending(false);
+    if (sent.length) onSent?.(sent);
+    if (failed.length) toast.error(`Not sent to ${failed.join('; ')}`);
+    if (sent.length) {
+      toast.success(sent.length === 1 ? `Quote request sent to ${sent[0].supplier.name}` : `Quote request sent to ${sent.length} suppliers`);
+      if (!failed.length) onClose();
     }
   };
 
@@ -483,20 +493,20 @@ export function SupplierQuoteDialog({ open, onClose, items, projectName = '', si
 
           {/* Supplier selector */}
           <div>
-            <Label className="text-sm font-semibold mb-2 block">Supplier</Label>
+            <Label className="text-sm font-semibold mb-2 block">Suppliers <span className="font-normal text-muted-foreground">(tick one or more: each gets their own email)</span></Label>
             {relevantSuppliers.length > 0 && (
               <div className="space-y-1.5 mb-3">
                 {relevantSuppliers.map(s => (
                   <div
                     key={s.id}
-                    onClick={() => setSelectedSupplierId(s.id)}
+                    onClick={() => toggleSupplier(s.id)}
                     className={cn(
                       'flex items-center justify-between px-3 py-2 rounded-lg border cursor-pointer text-sm transition-colors',
-                      selectedSupplierId === s.id ? 'border-primary bg-primary/5' : 'border-border hover:border-primary/50'
+                      selectedIds.has(s.id) ? 'border-primary bg-primary/5' : 'border-border hover:border-primary/50'
                     )}
                   >
                     <div className="flex items-center gap-2 min-w-0">
-                      {selectedSupplierId === s.id && <Check className="h-3.5 w-3.5 text-primary shrink-0" />}
+                      <input type="checkbox" readOnly checked={selectedIds.has(s.id)} className="shrink-0" />
                       <div className="min-w-0">
                         <p className="font-medium truncate">{s.name}</p>
                         <p className="text-xs text-muted-foreground">{s.email}{s.phone ? ` · ${s.phone}` : ''}</p>
@@ -609,9 +619,8 @@ export function SupplierQuoteDialog({ open, onClose, items, projectName = '', si
             </div>
             <div className="flex gap-2">
               <Button variant="outline" onClick={onClose} disabled={sending}>Cancel</Button>
-              <Button onClick={handleSend} disabled={sending || !selectedSupplier || selectedItems.length === 0}>
-                <Mail className="h-4 w-4 mr-1.5" />
-                {sending ? 'Sending...' : `Send to ${selectedSupplier?.name ?? 'Supplier'}`}
+              <Button onClick={handleSend} disabled={sending || selectedList.length === 0 || selectedItems.length === 0}>
+                {sending ? 'Sending...' : selectedList.length > 1 ? `Send to ${selectedList.length} suppliers` : `Send to ${selectedSupplier?.name ?? 'supplier'}`}
               </Button>
             </div>
           </div>

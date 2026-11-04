@@ -543,7 +543,8 @@ const ProjectDetail = () => {
                     <DropdownMenuItem onClick={handleExportExcel}>Excel workbook</DropdownMenuItem>
                     <DropdownMenuItem onClick={() => downloadEstimateBOQ(readLocalProject())}>Bill of quantities (CSV)</DropdownMenuItem>
                     <DropdownMenuItem onClick={() => setSowOpen(true)}>Scope of work (PDF)</DropdownMenuItem>
-                    <DropdownMenuItem onClick={() => setSupplierItems(estimateLinesAsCostItems(readLocalProject()))}>Request supplier quote</DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => setActiveMainTab("subbies")}>Request quotes by trade</DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => setSupplierItems(estimateLinesAsCostItems(readLocalProject()))}>Request supplier quote (any lines)</DropdownMenuItem>
                   </DropdownMenuContent>
                 </DropdownMenu>
               </TourTip>
@@ -908,40 +909,7 @@ const ProjectDetail = () => {
           </TabsContent>
 
           <TabsContent value="subbies">
-            <SubcontractorComparison
-              projectId={projectId!}
-              onUsePrice={(trade, company, amount) => {
-                const projects = JSON.parse(localStorage.getItem(getUserStorageKey('local_projects')) || '[]');
-                const idx = projects.findIndex((p: any) => p.id === projectId);
-                const newItem = {
-                  id: `subbie-${crypto.randomUUID()}`,
-                  section_id: null,
-                  area: 'Subcontractor',
-                  trade,
-                  scope_of_work: `${company} (subcontractor quote)`,
-                  material_type: 'Subcontract',
-                  quantity: 1,
-                  unit: 'lump sum',
-                  unit_price: amount,
-                  labour_hours: 0,
-                  labour_rate: 0,
-                  material_wastage_pct: 0,
-                  labour_wastage_pct: 0,
-                  markup_pct: 0,
-                  notes: `Quote from ${company}`,
-                  expanded: false,
-                };
-                if (idx !== -1) {
-                  projects[idx].estimate_items = [...(projects[idx].estimate_items || []), newItem];
-                } else {
-                  projects.push({ id: projectId, estimate_items: [newItem] });
-                }
-                localStorage.setItem(getUserStorageKey('local_projects'), JSON.stringify(projects));
-                const syncTarget = idx !== -1 ? projects[idx] : projects[projects.length - 1];
-                if (syncTarget) syncProjectToSupabase(syncTarget);
-                window.dispatchEvent(new CustomEvent('estimate-updated', { detail: { projectId } }));
-              }}
-            />
+            <SubcontractorComparison projectId={projectId!} />
           </TabsContent>
 
           <TabsContent value="documents">
