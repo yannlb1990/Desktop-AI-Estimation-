@@ -12,12 +12,14 @@ import { FileText, Printer, X, Plus, Trash2, ChevronRight, Upload, RefreshCw, Gr
 import { toast } from "sonner"
 import { saveQuoteToLibrary } from "@/components/DocumentLibrary"
 import { priceLine, calculateProjectTotals, resolveProjectPricing, projectFfeAllowance } from "@/lib/pricing/estimatePricing"
-import { readUserPricingDefaults } from "@/lib/pricing/userPricingDefaults"
+import { readUserPricingDefaults, projectStateOf } from "@/lib/pricing/userPricingDefaults"
 import { scopeForDisplay } from "@/lib/takeoff/scopeLabels"
 import { approveQuoteVersion, clearQuoteApproval, loadProject, createQuoteShare, loadQuoteShares, syncClientApprovals, quoteShareUrl, type QuoteShareRow } from "@/lib/contract"
 import { scaleLinesToTotal, shownTotal, lineAmount } from "@/lib/pricing/quoteLines"
 import { gstOn } from "@/lib/pricing/estimatePricing"
 import { checkEstimate } from "@/lib/estimate/checks"
+import { homeWarranty } from "@/lib/pricing/homeWarranty"
+import { readHomeWarranty } from "@/components/estimate/HomeWarrantyPanel"
 import { refreshBrand, saveBrand as saveSharedBrand } from "@/lib/branding"
 
 interface QuoteGeneratorProps {
@@ -451,6 +453,25 @@ export const QuoteGenerator = ({ project, estimate, listenForOpen }: QuoteGenera
   })()
   const gstAmount = gstOn(subtotalNum, gstPct)
   const totalIncGst = subtotalNum + gstAmount
+
+  // Home warranty insurance, when the builder chose to add it (Estimate, under the total):
+  // worked out from this quote's total and shown after GST, since it is collected for the owner
+  const [hwVersion, setHwVersion] = useState(0)
+  useEffect(() => {
+    const h = (e: Event) => { if ((e as CustomEvent).detail?.projectId === project?.id) setHwVersion(v => v + 1) }
+    window.addEventListener("home-warranty-changed", h)
+    return () => window.removeEventListener("home-warranty-changed", h)
+  }, [project?.id])
+  const insurance = useMemo(() => {
+    try {
+      const p = JSON.parse(localStorage.getItem(getUserStorageKey("local_projects")) || "[]").find((x: any) => x.id === project?.id)
+      const settings = readHomeWarranty(p)
+      if (!settings.include) return null
+      const r = homeWarranty(projectStateOf(p), totalIncGst, settings)
+      return r.premium > 0 ? r : null
+    } catch { return null }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [project?.id, totalIncGst, hwVersion, open])
   const depositAmount = totalIncGst * (parseFloat(depositPct) / 100)
   const progressAmount = totalIncGst * (parseFloat(progressPct) / 100)
   const finalAmount = totalIncGst * (parseFloat(finalPct) / 100)
@@ -1295,6 +1316,15 @@ ${clone.outerHTML}
                         <div className="text-sm font-medium uppercase tracking-wide mb-1" style={{ color: primaryColor }}>Total Quotation Value</div>
                         <div className="text-4xl font-bold font-mono" style={{ color: primaryColor }}>{au$(totalIncGst)}</div>
                         <div className="text-sm mt-1" style={{ color: primaryColor + "99" }}>Inclusive of GST</div>
+                        {insurance && (
+                          <div className="mt-3 text-sm" style={{ color: primaryColor }}>
+                            <div>Plus home warranty insurance ({insurance.rule.scheme}): {au$(insurance.premium)}</div>
+                            <div className="font-semibold">Total payable with insurance: {au$(totalIncGst + insurance.premium)}</div>
+                            <div className="text-xs text-gray-400 mt-0.5 max-w-[340px]">
+                              {insurance.rule.state === "QLD" ? "Premium collected for the owner and paid to QBCC; no GST is added." : "Premium passed on at cost from the insurer."}
+                            </div>
+                          </div>
+                        )}
                       </div>
                       <div className="text-right text-sm space-y-1" style={{ color: primaryColor + "bb" }}>
                         <div>Subtotal: {au$(subtotalNum)}</div>

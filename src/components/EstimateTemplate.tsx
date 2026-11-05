@@ -8,6 +8,7 @@ import { checkEstimate } from "@/lib/estimate/checks";
 import { loadQuoteShares, syncClientApprovals } from "@/lib/contract";
 import { ServicesDialog, type PricedServiceLine } from "@/components/estimate/ServicesDialog";
 import { RoomPackDialog } from "@/components/estimate/RoomPackDialog";
+import { HomeWarrantyPanel } from "@/components/estimate/HomeWarrantyPanel";
 import type { PackLine } from "@/lib/estimate/roomPacks";
 import { SiteVisitPanel } from "@/components/estimate/SiteVisitPanel";
 import type { SiteDraftLine } from "@/lib/site/toEstimate";
@@ -2310,6 +2311,7 @@ export const EstimateTemplate = ({ projectId, estimateId }: EstimateTemplateProp
           </div>
         </div>
       </Card>
+      <HomeWarrantyPanel projectId={projectId} state={projectState} totalIncGst={totals.totalPrice} />
 
       {/* Margin vs Markup Calculator */}
       {(() => {
