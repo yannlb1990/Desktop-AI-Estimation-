@@ -9,6 +9,7 @@ import { loadQuoteShares, syncClientApprovals } from "@/lib/contract";
 import { ServicesDialog, type PricedServiceLine } from "@/components/estimate/ServicesDialog";
 import { RoomPackDialog } from "@/components/estimate/RoomPackDialog";
 import { HomeWarrantyPanel } from "@/components/estimate/HomeWarrantyPanel";
+import { BoqImportDialog, type BoqLineOut } from "@/components/estimate/BoqImportDialog";
 import type { PackLine } from "@/lib/estimate/roomPacks";
 import { SiteVisitPanel } from "@/components/estimate/SiteVisitPanel";
 import type { SiteDraftLine } from "@/lib/site/toEstimate";
@@ -597,6 +598,7 @@ export const EstimateTemplate = ({ projectId, estimateId }: EstimateTemplateProp
   const [checksOpen, setChecksOpen] = useState(false);
   const [servicesOpen, setServicesOpen] = useState(false);
   const [packOpen, setPackOpen] = useState(false);
+  const [boqOpen, setBoqOpen] = useState(false);
   const [flashRowId, setFlashRowId] = useState<string | null>(null);
   const [showTemplateModal, setShowTemplateModal] = useState(false);
   const [customTemplates, setCustomTemplates] = useState<EstimateTemplateData[]>(() => loadCustomTemplates());
@@ -964,6 +966,49 @@ export const EstimateTemplate = ({ projectId, estimateId }: EstimateTemplateProp
     }
     setPackOpen(false);
     toast.success(`${created.length} lines added to ${lines[0].area}`);
+  };
+
+  // A bill of quantities: the BOQ's words, quantities and (when chosen) rates, as all-in prices
+  const addBoqLines = (lines: BoqLineOut[], markupPct: number) => {
+    if (blockedWhenLocked()) return;
+    if (lines.length === 0) return;
+    const stamp = Date.now();
+    const created: EstimateItem[] = lines.map((l, i) => ({
+      id: `boq-${stamp}-${i}`,
+      source: 'manual',
+      plan_link: null,
+      section_id: null,
+      area: l.area,
+      trade: l.trade,
+      scope_of_work: l.scope,
+      material_type: '',
+      quantity: l.quantity,
+      unit: l.unit,
+      unit_price: l.unitPrice,
+      labour_hours: 0,
+      labour_rate: labourRateForTrade(l.trade, labourRates) || config.defaultLabourRate,
+      labour_rate_override: false,
+      material_wastage_pct: 0,
+      labour_wastage_pct: 0,
+      markup_pct: l.allowance ? 0 : markupPct,
+      ...(l.allowance ? { allowance: l.allowance } : {}),
+      notes: l.note,
+      expanded: false,
+      item_number: `${items.length + i + 1}`,
+      isEditing: false,
+      relatedMaterials: [],
+    } as EstimateItem));
+    const updatedItems = [...items, ...created];
+    setItems(updatedItems);
+    const projects = JSON.parse(localStorage.getItem(getUserStorageKey('local_projects')) || '[]');
+    const projectIndex = projects.findIndex((p: any) => p.id === projectId);
+    if (projectIndex !== -1) {
+      projects[projectIndex].estimate_items = mergeWithSaved(projects[projectIndex].estimate_items, updatedItems);
+      localStorage.setItem(getUserStorageKey('local_projects'), JSON.stringify(projects));
+    }
+    setBoqOpen(false);
+    const unpriced = created.filter(c => !(c.unit_price > 0)).length;
+    toast.success(`${created.length} lines added from the BOQ${unpriced ? `, ${unpriced} still need a price` : ''}`);
   };
 
   // Lines recorded on a site visit: quantity from the room sizes, no price yet
@@ -2515,6 +2560,12 @@ export const EstimateTemplate = ({ projectId, estimateId }: EstimateTemplateProp
           <span className="text-muted-foreground">Kitchen, bathroom, laundry or robes in one go: every trade the room needs, priced for {projectState}</span>
           <Button variant="outline" size="sm" className="ml-auto" onClick={() => setPackOpen(true)}>Open room packs</Button>
         </div>
+        <div className="mt-3 flex flex-wrap items-center gap-3 rounded-lg border border-border px-4 py-2.5 text-sm">
+          <span className="font-medium">Bill of quantities</span>
+          <span className="text-muted-foreground">Bring in a BOQ from a QS or another builder: Excel, CSV or PDF, checked against its own total</span>
+          <Button variant="outline" size="sm" className="ml-auto" onClick={() => setBoqOpen(true)}>Import a BOQ</Button>
+        </div>
+        <BoqImportDialog open={boqOpen} onOpenChange={setBoqOpen} state={projectState} defaultMarkup={config.defaultMarkup} onAdd={addBoqLines} />
         <RoomPackDialog open={packOpen} onOpenChange={setPackOpen} state={projectState}
           rooms={[...new Set(items.map(i => i.area).filter(Boolean))]} onAdd={addPackLines} />
         <div className="grid grid-cols-12 gap-3 mt-4">
