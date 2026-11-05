@@ -200,15 +200,40 @@ const ALLOWANCE_LABEL = { PC: 'PC allowance', PS: 'PS allowance' } as const;
  * priced exactly): the quote lists these apart, and the difference later goes through a
  * variation. Click to go through none, PC, PS.
  */
-function AllowanceTag({ value, onChange }: { value?: 'PC' | 'PS'; onChange: (v: 'PC' | 'PS' | undefined) => void }) {
+function AllowanceTag({ value, onChange, amount, onAmount }: {
+  value?: 'PC' | 'PS'; onChange: (v: 'PC' | 'PS' | undefined) => void;
+  /** the allowance in dollars (quantity x price); typing a new one sets the line's price */
+  amount?: number; onAmount?: (v: number) => void;
+}) {
   const next = !value ? 'PC' : value === 'PC' ? 'PS' : undefined;
+  const [draft, setDraft] = React.useState<string | null>(null);
+  const commit = () => {
+    if (draft === null) return;
+    const v = parseFloat(draft.replace(/[$,\s]/g, ''));
+    if (!isNaN(v) && v >= 0 && v !== amount) onAmount?.(v);
+    setDraft(null);
+  };
   return (
-    <button type="button"
-      title={value ? 'Click to change: PC, PS or not an allowance' : 'Mark as a prime cost (PC) or provisional sum (PS) allowance'}
-      onClick={() => onChange(next)}
-      className={cn('mt-0.5 rounded px-1 text-[10px] leading-4', value ? 'border border-amber-500/50 text-amber-400' : 'text-muted-foreground/60 opacity-0 group-hover:opacity-100 hover:text-foreground')}>
-      {value ? ALLOWANCE_LABEL[value] : 'Mark PC / PS'}
-    </button>
+    <span className="mt-0.5 flex flex-wrap items-center gap-1">
+      <button type="button"
+        title={value ? 'Click to change: PC, PS or not an allowance' : 'Mark as a prime cost (PC) or provisional sum (PS) allowance'}
+        onClick={() => onChange(next)}
+        className={cn('rounded px-1 text-[10px] leading-4', value ? 'border border-amber-500/50 text-amber-400' : 'text-muted-foreground/60 opacity-0 group-hover:opacity-100 hover:text-foreground')}>
+        {value ? ALLOWANCE_LABEL[value] : 'Mark PC / PS'}
+      </button>
+      {value && onAmount && (
+        draft === null ? (
+          <button type="button" title="Click to set the allowance amount" onClick={() => setDraft(String(amount ?? 0))}
+            className="rounded px-1 font-mono text-[10px] leading-4 text-amber-400 hover:bg-muted/50 hover:underline decoration-dotted">
+            ${(amount ?? 0).toLocaleString('en-AU', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+          </button>
+        ) : (
+          <input autoFocus inputMode="decimal" value={draft} onChange={e => setDraft(e.target.value)}
+            onBlur={commit} onKeyDown={e => { if (e.key === 'Enter') commit(); if (e.key === 'Escape') setDraft(null); }}
+            className="h-5 w-24 rounded border border-amber-500/50 bg-background px-1 font-mono text-[10px]" />
+        )
+      )}
+    </span>
   );
 }
 
@@ -1151,12 +1176,10 @@ export const EstimateTemplate = ({ projectId, estimateId }: EstimateTemplateProp
     }
   };
 
-  // PC or PS: the allowance is what the client gets to spend, so it carries no markup
-  const setLineAllowance = (id: string, allowance: 'PC' | 'PS' | undefined) => {
+  /** several fields of one line at once */
+  const patchLine = (id: string, patch: (item: EstimateItem) => Partial<EstimateItem>) => {
     if (blockedWhenLocked()) return;
-    const updatedItems = items.map(item => item.id === id
-      ? { ...item, allowance, markup_pct: allowance ? 0 : (item.allowance ? config.defaultMarkup : item.markup_pct) }
-      : item);
+    const updatedItems = items.map(item => item.id === id ? { ...item, ...patch(item) } : item);
     setItems(updatedItems);
     const projects = JSON.parse(localStorage.getItem(getUserStorageKey('local_projects')) || '[]');
     const projectIndex = projects.findIndex((p: any) => p.id === projectId);
@@ -1165,6 +1188,19 @@ export const EstimateTemplate = ({ projectId, estimateId }: EstimateTemplateProp
       localStorage.setItem(getUserStorageKey('local_projects'), JSON.stringify(projects));
     }
   };
+
+  // PC or PS: the allowance is what the client gets to spend, so it carries no markup and no waste
+  const setLineAllowance = (id: string, allowance: 'PC' | 'PS' | undefined) =>
+    patchLine(id, item => allowance
+      ? { allowance, markup_pct: 0, material_wastage_pct: 0, labour_wastage_pct: 0 }
+      : { allowance: undefined, markup_pct: item.allowance ? config.defaultMarkup : item.markup_pct });
+
+  /** The allowance amount typed straight in: the line's price becomes that amount */
+  const setAllowanceAmount = (id: string, amount: number) =>
+    patchLine(id, item => {
+      const qty = Number(item.quantity) > 0 ? Number(item.quantity) : 1;
+      return { quantity: qty, unit_price: Math.round((amount / qty) * 10000) / 10000, labour_hours: 0 };
+    });
 
   // Markup on every line at once (Estimate Configuration > Apply to all lines)
   const [confirmMarkupAll, setConfirmMarkupAll] = useState(false);
@@ -1408,8 +1444,9 @@ export const EstimateTemplate = ({ projectId, estimateId }: EstimateTemplateProp
     });
   };
 
-  const newLineMatWaste = newLineWaste.mat === '' ? config.materialWastage : (parseFloat(newLineWaste.mat) || 0);
-  const newLineLabWaste = newLineWaste.lab === '' ? config.labourWastage : (parseFloat(newLineWaste.lab) || 0);
+  // an allowance (PC or PS) is the amount the client gets: no waste, no markup on it
+  const newLineMatWaste = newItem.allowance ? 0 : newLineWaste.mat === '' ? config.materialWastage : (parseFloat(newLineWaste.mat) || 0);
+  const newLineLabWaste = newItem.allowance ? 0 : newLineWaste.lab === '' ? config.labourWastage : (parseFloat(newLineWaste.lab) || 0);
   // The new line priced exactly as it will be once added (same pricing function as the table)
   const calculateLineTotal = () => {
     const typedRate = parseFloat(newItem.labour_rate);
@@ -1422,7 +1459,7 @@ export const EstimateTemplate = ({ projectId, estimateId }: EstimateTemplateProp
       labour_rate_override: typedRate > 0 && typedRate !== (labourRateForTrade(newItem.trade, labourRates) || config.defaultLabourRate),
       material_wastage_pct: newLineMatWaste,
       labour_wastage_pct: newLineLabWaste,
-      markup_pct: config.defaultMarkup,
+      markup_pct: newItem.allowance ? 0 : config.defaultMarkup,
     }, config, labourRates);
     return { materials: p.materials, labour: p.labour, markup: p.markup, total: p.total };
   };
@@ -1666,7 +1703,9 @@ export const EstimateTemplate = ({ projectId, estimateId }: EstimateTemplateProp
                   extra={scopesForLine(item)}
                   onChange={(v) => { if (v !== item.scope_of_work) updateItemField(item.id, 'scope_of_work', v); }}
                 />
-                <AllowanceTag value={item.allowance} onChange={(v) => setLineAllowance(item.id, v)} />
+                <AllowanceTag value={item.allowance} onChange={(v) => setLineAllowance(item.id, v)}
+                  amount={Math.round((Number(item.quantity) || 0) * (Number(item.unit_price) || 0) * 100) / 100}
+                  onAmount={(v) => setAllowanceAmount(item.id, v)} />
               </div>
             )}
           </TableCell>
@@ -2651,8 +2690,19 @@ export const EstimateTemplate = ({ projectId, estimateId }: EstimateTemplateProp
                 onChange={(e) => setConfig({ ...config, defaultMarkup: parseFloat(e.target.value) || 0 })}
                 className="h-8 w-20 rounded-md border border-input bg-background px-2 text-right font-mono text-sm focus:outline-none focus:ring-1 focus:ring-primary" />
             </label>
-            <p className="pb-1.5 text-[11px] leading-snug text-muted-foreground max-w-[240px]">
-              Waste is for this line. New lines will use {config.defaultMarkup}% markup.
+            <label className="space-y-1">
+              <span className="block text-xs text-muted-foreground">Allowance</span>
+              <select value={newItem.allowance} onChange={(e) => setNewItem({ ...newItem, allowance: e.target.value as '' | 'PC' | 'PS' })}
+                className="h-8 rounded-md border border-input bg-background px-2 text-sm">
+                <option value="">Not an allowance</option>
+                <option value="PC">PC (prime cost)</option>
+                <option value="PS">PS (provisional sum)</option>
+              </select>
+            </label>
+            <p className="pb-1.5 text-[11px] leading-snug text-muted-foreground max-w-[260px]">
+              {newItem.allowance
+                ? `${newItem.allowance} allowance: the quantity times the unit cost is the amount, with no waste or markup on it.`
+                : `Waste is for this line. New lines will use ${config.defaultMarkup}% markup.`}
             </p>
           </div>
 
