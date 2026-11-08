@@ -15,6 +15,7 @@ export default {
     extend: {
       colors: {
         gold: "hsl(var(--gold))",
+        "total-col": "hsl(var(--total-col))",
         border: "hsl(var(--border))",
         input: "hsl(var(--input))",
         ring: "hsl(var(--ring))",

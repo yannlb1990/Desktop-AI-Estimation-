@@ -42,6 +42,8 @@
     /* the brand amber, deep enough to read on white */
     --gold: 36 78% 32%;
     --logo-mark: 30 42% 8%;
+    /* the estimate's Total column: a warm tint so line totals stand out */
+    --total-col: 40 65% 89%;
 
     --radius: 0.75rem;
 
@@ -98,6 +100,7 @@
     /* the brand amber #D4A045 */
     --gold: 39 62% 55%;
     --logo-mark: 0 0% 100%;
+    --total-col: 36 42% 14%;
 
     /* Gradients — pure palette browns, no amber */
     --gradient-primary: linear-gradient(135deg, hsl(0 0% 0%) 0%, hsl(33 51% 17%) 100%);

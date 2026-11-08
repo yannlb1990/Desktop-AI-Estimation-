@@ -1883,7 +1883,7 @@ export const EstimateTemplate = ({ projectId, estimateId }: EstimateTemplateProp
               </div>
             </div>
           </TableCell>
-          <TableCell className="text-right font-mono font-bold sticky right-[140px] z-10 bg-card shadow-[-6px_0_8px_-6px_rgba(0,0,0,0.6)]">${lineTotal.toFixed(2)}</TableCell>
+          <TableCell className="text-right font-mono font-bold sticky right-[140px] z-10 bg-total-col border-x border-gold/20 shadow-[-6px_0_8px_-6px_rgba(0,0,0,0.6)]">${lineTotal.toFixed(2)}</TableCell>
           <TableCell className="sticky right-0 z-10 bg-card w-[140px] min-w-[140px]">
             <div className="flex gap-0.5">
               {isEditing ? (
@@ -2987,7 +2987,7 @@ export const EstimateTemplate = ({ projectId, estimateId }: EstimateTemplateProp
                 <TableHead className="text-right w-20">Hrs</TableHead>
                 <TableHead className="text-right w-[130px]">Cost</TableHead>
                 {/* Total and actions stay visible when the table scrolls sideways */}
-                <TableHead className="text-right w-24 sticky right-[140px] z-10 bg-card shadow-[-6px_0_8px_-6px_rgba(0,0,0,0.6)]">Total</TableHead>
+                <TableHead className="text-right w-24 sticky right-[140px] z-10 bg-total-col border-x border-gold/20 font-semibold text-foreground shadow-[-6px_0_8px_-6px_rgba(0,0,0,0.6)]">Total</TableHead>
                 <TableHead className="sticky right-0 z-10 bg-card w-[140px] min-w-[140px]"></TableHead>
               </TableRow>
             </TableHeader>
