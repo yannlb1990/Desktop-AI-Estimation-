@@ -92,7 +92,7 @@ export const MeasurementsSidebar = ({ measurements, onDelete, onEdit, planPageId
                       <Ruler className="h-4 w-4 text-red-500" />
                     )}
                     {measurement.measurement_type === 'area' && (
-                      <Square className="h-4 w-4 text-[#E1DCC9]/80" />
+                      <Square className="h-4 w-4 text-foreground/80" />
                     )}
                     {measurement.measurement_type === 'volume' && (
                       <Box className="h-4 w-4 text-foreground/70" />
@@ -158,7 +158,7 @@ export const MeasurementsSidebar = ({ measurements, onDelete, onEdit, planPageId
             </div>
             <div>
               <div className="text-muted-foreground">M²</div>
-              <div className="font-semibold text-[#E1DCC9]/70">{areaMeasurements.length}</div>
+              <div className="font-semibold text-foreground/70">{areaMeasurements.length}</div>
             </div>
             <div>
               <div className="text-muted-foreground">M³</div>

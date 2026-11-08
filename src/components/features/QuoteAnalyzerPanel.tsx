@@ -59,7 +59,7 @@ export function QuoteAnalyzerPanel({
 
   // Confidence score color
   const getScoreColor = (score: number) => {
-    if (score >= 80) return 'text-[#E1DCC9]/70';
+    if (score >= 80) return 'text-foreground/70';
     if (score >= 60) return 'text-amber-600';
     return 'text-red-600';
   };
@@ -220,7 +220,7 @@ export function QuoteAnalyzerPanel({
                 className={`p-2 rounded border ${
                   analysis.margin.marginPercent >= analysis.margin.industryBenchmark.low &&
                   analysis.margin.marginPercent <= analysis.margin.industryBenchmark.high
-                    ? 'border-[#E1DCC9]/20 bg-muted/10'
+                    ? 'border-foreground/20 bg-muted/10'
                     : 'border-gray-200'
                 }`}
               >
@@ -294,7 +294,7 @@ export function QuoteAnalyzerPanel({
               ))}
             </div>
           ) : (
-            <div className="flex items-center gap-2 text-[#E1DCC9]/70">
+            <div className="flex items-center gap-2 text-foreground/70">
               <CheckCircle2 className="h-5 w-5" />
               <span>No significant risks identified</span>
             </div>

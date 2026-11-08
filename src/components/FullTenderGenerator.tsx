@@ -472,7 +472,7 @@ ${clone.outerHTML}
   const riskColor = (level: string) => {
     if (level === "High") return "bg-red-100 text-red-700"
     if (level === "Medium") return "bg-amber-100 text-amber-700"
-    return "bg-muted/20 text-[#E1DCC9]/60"
+    return "bg-muted/20 text-foreground/60"
   }
 
   return (
@@ -947,11 +947,11 @@ ${clone.outerHTML}
                   <SH title="6. Scope of Works" />
                   <div className="grid grid-cols-2 gap-6">
                     <div>
-                      <h3 className="text-sm font-semibold text-gray-700 mb-3 flex items-center gap-2"><span className="text-[#E1DCC9]/80 text-base">✓</span> Inclusions</h3>
+                      <h3 className="text-sm font-semibold text-gray-700 mb-3 flex items-center gap-2"><span className="text-foreground/80 text-base">✓</span> Inclusions</h3>
                       <ul className="space-y-2">
                         {inclusions.filter(Boolean).map((item, i) => (
                           <li key={i} className="flex items-start gap-2 text-sm text-gray-600 bg-muted/10 rounded p-2">
-                            <span className="text-[#E1DCC9]/80 font-bold mt-0.5 flex-shrink-0">✓</span>{item}
+                            <span className="text-foreground/80 font-bold mt-0.5 flex-shrink-0">✓</span>{item}
                           </li>
                         ))}
                       </ul>
@@ -1165,7 +1165,7 @@ ${clone.outerHTML}
                             {v.saving && (
                               <div className="text-right flex-shrink-0">
                                 <div className="text-xs text-gray-400">Saving</div>
-                                <div className="font-bold text-[#E1DCC9]/70 font-mono">{v.saving.startsWith("-") ? v.saving : `-${v.saving}`}</div>
+                                <div className="font-bold text-foreground/70 font-mono">{v.saving.startsWith("-") ? v.saving : `-${v.saving}`}</div>
                               </div>
                             )}
                           </div>
@@ -1220,8 +1220,8 @@ ${clone.outerHTML}
                       { label: "EMP Delivery", value: "2 weeks", sub: "post contract award" },
                       { label: "NCC Compliance", value: "100%", sub: "all works" },
                     ].map(({ label, value, sub }) => (
-                      <div key={label} className="text-center p-3 rounded-xl bg-muted/10 border border-[#E1DCC9]/15">
-                        <div className="text-xl font-bold text-[#E1DCC9]/60">{value}</div>
+                      <div key={label} className="text-center p-3 rounded-xl bg-muted/10 border border-foreground/15">
+                        <div className="text-xl font-bold text-foreground/60">{value}</div>
                         <div className="text-xs font-medium text-gray-600 mt-0.5">{label}</div>
                         <div className="text-[10px] text-gray-400">{sub}</div>
                       </div>

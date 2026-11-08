@@ -30,10 +30,10 @@ type SupplierKey = "bunnings" | "mitre10" | "blackwoods" | "reece" | "tradelink"
 
 const SUPPLIERS: Record<SupplierKey, { name: string; cls: string }> = {
   bunnings:     { name: "Bunnings",       cls: "bg-red-100 text-red-700 border-red-200 dark:bg-red-950/50 dark:text-red-300 dark:border-red-800" },
-  mitre10:      { name: "Mitre 10",       cls: "bg-muted/20 text-[#E1DCC9]/60 border-border/35 dark:bg-card/50 dark:text-[#E1DCC9]/70 dark:border-border/45" },
+  mitre10:      { name: "Mitre 10",       cls: "bg-muted/20 text-foreground/60 border-border/35 dark:bg-card/50 dark:text-foreground/70 dark:border-border/45" },
   blackwoods:   { name: "Blackwoods",     cls: "bg-muted/20 text-foreground/80 border-border/40 dark:bg-background/50 dark:text-foreground/70 dark:border-border/50" },
   reece:        { name: "Reece",          cls: "bg-orange-100 text-orange-700 border-orange-200 dark:bg-orange-950/50 dark:text-orange-300 dark:border-orange-800" },
-  tradelink:    { name: "Tradelink",      cls: "bg-muted/15 text-[#E1DCC9]/80 border-border/35 dark:bg-card/60 dark:text-[#E1DCC9]/80 dark:border-border/40" },
+  tradelink:    { name: "Tradelink",      cls: "bg-muted/15 text-foreground/80 border-border/35 dark:bg-card/60 dark:text-foreground/80 dark:border-border/40" },
   rexel:        { name: "Rexel",          cls: "bg-muted/15 text-muted-foreground border-border/30 dark:bg-muted/20 dark:text-muted-foreground dark:border-border/40" },
   haymans:      { name: "Haymans Elec.",  cls: "bg-muted/15 text-muted-foreground border-border/35 dark:bg-muted/20 dark:text-muted-foreground dark:border-border/45" },
   beaumont:     { name: "Beaumont Tiles", cls: "bg-amber-100 text-amber-700 border-amber-200 dark:bg-amber-950/50 dark:text-amber-300 dark:border-amber-800" },
@@ -391,7 +391,7 @@ const MarketInsights = () => {
                           </TableCell>
                           <TableCell className="text-center text-xs font-mono text-muted-foreground">{item.unit}</TableCell>
                           <TableCell className="text-right font-mono text-sm">
-                            <span className="text-[#E1DCC9]/70 dark:text-[#E1DCC9]/80 font-medium">{fmt(allLo)}</span>
+                            <span className="text-foreground/70 dark:text-foreground/80 font-medium">{fmt(allLo)}</span>
                             <span className="text-muted-foreground mx-1">–</span>
                             <span className="text-red-600 dark:text-red-400 font-medium">{fmt(allHi)}</span>
                           </TableCell>
@@ -454,7 +454,7 @@ const MarketInsights = () => {
                     Services:   "bg-yellow-50 border-yellow-200 dark:bg-yellow-950/40 dark:border-yellow-700",
                     Lining:     "bg-muted/10 border-border/30 dark:bg-muted/20 dark:border-border/40",
                     Finishing:  "bg-muted/10 border-border/35 dark:bg-card/40 dark:border-border/40",
-                    External:   "bg-muted/10 border-[#E1DCC9]/20 dark:bg-[#E1DCC9]/8 dark:border-[#E1DCC9]/25",
+                    External:   "bg-muted/10 border-foreground/20 dark:bg-foreground/8 dark:border-foreground/25",
                     Civil:      "bg-orange-50 border-orange-200 dark:bg-orange-950/40 dark:border-orange-700",
                   };
                   return (
@@ -472,7 +472,7 @@ const MarketInsights = () => {
                       {/* Rate range bar */}
                       <div className="mb-3">
                         <div className="flex justify-between text-xs mb-1">
-                          <span className="text-[#E1DCC9]/70 dark:text-[#E1DCC9]/80 font-medium">{fmt(lo)}/hr</span>
+                          <span className="text-foreground/70 dark:text-foreground/80 font-medium">{fmt(lo)}/hr</span>
                           <span className="font-semibold text-foreground">{fmt(typ)}/hr typical</span>
                           <span className="text-red-600 dark:text-red-400 font-medium">{fmt(hi)}/hr</span>
                         </div>

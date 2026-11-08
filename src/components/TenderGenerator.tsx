@@ -339,12 +339,12 @@ export const TenderGenerator = ({ project, estimate }: TenderGeneratorProps) => 
                     <div className="grid grid-cols-2 gap-6">
                       <div>
                         <h3 className="text-sm font-semibold text-gray-700 mb-2 flex items-center gap-1">
-                          <span className="text-[#E1DCC9]/80">✓</span> Inclusions
+                          <span className="text-foreground/80">✓</span> Inclusions
                         </h3>
                         <ul className="space-y-1.5">
                           {inclusions.filter(Boolean).map((item, i) => (
                             <li key={i} className="flex items-start gap-2 text-sm text-gray-600">
-                              <ChevronRight className="h-3.5 w-3.5 mt-0.5 flex-shrink-0 text-[#E1DCC9]/80" />
+                              <ChevronRight className="h-3.5 w-3.5 mt-0.5 flex-shrink-0 text-foreground/80" />
                               {item}
                             </li>
                           ))}

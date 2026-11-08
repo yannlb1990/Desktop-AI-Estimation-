@@ -69,7 +69,7 @@ export function NCCCompliancePanel({
 
   // Get score color
   const getScoreColor = (score: number) => {
-    if (score >= 90) return 'text-[#E1DCC9]/70';
+    if (score >= 90) return 'text-foreground/70';
     if (score >= 70) return 'text-amber-600';
     return 'text-red-600';
   };
@@ -117,7 +117,7 @@ export function NCCCompliancePanel({
   const getWorkTypeColor = (workType: string) => {
     const colors: Record<string, string> = {
       bathroom: 'bg-muted/20 text-foreground/90',
-      shower: 'bg-muted/15 text-[#E1DCC9]/90',
+      shower: 'bg-muted/15 text-foreground/90',
       laundry: 'bg-muted/15 text-muted-foreground',
       deck: 'bg-amber-100 text-amber-800',
       electrical: 'bg-yellow-100 text-yellow-800',
@@ -323,7 +323,7 @@ export function NCCCompliancePanel({
                         }`}
                       >
                         {req.met ? (
-                          <CheckCircle2 className="h-5 w-5 text-[#E1DCC9]/70 shrink-0" />
+                          <CheckCircle2 className="h-5 w-5 text-foreground/70 shrink-0" />
                         ) : req.mandatory ? (
                           <XCircle className="h-5 w-5 text-red-600 shrink-0" />
                         ) : (

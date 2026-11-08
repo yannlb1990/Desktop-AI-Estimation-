@@ -1271,7 +1271,7 @@ export const PDFTakeoff = ({ projectId, estimateId, onAddCostItems }: PDFTakeoff
             const actual = parseFloat(verifyActualInput);
             const diff = Math.round((actual / verifyMeasurement.realValue - 1) * 100);
             return actual > 0 ? (
-              <p className={`text-xs font-medium ${Math.abs(diff) < 2 ? 'text-[#E1DCC9]/80' : 'text-amber-400'}`}>
+              <p className={`text-xs font-medium ${Math.abs(diff) < 2 ? 'text-foreground/80' : 'text-amber-400'}`}>
                 {Math.abs(diff) < 1 ? '✓ Scale looks correct' : `Scale will be corrected by ${diff > 0 ? '+' : ''}${diff}%`}
               </p>
             ) : null;
@@ -1369,7 +1369,7 @@ export const PDFTakeoff = ({ projectId, estimateId, onAddCostItems }: PDFTakeoff
                 <Button
                   variant="outline"
                   size="sm"
-                  className="gap-1.5 border-[#412D15]/50 text-[#D4A045] hover:bg-[#412D15]/40 hover:border-[#D4A045]/70"
+                  className="gap-1.5 border-border/50 text-gold hover:bg-accent/40 hover:border-gold/70"
                   onClick={() => { if (!sub.caps.planAnalysis) { setUpgradeModal({ open: true, feature: 'AI Plan Analyser' }); return; } setShowAnalyserModal(true); }}
                 >
                   <ScanLine className="h-3.5 w-3.5" />
@@ -1439,7 +1439,7 @@ export const PDFTakeoff = ({ projectId, estimateId, onAddCostItems }: PDFTakeoff
                   {/* Scale */}
                   {state.isCalibrated ? (
                     <div className="flex items-center gap-1">
-                      <span className="text-xs font-medium text-[#E1DCC9]/70 dark:text-[#E1DCC9]/80 flex items-center gap-1">
+                      <span className="text-xs font-medium text-foreground/70 dark:text-foreground/80 flex items-center gap-1">
                         <CheckCircle className="h-3.5 w-3.5" />
                         {state.currentScale?.scaleFactor ? `1:${state.currentScale.scaleFactor}` : 'Calibrated'}
                       </span>
@@ -1578,7 +1578,7 @@ export const PDFTakeoff = ({ projectId, estimateId, onAddCostItems }: PDFTakeoff
                         <div className="flex items-center gap-1 border-l border-border pl-2 ml-1">
                           {state.isCalibrated ? (
                             <>
-                              <span className="text-xs font-medium text-[#E1DCC9]/80 flex items-center gap-1">
+                              <span className="text-xs font-medium text-foreground/80 flex items-center gap-1">
                                 <CheckCircle className="h-3.5 w-3.5" />
                                 {state.currentScale?.scaleFactor ? `1:${state.currentScale.scaleFactor}` : 'Calibrated'}
                               </span>
@@ -2210,7 +2210,7 @@ export const PDFTakeoff = ({ projectId, estimateId, onAddCostItems }: PDFTakeoff
               </div>
             </div>
             {m.addedToEstimate ? (
-              <p className="text-[11px] text-[#E1DCC9]/70 dark:text-[#E1DCC9]/80 mb-2 font-medium">Already in estimate. Add again or update:</p>
+              <p className="text-[11px] text-foreground/70 dark:text-foreground/80 mb-2 font-medium">Already in estimate. Add again or update:</p>
             ) : (
               <p className="text-[11px] text-muted-foreground mb-2">Add to estimate as:</p>
             )}
@@ -2245,7 +2245,7 @@ export const PDFTakeoff = ({ projectId, estimateId, onAddCostItems }: PDFTakeoff
             })()}
             <button
               onClick={() => { setMeasurementPopup(null); if (!sub.caps.planAnalysis) { setUpgradeModal({ open: true, feature: 'AI Plan Analyser' }); return; } setShowAnalyserModal(true); }}
-              className="mt-2 w-full px-2.5 py-1.5 rounded text-xs font-medium border border-[#D4A045]/40 text-[#D4A045] hover:bg-[#412D15]/30 hover:border-[#D4A045]/70 flex items-center justify-center gap-1.5 transition-colors"
+              className="mt-2 w-full px-2.5 py-1.5 rounded text-xs font-medium border border-gold/40 text-gold hover:bg-accent/30 hover:border-gold/70 flex items-center justify-center gap-1.5 transition-colors"
             >
               <ScanLine className="h-3.5 w-3.5" />
               AI Plan Analyser

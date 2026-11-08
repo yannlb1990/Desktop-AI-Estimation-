@@ -110,14 +110,14 @@ function NotesBox({ value, onChange, placeholder }: { value: string; onChange: (
     <div className="space-y-2">
       <textarea className={`${field} min-h-[96px]`} value={value} placeholder={placeholder} onChange={e => onChange(e.target.value)} />
       {d.listening && (
-        <p className="rounded-lg border border-[#D4A045]/40 bg-[#D4A045]/10 px-3 py-2 text-sm text-foreground">
+        <p className="rounded-lg border border-gold/40 bg-gold/10 px-3 py-2 text-sm text-foreground">
           {d.live || 'Listening... speak now'}
         </p>
       )}
       {d.problem && <p className="text-xs text-amber-400">{d.problem}</p>}
       {d.supported ? (
         <button type="button" onClick={d.listening ? d.stop : d.start}
-          className={`w-full rounded-lg py-3 text-base font-semibold ${d.listening ? 'bg-red-500/90 text-white' : 'border border-[#D4A045] text-[#D4A045]'}`}>
+          className={`w-full rounded-lg py-3 text-base font-semibold ${d.listening ? 'bg-red-500/90 text-white' : 'border border-gold text-gold'}`}>
           {d.listening ? 'Stop' : 'Talk'}
         </button>
       ) : (
@@ -411,8 +411,8 @@ export default function SiteVisitEditor() {
     return (
       <div className="min-h-screen bg-background text-foreground px-6 max-w-xl mx-auto flex flex-col" style={{ paddingTop: 'max(3rem, env(safe-area-inset-top))', paddingBottom: 'calc(2rem + env(safe-area-inset-bottom))' }}>
         <div className="flex-1">
-          <div className={`grid h-24 w-24 place-items-center rounded-full ${uploaded ? 'bg-[#D4A045]' : 'bg-[#412D15]'}`}>
-            <span className="text-4xl font-bold text-[#0B0704]">{uploaded ? '✓' : '…'}</span>
+          <div className={`grid h-24 w-24 place-items-center rounded-full ${uploaded ? 'bg-gold' : 'bg-accent'}`}>
+            <span className="text-4xl font-bold text-primary-foreground">{uploaded ? '✓' : '…'}</span>
           </div>
           <h1 className="mt-8 font-display text-4xl font-bold">{uploaded ? 'Sent' : 'Saved'}</h1>
           <p className="mt-4 text-lg">
@@ -426,7 +426,7 @@ export default function SiteVisitEditor() {
           <p className="mt-3 text-sm text-muted-foreground">Changes you make later update the same visit in the office. Nothing is added twice.</p>
         </div>
         <button type="button" onClick={() => navigate('/site')} className="w-full rounded-xl bg-primary py-4 text-base font-semibold text-primary-foreground">Done</button>
-        <button type="button" onClick={() => setDone(false)} className="mt-4 w-full py-2 text-base text-[#D4A045]">Keep editing this visit</button>
+        <button type="button" onClick={() => setDone(false)} className="mt-4 w-full py-2 text-base text-gold">Keep editing this visit</button>
       </div>
     );
   }

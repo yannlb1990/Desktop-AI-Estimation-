@@ -77,7 +77,7 @@ const ShareProjectButton = ({ projectId, projectName, projectData }: ShareProjec
       variant="outline"
       onClick={handleShare}
       disabled={sharing}
-      className="border-[#412D15] text-[#E1DCC9] hover:bg-[#1A110A] hover:border-amber-500/40 text-xs gap-1.5"
+      className="border-border text-foreground hover:bg-card hover:border-amber-500/40 text-xs gap-1.5"
     >
       {sharing ? (
         <Loader2 className="h-3.5 w-3.5 animate-spin" />

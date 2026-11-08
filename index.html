@@ -36,6 +36,17 @@
     <meta name="twitter:image" content="https://metricore.com.au/og-image.png" />
     <meta name="twitter:site" content="@metricoreai" />
 
+    <script>
+      // the app's light or dark look before anything draws (src/lib/theme.ts does the rest)
+      (function () {
+        try {
+          var pref = localStorage.getItem('metricore_theme');
+          var app = /^\/(dashboard|site|xero|project|insights|clients|settings|materials|admin)(\/|$)/.test(location.pathname);
+          var light = app && (pref === 'light' || (pref === 'system' && window.matchMedia('(prefers-color-scheme: light)').matches));
+          if (light) { document.documentElement.classList.remove('dark'); document.documentElement.classList.add('light'); }
+        } catch (e) {}
+      })();
+    </script>
     <script type="application/ld+json">
     {
       "@context": "https://schema.org",

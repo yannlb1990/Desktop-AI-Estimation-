@@ -67,7 +67,7 @@ export const PDFElementsPanel = ({
   const getTypeColor = (type: ExtractedElement['type']) => {
     switch (type) {
       case 'dimension': return 'text-foreground/70 bg-muted/20 dark:bg-card/50';
-      case 'room_label': return 'text-[#E1DCC9]/70 bg-muted/20 dark:bg-card/50';
+      case 'room_label': return 'text-foreground/70 bg-muted/20 dark:bg-card/50';
       case 'annotation': return 'text-amber-600 bg-amber-100 dark:bg-amber-900/30';
       default: return 'text-muted-foreground bg-muted';
     }

@@ -853,7 +853,7 @@ export function AIPlanAnalyzer({
             <Tooltip>
               <TooltipTrigger asChild>
                 <span className={`text-[10px] font-semibold cursor-help tabular-nums ${
-                  item.confidence >= 0.8 ? 'text-[#E1DCC9]/70' :
+                  item.confidence >= 0.8 ? 'text-foreground/70' :
                   item.confidence >= 0.5 ? 'text-amber-500' : 'text-red-500'
                 }`}>
                   {Math.round(item.confidence * 100)}%
@@ -881,7 +881,7 @@ export function AIPlanAnalyzer({
                 <Button
                   variant="ghost"
                   size="sm"
-                  className="h-7 w-7 p-0 text-[#E1DCC9]/70 hover:text-[#E1DCC9]/60 hover:bg-muted/20"
+                  className="h-7 w-7 p-0 text-foreground/70 hover:text-foreground/60 hover:bg-muted/20"
                   onClick={saveRowEdit}
                   title="Save changes"
                 >
@@ -1797,7 +1797,7 @@ export function AIPlanAnalyzer({
                                     <Badge key={i} variant="secondary" className="text-[10px] py-0 font-mono">{f}</Badge>
                                   ))}
                                   {insFound.slice(0, 3).map((r, i) => (
-                                    <Badge key={`r-${i}`} variant="secondary" className="text-[10px] py-0 font-mono text-[#E1DCC9]/60">{r}</Badge>
+                                    <Badge key={`r-${i}`} variant="secondary" className="text-[10px] py-0 font-mono text-foreground/60">{r}</Badge>
                                   ))}
                                 </div>
                               </div>
@@ -2175,7 +2175,7 @@ export function AIPlanAnalyzer({
               <div className="flex items-center gap-2">
                 <Button
                   onClick={() => setAddItemDialogOpen(true)}
-                  className="bg-[#412D15]/70 hover:bg-[#412D15]/80"
+                  className="bg-accent/70 hover:bg-accent/80"
                 >
                   <Plus className="h-4 w-4 mr-2" />
                   Add Line Item
@@ -2353,7 +2353,7 @@ export function AIPlanAnalyzer({
                           )}
                         </div>
                         <div className="flex items-center gap-4">
-                          <span className="font-mono text-sm font-semibold text-[#E1DCC9]/60 dark:text-[#E1DCC9]/80">
+                          <span className="font-mono text-sm font-semibold text-foreground/60 dark:text-foreground/80">
                             ${group.subtotal.toLocaleString()}
                           </span>
                         </div>
@@ -2387,7 +2387,7 @@ export function AIPlanAnalyzer({
           )}
 
           {/* Totals Summary */}
-          <Card className="p-4 bg-gradient-to-r from-[#1F150C] to-[#412D15]/30">
+          <Card className="p-4 bg-gradient-to-r from-card to-accent/30">
             <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
               <div>
                 <p className="text-xs text-muted-foreground uppercase">Materials</p>
@@ -2574,7 +2574,7 @@ export function AIPlanAnalyzer({
             <Button
               onClick={addNewItem}
               disabled={!newItem.description || newItem.quantity <= 0}
-              className="bg-[#412D15]/70 hover:bg-[#412D15]/80"
+              className="bg-accent/70 hover:bg-accent/80"
             >
               <Plus className="h-4 w-4 mr-2" />
               Add Item
@@ -2634,7 +2634,7 @@ export function AIPlanAnalyzer({
         <DialogContent className="max-w-lg">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
-              <FolderOpen className="h-5 w-5 text-[#E1DCC9]/70" />
+              <FolderOpen className="h-5 w-5 text-foreground/70" />
               Load Project
             </DialogTitle>
             <DialogDescription>

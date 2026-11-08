@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo } from "react";
 import { toast } from "sonner";
+import { getThemePref, setThemePref, resolveTheme } from "@/lib/theme";
 import { jobMoney } from '@/lib/xero/money';
 import { refreshXeroPayments } from '@/lib/xero/payments';
 import { loadProject as loadLocalProject } from '@/lib/contract';
@@ -71,6 +72,7 @@ const Dashboard = () => {
   const [showAll, setShowAll] = useState(false);
   const [stageFilter, setStageFilter] = useState<ProjectStage | null>(null);
   const [search, setSearch] = useState('');
+  const [themeMode, setThemeMode] = useState(() => resolveTheme(getThemePref()));
   const [sortBy, setSortBy] = useState<'changed' | 'value' | 'name' | 'stage'>('changed');
   const [showAllAttention, setShowAllAttention] = useState(false);
   const [bannerDismissed, setBannerDismissed] = useState(false);
@@ -345,6 +347,11 @@ const Dashboard = () => {
                 <Settings className="h-4 w-4 md:mr-1.5" /><span className="hidden md:inline">Settings</span>
               </Button>
             </TourTip>
+            <Button variant="ghost" size="sm" className="hidden sm:inline-flex text-muted-foreground hover:text-foreground"
+              title="Switch between light and dark (Settings, Appearance for more)"
+              onClick={() => { const next = resolveTheme(getThemePref()) === 'dark' ? 'light' : 'dark'; setThemePref(next); setThemeMode(next); }}>
+              {themeMode === 'dark' ? 'Light mode' : 'Dark mode'}
+            </Button>
             <Button variant="ghost" size="sm" onClick={handleSignOut} className="text-muted-foreground hover:text-foreground" title="Sign Out">
               <LogOut className="h-4 w-4 md:mr-1.5" /><span className="hidden md:inline">Sign Out</span>
             </Button>

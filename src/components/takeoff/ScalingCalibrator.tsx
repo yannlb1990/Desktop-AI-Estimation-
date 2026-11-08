@@ -38,19 +38,19 @@ export const ScalingCalibrator = ({
       {isCalibrated && currentScale ? (
         <div className="bg-muted/10 dark:bg-card/50 border border-border/35 dark:border-border/45 p-3 rounded-lg space-y-1.5">
           <div className="flex items-center gap-2">
-            <CheckCircle className="h-4 w-4 text-[#E1DCC9]/80 shrink-0" />
+            <CheckCircle className="h-4 w-4 text-foreground/80 shrink-0" />
             <p className="text-sm font-medium text-foreground/80 dark:text-foreground/80">
               {currentScale.scaleFactor ? `1:${currentScale.scaleFactor}` : 'Manual'} — active
             </p>
           </div>
-          <p className="text-xs text-[#E1DCC9]/60 dark:text-[#E1DCC9]/70 pl-6">
+          <p className="text-xs text-foreground/60 dark:text-foreground/70 pl-6">
             {currentScale.unitsPerMetre.toFixed(2)} PDF units / metre
           </p>
           {onStartVerify && currentScale.scaleMethod === 'preset' && (
             <Button
               size="sm"
               variant="outline"
-              className="w-full h-7 text-xs mt-1 border-[#E1DCC9]/35 text-[#E1DCC9]/60 dark:text-[#E1DCC9]/70 hover:bg-muted/20 dark:hover:bg-card"
+              className="w-full h-7 text-xs mt-1 border-foreground/35 text-foreground/60 dark:text-foreground/70 hover:bg-muted/20 dark:hover:bg-card"
               onClick={onStartVerify}
             >
               <Ruler className="h-3 w-3 mr-1.5" />

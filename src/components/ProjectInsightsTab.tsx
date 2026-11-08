@@ -250,8 +250,8 @@ export const ProjectInsightsTab = ({ projectId }: ProjectInsightsTabProps) => {
     );
   }
 
-  const scoreColor = health.score >= 85 ? "text-[#E1DCC9]/70" : health.score >= 70 ? "text-amber-500" : "text-red-500";
-  const scoreRing = health.score >= 85 ? "border-[#E1DCC9]/30" : health.score >= 70 ? "border-amber-400" : "border-red-400";
+  const scoreColor = health.score >= 85 ? "text-foreground/70" : health.score >= 70 ? "text-amber-500" : "text-red-500";
+  const scoreRing = health.score >= 85 ? "border-foreground/30" : health.score >= 70 ? "border-amber-400" : "border-red-400";
 
   return (
     <div className="space-y-6">
@@ -278,7 +278,7 @@ export const ProjectInsightsTab = ({ projectId }: ProjectInsightsTabProps) => {
             </div>
             <div className="flex-1 space-y-2">
               {health.issues.length === 0 ? (
-                <div className="flex items-center gap-2 text-[#E1DCC9]/70">
+                <div className="flex items-center gap-2 text-foreground/70">
                   <CheckCircle2 className="h-5 w-5" />
                   <span className="font-medium">No issues found. Estimate looks complete.</span>
                 </div>
@@ -491,7 +491,7 @@ export const ProjectInsightsTab = ({ projectId }: ProjectInsightsTabProps) => {
         </CardHeader>
         <CardContent>
           {riskFlags.length === 0 ? (
-            <div className="flex items-center gap-2 text-[#E1DCC9]/70 py-2">
+            <div className="flex items-center gap-2 text-foreground/70 py-2">
               <CheckCircle2 className="h-5 w-5" />
               <span className="font-medium">All clear. No pricing risks found.</span>
             </div>

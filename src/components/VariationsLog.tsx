@@ -116,7 +116,7 @@ const STATUS_CONFIG: Record<
     label: "Pending Approval",
     className: "bg-amber-600/80 text-amber-100 border border-amber-500/50",
   },
-  approved: { label: "Approved", className: "bg-[#412D15]/70 text-foreground/90" },
+  approved: { label: "Approved", className: "bg-accent/70 text-foreground/90" },
   rejected: { label: "Rejected", className: "bg-red-600/80 text-red-100" },
   disputed: {
     label: "Disputed",
@@ -402,10 +402,10 @@ Please respond to approve or reject this variation.`;
             <p className="text-2xl font-bold text-foreground">{variations.length}</p>
           </CardContent>
         </Card>
-        <Card className="bg-card/40 border-[#E1DCC9]/20">
+        <Card className="bg-card/40 border-foreground/20">
           <CardContent className="pt-4 pb-4">
             <p className="text-xs text-muted-foreground mb-1">Approved Value</p>
-            <p className="text-2xl font-bold text-[#E1DCC9]/80">{aud(approvedValue)}</p>
+            <p className="text-2xl font-bold text-foreground/80">{aud(approvedValue)}</p>
           </CardContent>
         </Card>
         <Card className="bg-amber-900/20 border-amber-700/40">
@@ -570,7 +570,7 @@ Please respond to approve or reject this variation.`;
                           approvedAt: new Date().toISOString(),
                         })
                       }
-                      className="h-7 text-xs gap-1 border-[#E1DCC9]/20 text-[#E1DCC9]/70 hover:bg-card/80/30"
+                      className="h-7 text-xs gap-1 border-foreground/20 text-foreground/70 hover:bg-card/80/30"
                     >
                       <CheckCircle className="w-3 h-3" />
                       Mark Approved
@@ -602,7 +602,7 @@ Please respond to approve or reject this variation.`;
 
                 {v.status === "approved" && (
                   <>
-                    <span className="inline-flex items-center gap-1 text-xs text-[#E1DCC9]/80 font-medium">
+                    <span className="inline-flex items-center gap-1 text-xs text-foreground/80 font-medium">
                       <CheckCircle className="w-3.5 h-3.5" />
                       Approved{v.approvedAt ? ` ${format(parseISO(v.approvedAt), "dd MMM yyyy")}` : ""}
                     </span>
@@ -651,7 +651,7 @@ Please respond to approve or reject this variation.`;
                           approvedAt: new Date().toISOString(),
                         })
                       }
-                      className="h-7 text-xs gap-1 border-[#E1DCC9]/20 text-[#E1DCC9]/70 hover:bg-card/80/30 ml-2"
+                      className="h-7 text-xs gap-1 border-foreground/20 text-foreground/70 hover:bg-card/80/30 ml-2"
                     >
                       <CheckCircle className="w-3 h-3" />
                       Mark Approved
@@ -758,7 +758,7 @@ Please respond to approve or reject this variation.`;
                   size="sm"
                   variant="ghost"
                   onClick={addItemRow}
-                  className="h-6 text-xs gap-1 text-[#E1DCC9] hover:text-[#E1DCC9]/80"
+                  className="h-6 text-xs gap-1 text-foreground hover:text-foreground/80"
                 >
                   <Plus className="w-3 h-3" />
                   Add Row

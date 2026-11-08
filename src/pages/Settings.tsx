@@ -14,6 +14,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { getThemePref, setThemePref, type ThemePref } from "@/lib/theme";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
 import {
@@ -60,7 +61,7 @@ const SETTINGS_GROUPS: { label: string; items: { key: string; label: string }[] 
   { label: 'Quotes', items: [{ key: 'quotes', label: 'Quote settings' }] },
   { label: 'Suppliers', items: [{ key: 'suppliers', label: 'Suppliers' }] },
   { label: 'Connections', items: [{ key: 'xero', label: 'Xero' }, { key: 'ai', label: 'Claude AI' }] },
-  { label: 'Account', items: [{ key: 'notifications', label: 'Alerts' }, { key: 'billing', label: 'Plan and billing' }, { key: 'team', label: 'Team' }] },
+  { label: 'Account', items: [{ key: 'appearance', label: 'Appearance' }, { key: 'notifications', label: 'Alerts' }, { key: 'billing', label: 'Plan and billing' }, { key: 'team', label: 'Team' }] },
 ];
 
 /** Saves a section a moment after its values stop changing; not before \`armed\` (settings loaded). */
@@ -79,6 +80,7 @@ function useAutoSave(armed: boolean, values: unknown[], save: () => void, delay 
 const Settings = () => {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
+  const [themeChoice, setThemeChoice] = useState<ThemePref>(getThemePref);
   const [tab, setTab] = useState(() => {
     const t = new URLSearchParams(window.location.search).get('tab') || 'profile';
     return SETTINGS_GROUPS.some(g => g.items.some(i => i.key === t)) ? t : 'profile';
@@ -1078,6 +1080,27 @@ const Settings = () => {
             </Card>
           </TabsContent>
 
+          {/* ── Appearance ───────────────────────────────────────────────────── */}
+          <TabsContent value="appearance">
+            <Card className="p-6">
+              <h3 className="font-display text-xl font-bold mb-1">Appearance</h3>
+              <p className="mb-5 text-sm text-muted-foreground">How Metricore looks on this device. Quotes and PDFs always print on white.</p>
+              <div className="grid gap-3 sm:grid-cols-3">
+                {([
+                  { key: 'dark', label: 'Dark', hint: 'The usual look, easy on the eyes at night' },
+                  { key: 'light', label: 'Light', hint: 'White pages, easier to read in daylight or on site' },
+                  { key: 'system', label: 'Same as my device', hint: 'Follows your computer or phone setting' },
+                ] as const).map(o => (
+                  <button key={o.key} type="button" onClick={() => { setThemePref(o.key); setThemeChoice(o.key); }}
+                    className={`rounded-lg border p-4 text-left transition-colors ${themeChoice === o.key ? 'border-primary bg-primary/10' : 'border-border hover:bg-muted'}`}>
+                    <span className="block font-medium">{o.label}</span>
+                    <span className="mt-1 block text-xs text-muted-foreground">{o.hint}</span>
+                  </button>
+                ))}
+              </div>
+            </Card>
+          </TabsContent>
+
           {/* ── Notifications ─────────────────────────────────────────────────── */}
           <TabsContent value="notifications">
             <Card className="p-6">
@@ -1299,13 +1322,13 @@ const Settings = () => {
                     {activeMembers.map(m => (
                       <div key={m.id} className="flex items-center justify-between p-3 rounded-lg border border-border">
                         <div className="flex items-center gap-3">
-                          <div className="w-8 h-8 rounded-full bg-muted/100/20 flex items-center justify-center text-xs font-bold text-[#E1DCC9]/70">
+                          <div className="w-8 h-8 rounded-full bg-muted/100/20 flex items-center justify-center text-xs font-bold text-foreground/70">
                             {m.email[0].toUpperCase()}
                           </div>
                           <div>
                             <div className="text-sm font-medium">{m.email}</div>
                             <div className="text-xs text-muted-foreground flex items-center gap-1">
-                              <CheckCircle className="h-3 w-3 text-[#E1DCC9]/80" />
+                              <CheckCircle className="h-3 w-3 text-foreground/80" />
                               Joined {new Date(m.joined_at).toLocaleDateString("en-AU")}
                             </div>
                           </div>

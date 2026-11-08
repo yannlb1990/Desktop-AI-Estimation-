@@ -49,7 +49,7 @@ export const NCCSearchBar = () => {
       'Access & Egress': 'bg-muted/20 text-foreground/80',
       'Health & Amenity': 'bg-muted/15 text-muted-foreground',
       'Energy Efficiency': 'bg-amber-100 text-amber-800',
-      'Plumbing': 'bg-muted/15 text-[#E1DCC9]/90',
+      'Plumbing': 'bg-muted/15 text-foreground/90',
       'Electrical': 'bg-yellow-100 text-yellow-800',
       'Governing Requirements': 'bg-gray-100 text-gray-800',
     };
@@ -190,7 +190,7 @@ export const NCCSearchBar = () => {
                   {/* Quantity Required */}
                   {ref.quantityRequired && (
                     <div className="bg-muted/30 border border-border rounded-md p-3">
-                      <h5 className="font-semibold text-xs text-[#D4A045] mb-1 uppercase tracking-wide">Quantity Required</h5>
+                      <h5 className="font-semibold text-xs text-gold mb-1 uppercase tracking-wide">Quantity Required</h5>
                       <p className="text-sm text-foreground/80 leading-snug">{ref.quantityRequired}</p>
                     </div>
                   )}

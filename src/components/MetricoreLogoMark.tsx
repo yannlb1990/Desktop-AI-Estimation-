@@ -6,7 +6,7 @@ interface Props {
 
 export const MetricoreLogoMark = ({
   height = 32,
-  markColor = "white",
+  markColor = "hsl(var(--logo-mark))",
   dotColor = "#412D15",
 }: Props) => (
   <svg

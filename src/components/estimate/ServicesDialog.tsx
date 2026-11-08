@@ -208,7 +208,7 @@ export const ServicesDialog: React.FC<Props> = ({ open, measurements, onAdd, onC
                   <button className="text-xs text-muted-foreground hover:text-red-400" onClick={() => setRooms(rs => rs.filter((_, k) => k !== i))}>Remove</button>
                 </div>
               ))}
-              <button className="text-xs text-[#D4A045] hover:underline" onClick={() => setRooms(rs => {
+              <button className="text-xs text-gold hover:underline" onClick={() => setRooms(rs => {
                 let n = rs.length + 1;
                 while (rs.some(r => r.name === `Room ${n}`)) n++;
                 return [...rs, { name: `Room ${n}`, m2: '' }];

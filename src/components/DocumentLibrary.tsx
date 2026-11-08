@@ -386,8 +386,8 @@ export const DocumentLibrary = ({ projectId, projectName, clientName = "", siteA
           </div>
         </Card>
         <Card className="p-4 flex items-center gap-3">
-          <div className="p-2 rounded-lg bg-[#E1DCC9]/8">
-            <DollarSign className="h-5 w-5 text-[#E1DCC9]/70" />
+          <div className="p-2 rounded-lg bg-foreground/8">
+            <DollarSign className="h-5 w-5 text-foreground/70" />
           </div>
           <div>
             <div className="text-2xl font-bold font-mono">{savedQuotes.length > 0 ? au$(totalQuoteValue / savedQuotes.length) : "—"}</div>

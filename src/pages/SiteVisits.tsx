@@ -74,7 +74,7 @@ export default function SiteVisits() {
             <button key={v.id} onClick={() => navigate(`/site/${v.id}`)} className="w-full rounded-xl border border-border bg-card px-4 py-3 text-left">
               <div className="flex items-center justify-between gap-2">
                 <span className="font-medium truncate">{v.jobName || 'Untitled visit'}</span>
-                <span className={`shrink-0 text-xs ${pending ? 'text-amber-400' : 'text-[#D4A045]'}`}>{pending ? 'Waiting for signal' : 'In the office'}</span>
+                <span className={`shrink-0 text-xs ${pending ? 'text-amber-400' : 'text-gold'}`}>{pending ? 'Waiting for signal' : 'In the office'}</span>
               </div>
               <div className="mt-0.5 text-xs text-muted-foreground">
                 {v.address || 'No address'} · {v.rooms.length} room{v.rooms.length !== 1 ? 's' : ''}

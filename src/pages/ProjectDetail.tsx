@@ -505,7 +505,7 @@ const ProjectDetail = () => {
                 <span className="hidden sm:flex items-center gap-1 text-xs text-muted-foreground ml-2">
                   {syncState === 'saving'
                     ? <><Loader2 className="h-3 w-3 animate-spin" />Saving…</>
-                    : <><Check className="h-3 w-3 text-[#E1DCC9]/80" />Saved</>
+                    : <><Check className="h-3 w-3 text-foreground/80" />Saved</>
                   }
                 </span>
               )}
@@ -770,7 +770,7 @@ const ProjectDetail = () => {
                     onClick={() => setActiveMainTab(tool.key)}
                     className={`flex items-center gap-1.5 px-2 md:px-3 py-2 rounded-lg text-xs font-medium transition-all shrink-0 ${
                       isActive
-                        ? "bg-[#412D15] text-foreground shadow-sm ring-1 ring-[#D4A045]/40"
+                        ? "bg-accent text-foreground shadow-sm ring-1 ring-gold/40"
                         : "text-muted-foreground hover:bg-muted/50 hover:text-foreground"
                     }`}
                     title={tool.label}

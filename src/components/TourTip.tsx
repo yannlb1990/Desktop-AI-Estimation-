@@ -22,10 +22,10 @@ export const TourTip = ({ text, children, position = "bottom" }: TourTipProps) =
   };
 
   const arrowClasses: Record<string, string> = {
-    bottom: "bottom-full left-1/2 -translate-x-1/2 border-b-[#1A110A] border-x-transparent border-t-transparent border-4",
-    top:    "top-full left-1/2 -translate-x-1/2 border-t-[#1A110A] border-x-transparent border-b-transparent border-4",
-    right:  "right-full top-1/2 -translate-y-1/2 border-r-[#1A110A] border-y-transparent border-l-transparent border-4",
-    left:   "left-full top-1/2 -translate-y-1/2 border-l-[#1A110A] border-y-transparent border-r-transparent border-4",
+    bottom: "bottom-full left-1/2 -translate-x-1/2 border-b-card border-x-transparent border-t-transparent border-4",
+    top:    "top-full left-1/2 -translate-x-1/2 border-t-card border-x-transparent border-b-transparent border-4",
+    right:  "right-full top-1/2 -translate-y-1/2 border-r-card border-y-transparent border-l-transparent border-4",
+    left:   "left-full top-1/2 -translate-y-1/2 border-l-card border-y-transparent border-r-transparent border-4",
   };
 
   return (
@@ -36,11 +36,11 @@ export const TourTip = ({ text, children, position = "bottom" }: TourTipProps) =
       onMouseLeave={() => setVisible(false)}
     >
       {/* Glowing ring when tour is active */}
-      <span className="absolute inset-0 rounded-md ring-2 ring-[#D4A045]/50 ring-offset-1 ring-offset-background pointer-events-none animate-pulse" />
+      <span className="absolute inset-0 rounded-md ring-2 ring-gold/50 ring-offset-1 ring-offset-background pointer-events-none animate-pulse" />
       {children}
       {visible && (
         <div className={`absolute z-50 ${posClasses[position]} pointer-events-none`}>
-          <div className="relative bg-card border border-[#D4A045]/40 text-foreground text-xs rounded-lg px-3 py-2 shadow-xl max-w-[220px] whitespace-normal leading-relaxed">
+          <div className="relative bg-card border border-gold/40 text-foreground text-xs rounded-lg px-3 py-2 shadow-xl max-w-[220px] whitespace-normal leading-relaxed">
             <span className={`absolute ${arrowClasses[position]}`} />
             <span className="text-amber-400 font-semibold mr-1">Guide:</span>
             {text}

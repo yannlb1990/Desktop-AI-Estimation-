@@ -61,7 +61,7 @@ const COST_TYPES: CostType[] = ["invoice", "labour", "material", "subcontract", 
 const typeColors: Record<CostType, string> = {
   invoice: "bg-muted/100/20 text-foreground/70 border-border/40",
   labour: "bg-orange-500/20 text-orange-300 border-orange-500/30",
-  material: "bg-muted/100/20 text-[#E1DCC9]/70 border-[#E1DCC9]/20",
+  material: "bg-muted/100/20 text-foreground/70 border-foreground/20",
   subcontract: "bg-muted/20 text-muted-foreground border-border/30",
   other: "bg-muted/40 text-foreground/60 border-border/30",
 };
@@ -327,7 +327,7 @@ export default function JobCostTracker({ projectId }: JobCostTrackerProps) {
                 </p>
                 {paidMoney.claimedIncGst > 0 && (
                   <p className="text-[11px] mt-0.5 text-muted-foreground">
-                    Client paid <span className="text-[#D4A045]">{aud(paidMoney.paidIncGst)}</span> of {aud(paidMoney.claimedIncGst)} claimed (inc GST)
+                    Client paid <span className="text-gold">{aud(paidMoney.paidIncGst)}</span> of {aud(paidMoney.claimedIncGst)} claimed (inc GST)
                     {paidMoney.owingIncGst > 0.004 && <> · <span className={paidMoney.overdueIncGst > 0.004 ? "text-red-400" : ""}>{aud(paidMoney.owingIncGst)} owing</span></>}
                   </p>
                 )}
@@ -356,22 +356,22 @@ export default function JobCostTracker({ projectId }: JobCostTrackerProps) {
                 <p className="text-xs text-muted-foreground mb-1">Actual Cost (ex GST)</p>
                 <p className="text-xl font-bold text-foreground">{aud(actualTotal)}</p>
               </div>
-              <DollarSign className="w-5 h-5 text-[#E1DCC9] mt-0.5" />
+              <DollarSign className="w-5 h-5 text-foreground mt-0.5" />
             </div>
           </CardContent>
         </Card>
 
-        <Card className={`border ${variance >= 0 ? "bg-card/40 border-[#E1DCC9]/20" : "bg-red-900/20 border-red-700/40"}`}>
+        <Card className={`border ${variance >= 0 ? "bg-card/40 border-foreground/20" : "bg-red-900/20 border-red-700/40"}`}>
           <CardContent className="pt-4 pb-4">
             <div className="flex items-start justify-between">
               <div>
                 <p className="text-xs text-muted-foreground mb-1">Variance</p>
-                <p className={`text-xl font-bold ${variance >= 0 ? "text-[#E1DCC9]/80" : "text-red-400"}`}>
+                <p className={`text-xl font-bold ${variance >= 0 ? "text-foreground/80" : "text-red-400"}`}>
                   {variance >= 0 ? "+" : ""}{aud(variance)}
                 </p>
               </div>
               {variance >= 0
-                ? <TrendingDown className="w-5 h-5 text-[#E1DCC9]/80 mt-0.5" />
+                ? <TrendingDown className="w-5 h-5 text-foreground/80 mt-0.5" />
                 : <TrendingUp className="w-5 h-5 text-red-500 mt-0.5" />}
             </div>
           </CardContent>
@@ -584,10 +584,10 @@ export default function JobCostTracker({ projectId }: JobCostTrackerProps) {
                       <td className="px-4 py-3 text-right">
                         {row.budget > 0 ? (
                           <div>
-                            <span className={`font-mono font-semibold ${row.remaining < 0 ? "text-red-400" : "text-[#E1DCC9]/80"}`}>
+                            <span className={`font-mono font-semibold ${row.remaining < 0 ? "text-red-400" : "text-foreground/80"}`}>
                               {aud(Math.abs(row.remaining))}
                             </span>
-                            <div className={`text-xs mt-0.5 ${row.remaining >= 0 ? "text-[#E1DCC9]/80/70" : "text-red-500/70"}`}>
+                            <div className={`text-xs mt-0.5 ${row.remaining >= 0 ? "text-foreground/80/70" : "text-red-500/70"}`}>
                               {row.remaining >= 0 ? "saving" : "over budget"}
                             </div>
                           </div>
@@ -619,7 +619,7 @@ export default function JobCostTracker({ projectId }: JobCostTrackerProps) {
                       <td className="px-2 py-3">
                         <button
                           onClick={() => openFormForTrade(row.trade)}
-                          className="opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-1 text-xs text-[#E1DCC9] hover:text-[#E1DCC9]/80 whitespace-nowrap"
+                          className="opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-1 text-xs text-foreground hover:text-foreground/80 whitespace-nowrap"
                         >
                           <Plus className="w-3 h-3" /> Log cost
                         </button>
@@ -636,8 +636,8 @@ export default function JobCostTracker({ projectId }: JobCostTrackerProps) {
                     <td className="px-4 py-3 text-right">
                       {totalSavings > 0 && (
                         <div>
-                          <span className="font-mono font-bold text-[#E1DCC9]/80">{aud(totalSavings)}</span>
-                          <div className="text-xs text-[#E1DCC9]/80/70 mt-0.5">total savings</div>
+                          <span className="font-mono font-bold text-foreground/80">{aud(totalSavings)}</span>
+                          <div className="text-xs text-foreground/80/70 mt-0.5">total savings</div>
                         </div>
                       )}
                       {variance < 0 && (
@@ -703,7 +703,7 @@ export default function JobCostTracker({ projectId }: JobCostTrackerProps) {
                       <td colSpan={6} className="px-4 py-2.5">
                         <button
                           onClick={() => { setShowMonitorForm(true); setMonitorTrade(availableTrades[0]); }}
-                          className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-[#E1DCC9] transition-colors"
+                          className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors"
                         >
                           <Plus className="w-3.5 h-3.5" /> Monitor another trade
                         </button>

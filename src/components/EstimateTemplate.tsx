@@ -1670,7 +1670,7 @@ export const EstimateTemplate = ({ projectId, estimateId }: EstimateTemplateProp
 
     return (
       <React.Fragment key={item.id}>
-        <TableRow id={`est-row-${item.id}`} className={`group transition-colors ${flashRowId === item.id ? 'bg-amber-500/15 [&>td.sticky]:!bg-[#33240f]' : ''}`}>
+        <TableRow id={`est-row-${item.id}`} className={`group transition-colors ${flashRowId === item.id ? 'bg-amber-500/15 [&>td.sticky]:!bg-accent' : ''}`}>
           <TableCell>
             {relatedMats.length > 0 && (
               <Button
@@ -1892,7 +1892,7 @@ export const EstimateTemplate = ({ projectId, estimateId }: EstimateTemplateProp
                     variant="ghost"
                     size="icon"
                     onClick={() => saveEdit(item.id)}
-                    className="text-[#E1DCC9]/70 h-7 w-7"
+                    className="text-foreground/70 h-7 w-7"
                   >
                     <Save className="h-4 w-4" />
                   </Button>
@@ -2420,7 +2420,7 @@ export const EstimateTemplate = ({ projectId, estimateId }: EstimateTemplateProp
                 </div>
                 <div className="grid grid-cols-2 gap-2">
                   <div className="p-2 bg-muted/20 dark:bg-card/50 rounded text-center">
-                    <div className="text-xs text-[#E1DCC9]/60 font-medium">Required Markup</div>
+                    <div className="text-xs text-foreground/60 font-medium">Required Markup</div>
                     <div className="text-xl font-bold text-foreground/80 font-mono">{reqMarkup.toFixed(1)}%</div>
                   </div>
                   <div className="p-2 bg-muted/10 dark:bg-card/40 rounded text-center">
@@ -2429,7 +2429,7 @@ export const EstimateTemplate = ({ projectId, estimateId }: EstimateTemplateProp
                   </div>
                 </div>
                 <button
-                  className="w-full h-8 text-xs rounded-md border border-[#E1DCC9]/25 text-[#E1DCC9]/60 hover:bg-muted/10 dark:hover:bg-card/50 transition-colors"
+                  className="w-full h-8 text-xs rounded-md border border-foreground/25 text-foreground/60 hover:bg-muted/10 dark:hover:bg-card/50 transition-colors"
                   onClick={() => setConfig({ ...config, marginPct: parseFloat(reqMarkup.toFixed(1)) })}
                 >
                   Apply {reqMarkup.toFixed(1)}% markup to estimate
@@ -2776,7 +2776,7 @@ export const EstimateTemplate = ({ projectId, estimateId }: EstimateTemplateProp
                     {t.markup > 0 && <> + Markup ${money(t.markup)}</>}
                   </p>
                   <p className="mt-0.5">
-                    <span className="text-lg font-bold text-[#D4A045]">${money(t.total)}</span>
+                    <span className="text-lg font-bold text-gold">${money(t.total)}</span>
                     <span className="ml-1.5 text-xs text-muted-foreground">ex GST{qty > 0 && qty !== 1 ? `, $${money(t.total / qty)} per ${newItem.unit}` : ''}</span>
                   </p>
                 </div>
@@ -2822,12 +2822,12 @@ export const EstimateTemplate = ({ projectId, estimateId }: EstimateTemplateProp
             approval ? `Quote ${approval.quoteNumber} approved${approval.approvedBy ? ` by ${approval.approvedBy}` : ''} on ${new Date(approval.approvedAt).toLocaleDateString('en-AU')}. It is the contract now.` : '',
           ][stage];
           return (
-            <div className={cn('mt-3 rounded-lg border px-4 py-2.5 text-sm', approval ? 'border-[#D4A045]/50 bg-[#D4A045]/5' : 'border-border')}>
+            <div className={cn('mt-3 rounded-lg border px-4 py-2.5 text-sm', approval ? 'border-gold/50 bg-gold/5' : 'border-border')}>
               <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
                 {steps.map((st, i) => (
                   <span key={st} className="flex items-center gap-2">
                     {i > 0 && <span className="text-muted-foreground/50">/</span>}
-                    <span className={cn(i === stage ? 'font-semibold text-[#D4A045]' : i < stage ? 'text-foreground/70' : 'text-muted-foreground/60')}>{st}</span>
+                    <span className={cn(i === stage ? 'font-semibold text-gold' : i < stage ? 'text-foreground/70' : 'text-muted-foreground/60')}>{st}</span>
                   </span>
                 ))}
               </div>
@@ -2874,7 +2874,7 @@ export const EstimateTemplate = ({ projectId, estimateId }: EstimateTemplateProp
                     : `Check estimate: ${[fixes ? `${fixes} to fix` : '', looks ? `${looks} to check` : ''].filter(Boolean).join(', ')}`}
                 </span>
                 {estimateChecks.length > 0 && (
-                  <button type="button" className="text-xs font-medium text-[#D4A045] hover:underline" onClick={() => setChecksOpen(o => !o)}>
+                  <button type="button" className="text-xs font-medium text-gold hover:underline" onClick={() => setChecksOpen(o => !o)}>
                     {checksOpen ? 'Hide' : 'Show'}
                   </button>
                 )}
@@ -2892,7 +2892,7 @@ export const EstimateTemplate = ({ projectId, estimateId }: EstimateTemplateProp
                             : <span className="ml-2 text-muted-foreground">Whole job:</span>}
                           <span className="ml-1">{c.message}</span>
                         </span>
-                        {line && <button type="button" className="shrink-0 text-xs text-[#D4A045] hover:underline" onClick={() => showLine(c.itemId)}>Show line</button>}
+                        {line && <button type="button" className="shrink-0 text-xs text-gold hover:underline" onClick={() => showLine(c.itemId)}>Show line</button>}
                       </li>
                     );
                   })}

@@ -1588,7 +1588,7 @@ export const CostEstimator = ({
                           <Badge variant="outline" className={cn("text-xs px-1.5 whitespace-nowrap",
                             item.category === 'Framing' && "border-orange-400 text-orange-600",
                             item.category === 'Lining' && "border-foreground/25 text-foreground/70",
-                            item.category === 'Insulation' && "border-[#E1DCC9]/25 text-[#E1DCC9]/70"
+                            item.category === 'Insulation' && "border-foreground/25 text-foreground/70"
                           )}>{item.category}</Badge>
                         </TableCell>
 
@@ -1750,7 +1750,7 @@ export const CostEstimator = ({
                               <div className="font-mono font-semibold text-sm">${lineTotal.toFixed(0)}</div>
                               <div className="text-[10px] text-muted-foreground">
                                 M:{materialTotal.toFixed(0)} L:{labourTotal.toFixed(0)}
-                                {(item.markupPercent ?? 0) > 0 && <span className="text-[#E1DCC9]/70 ml-1">+{(lineTotal - lineSubtotal).toFixed(0)}</span>}
+                                {(item.markupPercent ?? 0) > 0 && <span className="text-foreground/70 ml-1">+{(lineTotal - lineSubtotal).toFixed(0)}</span>}
                               </div>
                             </>
                           )}
@@ -1763,7 +1763,7 @@ export const CostEstimator = ({
                               <TooltipProvider>
                                 <Tooltip>
                                   <TooltipTrigger asChild>
-                                    <span className="h-7 w-7 flex items-center justify-center text-[#E1DCC9]/70">
+                                    <span className="h-7 w-7 flex items-center justify-center text-foreground/70">
                                       <CheckCircle2 className="h-4 w-4" />
                                     </span>
                                   </TooltipTrigger>
@@ -1838,13 +1838,13 @@ export const CostEstimator = ({
                                           <Wrench className="h-4 w-4 text-amber-600" />
                                           <span className="text-xs font-semibold">Related Materials</span>
                                           {accepted.length > 0 && (
-                                            <span className="text-xs bg-muted/20 text-[#E1DCC9]/60 px-1.5 py-0.5 rounded-full font-medium">
+                                            <span className="text-xs bg-muted/20 text-foreground/60 px-1.5 py-0.5 rounded-full font-medium">
                                               {accepted.length} added
                                             </span>
                                           )}
                                         </div>
                                         {pending.length > 0 && (
-                                          <Button size="sm" variant="outline" className="h-6 text-xs border-[#E1DCC9]/25 text-[#E1DCC9]/60 hover:bg-muted/10"
+                                          <Button size="sm" variant="outline" className="h-6 text-xs border-foreground/25 text-foreground/60 hover:bg-muted/10"
                                             onClick={acceptAll}>
                                             <CheckCircle2 className="h-3 w-3 mr-1" /> Accept All ({pending.length})
                                           </Button>
@@ -1863,7 +1863,7 @@ export const CostEstimator = ({
                                               </div>
                                               <div className="flex items-center gap-1">
                                                 <span className="font-mono text-amber-700">${(s.quantity * s.unitCost).toFixed(2)}</span>
-                                                <Button size="sm" variant="outline" className="h-6 text-xs border-[#E1DCC9]/25 text-[#E1DCC9]/60 hover:bg-muted/10"
+                                                <Button size="sm" variant="outline" className="h-6 text-xs border-foreground/25 text-foreground/60 hover:bg-muted/10"
                                                   onClick={() => acceptOne(s)}>
                                                   <Plus className="h-3 w-3 mr-1" /> Accept
                                                 </Button>
@@ -1879,7 +1879,7 @@ export const CostEstimator = ({
                                           <p className="text-xs text-muted-foreground uppercase tracking-wide font-medium mb-1">Added</p>
                                           {accepted.map(rm => (
                                             <div key={rm.id} className="flex items-center gap-1 text-xs bg-muted/10 dark:bg-card/40 rounded p-2 border border-border/35">
-                                              <CheckCircle2 className="h-3 w-3 text-[#E1DCC9]/70 shrink-0" />
+                                              <CheckCircle2 className="h-3 w-3 text-foreground/70 shrink-0" />
                                               <span className="font-medium flex-1 min-w-0 truncate">{rm.name}</span>
                                               <input
                                                 type="number"
@@ -1889,14 +1889,14 @@ export const CostEstimator = ({
                                                 className="w-12 h-5 border rounded px-1 text-xs text-center bg-white"
                                               />
                                               <span className="text-muted-foreground">{rm.unit}</span>
-                                              <span className="font-mono text-[#E1DCC9]/60">${(rm.quantity * rm.unitCost).toFixed(2)}</span>
+                                              <span className="font-mono text-foreground/60">${(rm.quantity * rm.unitCost).toFixed(2)}</span>
                                               <button onClick={() => removeAccepted(rm.id)}
                                                 className="text-red-400 hover:text-red-600 ml-1">
                                                 <Trash2 className="h-3 w-3" />
                                               </button>
                                             </div>
                                           ))}
-                                          <div className="text-right text-xs font-mono font-semibold text-[#E1DCC9]/60 pr-1">
+                                          <div className="text-right text-xs font-mono font-semibold text-foreground/60 pr-1">
                                             Materials total: ${accepted.reduce((s, rm) => s + rm.quantity * rm.unitCost, 0).toFixed(2)}
                                           </div>
                                         </div>
@@ -2010,7 +2010,7 @@ export const CostEstimator = ({
                                   />
                                 </div>
                                 {item.linkedMeasurements.length > 0 && (
-                                  <div className="flex items-center gap-1 text-xs text-[#E1DCC9]/70">
+                                  <div className="flex items-center gap-1 text-xs text-foreground/70">
                                     <Link2 className="h-3 w-3" />
                                     Linked to {item.linkedMeasurements.length} measurement(s)
                                   </div>
@@ -2126,7 +2126,7 @@ export const CostEstimator = ({
           </div>
           {totals.markupTotal > 0 && (
             <div className="p-2 bg-muted/20 dark:bg-card/50 rounded">
-              <div className="text-xs text-[#E1DCC9]/60">Item Markup</div>
+              <div className="text-xs text-foreground/60">Item Markup</div>
               <div className="text-sm font-bold text-foreground/80">+${totals.markupTotal.toFixed(2)}</div>
             </div>
           )}
@@ -2195,7 +2195,7 @@ export const CostEstimator = ({
             </div>
             <div className="grid grid-cols-2 gap-2">
               <div className="p-2 bg-muted/20 dark:bg-card/50 rounded text-center">
-                <div className="text-xs text-[#E1DCC9]/60 font-medium">Required Markup</div>
+                <div className="text-xs text-foreground/60 font-medium">Required Markup</div>
                 <div className="text-xl font-bold text-foreground/80 font-mono">{requiredMarkup.toFixed(1)}%</div>
               </div>
               <div className="p-2 bg-muted/10 dark:bg-card/40 rounded text-center">
@@ -2206,7 +2206,7 @@ export const CostEstimator = ({
             <Button
               size="sm"
               variant="outline"
-              className="w-full h-8 text-xs border-[#E1DCC9]/25 text-[#E1DCC9]/60 hover:bg-muted/10 dark:hover:bg-card/50"
+              className="w-full h-8 text-xs border-foreground/25 text-foreground/60 hover:bg-muted/10 dark:hover:bg-card/50"
               onClick={() => setMarginPercent(parseFloat(requiredMarkup.toFixed(1)))}
             >
               Apply {requiredMarkup.toFixed(1)}% markup to estimate

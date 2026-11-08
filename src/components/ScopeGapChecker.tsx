@@ -189,7 +189,7 @@ export function ScopeGapChecker({
   if (gaps.length === 0) {
     return (
       <Card className="p-6 text-center">
-        <CheckCircle2 className="h-12 w-12 text-[#E1DCC9]/80 mx-auto mb-4" />
+        <CheckCircle2 className="h-12 w-12 text-foreground/80 mx-auto mb-4" />
         <h3 className="text-lg font-semibold mb-2">No Scope Gaps Detected</h3>
         <p className="text-muted-foreground">
           The estimate appears to cover all typical construction requirements.
@@ -276,7 +276,7 @@ export function ScopeGapChecker({
                           {unacknowledged.length} to review
                         </Badge>
                       ) : (
-                        <Badge variant="outline" className="text-xs text-[#E1DCC9]/70 border-[#E1DCC9]/30">
+                        <Badge variant="outline" className="text-xs text-foreground/70 border-foreground/30">
                           All addressed
                         </Badge>
                       )}
@@ -297,7 +297,7 @@ export function ScopeGapChecker({
                           <div className="flex items-start gap-3">
                             <div className={severityConfig.color}>
                               {gap.isAcknowledged ? (
-                                <CheckCircle2 className="h-5 w-5 text-[#E1DCC9]/70" />
+                                <CheckCircle2 className="h-5 w-5 text-foreground/70" />
                               ) : (
                                 severityConfig.icon
                               )}
@@ -306,7 +306,7 @@ export function ScopeGapChecker({
                               <div className="flex items-center gap-2 mb-1">
                                 <h4 className="font-medium">{gap.title}</h4>
                                 {gap.isAcknowledged && (
-                                  <Badge variant="outline" className="text-xs text-[#E1DCC9]/70">
+                                  <Badge variant="outline" className="text-xs text-foreground/70">
                                     {gap.acknowledgedAs === 'added' ? 'Added to estimate' :
                                      gap.acknowledgedAs === 'not_required' ? 'Not required' :
                                      'Included elsewhere'}
@@ -438,7 +438,7 @@ export function ScopeGapChecker({
       {acknowledgedGaps.length > 0 && (
         <Card className="p-4">
           <h4 className="font-medium mb-2 flex items-center gap-2">
-            <CheckCircle2 className="h-4 w-4 text-[#E1DCC9]/70" />
+            <CheckCircle2 className="h-4 w-4 text-foreground/70" />
             Addressed Items ({acknowledgedGaps.length})
           </h4>
           <div className="flex flex-wrap gap-2">
@@ -446,7 +446,7 @@ export function ScopeGapChecker({
               <Badge
                 key={gap.id}
                 variant="outline"
-                className="text-xs text-[#E1DCC9]/70 border-[#E1DCC9]/20"
+                className="text-xs text-foreground/70 border-foreground/20"
               >
                 {gap.title}
                 {gap.acknowledgedAs === 'added' && ' - Added'}

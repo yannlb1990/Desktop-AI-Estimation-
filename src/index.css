@@ -39,6 +39,10 @@
     --input: 38 22% 78%;
     --ring: 33 55% 25%;
 
+    /* the brand amber, deep enough to read on white */
+    --gold: 36 78% 32%;
+    --logo-mark: 30 42% 8%;
+
     --radius: 0.75rem;
 
     --gradient-primary: linear-gradient(135deg, hsl(30 42% 8%) 0%, hsl(33 51% 17%) 100%);
@@ -90,6 +94,10 @@
     --border: 33 40% 20%;              /* ~#412010 slightly brighter than #412D15 */
     --input: 33 40% 20%;
     --ring: 48 28% 84%;               /* cream focus ring */
+
+    /* the brand amber #D4A045 */
+    --gold: 39 62% 55%;
+    --logo-mark: 0 0% 100%;
 
     /* Gradients — pure palette browns, no amber */
     --gradient-primary: linear-gradient(135deg, hsl(0 0% 0%) 0%, hsl(33 51% 17%) 100%);
@@ -195,4 +203,16 @@
   .card-highlight {
     border-top: 1px solid hsl(36 68% 48% / 0.4);
   }
+}
+
+/* ── Light mode: the pale accent text used on dark backgrounds is too faint on white,
+   so in light mode those shades read as their deeper versions ─────────────────────── */
+@layer utilities {
+  html:not(.dark) .text-amber-300, html:not(.dark) .text-amber-400, html:not(.dark) .text-yellow-400 { color: rgb(180 83 9); }
+  html:not(.dark) .text-orange-300, html:not(.dark) .text-orange-400 { color: rgb(194 65 12); }
+  html:not(.dark) .text-red-300, html:not(.dark) .text-red-400 { color: rgb(185 28 28); }
+  html:not(.dark) .text-emerald-300, html:not(.dark) .text-emerald-400, html:not(.dark) .text-green-400 { color: rgb(4 120 87); }
+  html:not(.dark) .text-sky-300, html:not(.dark) .text-sky-400, html:not(.dark) .text-blue-400 { color: rgb(3 105 161); }
+  html:not(.dark) .text-violet-400 { color: rgb(109 40 217); }
+  html:not(.dark) .border-amber-500\/50, html:not(.dark) .border-amber-400\/50 { border-color: rgb(217 119 6 / 0.6); }
 }

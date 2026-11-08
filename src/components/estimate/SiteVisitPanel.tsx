@@ -149,7 +149,7 @@ export function SiteVisitPanel({ projectId, addedKeys, siteItems, onAdd, onUpdat
                     {reviewing === v.id ? 'Reading photos and notes (about a minute)...' : review ? 'Review again: the visit changed' : 'Review with AI'}
                   </Button>
                 )}
-                <button type="button" className="text-xs text-[#D4A045] hover:underline" onClick={() => copyNotes(v)}>Use notes for the quote's scope</button>
+                <button type="button" className="text-xs text-gold hover:underline" onClick={() => copyNotes(v)}>Use notes for the quote's scope</button>
               </span>
             </div>
             {v.notes && <p className="text-muted-foreground whitespace-pre-line">{v.notes}</p>}
@@ -194,7 +194,7 @@ export function SiteVisitPanel({ projectId, addedKeys, siteItems, onAdd, onUpdat
             })}
 
             {review && (aiLines.length > 0 || review.checks.length > 0) && (
-              <div className="rounded-md border border-[#D4A045]/40 bg-[#D4A045]/5 p-3 space-y-2">
+              <div className="rounded-md border border-gold/40 bg-gold/5 p-3 space-y-2">
                 <div className="flex items-baseline justify-between gap-2">
                   <span className="font-medium">Suggested by AI from the photos and notes</span>
                   <span className="text-xs text-muted-foreground">
@@ -225,7 +225,7 @@ export function SiteVisitPanel({ projectId, addedKeys, siteItems, onAdd, onUpdat
                   );
                 })}
                 {review.checks.length > 0 && (
-                  <div className="border-t border-[#D4A045]/20 pt-2">
+                  <div className="border-t border-gold/20 pt-2">
                     <div className="mb-1 text-xs font-medium text-amber-400">Check before quoting</div>
                     <ul className="space-y-1 text-sm">
                       {review.checks.map((c, i) => (

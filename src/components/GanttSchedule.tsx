@@ -1444,7 +1444,7 @@ export default function GanttSchedule({ projectId }: GanttScheduleProps) {
           <div className="text-muted-foreground">
             {tooltip.task.durationDays}d cal
             {workDays && ` · ${countWorkingDays(parseISO(tooltip.task.startDate), parseISO(tooltip.task.endDate), activeHols)}wd`}
-            {" · "}<span className="text-[#E1DCC9] font-medium">{tooltip.task.progress}% complete</span>
+            {" · "}<span className="text-foreground font-medium">{tooltip.task.progress}% complete</span>
           </div>
           {(() => {
             const f = criticalPath.get(tooltip.task.id);
@@ -1498,7 +1498,7 @@ export default function GanttSchedule({ projectId }: GanttScheduleProps) {
                 localStorage.setItem("gantt_workDays", next ? "1" : "0");
                 if (!next) { setExclHolidays(false); localStorage.setItem("gantt_exclHolidays", "0"); }
               }}
-              className={`h-8 gap-1 text-xs ${workDays ? "bg-[#412D15] hover:bg-[#412D15]/90 border-[#412D15] text-white" : "bg-transparent border border-border/50 text-foreground/60 hover:bg-muted/60 hover:text-foreground"}`}
+              className={`h-8 gap-1 text-xs ${workDays ? "bg-accent hover:bg-accent/90 border-border text-white" : "bg-transparent border border-border/50 text-foreground/60 hover:bg-muted/60 hover:text-foreground"}`}
               title="Exclude weekends. Hit Reset to regenerate with working-day dates."
             >
               <CalendarCheck className="w-3.5 h-3.5" /> Work Days
@@ -1513,7 +1513,7 @@ export default function GanttSchedule({ projectId }: GanttScheduleProps) {
                     localStorage.setItem("gantt_exclHolidays", next ? "1" : "0");
                     if (!next) setShowCustomHolForm(false);
                   }}
-                  className={`h-8 gap-1 text-xs ${exclHolidays ? "bg-[#412D15] hover:bg-[#412D15]/90 border-[#412D15] text-white" : "bg-transparent border border-border/50 text-foreground/60 hover:bg-muted/60 hover:text-foreground"}`}
+                  className={`h-8 gap-1 text-xs ${exclHolidays ? "bg-accent hover:bg-accent/90 border-border text-white" : "bg-transparent border border-border/50 text-foreground/60 hover:bg-muted/60 hover:text-foreground"}`}
                   title="Skip public holidays when counting working days"
                 >
                   Holidays
@@ -1956,7 +1956,7 @@ export default function GanttSchedule({ projectId }: GanttScheduleProps) {
 
         {/* ── Bottom edit panel ────────────────────────────────────────────── */}
         {expandedId && editDraft && (
-          <div className="border border-[#412D15]/80 rounded-xl bg-card/90 px-4 py-3 gantt-no-print">
+          <div className="border border-border/80 rounded-xl bg-card/90 px-4 py-3 gantt-no-print">
             <div className="flex items-center gap-2 mb-3">
               <div className="w-3 h-3 rounded-sm flex-shrink-0" style={{ backgroundColor: editDraft.color }} />
               <span className="text-sm font-semibold text-foreground truncate">{editDraft.name}</span>
@@ -2022,7 +2022,7 @@ export default function GanttSchedule({ projectId }: GanttScheduleProps) {
                   value={sowSearch}
                   onFocus={() => setSowOpen(true)}
                   onChange={(e) => { setSowSearch(e.target.value); setSowOpen(true); }}
-                  className="h-7 text-sm w-full rounded-md border border-border bg-muted/60 px-3 py-1 text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-[#412D15]"
+                  className="h-7 text-sm w-full rounded-md border border-border bg-muted/60 px-3 py-1 text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-border"
                 />
                 {editDraft.sowRef && (
                   <button
@@ -2047,7 +2047,7 @@ export default function GanttSchedule({ projectId }: GanttScheduleProps) {
                         {tradeItems.map((r) => (
                           <button
                             key={r.id}
-                            className={`w-full text-left px-3 py-1.5 text-xs hover:bg-muted flex items-center gap-2 ${editDraft.sowRef === r.id ? "bg-[#412D15]/60 text-foreground" : "text-foreground/80"}`}
+                            className={`w-full text-left px-3 py-1.5 text-xs hover:bg-muted flex items-center gap-2 ${editDraft.sowRef === r.id ? "bg-accent/60 text-foreground" : "text-foreground/80"}`}
                             onMouseDown={(e) => {
                               e.preventDefault();
                               setEditDraft({ ...editDraft, sowRef: r.id });
@@ -2067,7 +2067,7 @@ export default function GanttSchedule({ projectId }: GanttScheduleProps) {
             </div>
 
             <div className="flex gap-2 items-center">
-              <Button size="sm" onClick={handleSave} className="h-7 text-xs bg-[#412D15] hover:bg-[#412D15]/90">Save</Button>
+              <Button size="sm" onClick={handleSave} className="h-7 text-xs bg-accent hover:bg-accent/90">Save</Button>
               <Button size="sm" variant="ghost" onClick={() => { setExpandedId(null); setEditDraft(null); setConfirmDelete(null); }} className="h-7 text-xs text-muted-foreground hover:text-foreground">Cancel</Button>
               <div className="ml-auto flex items-center gap-2">
                 {confirmDelete === expandedId ? (

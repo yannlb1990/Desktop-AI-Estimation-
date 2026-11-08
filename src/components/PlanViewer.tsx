@@ -1404,7 +1404,7 @@ export const PlanViewer = ({ planUrl, projectId, planPageId: propPlanPageId, wiz
                 </div>
                 <div>
                   <span className="text-muted-foreground">Ready:</span>
-                  <p className={isPlanReady ? "text-[#E1DCC9]/70" : "text-red-600"}>
+                  <p className={isPlanReady ? "text-foreground/70" : "text-red-600"}>
                     {isPlanReady ? "✓ Yes" : "✗ No"}
                   </p>
                 </div>

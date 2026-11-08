@@ -207,8 +207,8 @@ const RoofPitchPanel = ({ measurement: m, onUpdateMeasurement }: RoofPitchPanelP
           onClick={() => applyPitch(0)}
           className={`h-6 px-2 rounded text-[10px] font-mono transition-colors ${
             pitch === 0
-              ? 'bg-[#412D15] text-white'
-              : 'bg-muted text-muted-foreground hover:bg-[#412D15]/40'
+              ? 'bg-accent text-white'
+              : 'bg-muted text-muted-foreground hover:bg-accent/40'
           }`}
         >
           Flat
@@ -224,8 +224,8 @@ const RoofPitchPanel = ({ measurement: m, onUpdateMeasurement }: RoofPitchPanelP
             onClick={() => { applyWaste(pct); setCustomWaste(''); }}
             className={`h-5 px-1.5 rounded text-[10px] font-mono transition-colors ${
               waste === pct
-                ? 'bg-[#412D15] text-white'
-                : 'bg-muted text-muted-foreground hover:bg-[#412D15]/20 hover:text-[#E1DCC9]'
+                ? 'bg-accent text-white'
+                : 'bg-muted text-muted-foreground hover:bg-accent/20 hover:text-foreground'
             }`}
           >
             {pct}%
@@ -844,14 +844,14 @@ export const TakeoffTable = ({
               })() : (
                 <div className="flex flex-wrap gap-1.5">
                   <button
-                    className="rounded-md border border-dashed border-foreground/20 px-2 py-1.5 text-[11px] font-medium text-[#E1DCC9] hover:border-foreground/40 hover:bg-primary/10 transition-colors"
+                    className="rounded-md border border-dashed border-foreground/20 px-2 py-1.5 text-[11px] font-medium text-foreground hover:border-foreground/40 hover:bg-primary/10 transition-colors"
                     onClick={() => { setWallsForSetup([m]); setPendingNonWallIds([]); setWallSetupOpen(true); }}
                   >
                     Set up wall
                   </button>
                   {onAddConcrete && m.measurementType !== 'Wall' && (
                     <button
-                      className="rounded-md border border-dashed border-foreground/20 px-2 py-1.5 text-[11px] font-medium text-[#E1DCC9] hover:border-foreground/40 hover:bg-primary/10 transition-colors"
+                      className="rounded-md border border-dashed border-foreground/20 px-2 py-1.5 text-[11px] font-medium text-foreground hover:border-foreground/40 hover:bg-primary/10 transition-colors"
                       onClick={() => setConcreteFor(m)}
                     >
                       Footing or trench

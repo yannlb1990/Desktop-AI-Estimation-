@@ -72,12 +72,12 @@ const TeamSettings = () => {
   };
 
   return (
-    <div className="min-h-screen bg-background text-[#E1DCC9]">
+    <div className="min-h-screen bg-background text-foreground">
       <div className="container mx-auto px-4 md:px-6 py-8 max-w-2xl">
 
         <button
           onClick={() => navigate('/settings')}
-          className="flex items-center gap-2 text-sm text-[#8a7060] hover:text-[#E1DCC9] mb-6 transition-colors"
+          className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground mb-6 transition-colors"
         >
           <ArrowLeft className="h-4 w-4" /> Back to Settings
         </button>
@@ -88,20 +88,20 @@ const TeamSettings = () => {
           </div>
           <div>
             <h1 className="font-display text-2xl font-bold">Team</h1>
-            <p className="text-sm text-[#8a7060]">Collaborate with your team on shared estimates</p>
+            <p className="text-sm text-muted-foreground">Collaborate with your team on shared estimates</p>
           </div>
         </div>
 
         {loadingTeam ? (
-          <div className="flex items-center gap-3 text-[#8a7060] py-12 justify-center">
+          <div className="flex items-center gap-3 text-muted-foreground py-12 justify-center">
             <Loader2 className="h-5 w-5 animate-spin" />
             <span className="text-sm">Loading team...</span>
           </div>
         ) : !team ? (
           /* No team yet */
-          <Card className="p-6 bg-card border border-[#412D15]">
+          <Card className="p-6 bg-card border border-border">
             <h2 className="font-semibold text-lg mb-2">Create your team</h2>
-            <p className="text-sm text-[#8a7060] mb-6">
+            <p className="text-sm text-muted-foreground mb-6">
               Give your team a name to get started. You can invite members after creating it.
             </p>
             <div className="flex gap-3">
@@ -110,7 +110,7 @@ const TeamSettings = () => {
                 value={newTeamName}
                 onChange={(e) => setNewTeamName(e.target.value)}
                 onKeyDown={(e) => e.key === 'Enter' && handleCreateTeam()}
-                className="bg-background border-[#412D15] text-[#E1DCC9] placeholder:text-[#8a7060] focus:border-amber-500/60"
+                className="bg-background border-border text-foreground placeholder:text-muted-foreground focus:border-amber-500/60"
               />
               <Button
                 onClick={handleCreateTeam}
@@ -125,25 +125,25 @@ const TeamSettings = () => {
           /* Has a team */
           <div className="space-y-6">
 
-            <Card className="p-6 bg-card border border-[#412D15]">
-              <h2 className="font-display text-xl font-bold text-[#D4A045] mb-1">{team.name ?? 'My Team'}</h2>
-              <p className="text-xs text-[#8a7060]">Up to {team.max_seats} seats</p>
+            <Card className="p-6 bg-card border border-border">
+              <h2 className="font-display text-xl font-bold text-gold mb-1">{team.name ?? 'My Team'}</h2>
+              <p className="text-xs text-muted-foreground">Up to {team.max_seats} seats</p>
             </Card>
 
             {/* Member list */}
-            <Card className="bg-card border border-[#412D15]">
-              <div className="px-5 py-4 border-b border-[#412D15]">
-                <h3 className="font-semibold text-sm uppercase tracking-wide text-[#8a7060]">Members</h3>
+            <Card className="bg-card border border-border">
+              <div className="px-5 py-4 border-b border-border">
+                <h3 className="font-semibold text-sm uppercase tracking-wide text-muted-foreground">Members</h3>
               </div>
               {members.length === 0 ? (
-                <div className="px-5 py-8 text-center text-sm text-[#8a7060]">No members yet. Invite someone below.</div>
+                <div className="px-5 py-8 text-center text-sm text-muted-foreground">No members yet. Invite someone below.</div>
               ) : (
-                <div className="divide-y divide-[#412D15]/60">
+                <div className="divide-y divide-border/60">
                   {members.map((m) => (
                     <div key={m.id} className="flex items-center justify-between px-5 py-3">
                       <div>
                         <div className="text-sm font-medium">{m.email}</div>
-                        <div className="text-xs text-[#8a7060] capitalize">{m.role}</div>
+                        <div className="text-xs text-muted-foreground capitalize">{m.role}</div>
                       </div>
                       <Badge
                         variant="outline"
@@ -162,9 +162,9 @@ const TeamSettings = () => {
             </Card>
 
             {/* Invite */}
-            <Card className="p-6 bg-card border border-[#412D15]">
+            <Card className="p-6 bg-card border border-border">
               <div className="flex items-center gap-2 mb-4">
-                <UserPlus className="h-4 w-4 text-[#D4A045]" />
+                <UserPlus className="h-4 w-4 text-gold" />
                 <h3 className="font-semibold">Invite a member</h3>
               </div>
               <div className="flex gap-3">
@@ -174,7 +174,7 @@ const TeamSettings = () => {
                   value={inviteEmail}
                   onChange={(e) => setInviteEmail(e.target.value)}
                   onKeyDown={(e) => e.key === 'Enter' && handleInvite()}
-                  className="bg-background border-[#412D15] text-[#E1DCC9] placeholder:text-[#8a7060] focus:border-amber-500/60"
+                  className="bg-background border-border text-foreground placeholder:text-muted-foreground focus:border-amber-500/60"
                 />
                 <Button
                   onClick={handleInvite}
@@ -184,7 +184,7 @@ const TeamSettings = () => {
                   {inviting ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Invite'}
                 </Button>
               </div>
-              <p className="text-xs text-[#8a7060] mt-3">
+              <p className="text-xs text-muted-foreground mt-3">
                 They will appear as pending until they log in with this email address.
               </p>
             </Card>

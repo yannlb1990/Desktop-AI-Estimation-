@@ -181,7 +181,7 @@ export const AIExtractionPanel: React.FC<AIExtractionPanelProps> = ({
           <h3 className="font-semibold">AI Extraction</h3>
         </div>
         {apiAvailable === true && (
-          <Badge variant="outline" className="text-[#E1DCC9]/70">
+          <Badge variant="outline" className="text-foreground/70">
             <CheckCircle2 className="h-3 w-3 mr-1" />
             API Ready
           </Badge>

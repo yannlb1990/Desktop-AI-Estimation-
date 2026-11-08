@@ -88,7 +88,7 @@ export default function OnboardingChecklist({ projects = [] }: { projects?: any[
     <div className="rounded-xl border border-border bg-card p-4">
       {/* Title row */}
       <div className="flex items-center justify-between mb-3">
-        <span className="font-semibold text-sm text-[#E1DCC9]">Getting started</span>
+        <span className="font-semibold text-sm text-foreground">Getting started</span>
         <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-amber-400/15 text-amber-400 border border-amber-400/25">
           {doneCount} of {STEPS.length} done
         </span>
@@ -113,7 +113,7 @@ export default function OnboardingChecklist({ projects = [] }: { projects?: any[
                 className={`text-sm transition-colors ${
                   done
                     ? 'line-through text-muted-foreground'
-                    : 'text-[#E1DCC9]'
+                    : 'text-foreground'
                 }`}
               >
                 {step.label}
@@ -127,7 +127,7 @@ export default function OnboardingChecklist({ projects = [] }: { projects?: any[
       <div className="flex justify-end mt-3">
         <button
           onClick={handleDismiss}
-          className="text-xs text-muted-foreground hover:text-[#E1DCC9] transition-colors"
+          className="text-xs text-muted-foreground hover:text-foreground transition-colors"
         >
           Dismiss
         </button>

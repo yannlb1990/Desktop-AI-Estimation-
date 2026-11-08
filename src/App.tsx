@@ -12,6 +12,22 @@ import { isSignedIn, getLocalUser, localSignOut } from "@/lib/localAuth";
 import FeedbackWidget from "@/components/FeedbackWidget";
 import { getSubscriptionStatus } from "@/lib/subscription";
 import { syncSubscriptionFromDB } from "@/lib/stripeCheckout";
+import { applyTheme } from "@/lib/theme";
+
+/** Light or dark: the builder's choice inside the app, the brand's dark look on public pages */
+const ThemeSync = () => {
+  const { pathname } = useLocation()
+  useEffect(() => { applyTheme(pathname) }, [pathname])
+  useEffect(() => {
+    // "Same as my device" follows the device when it changes
+    const mq = window.matchMedia?.('(prefers-color-scheme: light)')
+    const on = () => applyTheme()
+    mq?.addEventListener?.('change', on)
+    window.addEventListener('theme-changed', on)
+    return () => { mq?.removeEventListener?.('change', on); window.removeEventListener('theme-changed', on) }
+  }, [])
+  return null
+}
 
 /** The feedback button covers buttons on the phone's site-visit screens */
 const FeedbackOffSite = () => {
@@ -142,6 +158,7 @@ const App = () => {
         <BrowserRouter>
           <MobileBlocker />
           <IdleGuard />
+          <ThemeSync />
           {isSignedIn() && <FeedbackOffSite />}
           <Suspense fallback={<PageFallback />}>
           <Routes>

@@ -279,7 +279,7 @@ export const SubcontractorComparison = ({ projectId }: { projectId: string }) =>
                 Your estimate: <span className="font-mono text-foreground">{aud(cost)}</span> cost{lineCount ? `, ${lineCount} line${lineCount !== 1 ? "s" : ""}` : ""}
               </span>
               <span className="text-sm text-muted-foreground">
-                {awarded ? <>Awarded to <span className="text-[#D4A045]">{awarded.company}</span> at <span className="font-mono">{aud(awarded.amount)}</span></>
+                {awarded ? <>Awarded to <span className="text-gold">{awarded.company}</span> at <span className="font-mono">{aud(awarded.amount)}</span></>
                   : [priced.length ? `${priced.length} priced, lowest ${aud(lowest!)}` : "", waiting ? `${waiting} waiting` : ""].filter(Boolean).join(", ") || "No quotes yet"}
               </span>
               <span className="ml-auto flex gap-2">
@@ -293,7 +293,7 @@ export const SubcontractorComparison = ({ projectId }: { projectId: string }) =>
                   const st = statusOf(q)
                   const diff = q.amount - cost
                   return (
-                    <div key={q.id} className={cn("grid grid-cols-1 gap-2 border-b border-border/50 px-5 py-2 last:border-0 sm:grid-cols-[1fr_9rem_10rem_auto] sm:items-center", st === "declined" && "opacity-50", st === "awarded" && "bg-[#D4A045]/5")}>
+                    <div key={q.id} className={cn("grid grid-cols-1 gap-2 border-b border-border/50 px-5 py-2 last:border-0 sm:grid-cols-[1fr_9rem_10rem_auto] sm:items-center", st === "declined" && "opacity-50", st === "awarded" && "bg-gold/5")}>
                       <div className="min-w-0">
                         <span className="font-medium">{q.company}</span>
                         <span className="block truncate text-xs text-muted-foreground">
@@ -301,7 +301,7 @@ export const SubcontractorComparison = ({ projectId }: { projectId: string }) =>
                         </span>
                       </div>
                       <div className="text-xs">
-                        <span className={cn(st === "awarded" ? "text-[#D4A045]" : st === "requested" ? "text-amber-400" : "text-muted-foreground")}>{STATUS_TEXT[st]}</span>
+                        <span className={cn(st === "awarded" ? "text-gold" : st === "requested" ? "text-amber-400" : "text-muted-foreground")}>{STATUS_TEXT[st]}</span>
                         <span className="block text-muted-foreground">{st === "requested" ? `asked ${dateText(q.requestedAt)}` : dateText(q.submittedAt)}</span>
                       </div>
                       <div className="sm:text-right">

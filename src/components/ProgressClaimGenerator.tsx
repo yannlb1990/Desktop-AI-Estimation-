@@ -279,7 +279,7 @@ export function ProgressClaimGenerator({ projectId, projectName, siteAddress = '
         ) : xero.connected ? (
           <>
             <span>Invoices go to <span className="font-medium">{xero.tenantName}</span> in Xero as drafts. Use Send to Xero on the deposit or a claim below.</span>
-            <a href="/settings?tab=xero" className="text-xs text-[#D4A045] hover:underline">Accounts and branding</a>
+            <a href="/settings?tab=xero" className="text-xs text-gold hover:underline">Accounts and branding</a>
           </>
         ) : (
           <>
@@ -319,7 +319,7 @@ export function ProgressClaimGenerator({ projectId, projectName, siteAddress = '
             <div><p className="text-xs text-muted-foreground">Approved quote (ex GST)</p><p className="font-semibold">${fmt(contract.quoteExGst)}</p></div>
             <div><p className="text-xs text-muted-foreground">Approved variations</p><p className="font-semibold">${fmt(contract.variationsExGst)}</p></div>
             <div><p className="text-xs text-muted-foreground">Contract sum (ex GST)</p><p className="font-semibold">${fmt(contract.contractExGst)}</p></div>
-            <div><p className="text-xs text-muted-foreground">Contract sum (inc GST)</p><p className="font-semibold text-[#E1DCC9]">${fmt(contract.contractIncGst)}</p></div>
+            <div><p className="text-xs text-muted-foreground">Contract sum (inc GST)</p><p className="font-semibold text-foreground">${fmt(contract.contractIncGst)}</p></div>
           </CardContent>
         </Card>
       ) : (
@@ -376,7 +376,7 @@ export function ProgressClaimGenerator({ projectId, projectName, siteAddress = '
             <div><p className="text-xs text-muted-foreground">Contract sum</p><p className="font-semibold">${fmt(money.contractIncGst)}</p></div>
             <div><p className="text-xs text-muted-foreground">Claimed so far</p><p className="font-semibold">${fmt(money.claimedIncGst)}</p>
               {money.notIssuedIncGst > 0.004 && <p className="text-[11px] text-muted-foreground">${fmt(money.notIssuedIncGst)} not issued yet</p>}</div>
-            <div><p className="text-xs text-muted-foreground">Paid by the client</p><p className="font-semibold text-[#D4A045]">${fmt(money.paidIncGst)}</p></div>
+            <div><p className="text-xs text-muted-foreground">Paid by the client</p><p className="font-semibold text-gold">${fmt(money.paidIncGst)}</p></div>
             <div><p className="text-xs text-muted-foreground">Owing</p><p className={`font-semibold ${money.overdueIncGst > 0.004 ? 'text-red-400' : ''}`}>${fmt(money.owingIncGst)}</p>
               {money.overdueIncGst > 0.004 && <p className="text-[11px] text-red-400">${fmt(money.overdueIncGst)} overdue</p>}</div>
             <div><p className="text-xs text-muted-foreground">Left to claim</p><p className="font-semibold">${fmt(money.leftToClaimIncGst)}</p>
@@ -404,7 +404,7 @@ export function ProgressClaimGenerator({ projectId, projectName, siteAddress = '
                   <span className="flex items-center gap-2">
                     {own ? (
                       <>
-                        <span className="text-xs text-[#D4A045]">{own.xero ? `Invoiced on its own (${own.xero.number ?? 'in Xero'})` : 'Invoiced on its own'}</span>
+                        <span className="text-xs text-gold">{own.xero ? `Invoiced on its own (${own.xero.number ?? 'in Xero'})` : 'Invoiced on its own'}</span>
                         {!own.xero && <Button size="sm" variant="ghost" className="h-7" onClick={() => putBackOnClaims(own)}>Put back on claims</Button>}
                       </>
                     ) : onClaim ? (
@@ -503,7 +503,7 @@ export function ProgressClaimGenerator({ projectId, projectName, siteAddress = '
               </div>
               <div className="col-span-12 flex items-center justify-end gap-1.5 pt-0.5">
                 <span className="text-[10px] text-muted-foreground">Completed to date:</span>
-                <span className="text-xs font-semibold text-[#E1DCC9]">${fmt(stage.value * (stage.percentComplete / 100))}</span>
+                <span className="text-xs font-semibold text-foreground">${fmt(stage.value * (stage.percentComplete / 100))}</span>
               </div>
             </div>
           ))}
@@ -536,7 +536,7 @@ export function ProgressClaimGenerator({ projectId, projectName, siteAddress = '
             ))}
             <div className="flex justify-between items-center border-t-2 border-border/40 pt-3 mt-1">
               <span className="font-bold text-base text-foreground/80">TOTAL DUE THIS CLAIM</span>
-              <span className="font-bold text-base text-[#E1DCC9]">${fmt(summary.thisClaimIncGst)}</span>
+              <span className="font-bold text-base text-foreground">${fmt(summary.thisClaimIncGst)}</span>
             </div>
           </div>
         </CardContent>
@@ -573,7 +573,7 @@ export function ProgressClaimGenerator({ projectId, projectName, siteAddress = '
                 <span className="flex items-center gap-2">
                   {c.xero && (() => {
                     const st = xeroStateLabel(c.xero);
-                    const tone = st?.tone === 'done' ? 'text-[#D4A045]' : st?.tone === 'late' ? 'text-red-400' : st?.tone === 'wait' ? 'text-foreground' : 'text-muted-foreground';
+                    const tone = st?.tone === 'done' ? 'text-gold' : st?.tone === 'late' ? 'text-red-400' : st?.tone === 'wait' ? 'text-foreground' : 'text-muted-foreground';
                     return (
                       <a href={c.xero.url} target="_blank" rel="noopener noreferrer" className={`text-xs hover:underline ${tone}`}>
                         {st?.text ?? `${c.xero.number || 'Invoice'} in Xero`}

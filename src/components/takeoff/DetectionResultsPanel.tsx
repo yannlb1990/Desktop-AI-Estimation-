@@ -116,7 +116,7 @@ export const DetectionResultsPanel: React.FC<DetectionResultsPanelProps> = ({
   const hasServices     = result && Object.values(result.symbols).some(v => v > 0);
 
   const confColor = (c: number) =>
-    c >= 0.9 ? 'text-[#E1DCC9]/70' : c >= 0.7 ? 'text-amber-600' : 'text-muted-foreground';
+    c >= 0.9 ? 'text-foreground/70' : c >= 0.7 ? 'text-amber-600' : 'text-muted-foreground';
 
   return (
     <>
@@ -128,7 +128,7 @@ export const DetectionResultsPanel: React.FC<DetectionResultsPanelProps> = ({
             <h3 className="font-semibold text-sm">Opening Detection</h3>
           </div>
           {result && (
-            <Badge variant="outline" className="text-xs text-[#E1DCC9]/70 border-[#E1DCC9]/20">
+            <Badge variant="outline" className="text-xs text-foreground/70 border-foreground/20">
               <CheckCircle2 className="h-3 w-3 mr-1" />Scanned
             </Badge>
           )}
@@ -255,26 +255,26 @@ export const DetectionResultsPanel: React.FC<DetectionResultsPanelProps> = ({
                   )}
                   {result.symbols.toilets > 0 && (
                     <div className="flex items-center justify-between px-2 py-1.5 rounded-md bg-muted/10 border border-border/30 text-xs">
-                      <span className="flex items-center gap-1 text-[#E1DCC9]/90">
+                      <span className="flex items-center gap-1 text-foreground/90">
                         <Droplets className="h-3 w-3" />WC
                       </span>
-                      <span className="font-bold text-[#E1DCC9]/80">{result.symbols.toilets}</span>
+                      <span className="font-bold text-foreground/80">{result.symbols.toilets}</span>
                     </div>
                   )}
                   {result.symbols.basins > 0 && (
                     <div className="flex items-center justify-between px-2 py-1.5 rounded-md bg-muted/10 border border-border/30 text-xs">
-                      <span className="flex items-center gap-1 text-[#E1DCC9]/90">
+                      <span className="flex items-center gap-1 text-foreground/90">
                         <Droplets className="h-3 w-3" />Basin
                       </span>
-                      <span className="font-bold text-[#E1DCC9]/80">{result.symbols.basins}</span>
+                      <span className="font-bold text-foreground/80">{result.symbols.basins}</span>
                     </div>
                   )}
                   {result.symbols.showers > 0 && (
                     <div className="flex items-center justify-between px-2 py-1.5 rounded-md bg-muted/10 border border-border/30 text-xs">
-                      <span className="flex items-center gap-1 text-[#E1DCC9]/90">
+                      <span className="flex items-center gap-1 text-foreground/90">
                         <Droplets className="h-3 w-3" />Shower
                       </span>
-                      <span className="font-bold text-[#E1DCC9]/80">{result.symbols.showers}</span>
+                      <span className="font-bold text-foreground/80">{result.symbols.showers}</span>
                     </div>
                   )}
                 </div>

@@ -979,12 +979,12 @@ export function PDFAnalysisViewer({
 
   const mainContent = (
     <div className={isFullscreen
-      ? 'fixed inset-0 z-[9999] flex flex-col bg-[#09111f] text-white'
+      ? 'fixed inset-0 z-[9999] flex flex-col bg-muted text-white'
       : 'flex flex-col w-full'
     }>
       {/* Toolbar */}
       <div className={`flex items-center justify-between p-3 border-b flex-wrap gap-2 ${
-        isFullscreen ? 'bg-[#0d1b2e] border-[#1e2d45]' : 'bg-muted/30'
+        isFullscreen ? 'bg-muted border-border' : 'bg-muted/30'
       }`}>
         <div className="flex items-center gap-2 flex-wrap">
           {/* Page Navigation */}
@@ -1063,7 +1063,7 @@ export function PDFAnalysisViewer({
           {/* Scale Status Badge */}
           <Badge
             variant={currentCalibration ? 'default' : 'destructive'}
-            className={`text-xs ${currentCalibration ? 'bg-[#412D15]/70' : 'bg-amber-500'}`}
+            className={`text-xs ${currentCalibration ? 'bg-accent/70' : 'bg-amber-500'}`}
           >
             {calibratedPageCount}/{totalPages} scaled
           </Badge>
@@ -1130,7 +1130,7 @@ export function PDFAnalysisViewer({
               variant="default"
               size="sm"
               onClick={completeAreaMeasurement}
-              className="h-8 bg-[#412D15]/70 hover:bg-[#412D15]/80"
+              className="h-8 bg-accent/70 hover:bg-accent/80"
             >
               <Check className="h-4 w-4 mr-1" />
               Complete
@@ -1273,11 +1273,11 @@ export function PDFAnalysisViewer({
               )}
               {measurementMode === 'area' && (
                 <>
-                  <PenTool className="h-4 w-4 text-[#E1DCC9]/70" />
-                  <span className="text-sm text-[#E1DCC9]/60 dark:text-[#E1DCC9]/70 font-medium">
+                  <PenTool className="h-4 w-4 text-foreground/70" />
+                  <span className="text-sm text-foreground/60 dark:text-foreground/70 font-medium">
                     Area Mode:
                   </span>
-                  <span className="text-sm text-[#E1DCC9]/70 dark:text-[#E1DCC9]/80">
+                  <span className="text-sm text-foreground/70 dark:text-foreground/80">
                     {isDragging
                       ? 'Release to create room area'
                       : 'Click and drag to draw rectangle area'}
@@ -1297,7 +1297,7 @@ export function PDFAnalysisViewer({
       <div
         ref={containerRef}
         className={`relative overflow-auto ${
-          isFullscreen ? 'flex-1 bg-[#09111f]' : 'bg-gray-200 dark:bg-gray-800'
+          isFullscreen ? 'flex-1 bg-muted' : 'bg-gray-200 dark:bg-gray-800'
         } ${measurementMode === 'pan' ? (isPanning ? 'cursor-grabbing' : 'cursor-grab') : ''}`}
         style={isFullscreen ? undefined : { maxHeight: '70vh' }}
         onMouseDown={handlePanStart}
@@ -1307,14 +1307,14 @@ export function PDFAnalysisViewer({
       >
         {/* ── FULLSCREEN FLOATING TOOL PALETTE ── */}
         {isFullscreen && (
-          <div className="absolute left-3 top-1/2 -translate-y-1/2 flex flex-col gap-1 bg-[#0d1b2e]/95 backdrop-blur-sm rounded-2xl p-2 shadow-2xl border border-white/10 z-30 select-none">
+          <div className="absolute left-3 top-1/2 -translate-y-1/2 flex flex-col gap-1 bg-muted/95 backdrop-blur-sm rounded-2xl p-2 shadow-2xl border border-white/10 z-30 select-none">
             {/* Pointer */}
             <Tooltip>
               <TooltipTrigger asChild>
                 <button
                   onClick={() => setMeasurementMode('none')}
                   className={`w-10 h-10 rounded-xl flex items-center justify-center transition-all ${
-                    measurementMode === 'none' ? 'bg-muted/70 text-white shadow-lg' : 'text-gray-300 hover:bg-[#1a2d45] hover:text-foreground'
+                    measurementMode === 'none' ? 'bg-muted/70 text-white shadow-lg' : 'text-gray-300 hover:bg-muted hover:text-foreground'
                   }`}
                 >
                   <MousePointer2 className="h-5 w-5" />
@@ -1329,7 +1329,7 @@ export function PDFAnalysisViewer({
                 <button
                   onClick={() => setMeasurementMode(measurementMode === 'pan' ? 'none' : 'pan')}
                   className={`w-10 h-10 rounded-xl flex items-center justify-center transition-all ${
-                    measurementMode === 'pan' ? 'bg-muted/70 text-white shadow-lg' : 'text-gray-300 hover:bg-[#1a2d45] hover:text-foreground'
+                    measurementMode === 'pan' ? 'bg-muted/70 text-white shadow-lg' : 'text-gray-300 hover:bg-muted hover:text-foreground'
                   }`}
                 >
                   <Hand className="h-5 w-5" />
@@ -1347,12 +1347,12 @@ export function PDFAnalysisViewer({
                   onClick={() => setMeasurementMode(measurementMode === 'calibrate' ? 'none' : 'calibrate')}
                   className={`w-10 h-10 rounded-xl flex items-center justify-center transition-all relative ${
                     measurementMode === 'calibrate' ? 'bg-amber-500 text-white shadow-lg' :
-                    currentCalibration ? 'text-[#E1DCC9]/80 hover:bg-[#1a2d45]' : 'text-amber-400 hover:bg-[#1a2d45] hover:text-amber-300'
+                    currentCalibration ? 'text-foreground/80 hover:bg-muted' : 'text-amber-400 hover:bg-muted hover:text-amber-300'
                   }`}
                 >
                   <Ruler className="h-5 w-5" />
                   {!currentCalibration && (
-                    <span className="absolute -top-1 -right-1 w-3 h-3 bg-amber-500 rounded-full border border-[#09111f]" />
+                    <span className="absolute -top-1 -right-1 w-3 h-3 bg-amber-500 rounded-full border border-border" />
                   )}
                 </button>
               </TooltipTrigger>
@@ -1369,7 +1369,7 @@ export function PDFAnalysisViewer({
                   disabled={!currentCalibration}
                   className={`w-10 h-10 rounded-xl flex items-center justify-center transition-all ${
                     measurementMode === 'distance' ? 'bg-muted/70 text-white shadow-lg' :
-                    currentCalibration ? 'text-gray-300 hover:bg-[#1a2d45] hover:text-foreground' : 'text-gray-600 cursor-not-allowed'
+                    currentCalibration ? 'text-gray-300 hover:bg-muted hover:text-foreground' : 'text-gray-600 cursor-not-allowed'
                   }`}
                 >
                   <Move className="h-5 w-5" />
@@ -1385,8 +1385,8 @@ export function PDFAnalysisViewer({
                   onClick={() => currentCalibration && setMeasurementMode(measurementMode === 'area' ? 'none' : 'area')}
                   disabled={!currentCalibration}
                   className={`w-10 h-10 rounded-xl flex items-center justify-center transition-all ${
-                    measurementMode === 'area' ? 'bg-[#412D15]/70 text-white shadow-lg' :
-                    currentCalibration ? 'text-gray-300 hover:bg-[#1a2d45] hover:text-foreground' : 'text-gray-600 cursor-not-allowed'
+                    measurementMode === 'area' ? 'bg-accent/70 text-white shadow-lg' :
+                    currentCalibration ? 'text-gray-300 hover:bg-muted hover:text-foreground' : 'text-gray-600 cursor-not-allowed'
                   }`}
                 >
                   <PenTool className="h-5 w-5" />
@@ -1400,7 +1400,7 @@ export function PDFAnalysisViewer({
             {/* Zoom In */}
             <Tooltip>
               <TooltipTrigger asChild>
-                <button onClick={zoomIn} className="w-10 h-10 rounded-xl flex items-center justify-center text-gray-300 hover:bg-[#1a2d45] hover:text-foreground transition-all">
+                <button onClick={zoomIn} className="w-10 h-10 rounded-xl flex items-center justify-center text-gray-300 hover:bg-muted hover:text-foreground transition-all">
                   <ZoomIn className="h-5 w-5" />
                 </button>
               </TooltipTrigger>
@@ -1410,7 +1410,7 @@ export function PDFAnalysisViewer({
             {/* Zoom Out */}
             <Tooltip>
               <TooltipTrigger asChild>
-                <button onClick={zoomOut} className="w-10 h-10 rounded-xl flex items-center justify-center text-gray-300 hover:bg-[#1a2d45] hover:text-foreground transition-all">
+                <button onClick={zoomOut} className="w-10 h-10 rounded-xl flex items-center justify-center text-gray-300 hover:bg-muted hover:text-foreground transition-all">
                   <ZoomOut className="h-5 w-5" />
                 </button>
               </TooltipTrigger>
@@ -1420,7 +1420,7 @@ export function PDFAnalysisViewer({
             {/* Reset zoom */}
             <Tooltip>
               <TooltipTrigger asChild>
-                <button onClick={resetZoom} className="w-10 h-10 rounded-xl flex items-center justify-center text-gray-300 hover:bg-[#1a2d45] hover:text-foreground transition-all text-[10px] font-bold">
+                <button onClick={resetZoom} className="w-10 h-10 rounded-xl flex items-center justify-center text-gray-300 hover:bg-muted hover:text-foreground transition-all text-[10px] font-bold">
                   {Math.round(zoom * 100)}%
                 </button>
               </TooltipTrigger>
@@ -1434,8 +1434,8 @@ export function PDFAnalysisViewer({
           <div className={`absolute bottom-4 left-1/2 -translate-x-1/2 z-30 flex items-center gap-3 px-4 py-2 rounded-full shadow-2xl border text-sm font-medium backdrop-blur-sm ${
             measurementMode === 'calibrate' ? 'bg-amber-600/90 border-amber-400 text-white' :
             measurementMode === 'distance' ? 'bg-muted/70/90 border-foreground/25 text-white' :
-            measurementMode === 'area' ? 'bg-primary/20 border-[#E1DCC9]/25 text-white' :
-            'bg-[#0d1b2e]/90 border-[#1e2d45] text-gray-200'
+            measurementMode === 'area' ? 'bg-primary/20 border-foreground/25 text-white' :
+            'bg-muted/90 border-border text-gray-200'
           }`}>
             {measurementMode === 'calibrate' && <><Ruler className="h-4 w-4" />{calibrationPoints.length === 0 ? 'Click first point' : calibrationPoints.length === 1 ? 'Click second point' : 'Enter distance'}</>}
             {measurementMode === 'distance' && <><Move className="h-4 w-4" />{isDragging ? 'Release to complete' : 'Click and drag to measure'}</>}
@@ -1449,8 +1449,8 @@ export function PDFAnalysisViewer({
 
         {/* ── FULLSCREEN PAGE NAV (bottom-right) ── */}
         {isFullscreen && (
-          <div className="absolute bottom-4 right-4 z-30 flex items-center gap-1 bg-[#0d1b2e]/90 backdrop-blur-sm rounded-full px-2 py-1 shadow-xl border border-white/10">
-            <button onClick={() => goToPage(currentPage - 1)} disabled={currentPage <= 1} className="w-7 h-7 flex items-center justify-center rounded-full text-gray-300 hover:bg-[#1a2d45] disabled:opacity-30 transition-all">
+          <div className="absolute bottom-4 right-4 z-30 flex items-center gap-1 bg-muted/90 backdrop-blur-sm rounded-full px-2 py-1 shadow-xl border border-white/10">
+            <button onClick={() => goToPage(currentPage - 1)} disabled={currentPage <= 1} className="w-7 h-7 flex items-center justify-center rounded-full text-gray-300 hover:bg-muted disabled:opacity-30 transition-all">
               <ChevronLeft className="h-4 w-4" />
             </button>
             <select
@@ -1459,12 +1459,12 @@ export function PDFAnalysisViewer({
               className="bg-transparent text-xs text-gray-200 font-medium text-center cursor-pointer outline-none min-w-[80px] appearance-none"
             >
               {Array.from({ length: totalPages }, (_, i) => i + 1).map(p => (
-                <option key={p} value={p} className="bg-[#09111f] text-gray-200">
+                <option key={p} value={p} className="bg-muted text-gray-200">
                   Page {p} / {totalPages}
                 </option>
               ))}
             </select>
-            <button onClick={() => goToPage(currentPage + 1)} disabled={currentPage >= totalPages} className="w-7 h-7 flex items-center justify-center rounded-full text-gray-300 hover:bg-[#1a2d45] disabled:opacity-30 transition-all">
+            <button onClick={() => goToPage(currentPage + 1)} disabled={currentPage >= totalPages} className="w-7 h-7 flex items-center justify-center rounded-full text-gray-300 hover:bg-muted disabled:opacity-30 transition-all">
               <ChevronRight className="h-4 w-4" />
             </button>
           </div>
@@ -1973,14 +1973,14 @@ export function PDFAnalysisViewer({
 
           {/* Enhanced Extraction Summary */}
           {analysisResult && (
-            <div className="mb-3 rounded-lg border bg-gradient-to-r from-muted/10 to-muted/5 dark:from-card/50 dark:to-background/50 border-[#E1DCC9]/20 dark:border-border/40">
+            <div className="mb-3 rounded-lg border bg-gradient-to-r from-muted/10 to-muted/5 dark:from-card/50 dark:to-background/50 border-foreground/20 dark:border-border/40">
               <button
                 onClick={() => setShowExtractionSummary(!showExtractionSummary)}
                 className="w-full flex items-center justify-between p-2 text-left"
               >
                 <div className="flex items-center gap-2 text-xs">
-                  <FileText className="h-3 w-3 text-[#E1DCC9]/60" />
-                  <span className="font-medium text-[#E1DCC9]/60 dark:text-[#E1DCC9]/70">
+                  <FileText className="h-3 w-3 text-foreground/60" />
+                  <span className="font-medium text-foreground/60 dark:text-foreground/70">
                     PDF Extraction Summary
                   </span>
                   {analysisResult.standardsReferences?.length > 0 && (
@@ -2000,9 +2000,9 @@ export function PDFAnalysisViewer({
                   )}
                 </div>
                 {showExtractionSummary ? (
-                  <ChevronUp className="h-4 w-4 text-[#E1DCC9]/60" />
+                  <ChevronUp className="h-4 w-4 text-foreground/60" />
                 ) : (
-                  <ChevronDown className="h-4 w-4 text-[#E1DCC9]/60" />
+                  <ChevronDown className="h-4 w-4 text-foreground/60" />
                 )}
               </button>
 
@@ -2026,7 +2026,7 @@ export function PDFAnalysisViewer({
                       {analysisResult.summary.totalFloorArea && (
                         <div className="mt-1 pt-1 border-t flex justify-between text-xs font-medium">
                           <span>Total Floor Area</span>
-                          <span className="text-[#E1DCC9]/60">{analysisResult.summary.totalFloorArea.toFixed(2)}m²</span>
+                          <span className="text-foreground/60">{analysisResult.summary.totalFloorArea.toFixed(2)}m²</span>
                         </div>
                       )}
                     </div>
@@ -2193,7 +2193,7 @@ export function PDFAnalysisViewer({
                       ${currentPage === pageNum
                         ? 'border-primary ring-2 ring-primary/30 bg-primary/5'
                         : isCalibrated
-                        ? 'border-[#E1DCC9]/30 hover:border-[#E1DCC9]/35 bg-muted/10 dark:bg-card/50'
+                        ? 'border-foreground/30 hover:border-foreground/35 bg-muted/10 dark:bg-card/50'
                         : 'border-amber-400 hover:border-amber-500 bg-amber-50 dark:bg-amber-950/30'
                       }
                     `}
@@ -2220,7 +2220,7 @@ export function PDFAnalysisViewer({
                     )}
                     {/* Scale indicator at bottom */}
                     <div className={`absolute bottom-0 left-0 right-0 text-white text-[9px] text-center py-0.5 truncate px-1 ${
-                      isCalibrated ? 'bg-[#412D15]/70' : 'bg-amber-500'
+                      isCalibrated ? 'bg-accent/70' : 'bg-amber-500'
                     }`}>
                       {isCalibrated && pageCalibration
                         ? pageCalibration.scale
@@ -2434,7 +2434,7 @@ export function PDFAnalysisViewer({
         <DialogContent className="max-w-lg">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
-              <Home className="h-5 w-5 text-[#E1DCC9]/70" />
+              <Home className="h-5 w-5 text-foreground/70" />
               Assign Room Type
             </DialogTitle>
           </DialogHeader>

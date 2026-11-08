@@ -300,7 +300,7 @@ export default function MaterialsLibrary() {
                         <div className="flex items-center gap-1.5">
                           {m.supplierType === 'overseas'
                             ? <Globe className="h-3 w-3 text-amber-500" />
-                            : <MapPin className="h-3 w-3 text-[#E1DCC9]/80" />}
+                            : <MapPin className="h-3 w-3 text-foreground/80" />}
                           <span className="text-sm">{m.supplierName}</span>
                         </div>
                       ) : (

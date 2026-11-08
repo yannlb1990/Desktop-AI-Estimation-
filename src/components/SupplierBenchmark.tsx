@@ -247,7 +247,7 @@ export const SupplierBenchmark = () => {
                   <div className="flex items-center justify-between mb-4">
                     <h3 className="font-semibold">{product}</h3>
                     <div className="flex gap-4 text-sm">
-                      <span className="text-[#E1DCC9]/70">
+                      <span className="text-foreground/70">
                         <TrendingDown className="h-4 w-4 inline mr-1" />
                         ${min.toFixed(2)}
                       </span>
@@ -282,16 +282,16 @@ export const SupplierBenchmark = () => {
                             <TableCell className="font-medium">
                               {supplier}
                               {isCheapest && (
-                                <Badge className="ml-2 bg-[#412D15]/70">Best Price</Badge>
+                                <Badge className="ml-2 bg-accent/70">Best Price</Badge>
                               )}
                             </TableCell>
                             <TableCell className="text-right font-mono">
                               ${price.toFixed(2)}
                             </TableCell>
-                            <TableCell className={`text-right font-mono ${vsAvg < 0 ? 'text-[#E1DCC9]/70' : vsAvg > 0 ? 'text-red-600' : ''}`}>
+                            <TableCell className={`text-right font-mono ${vsAvg < 0 ? 'text-foreground/70' : vsAvg > 0 ? 'text-red-600' : ''}`}>
                               {vsAvg > 0 ? '+' : ''}{vsAvg.toFixed(1)}%
                             </TableCell>
-                            <TableCell className="text-right font-mono text-[#E1DCC9]/70">
+                            <TableCell className="text-right font-mono text-foreground/70">
                               ${savings.toFixed(2)}
                             </TableCell>
                           </TableRow>

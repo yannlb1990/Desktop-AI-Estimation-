@@ -178,7 +178,7 @@ export function RoomsFromWallsDialog({ open, onOpenChange, measurements, pageInd
                   <span className="w-24 shrink-0 text-right text-xs">
                     {moved ? (
                       <Button size="sm" variant="outline" className="h-7" onClick={() => update(r)}>Update area</Button>
-                    ) : m ? <span className="text-[#D4A045]">Added</span> : null}
+                    ) : m ? <span className="text-gold">Added</span> : null}
                   </span>
                 </div>
               );

@@ -138,7 +138,7 @@ export function RevisionDiffViewer({
   // Change type styling
   const getChangeTypeStyle = (type: 'added' | 'removed' | 'modified') => {
     const styles = {
-      added: { bg: 'bg-muted/10', border: 'border-border/35', text: 'text-[#E1DCC9]/60', icon: Plus },
+      added: { bg: 'bg-muted/10', border: 'border-border/35', text: 'text-foreground/60', icon: Plus },
       removed: { bg: 'bg-red-50', border: 'border-red-200', text: 'text-red-700', icon: Minus },
       modified: { bg: 'bg-amber-50', border: 'border-amber-200', text: 'text-amber-700', icon: Edit3 },
     };
@@ -208,14 +208,14 @@ export function RevisionDiffViewer({
           {diff && (
             <div className="grid grid-cols-4 gap-4 mt-4">
               <div className="bg-muted/10 p-3 rounded-lg">
-                <div className="flex items-center gap-2 text-[#E1DCC9]/60">
+                <div className="flex items-center gap-2 text-foreground/60">
                   <Plus className="h-4 w-4" />
                   <span className="text-sm font-medium">Added</span>
                 </div>
                 <div className="text-lg font-semibold text-foreground/80">
                   {diff.summary.addedItems} items
                 </div>
-                <div className="text-sm text-[#E1DCC9]/70">
+                <div className="text-sm text-foreground/70">
                   +{formatCurrency(diff.summary.totalAdded)}
                 </div>
               </div>
@@ -381,7 +381,7 @@ export function RevisionDiffViewer({
                     </div>
                     <div>
                       <span className="text-muted-foreground">Total Additions:</span>
-                      <span className="font-medium text-[#E1DCC9]/70 ml-2">
+                      <span className="font-medium text-foreground/70 ml-2">
                         +{formatCurrency(cumulativeChanges.totalAdditions)}
                       </span>
                     </div>
@@ -393,7 +393,7 @@ export function RevisionDiffViewer({
                     </div>
                     <div>
                       <span className="text-muted-foreground">Net Change:</span>
-                      <span className={`font-medium ml-2 ${cumulativeChanges.netChange >= 0 ? 'text-[#E1DCC9]/70' : 'text-red-600'}`}>
+                      <span className={`font-medium ml-2 ${cumulativeChanges.netChange >= 0 ? 'text-foreground/70' : 'text-red-600'}`}>
                         {cumulativeChanges.netChange >= 0 ? '+' : ''}
                         {formatCurrency(cumulativeChanges.netChange)}
                       </span>
@@ -432,7 +432,7 @@ export function RevisionDiffViewer({
 
                           {entry.diff && (
                             <div className="flex items-center gap-4 text-xs">
-                              <span className="text-[#E1DCC9]/70">
+                              <span className="text-foreground/70">
                                 +{entry.diff.summary.addedItems} added
                               </span>
                               <span className="text-red-600">
