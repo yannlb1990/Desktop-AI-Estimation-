@@ -15,6 +15,7 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { getThemePref, setThemePref, type ThemePref } from "@/lib/theme";
+import { TenderAttachments } from "@/components/tender/TenderAttachments";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
 import {
@@ -56,7 +57,7 @@ const Toggle = ({ value, onChange }: { value: boolean; onChange: (v: boolean) =>
 
 /** The settings, grouped the way a builder thinks about them */
 const SETTINGS_GROUPS: { label: string; items: { key: string; label: string }[] }[] = [
-  { label: 'Business', items: [{ key: 'profile', label: 'Company details' }, { key: 'branding', label: 'Logo and branding' }, { key: 'regional', label: 'State and region' }] },
+  { label: 'Business', items: [{ key: 'profile', label: 'Company details' }, { key: 'branding', label: 'Logo and branding' }, { key: 'regional', label: 'State and region' }, { key: 'documents', label: 'Company documents' }] },
   { label: 'Pricing', items: [{ key: 'rates', label: 'Rates and markup' }] },
   { label: 'Quotes', items: [{ key: 'quotes', label: 'Quote settings' }] },
   { label: 'Suppliers', items: [{ key: 'suppliers', label: 'Suppliers' }] },
@@ -1077,6 +1078,15 @@ const Settings = () => {
                 </div>
                 <SavedNote section="profile" />
               </div>
+            </Card>
+          </TabsContent>
+
+          {/* ── Company documents: insurances, licence, profile, sent with every tender ── */}
+          <TabsContent value="documents">
+            <Card className="p-6">
+              <h3 className="font-display text-xl font-bold mb-1">Company documents</h3>
+              <p className="mb-4 text-sm text-muted-foreground">Your insurances, licence and company profile, kept once and attached to every tender.</p>
+              <TenderAttachments />
             </Card>
           </TabsContent>
 

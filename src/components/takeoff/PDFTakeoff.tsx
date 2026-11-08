@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { ScreenGuide } from '@/components/ScreenGuide';
 import { createPortal } from 'react-dom';
 import { Download, ZoomIn, ZoomOut, RotateCw, RotateCcw, Maximize2, Minimize2, ChevronLeft, ChevronRight, ChevronUp, ChevronDown, Trash2, FileText, SlidersHorizontal, Combine, Ruler, X, CheckCircle, EyeOff, Lock, ScanLine, AlertTriangle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -1288,6 +1289,9 @@ export const PDFTakeoff = ({ projectId, estimateId, onAddCostItems }: PDFTakeoff
     </Dialog>
 
     <div className="space-y-6">
+      <ScreenGuide id="takeoff" title="Takeoff: quantities from your drawings"
+        intro="Upload your plans and measure them. Every measurement becomes a quantity in your estimate, and stays linked if you measure again."
+        steps={['Upload the drawings (PDF or image)', 'Set the scale from a known dimension', 'Measure areas, lengths and counts, then open the estimate to price them']} />
       <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
         <div className="flex items-center justify-between">
           <TabsList>

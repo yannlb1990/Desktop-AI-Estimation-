@@ -9,6 +9,7 @@ import { loadQuoteShares, syncClientApprovals } from "@/lib/contract";
 import { ServicesDialog, type PricedServiceLine } from "@/components/estimate/ServicesDialog";
 import { RoomPackDialog } from "@/components/estimate/RoomPackDialog";
 import { HomeWarrantyPanel } from "@/components/estimate/HomeWarrantyPanel";
+import { ScreenGuide } from "@/components/ScreenGuide";
 import { BoqImportDialog, type BoqLineOut } from "@/components/estimate/BoqImportDialog";
 import type { PackLine } from "@/lib/estimate/roomPacks";
 import { SiteVisitPanel } from "@/components/estimate/SiteVisitPanel";
@@ -2105,6 +2106,9 @@ export const EstimateTemplate = ({ projectId, estimateId }: EstimateTemplateProp
 
   return (
     <div className="space-y-6 p-6">
+      <ScreenGuide id="estimate" title="Estimate: your price, line by line"
+        intro="Add the work as lines with a quantity and price, check them, then make the quote or tender."
+        steps={['Add lines: by hand, a recipe, a room pack, the services calculator, a BOQ, or from the takeoff', 'Check estimate shows anything to fix before quoting', 'Generate Quote or Tender at the top sends it to your client']} />
       {/* Lines arriving from the takeoff are announced by the takeoff's own message (with Undo) */}
 
       {/* 1. NCC Standards Research */}

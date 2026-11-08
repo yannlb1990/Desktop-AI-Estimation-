@@ -1,4 +1,6 @@
 import { useState, useEffect } from "react"
+import { TenderAttachments } from "@/components/tender/TenderAttachments"
+import { attachedDocs, loadCompanyDocs, loadCompanyDocsLocal, loadProjectDocs, docTypeLabel, type StoredDoc } from "@/lib/tender/attachments"
 import { getUserStorageKey } from "@/lib/localAuth"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -143,6 +145,17 @@ export const FullTenderGenerator = ({ project, estimate }: FullTenderProps) => {
   const [open, setOpen] = useState(false)
   const [upgradeOpen, setUpgradeOpen] = useState(false)
   const [activeTab, setActiveTab] = useState("company")
+  // documents going with this tender, refreshed when they change in the Files tab
+  const [attached, setAttached] = useState<StoredDoc[]>([])
+  useEffect(() => {
+    if (!project?.id) return
+    const read = () => setAttached(attachedDocs(loadCompanyDocsLocal(), loadProjectDocs(project.id)))
+    read()
+    loadCompanyDocs().then(read).catch(() => {})
+    const h = (e: Event) => { const d = (e as CustomEvent).detail; if (d?.company || d?.projectId === project.id) read() }
+    window.addEventListener("tender-docs-changed", h)
+    return () => window.removeEventListener("tender-docs-changed", h)
+  }, [project?.id, open])
   const sub = useSubscription()
 
   const brand = LOAD_BRAND()
@@ -509,13 +522,19 @@ ${clone.outerHTML}
             {/* ── EDITOR PANEL ── */}
             <div className="w-[360px] flex-shrink-0 border-r overflow-y-auto bg-muted/30 p-4 no-print">
               <Tabs value={activeTab} onValueChange={setActiveTab}>
-                <TabsList className="grid grid-cols-5 w-full mb-4">
+                <TabsList className="grid grid-cols-6 w-full mb-4">
                   <TabsTrigger value="company" className="text-[10px]">Company</TabsTrigger>
                   <TabsTrigger value="personnel" className="text-[10px]">People</TabsTrigger>
                   <TabsTrigger value="scope" className="text-[10px]">Scope</TabsTrigger>
                   <TabsTrigger value="risk" className="text-[10px]">Risk</TabsTrigger>
                   <TabsTrigger value="pricing" className="text-[10px]">Pricing</TabsTrigger>
+                  <TabsTrigger value="files" className="text-[10px]">Files</TabsTrigger>
                 </TabsList>
+
+                {/* ── ATTACHMENTS TAB: the documents that go with this tender ── */}
+                <TabsContent value="files" className="space-y-3 mt-0">
+                  {project?.id ? <TenderAttachments projectId={project.id} /> : <p className="text-xs text-muted-foreground">Save the project first.</p>}
+                </TabsContent>
 
                 {/* ── COMPANY TAB ── */}
                 <TabsContent value="company" className="space-y-3 mt-0">
@@ -1265,6 +1284,25 @@ ${clone.outerHTML}
                   {/* 19. Terms */}
                   <SH title="19. Terms & Conditions" />
                   <div className="text-xs text-gray-600 leading-relaxed whitespace-pre-line bg-gray-50 rounded-xl p-5">{terms}</div>
+
+                  {/* Documents going with the tender */}
+                  {attached.length > 0 && (
+                    <>
+                      <SH title="Documents attached" />
+                      <table className="w-full text-sm">
+                        <tbody>
+                          {attached.map(d => (
+                            <tr key={d.id} className="border-b border-gray-100">
+                              <td className="py-1.5 pr-3 text-gray-800">{docTypeLabel(d.type)}</td>
+                              <td className="py-1.5 pr-3 text-gray-600">{d.fileName}</td>
+                              <td className="py-1.5 text-right text-gray-500">{d.expiresAt ? `Valid to ${new Date(d.expiresAt).toLocaleDateString("en-AU")}` : ""}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                      <p className="mt-1 text-xs text-gray-500">These documents are provided with this tender as separate files.</p>
+                    </>
+                  )}
 
                   {/* 20. Acceptance */}
                   <SH title="20. Execution & Acceptance" />

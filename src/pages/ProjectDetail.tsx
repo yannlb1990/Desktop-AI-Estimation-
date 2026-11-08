@@ -49,7 +49,6 @@ import { format } from "date-fns";
 import { OverheadManager } from "@/components/OverheadManager";
 import { EstimateTemplate } from "@/components/EstimateTemplate";
 import { PlanViewer } from "@/components/PlanViewer";
-import { TenderDocuments } from "@/components/TenderDocuments";
 import { QuoteGenerator } from "@/components/QuoteGenerator";
 import { FullTenderGenerator } from "@/components/FullTenderGenerator";
 import { ProjectInsightsTab } from "@/components/ProjectInsightsTab";
@@ -75,7 +74,9 @@ const ProjectDetail = () => {
   // ?tab=progressclaim (from the dashboard's Invoice button) opens that tab straight away
   const [activeMainTab, setActiveMainTab] = useState(() => {
     const t = new URLSearchParams(window.location.search).get("tab");
-    return t && ["takeoff", "estimate", "tender", "overheads", "insights", "compliance", "subbies", "ffe", "documents", "schedule", "jobcost", "variations", "progressclaim"].includes(t) ? t : "takeoff";
+    // the old Pricing step (?tab=tender) is now the Generate Quote and Tender buttons: open the estimate
+    if (t === "tender") return "estimate";
+    return t && ["takeoff", "estimate", "overheads", "insights", "compliance", "subbies", "ffe", "documents", "schedule", "jobcost", "variations", "progressclaim"].includes(t) ? t : "takeoff";
   });
   const [showSuppliers, setShowSuppliers] = useState(false);
   const [syncState, setSyncState] = useState<'idle' | 'saving' | 'saved'>('idle');
@@ -689,44 +690,21 @@ const ProjectDetail = () => {
           </div>
         )}
 
-        {/* ── Row 1: Main workflow steps ── */}
-        <div className="flex items-center bg-card border border-border rounded-xl px-6 py-4 mb-2">
+        {/* ── Takeoff or Estimate: the two places a job is worked on ── */}
+        <div className="mb-2 grid grid-cols-2 gap-1 rounded-xl border border-border bg-card p-1">
           {[
-            { key: "takeoff",  label: "Takeoff",  icon: Ruler,      tour: "Upload your PDF plans here. AI measures quantities automatically. Review and adjust each item, then send everything to Estimate." },
-            { key: "estimate", label: "Estimate", icon: Calculator,  tour: "Review and price all takeoff items. Add labour, materials, margins and overheads. This is your full cost build-up before generating the client document." },
-            { key: "tender",   label: "Pricing",  icon: FileText,    tour: "Generate the final client document. Choose a Quote (fast 2-page branded proposal) or a full Tender with compliance, programme and legal terms." },
-          ].map((step, i) => {
+            { key: "takeoff", label: "Takeoff", hint: "Plans and measuring", tour: "Upload drawings and measure: every area, length and count becomes a quantity in the estimate." },
+            { key: "estimate", label: "Estimate", hint: "Lines and pricing", tour: "Add and price lines (by hand, recipes, room packs, BOQ or from the takeoff), check them, then make the quote or tender." },
+          ].map(step => {
             const isActive = activeMainTab === step.key;
-            const isPast =
-              (step.key === "takeoff"  && (activeMainTab === "estimate" || activeMainTab === "tender")) ||
-              (step.key === "estimate" && activeMainTab === "tender");
             return (
-              <React.Fragment key={step.key}>
-                <TourTip text={step.tour} position="bottom">
-                  <button
-                    onClick={() => setActiveMainTab(step.key)}
-                    className="flex flex-col items-center gap-2 group min-w-0 flex-1"
-                  >
-                    <div className={`w-9 h-9 rounded-full flex items-center justify-center text-sm font-bold border-2 transition-all duration-200 ${
-                      isActive
-                        ? "bg-primary border-primary text-primary-foreground shadow-[0_0_16px_hsl(var(--primary)/0.3)]"
-                        : isPast
-                        ? "bg-primary/10 border-primary text-primary"
-                        : "bg-muted border-border text-muted-foreground group-hover:border-primary/40"
-                    }`}>
-                      {isPast ? "✓" : i + 1}
-                    </div>
-                    <span className={`hidden sm:block text-xs font-semibold tracking-wide transition-colors ${
-                      isActive ? "text-primary" : isPast ? "text-primary/70" : "text-muted-foreground group-hover:text-foreground"
-                    }`}>
-                      {step.label}
-                    </span>
-                  </button>
-                </TourTip>
-                {i < 2 && (
-                  <div className={`flex-1 h-px mx-4 transition-colors ${isPast ? "bg-primary/40" : "bg-border"}`} />
-                )}
-              </React.Fragment>
+              <TourTip key={step.key} text={step.tour} position="bottom">
+                <button onClick={() => setActiveMainTab(step.key)}
+                  className={`w-full rounded-lg px-4 py-2.5 text-left transition-colors ${isActive ? "bg-primary text-primary-foreground" : "hover:bg-muted"}`}>
+                  <span className="block text-sm font-semibold">{step.label}</span>
+                  <span className={`block text-xs ${isActive ? "text-primary-foreground/80" : "text-muted-foreground"}`}>{step.hint}</span>
+                </button>
+              </TourTip>
             );
           })}
         </div>
@@ -800,7 +778,6 @@ const ProjectDetail = () => {
           <TabsList className="hidden">
             <TabsTrigger value="takeoff" />
             <TabsTrigger value="estimate" />
-            <TabsTrigger value="tender" />
             <TabsTrigger value="overheads" />
             <TabsTrigger value="insights" />
             <TabsTrigger value="compliance" />
@@ -847,33 +824,13 @@ const ProjectDetail = () => {
             <div className="flex justify-end gap-2">
               <Button
                 variant="outline"
-                onClick={() => setActiveMainTab("tender")}
+                onClick={() => window.dispatchEvent(new CustomEvent("open-quote-generator"))}
                 className="border-primary/50 text-primary hover:bg-primary/10"
               >
                 <FileText className="h-4 w-4 mr-2" />
                 Generate Quote
               </Button>
             </div>
-          </TabsContent>
-
-          {/* Step 3 — Tender */}
-          <TabsContent value="tender" className="space-y-6">
-            <Button variant="ghost" size="sm" onClick={() => setActiveMainTab("estimate")}>
-              <ArrowLeft className="h-4 w-4 mr-1" />
-              Back to Estimate
-            </Button>
-            <Card className="p-6">
-              <h3 className="font-display text-xl font-bold mb-2">Generate Quote or Tender</h3>
-              <p className="text-muted-foreground mb-4">
-                <strong>Quote</strong>: fast, branded proposal with scope, pricing and signature block.<br />
-                <strong>Tender</strong>: full corporate document with company profile, compliance, methodology, programme and legal terms.
-              </p>
-              <div className="flex gap-3">
-                <QuoteGenerator project={project} estimate={estimate} />
-                <FullTenderGenerator project={project} estimate={estimate} />
-              </div>
-            </Card>
-            <TenderDocuments projectId={projectId!} />
           </TabsContent>
 
           {/* Tools */}
