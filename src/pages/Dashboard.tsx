@@ -1,4 +1,5 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
+import { toast } from "sonner";
 import { jobMoney } from '@/lib/xero/money';
 import { refreshXeroPayments } from '@/lib/xero/payments';
 import { loadProject as loadLocalProject } from '@/lib/contract';
@@ -25,28 +26,16 @@ import { useTour } from "@/context/TourContext";
 import { TourTip } from "@/components/TourTip";
 import WelcomeOverlay from "@/components/WelcomeOverlay";
 import OnboardingChecklist from "@/components/OnboardingChecklist";
-import { calculateProjectTotals } from "@/lib/pricing/estimatePricing";
+import { calculateProjectTotals, resolveProjectPricing } from "@/lib/pricing/estimatePricing";
+import { checkEstimate } from "@/lib/estimate/checks";
+import { syncProjectToSupabase } from "@/lib/db/projects";
+import { STAGE_LABEL, stageOf, stagePatch, stageIndex, type ProjectStage } from "@/lib/projectStage";
+import { buildDashboard, nextStep, jobValue } from "@/lib/dashboardData";
+import { StagePicker, STAGE_STYLE } from "@/components/dashboard/StagePicker";
 import { readUserPricingDefaults } from "@/lib/pricing/userPricingDefaults";
 import { SiteVisitsInbox } from "@/components/SiteVisitsInbox";
 
 // ── helpers ─────────────────────────────────────────────────────────────────
-
-type Stage = 'Takeoff' | 'Estimating' | 'Tender Ready' | 'Sent';
-type QuoteStatus = 'draft' | 'sent' | 'won' | 'lost';
-
-const QUOTE_STATUS_CONFIG: Record<QuoteStatus, { label: string; color: string; bg: string; icon: React.ReactNode }> = {
-  draft:  { label: 'Draft',  color: 'text-muted-foreground', bg: 'bg-muted/60 border-border',         icon: <FileText className="h-3 w-3" /> },
-  sent:   { label: 'Sent',   color: 'text-orange-400',       bg: 'bg-orange-400/10 border-orange-400/30', icon: <Send className="h-3 w-3" /> },
-  won:    { label: 'Won',    color: 'text-[#E1DCC9]/80',        bg: 'bg-[#E1DCC9]/8 border-[#E1DCC9]/20',  icon: <Trophy className="h-3 w-3" /> },
-  lost:   { label: 'Lost',   color: 'text-red-400',          bg: 'bg-red-400/10 border-red-400/30',      icon: <XCircle className="h-3 w-3" /> },
-};
-
-const getStage = (p: any): Stage => {
-  if (p.status === 'complete' || p.status === 'completed') return 'Sent';
-  if (p.estimate_items?.length > 0) return 'Tender Ready';
-  if (p.cost_items?.length > 0) return 'Estimating';
-  return 'Takeoff';
-};
 
 // Same total as the Estimate tab's Project Cost Summary (incl. GST): labour, markup,
 // overheads, prelims, contingency, margin and GST all come from the shared pricing module.
@@ -72,58 +61,6 @@ const fmtDate = (d: string | undefined) => {
   return date.toLocaleDateString('en-AU', { day: 'numeric', month: 'short' });
 };
 
-const STAGE_CONFIG: Record<Stage, { color: string; dot: string; bg: string }> = {
-  'Takeoff':      { color: 'text-amber-400',  dot: 'bg-amber-400',  bg: 'bg-amber-400/10 border-amber-400/30' },
-  'Estimating':   { color: 'text-amber-400',  dot: 'bg-amber-400',  bg: 'bg-amber-400/10 border-amber-400/30' },
-  'Tender Ready': { color: 'text-[#E1DCC9]/80',  dot: 'bg-[#E1DCC9]/15',  bg: 'bg-[#E1DCC9]/8 border-[#E1DCC9]/20' },
-  'Sent':         { color: 'text-orange-400', dot: 'bg-orange-400', bg: 'bg-orange-400/10 border-orange-400/30' },
-};
-
-// ── Project completion score ─────────────────────────────────────────────────
-
-interface CompletionStep {
-  key: string;
-  label: string;       // shown in tooltip
-  action: string;      // "next step" label shown in UI
-  done: boolean;
-}
-
-function getProjectCompletion(p: any): {
-  steps: CompletionStep[];
-  score: number;
-  total: number;
-  nextAction: string;
-  pct: number;
-} {
-  const hasPlan   = !!(p.plan_file_name || p.plan_file_url);
-  const items: any[] = p.estimate_items ?? [];
-  const hasItems  = items.length > 0;
-  const hasPrices = hasItems && items.some(
-    (i: any) => (i.unit_price ?? 0) > 0 || (i.labour_rate ?? 0) > 0 ||
-                (i.total ?? 0) > 0 || (i.totalCost ?? 0) > 0
-  );
-  const grandTotal = getProjectValue(p);
-  const hasTotals = grandTotal > 0;
-  const isSent    = ['sent', 'won', 'lost'].includes(p.quoteStatus ?? '');
-
-  const steps: CompletionStep[] = [
-    { key: 'created',  label: 'Project created',   action: 'Created',          done: true },
-    { key: 'plan',     label: 'Plan uploaded',      action: 'Upload plan',      done: hasPlan },
-    { key: 'items',    label: 'Estimate started',   action: 'Start estimate',   done: hasItems },
-    { key: 'priced',   label: 'Items priced',       action: 'Set item pricing', done: hasTotals || hasPrices },
-    { key: 'sent',     label: 'Quote sent',         action: 'Send quote',       done: isSent },
-  ];
-
-  const score = steps.filter(s => s.done).length;
-  const total = steps.length;
-  const pct   = Math.round((score / total) * 100);
-
-  const firstPending = steps.find(s => !s.done);
-  const nextAction   = firstPending ? firstPending.action : 'Complete';
-
-  return { steps, score, total, nextAction, pct };
-}
-
 // ── component ────────────────────────────────────────────────────────────────
 
 const Dashboard = () => {
@@ -132,7 +69,10 @@ const Dashboard = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [loadError, setLoadError] = useState(false);
   const [showAll, setShowAll] = useState(false);
-  const [stageFilter, setStageFilter] = useState<Stage | null>(null);
+  const [stageFilter, setStageFilter] = useState<ProjectStage | null>(null);
+  const [search, setSearch] = useState('');
+  const [sortBy, setSortBy] = useState<'changed' | 'value' | 'name' | 'stage'>('changed');
+  const [showAllAttention, setShowAllAttention] = useState(false);
   const [bannerDismissed, setBannerDismissed] = useState(false);
   const [showWelcome, setShowWelcome] = useState(() => {
     const user = getLocalUser();
@@ -198,25 +138,54 @@ const Dashboard = () => {
   }, [sub.effectivePlan]);
 
   // ── derived stats ──────────────────────────────────────────────────────────
-  const defaultRates = (() => { try { return JSON.parse(localStorage.getItem(getUserStorageKey('default_rates')) || "{}"); } catch { return {}; } })();
-  const targetMargin: number = defaultRates.margin ?? 0;
+  // fix-level checks per job (no price, scope not chosen), computed once per load
+  const fixCounts = useMemo(() => {
+    const m = new Map<string, number>();
+    for (const p of projects) {
+      if (!(p.estimate_items ?? []).length) { m.set(p.id, 0); continue; }
+      try {
+        const { config, labourRates } = resolveProjectPricing(p, readUserPricingDefaults(p));
+        m.set(p.id, checkEstimate(p.estimate_items, config, labourRates).filter(c => c.level === 'fix').length);
+      } catch { m.set(p.id, 0); }
+    }
+    return m;
+  }, [projects]);
+  const fixesFor = (p: any) => fixCounts.get(p.id) ?? 0;
+  const dash = useMemo(() => buildDashboard(projects, getProjectValue, fixesFor),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [projects, fixCounts]);
 
-  const pipelineValue = projects.reduce((s, p) => s + getProjectValue(p), 0);
-  const sentProjects  = projects.filter(p => getStage(p) === 'Sent');
-  const wonProjects   = projects.filter(p => p.quoteStatus === 'won');
-  const lostProjects  = projects.filter(p => p.quoteStatus === 'lost');
-  const winRate       = (wonProjects.length + lostProjects.length) > 0
-    ? Math.round((wonProjects.length / (wonProjects.length + lostProjects.length)) * 100)
-    : null;
+  const q = search.trim().toLowerCase();
+  const filteredProjects = projects
+    .filter(p => !stageFilter || stageOf(p) === stageFilter)
+    .filter(p => !q || [p.name, p.client_name, p.site_address, p.address].some(v => String(v ?? '').toLowerCase().includes(q)))
+    .sort((a, b) => sortBy === 'value' ? jobValue(b, getProjectValue) - jobValue(a, getProjectValue)
+      : sortBy === 'name' ? String(a.name ?? '').localeCompare(String(b.name ?? ''))
+      : sortBy === 'stage' ? stageIndex(stageOf(a)) - stageIndex(stageOf(b))
+      : String(b.updated_at || b.created_at || '').localeCompare(String(a.updated_at || a.created_at || '')));
+  const displayProjects = showAll ? filteredProjects : filteredProjects.slice(0, 10);
 
-  const stages: Stage[] = ['Takeoff', 'Estimating', 'Tender Ready', 'Sent'];
-  const stageCounts = stages.reduce((acc, s) => {
-    acc[s] = projects.filter(p => getStage(p) === s).length;
-    return acc;
-  }, {} as Record<Stage, number>);
-
-  const filteredProjects = stageFilter ? projects.filter(p => getStage(p) === stageFilter) : projects;
-  const displayProjects = showAll ? filteredProjects : filteredProjects.slice(0, 8);
+  /** The builder moves a job: saved here and in the cloud, and any suggestion is settled */
+  const changeStage = (projectId: string, stage: ProjectStage) => {
+    const patch = stagePatch(stage);
+    const key = getUserStorageKey('local_projects');
+    const all: any[] = JSON.parse(localStorage.getItem(key) || '[]');
+    const idx = all.findIndex(p => p.id === projectId);
+    if (idx !== -1) {
+      all[idx] = { ...all[idx], ...patch, updated_at: new Date().toISOString() };
+      localStorage.setItem(key, JSON.stringify(all));
+      syncProjectToSupabase(all[idx]);
+    }
+    setProjects(prev => prev.map(p => p.id === projectId ? { ...p, ...patch, updated_at: new Date().toISOString() } : p));
+    toast.success(`Moved to ${STAGE_LABEL[stage]}`);
+  };
+  const dismissSuggestion = (projectId: string) => {
+    const key = getUserStorageKey('local_projects');
+    const all: any[] = JSON.parse(localStorage.getItem(key) || '[]');
+    const idx = all.findIndex(p => p.id === projectId);
+    if (idx !== -1) { all[idx] = { ...all[idx], stage_suggestion: null }; localStorage.setItem(key, JSON.stringify(all)); syncProjectToSupabase(all[idx]); }
+    setProjects(prev => prev.map(p => p.id === projectId ? { ...p, stage_suggestion: null } : p));
+  };
 
   // ── plan guards ────────────────────────────────────────────────────────────
   const atProjectLimit =
@@ -419,50 +388,72 @@ const Dashboard = () => {
       <div className="container mx-auto px-4 md:px-6 py-4 md:py-8 space-y-6">
 
         {/* Hero row */}
-        <div className="flex items-start justify-between">
+        <div className="flex flex-wrap items-end justify-between gap-3">
           <div>
             <h1 className="font-display text-2xl sm:text-3xl font-bold">Welcome back{firstName ? `, ${firstName}` : ''}</h1>
             <p className="text-muted-foreground mt-1">
-              {projects.length} project{projects.length !== 1 ? 's' : ''} · {fmtCurrency(pipelineValue)} in pipeline
+              {projects.length} job{projects.length !== 1 ? 's' : ''}{dash.attention.length ? ` · ${dash.attention.length} need${dash.attention.length === 1 ? 's' : ''} your attention` : ''}
             </p>
           </div>
         </div>
 
         <SiteVisitsInbox />
 
-        {/* Stats row */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        {/* The numbers that matter */}
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4">
           {isLoading
             ? [...Array(4)].map((_, i) => (
-                <Card key={i} className="p-3 sm:p-5 bg-background space-y-3">
-                  <div className="flex items-center justify-between">
-                    <Skeleton className="h-3 w-28" />
-                    <Skeleton className="h-4 w-4 rounded" />
-                  </div>
-                  <Skeleton className="h-7 w-20" />
-                  <Skeleton className="h-3 w-32" />
-                </Card>
+                <Card key={i} className="p-4 sm:p-5 space-y-3"><Skeleton className="h-3 w-28" /><Skeleton className="h-7 w-20" /><Skeleton className="h-3 w-32" /></Card>
               ))
             : [
-                { label: 'Active Projects', value: String(projects.filter(p => p.quoteStatus !== 'won' && p.quoteStatus !== 'lost').length), sub: 'in progress',                                                                          icon: <FileText className="h-4 w-4" />,   accent: 'text-primary' },
-                { label: 'Pipeline Value',  value: fmtCurrency(pipelineValue),            sub: 'across all estimates',                                                                        icon: <DollarSign className="h-4 w-4" />, accent: 'text-[#E1DCC9]/80' },
-                { label: 'Target Margin',   value: targetMargin ? `${targetMargin}%` : '—', sub: 'set in Settings',                                                                          icon: <TrendingUp className="h-4 w-4" />, accent: 'text-amber-400' },
-                { label: 'Win Rate',        value: winRate !== null ? `${winRate}%` : '—', sub: winRate !== null ? `${wonProjects.length} won · ${lostProjects.length} lost` : 'mark quotes as Won/Lost', icon: <BarChart3 className="h-4 w-4" />,  accent: 'text-[#E1DCC9]/80' },
-              ].map(({ label, value, sub, icon, accent }) => (
-                <Card key={label} className="p-3 sm:p-5 bg-background">
-                  <div className="flex items-center justify-between mb-3">
-                    <span className="text-xs text-muted-foreground font-medium uppercase tracking-wide">{label}</span>
-                    <span className={accent}>{icon}</span>
-                  </div>
-                  <div className="font-mono text-xl sm:text-2xl font-bold">{value}</div>
-                  <div className="text-xs text-muted-foreground mt-1">{sub}</div>
+                { label: 'Quotes out', value: fmtCurrency(dash.quotesOut.value), sub: `${dash.quotesOut.count} with clients`, stage: 'quote_sent' as ProjectStage },
+                { label: 'Won this month', value: fmtCurrency(dash.wonThisMonth.value), sub: `${dash.wonThisMonth.count} job${dash.wonThisMonth.count !== 1 ? 's' : ''}`, stage: 'won' as ProjectStage },
+                { label: 'Owing to you', value: fmtCurrency(dash.owing.amount), sub: dash.owing.overdue > 0.004 ? `${fmtCurrency(dash.owing.overdue)} overdue` : 'nothing overdue', warn: dash.owing.overdue > 0.004 },
+                { label: 'In progress', value: String(dash.inProgress.count), sub: `${fmtCurrency(dash.inProgress.value)} of work`, stage: 'in_progress' as ProjectStage },
+              ].map(c => (
+                <Card key={c.label} className={`p-4 sm:p-5 ${c.stage ? 'cursor-pointer hover:border-primary/40 transition-colors' : ''}`}
+                  onClick={() => c.stage && setStageFilter(stageFilter === c.stage ? null : c.stage)}>
+                  <div className="text-xs font-medium uppercase tracking-wide text-muted-foreground">{c.label}</div>
+                  <div className="mt-2 font-mono text-xl sm:text-2xl font-bold">{c.value}</div>
+                  <div className={`mt-1 text-xs ${c.warn ? 'text-red-600 dark:text-red-400' : 'text-muted-foreground'}`}>{c.sub}</div>
                 </Card>
-              ))
-          }
+              ))}
         </div>
 
-        {/* Onboarding checklist — localStorage only, safe if unavailable */}
-        {(() => { try { return <OnboardingChecklist />; } catch { return null; } })()}
+        {/* Needs attention: one click to the right screen */}
+        {!isLoading && dash.attention.length > 0 && (
+          <Card>
+            <div className="border-b border-border px-4 md:px-6 py-3">
+              <h2 className="font-display text-lg font-bold">Needs attention</h2>
+            </div>
+            <div className="divide-y divide-border">
+              {dash.attention.slice(0, showAllAttention ? undefined : 6).map((a, i) => (
+                <div key={`${a.projectId}-${a.kind}-${i}`} className="flex flex-wrap items-center gap-x-3 gap-y-2 px-4 md:px-6 py-2.5 text-sm">
+                  <span className={`h-2 w-2 shrink-0 rounded-full ${a.kind === 'overdue' ? 'bg-red-500' : a.kind === 'suggestion' ? 'bg-emerald-500' : 'bg-amber-500'}`} />
+                  <span className="font-medium">{a.projectName}</span>
+                  <span className="text-muted-foreground">{a.text}</span>
+                  <span className="ml-auto flex gap-2">
+                    {a.suggestion ? (
+                      <>
+                        <Button size="sm" className="h-7" onClick={() => changeStage(a.projectId, a.suggestion!)}>Move to {STAGE_LABEL[a.suggestion]}</Button>
+                        <Button size="sm" variant="ghost" className="h-7" onClick={() => dismissSuggestion(a.projectId)}>Not yet</Button>
+                      </>
+                    ) : (
+                      <Button size="sm" variant="outline" className="h-7" onClick={() => navigate(`/project/${a.projectId}${a.tab ? `?tab=${a.tab}` : ''}`)}>Open</Button>
+                    )}
+                  </span>
+                </div>
+              ))}
+            </div>
+            {dash.attention.length > 6 && (
+              <button className="w-full border-t border-border py-2 text-xs text-muted-foreground hover:text-foreground" onClick={() => setShowAllAttention(v => !v)}>
+                {showAllAttention ? 'Show less' : `Show all ${dash.attention.length}`}
+              </button>
+            )}
+          </Card>
+        )}
+
+        {(() => { try { return <OnboardingChecklist projects={projects} />; } catch { return null; } })()}
 
         {/* Load error banner */}
         {loadError && (
@@ -478,287 +469,124 @@ const Dashboard = () => {
           </div>
         )}
 
-        {/* Pipeline funnel — only shown when there are projects to display */}
-        {projects.length > 0 && <Card className="p-4 sm:p-5 bg-background">
-          <p className="text-xs text-muted-foreground font-medium uppercase tracking-wide mb-3 sm:mb-4">Project Pipeline</p>
-          {/* Mobile: 2×2 grid */}
-          <div className="grid grid-cols-2 gap-2 sm:hidden">
-            {stages.map((stage) => {
-              const cfg = STAGE_CONFIG[stage];
-              const count = stageCounts[stage];
-              const isActive = stageFilter === stage;
-              return (
-                <button
-                  key={stage}
-                  onClick={() => setStageFilter(isActive ? null : stage)}
-                  className={`rounded-lg border px-3 py-3 text-left transition-all ${cfg.bg} ${
-                    isActive ? 'ring-2 ring-current shadow-sm' : 'hover:opacity-80'
-                  }`}
-                >
-                  <div className={`text-xl font-mono font-bold ${cfg.color}`}>{count}</div>
-                  <div className={`text-xs font-medium mt-0.5 ${cfg.color}`}>{stage}</div>
-                </button>
-              );
-            })}
-          </div>
-          {/* sm+: horizontal flex with arrows */}
-          <div className="hidden sm:flex items-stretch gap-0">
-            {stages.map((stage, i) => {
-              const cfg = STAGE_CONFIG[stage];
-              const count = stageCounts[stage];
-              const isActive = stageFilter === stage;
-              return (
-                <div key={stage} className="flex items-center flex-1">
-                  <button
-                    onClick={() => setStageFilter(isActive ? null : stage)}
-                    className={`flex-1 rounded-lg border px-4 py-3 text-left transition-all ${cfg.bg} ${
-                      isActive ? 'ring-2 ring-current shadow-sm' : 'hover:opacity-80'
-                    }`}
-                    title={isActive ? `Clear filter: ${stage}` : `Filter by ${stage}`}
-                  >
-                    <div className={`text-2xl font-mono font-bold ${cfg.color}`}>{count}</div>
-                    <div className={`text-xs font-medium mt-0.5 ${cfg.color}`}>{stage}</div>
-                  </button>
-                  {i < stages.length - 1 && (
-                    <ArrowRight className="h-4 w-4 text-muted-foreground/40 mx-2 shrink-0" />
-                  )}
-                </div>
-              );
-            })}
-          </div>
-        </Card>}
-
-        {/* Recent Projects */}
-        <Card className="bg-background">
-          <div className="flex items-center justify-between px-4 md:px-6 py-4 border-b border-border">
-            <div className="flex items-center gap-2">
-              <h2 className="font-display text-lg font-bold">Recent Projects</h2>
-              {stageFilter && (
-                <button
-                  onClick={() => setStageFilter(null)}
-                  className={`inline-flex items-center gap-1 text-xs font-medium px-2 py-0.5 rounded-full border ${STAGE_CONFIG[stageFilter].bg} ${STAGE_CONFIG[stageFilter].color}`}
-                >
-                  {stageFilter}
-                  <X className="h-3 w-3" />
-                </button>
-              )}
+        {/* Pipeline: every stage, its jobs and their value; click to show those jobs */}
+        {projects.length > 0 && (
+          <Card className="p-3 sm:p-4">
+            <div className="mb-2 flex items-center justify-between">
+              <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Pipeline</p>
+              {stageFilter && <button className="text-xs text-muted-foreground hover:text-foreground" onClick={() => setStageFilter(null)}>Show all jobs</button>}
             </div>
-            {filteredProjects.length > 8 && (
-              <Button variant="ghost" size="sm" onClick={() => setShowAll(v => !v)}>
-                {showAll ? 'Show less' : `Show all ${filteredProjects.length}`}
-              </Button>
+            <div className="flex gap-2 overflow-x-auto pb-1">
+              {dash.pipeline.map(col => {
+                const active = stageFilter === col.stage;
+                return (
+                  <button key={col.stage} type="button" onClick={() => setStageFilter(active ? null : col.stage)}
+                    className={`min-w-[118px] flex-1 rounded-lg border px-3 py-2.5 text-left transition-colors ${STAGE_STYLE[col.stage]} ${active ? 'ring-2 ring-primary' : 'hover:opacity-80'} ${col.count === 0 && !active ? 'opacity-50' : ''}`}>
+                    <div className="font-mono text-xl font-bold">{col.count}</div>
+                    <div className="text-xs font-medium">{col.label}</div>
+                    <div className="mt-0.5 font-mono text-[11px] opacity-80">{col.value > 0 ? fmtCurrency(col.value) : ''}</div>
+                  </button>
+                );
+              })}
+            </div>
+          </Card>
+        )}
+
+        {/* Jobs */}
+        <Card>
+          <div className="flex flex-wrap items-center gap-3 px-4 md:px-6 py-3 border-b border-border">
+            <h2 className="font-display text-lg font-bold">{stageFilter ? STAGE_LABEL[stageFilter] : 'Jobs'}</h2>
+            {stageFilter && (
+              <button onClick={() => setStageFilter(null)} className="inline-flex items-center gap-1 rounded-full border border-border px-2 py-0.5 text-xs text-muted-foreground hover:text-foreground">
+                Clear <X className="h-3 w-3" />
+              </button>
             )}
+            <div className="ml-auto flex flex-wrap items-center gap-2">
+              <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search jobs, clients, addresses"
+                className="h-8 w-56 rounded-md border border-input bg-background px-2.5 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-primary" />
+              <select value={sortBy} onChange={e => setSortBy(e.target.value as typeof sortBy)}
+                className="h-8 rounded-md border border-input bg-background px-2 text-sm">
+                <option value="changed">Last changed</option>
+                <option value="value">Value</option>
+                <option value="name">Name</option>
+                <option value="stage">Stage</option>
+              </select>
+            </div>
           </div>
 
           {isLoading ? (
             <div className="divide-y divide-border">
               {[...Array(5)].map((_, i) => (
-                <div key={i}>
-                  {/* Desktop skeleton row */}
-                  <div className="hidden md:grid grid-cols-[2fr_1fr_1fr_1fr_1fr_1fr_auto] gap-4 px-6 py-4 items-center">
-                    <div className="space-y-2">
-                      <Skeleton className="h-4 w-44" />
-                      <div className="flex items-center gap-1">
-                        {[...Array(4)].map((_, j) => <Skeleton key={j} className="h-2 w-2 rounded-full" />)}
-                        <Skeleton className="h-3 w-16 ml-1" />
-                      </div>
-                    </div>
-                    <Skeleton className="h-3 w-20" />
-                    <Skeleton className="h-5 w-20 rounded-full" />
-                    <div />
-                    <Skeleton className="h-4 w-16" />
-                    <Skeleton className="h-3 w-14" />
-                    <Skeleton className="h-7 w-7 rounded" />
-                  </div>
-                  {/* Mobile skeleton row */}
-                  <div className="md:hidden px-4 py-3.5 flex items-start gap-3">
-                    <div className="flex-1 space-y-2">
-                      <Skeleton className="h-4 w-36" />
-                      <div className="flex gap-2">
-                        <Skeleton className="h-5 w-16 rounded-full" />
-                      </div>
-                    </div>
-                    <Skeleton className="h-4 w-4 mt-1 rounded" />
-                  </div>
-                </div>
+                <div key={i} className="flex items-center gap-4 px-4 md:px-6 py-4"><Skeleton className="h-4 w-44" /><Skeleton className="h-5 w-20 rounded-full" /><Skeleton className="ml-auto h-4 w-16" /></div>
               ))}
             </div>
           ) : projects.length === 0 ? (
             <div className="text-center py-16 px-4 md:px-6">
-              <div className="w-16 h-16 bg-primary/10 rounded-2xl flex items-center justify-center mx-auto mb-4">
-                <FileText className="h-8 w-8 text-primary" />
-              </div>
-              <h3 className="font-semibold text-lg mb-2">No projects yet</h3>
-              <p className="text-muted-foreground text-sm mb-6">Upload a PDF plan or create a quick manual estimate to get started</p>
-              <Button onClick={handleNewProject} className="bg-primary text-primary-foreground">
-                <Plus className="h-4 w-4 mr-2" />Create First Project
-              </Button>
+              <h3 className="font-semibold text-lg mb-2">No jobs yet</h3>
+              <p className="text-muted-foreground text-sm mb-6">Upload a plan or start a quick estimate to get going</p>
+              <Button onClick={handleNewProject}><Plus className="h-4 w-4 mr-2" />New project</Button>
             </div>
+          ) : filteredProjects.length === 0 ? (
+            <p className="px-6 py-10 text-center text-sm text-muted-foreground">No jobs match{search ? ` "${search}"` : ''}{stageFilter ? ` in ${STAGE_LABEL[stageFilter]}` : ''}.</p>
           ) : (
             <>
-              {/* Table — desktop only, with horizontal scroll for narrow viewports */}
-              <div className="hidden md:block overflow-x-auto">
-              <div className="grid grid-cols-[2fr_1fr_1fr_1fr_1fr_1fr_auto] gap-4 px-4 md:px-6 py-2 text-xs font-medium text-muted-foreground uppercase tracking-wide border-b border-border min-w-[640px]">
-                <span>Project</span>
-                <span>Client</span>
-                <span>Stage</span>
-                <span>Status</span>
-                <span>Value</span>
-                <span>Modified</span>
-                <span></span>
+              <div className="hidden md:grid grid-cols-[2.2fr_1.2fr_1fr_0.9fr_1.3fr_0.7fr_auto] gap-4 px-6 py-2 text-xs font-medium text-muted-foreground uppercase tracking-wide border-b border-border">
+                <span>Job</span><span>Client</span><span>Stage</span><span>Value</span><span>Next step</span><span>Changed</span><span />
               </div>
-              <div className="divide-y divide-border min-w-[640px]">
+              <div className="divide-y divide-border">
                 {displayProjects.map((project) => {
-                  const stage = getStage(project);
-                  const cfg = STAGE_CONFIG[stage];
-                  const value = getProjectValue(project);
-                  const qs = (project.quoteStatus || 'draft') as QuoteStatus;
-                  const qcfg = QUOTE_STATUS_CONFIG[qs];
-                  const completion = getProjectCompletion(project);
-                  const allDone = completion.score === completion.total;
-                  // invoicing: what comes next for this job, and its last invoice in Xero
-                  const claimRecs: any[] = (project as any).progress_claims ?? [];
-                  const lastXero = [...claimRecs].reverse().find(c => c.xero)?.xero;
-                  const cash = lastXero ? jobMoney(0, claimRecs) : null;
-                  const cashNote = !cash ? null
-                    : cash.owingIncGst > 0.004 ? { text: `${fmtCurrency(cash.owingIncGst)} owing`, late: cash.overdueIncGst > 0.004 }
-                    : cash.paidIncGst > 0.004 ? { text: 'Paid up', late: false }
-                    : { text: lastXero.number ? `${lastXero.number} in Xero` : 'In Xero', late: false };
-                  const invoiceLabel = !(project as any).approved_quote ? 'Invoice'
-                    : claimRecs.length === 0 ? 'Invoice deposit' : 'Next claim';
-                  const openInvoicing = (e: React.MouseEvent) => { e.stopPropagation(); navigate(`/project/${project.id}?tab=progressclaim`); };
+                  const stage = stageOf(project);
+                  const value = jobValue(project, getProjectValue);
+                  const step = nextStep(project, fixesFor(project));
+                  const open = (e: React.MouseEvent) => { e.stopPropagation(); navigate(`/project/${project.id}${step.tab ? `?tab=${step.tab}` : ''}`); };
+                  const stepBtn = step.label ? (
+                    <Button size="sm" variant={step.tone === 'warn' ? 'default' : 'outline'} disabled={step.tone === 'done'}
+                      className={`h-7 px-2.5 text-xs ${step.tone === 'warn' ? 'bg-amber-500 text-black hover:bg-amber-400' : ''}`} onClick={open}>
+                      {step.label}
+                    </Button>
+                  ) : <span className="text-xs text-muted-foreground">No further step</span>;
                   return (
-                    <div
-                      key={project.id}
-                      className="hover:bg-muted/30 cursor-pointer transition-colors group"
-                      onClick={() => navigate(`/project/${project.id}`)}
-                    >
-                      {/* Mobile card layout */}
-                      <div className="md:hidden px-4 py-3.5">
+                    <div key={project.id} className="group cursor-pointer transition-colors hover:bg-muted/40" onClick={() => navigate(`/project/${project.id}`)}>
+                      {/* phone: a card */}
+                      <div className="md:hidden px-4 py-3.5 space-y-2">
                         <div className="flex items-start justify-between gap-3">
-                          <div className="flex-1 min-w-0">
-                            <div className="font-medium text-sm group-hover:text-primary transition-colors truncate">{project.name}</div>
-                            <div className="flex items-center gap-2 mt-1 flex-wrap">
-                              {project.client_name && (
-                                <span className="text-xs text-muted-foreground flex items-center gap-1">
-                                  <User className="h-3 w-3 shrink-0" />{project.client_name}
-                                </span>
-                              )}
-                              <span className={`inline-flex items-center gap-1 text-xs font-medium px-2 py-0.5 rounded-full border ${cfg.bg} ${cfg.color}`}>
-                                <span className={`w-1.5 h-1.5 rounded-full ${cfg.dot}`} />{stage}
-                              </span>
-                              {qs !== 'draft' && (
-                                <span className={`inline-flex items-center gap-1 text-xs font-medium px-2 py-0.5 rounded-full border ${qcfg.bg} ${qcfg.color}`}>
-                                  {qcfg.icon}{qcfg.label}
-                                </span>
-                              )}
-                            </div>
-                            <div className="flex items-center gap-3 mt-1.5">
-                              <div className="flex items-center gap-1">
-                                {completion.steps.map((step, i) => (
-                                  <div key={step.key} title={step.label} className={`w-2 h-2 rounded-full transition-colors ${step.done ? i === completion.score - 1 && !allDone ? 'bg-amber-400' : allDone ? 'bg-muted/100' : 'bg-primary/60' : 'bg-muted-foreground/20'}`} />
-                                ))}
-                              </div>
-                              {value > 0 && <span className="font-mono text-sm font-semibold text-primary">{fmtCurrency(value)}</span>}
-                            </div>
+                          <div className="min-w-0">
+                            <div className="truncate font-medium">{project.name}</div>
+                            <div className="truncate text-xs text-muted-foreground">{[project.client_name, project.site_address].filter(Boolean).join(' · ') || 'No client yet'}</div>
                           </div>
-                          <div className="flex flex-col items-end gap-2 shrink-0">
-                            <ChevronRight className="h-4 w-4 text-muted-foreground" />
-                            <Button size="sm" variant="outline" className="h-7 px-2 text-xs" onClick={openInvoicing}>{invoiceLabel}</Button>
-                            {cashNote && <span className={`text-[11px] ${cashNote.late ? 'text-red-400' : 'text-[#D4A045]'}`}>{cashNote.text}</span>}
-                            <Button
-                              size="sm"
-                              variant="ghost"
-                              className="h-7 w-7 p-0 text-destructive hover:text-destructive hover:bg-destructive/10"
-                              onClick={e => handleDeleteProject(e, project.id)}
-                            >
-                              <Trash2 className="h-3.5 w-3.5" />
-                            </Button>
-                          </div>
+                          {value > 0 && <span className="shrink-0 font-mono text-sm font-semibold">{fmtCurrency(value)}</span>}
+                        </div>
+                        <div className="flex items-center justify-between gap-2">
+                          <StagePicker stage={stage} onChange={s => changeStage(project.id, s)} />
+                          {stepBtn}
                         </div>
                       </div>
-
-                      {/* Desktop table row */}
-                      <div className="hidden md:grid grid-cols-[2fr_1fr_1fr_1fr_1fr_1fr_auto] gap-4 px-6 py-3.5 items-center">
-                        <div>
-                          <div className="font-medium text-sm group-hover:text-primary transition-colors">{project.name}</div>
-                          <div className="flex items-center gap-1 mt-1.5">
-                            {completion.steps.map((step, i) => (
-                              <div
-                                key={step.key}
-                                title={step.label}
-                                className={`w-2 h-2 rounded-full transition-colors ${
-                                  step.done
-                                    ? i === completion.score - 1 && !allDone
-                                      ? 'bg-amber-400'
-                                      : allDone
-                                      ? 'bg-muted/100'
-                                      : 'bg-primary/60'
-                                    : 'bg-muted-foreground/20'
-                                }`}
-                              />
-                            ))}
-                            <span className={`text-xs ml-1 ${allDone ? 'text-[#E1DCC9]/80' : 'text-muted-foreground/60'}`}>
-                              {allDone ? '✓ Complete' : <span>→ {completion.nextAction}</span>}
-                            </span>
-                          </div>
+                      {/* computer: a row */}
+                      <div className="hidden md:grid grid-cols-[2.2fr_1.2fr_1fr_0.9fr_1.3fr_0.7fr_auto] gap-4 px-6 py-3 items-center">
+                        <div className="min-w-0">
+                          <div className="truncate font-medium text-sm group-hover:text-primary transition-colors">{project.name}</div>
+                          {project.site_address && <div className="truncate text-xs text-muted-foreground">{project.site_address}</div>}
                         </div>
-                        <div className="flex items-center gap-1.5 text-sm text-muted-foreground">
-                          <User className="h-3 w-3 shrink-0" />
-                          <span className="truncate">{project.client_name || '—'}</span>
-                        </div>
-                        <div>
-                          <span className={`inline-flex items-center gap-1.5 text-xs font-medium px-2 py-1 rounded-full border ${cfg.bg} ${cfg.color}`}>
-                            <span className={`w-1.5 h-1.5 rounded-full ${cfg.dot}`} />
-                            {stage}
-                          </span>
-                        </div>
-                        <div>
-                          {qs !== 'draft' && (
-                            <span className={`inline-flex items-center gap-1 text-xs font-medium px-2 py-1 rounded-full border ${qcfg.bg} ${qcfg.color}`}>
-                              {qcfg.icon}
-                              {qcfg.label}
-                            </span>
-                          )}
-                        </div>
-                        <div className="font-mono text-sm font-medium">
-                          {value > 0 ? fmtCurrency(value) : <span className="text-muted-foreground">—</span>}
-                        </div>
-                        <div className="flex items-center gap-1 text-xs text-muted-foreground">
-                          <Clock className="h-3 w-3" />
-                          {fmtDate(project.updated_at || project.created_at)}
-                        </div>
-                        <div className="flex items-center gap-1">
-                          <span className="flex flex-col items-end">
-                            <Button size="sm" variant="outline" className="h-7 px-2 text-xs" onClick={openInvoicing}
-                              title="Deposit, progress claims and variations, sent to Xero as draft invoices">
-                              {invoiceLabel}
-                            </Button>
-                            {cashNote && <span className={`text-[11px] ${cashNote.late ? 'text-red-400' : 'text-[#D4A045]'}`} title={cashNote.late ? 'Part of this is overdue' : undefined}>{cashNote.text}</span>}
-                          </span>
-                          <Button
-                            size="sm"
-                            variant="ghost"
-                            className="h-7 w-7 p-0 opacity-0 group-hover:opacity-100 transition-opacity"
-                            onClick={e => { e.stopPropagation(); navigate(`/project/${project.id}`); }}
-                          >
-                            <ExternalLink className="h-3.5 w-3.5" />
-                          </Button>
-                          <Button
-                            size="sm"
-                            variant="ghost"
-                            className="h-7 w-7 p-0 text-destructive hover:text-destructive hover:bg-destructive/10 opacity-0 group-hover:opacity-100 transition-opacity"
-                            onClick={e => handleDeleteProject(e, project.id)}
-                          >
-                            <Trash2 className="h-3.5 w-3.5" />
-                          </Button>
-                        </div>
+                        <div className="truncate text-sm text-muted-foreground">{project.client_name || '—'}</div>
+                        <div><StagePicker stage={stage} onChange={s => changeStage(project.id, s)} /></div>
+                        <div className="font-mono text-sm font-medium">{value > 0 ? fmtCurrency(value) : <span className="text-muted-foreground">—</span>}</div>
+                        <div>{stepBtn}</div>
+                        <div className="text-xs text-muted-foreground">{fmtDate(project.updated_at || project.created_at)}</div>
+                        <Button size="sm" variant="ghost" title="Delete job"
+                          className="h-7 w-7 p-0 text-destructive opacity-0 transition-opacity hover:bg-destructive/10 hover:text-destructive group-hover:opacity-100"
+                          onClick={e => handleDeleteProject(e, project.id)}>
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </Button>
                       </div>
                     </div>
                   );
                 })}
               </div>
-              </div>
+              {filteredProjects.length > 10 && (
+                <button className="w-full border-t border-border py-2.5 text-sm text-muted-foreground hover:text-foreground" onClick={() => setShowAll(v => !v)}>
+                  {showAll ? 'Show fewer' : `Show all ${filteredProjects.length} jobs`}
+                </button>
+              )}
             </>
           )}
         </Card>

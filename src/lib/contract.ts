@@ -132,7 +132,11 @@ export function approveQuoteVersion(
     lines,
     paymentSchedule,
   };
-  patchProject(projectId, { approved_quote: approved, quoteStatus: 'won' });
+  // the stage is the builder's to move: offer Won on the dashboard rather than moving the job
+  patchProject(projectId, {
+    approved_quote: approved, quoteStatus: 'won',
+    stage_suggestion: { stage: 'won', reason: `Quote ${version.quoteNumber} approved${approvedBy ? ` by ${approvedBy}` : ''}`, at: approved.approvedAt },
+  });
   return approved;
 }
 
@@ -316,6 +320,7 @@ export async function createQuoteShare(
       ? 'Client approval links are not set up on the database yet'
       : error.message);
   }
+  patchProject(projectId, { stage_suggestion: { stage: 'quote_sent', reason: `Approval link for quote ${version.quoteNumber} created`, at: new Date().toISOString() } });
   return data.token as string;
 }
 

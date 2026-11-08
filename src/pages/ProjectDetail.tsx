@@ -5,6 +5,7 @@ import { downloadEstimateBOQ } from "@/lib/estimate/exports";
 import { estimateLinesAsCostItems } from "@/lib/estimate/fromCostItem";
 import { SOWGeneratorDialog } from "@/components/takeoff/SOWGeneratorDialog";
 import { SupplierQuoteDialog } from "@/components/SupplierQuoteDialog";
+import { STAGES, STAGE_LABEL, stageOf, stagePatch, type ProjectStage } from "@/lib/projectStage";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import type { ReactNode } from "react";
 
@@ -392,18 +393,18 @@ const ProjectDetail = () => {
     toast.success("Due date updated");
   };
 
-  const handleQuoteStatusChange = (status: string) => {
+  const handleStageChange = (stage: ProjectStage) => {
     if (!projectId) return;
     const projects = JSON.parse(localStorage.getItem(getUserStorageKey('local_projects')) || "[]");
     const idx = projects.findIndex((p: any) => p.id === projectId);
     if (idx !== -1) {
-      projects[idx].quoteStatus = status;
-      projects[idx].updated_at = new Date().toISOString();
+      const patch = stagePatch(stage);
+      projects[idx] = { ...projects[idx], ...patch, updated_at: new Date().toISOString() };
       localStorage.setItem(getUserStorageKey('local_projects'), JSON.stringify(projects));
-      setProject((prev: any) => ({ ...prev, quoteStatus: status }));
+      setProject((prev: any) => ({ ...prev, ...patch }));
       syncWithTracking(projects[idx]);
     }
-    toast.success(`Status updated to ${status}`);
+    toast.success(`Moved to ${STAGE_LABEL[stage]}`);
   };
 
   const sendReminder = () => {
@@ -597,21 +598,13 @@ const ProjectDetail = () => {
                   );
                 })()}
               </div>
-                <TourTip text="Track the quote status: Draft (in progress), Sent (submitted to client), Won or Lost. This feeds your win rate on the dashboard." position="bottom">
-                  <Select value={project.quoteStatus || "draft"} onValueChange={handleQuoteStatusChange}>
-                    <SelectTrigger className={`h-7 w-auto text-xs px-2.5 border rounded-full ${
-                      project.quoteStatus === "won" ? "border-[#E1DCC9]/20 bg-muted/100/10 text-[#E1DCC9]/80" :
-                      project.quoteStatus === "lost" ? "border-red-400/50 bg-red-500/10 text-red-400" :
-                      project.quoteStatus === "sent" ? "border-border/35 bg-muted/20 text-muted-foreground" :
-                      "border-border bg-muted text-muted-foreground"
-                    }`}>
+                <TourTip text="Where this job is. You choose it: the dashboard groups jobs by stage." position="bottom">
+                  <Select value={stageOf(project)} onValueChange={(v) => handleStageChange(v as ProjectStage)}>
+                    <SelectTrigger className="h-7 w-auto text-xs px-2.5 border rounded-full border-border bg-muted text-foreground">
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="draft">Draft</SelectItem>
-                      <SelectItem value="sent">Sent</SelectItem>
-                      <SelectItem value="won">Won</SelectItem>
-                      <SelectItem value="lost">Lost</SelectItem>
+                      {STAGES.map(s => <SelectItem key={s.key} value={s.key}>{s.label}</SelectItem>)}
                     </SelectContent>
                   </Select>
                 </TourTip>

@@ -38,8 +38,24 @@ function isDismissed(): boolean {
   }
 }
 
-export default function OnboardingChecklist() {
-  const [stepsDone, setStepsDone] = useState<Record<string, boolean>>(readStepState);
+/** Steps the builder has clearly done already, read from their jobs */
+function doneFromProjects(projects: any[]): Record<string, boolean> {
+  const has = (key: (id: string) => string, test: (v: any) => boolean) => projects.some(p => {
+    try { const raw = localStorage.getItem(key(p.id)); return !!raw && test(JSON.parse(raw)); } catch { return false; }
+  });
+  return {
+    uploaded: projects.some(p => p.plan_file_name || p.plan_file_url),
+    calibrated: has(id => `takeoff_${id}`, t => !!(t?.scale || t?.pageScales && Object.keys(t.pageScales).length)),
+    measured: has(id => `takeoff_${id}`, t => (t?.measurements ?? []).length > 0),
+    ai: projects.some(p => { try { return !!localStorage.getItem(`planAnalysis_${p.id}`); } catch { return false; } }),
+    exported: false,
+  };
+}
+
+export default function OnboardingChecklist({ projects = [] }: { projects?: any[] }) {
+  const [flags, setStepsDone] = useState<Record<string, boolean>>(readStepState);
+  const fromJobs = doneFromProjects(projects);
+  const stepsDone = Object.fromEntries(STEPS.map(s => [s.key, flags[s.key] || fromJobs[s.key]]));
   const [dismissed, setDismissed] = useState<boolean>(isDismissed);
 
   const refresh = useCallback(() => {
@@ -55,7 +71,9 @@ export default function OnboardingChecklist() {
   const doneCount = STEPS.filter(s => stepsDone[s.key]).length;
   const allDone = doneCount === STEPS.length;
 
-  if (dismissed || allDone) return null;
+  // someone already running jobs through Metricore doesn't need a getting started list
+  const established = projects.filter(p => (p.estimate_items ?? []).length > 0).length >= 3;
+  if (dismissed || allDone || established) return null;
 
   const handleDismiss = () => {
     try {
