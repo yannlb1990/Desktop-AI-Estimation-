@@ -102,10 +102,28 @@ function computeSnapPoint(
  * Fabric's getElementOffset which adds scrollLeft (document-relative) while
  * clientX/clientY are viewport-relative — causing drift when the page scrolls.
  */
-function getCSSPointer(canvas: any, e: { clientX: number; clientY: number }): { x: number; y: number } {
+function getCSSPointer(canvas: any, e: any): { x: number; y: number } {
   const rect = (canvas.upperCanvasEl as HTMLCanvasElement).getBoundingClientRect();
-  return { x: e.clientX - rect.left, y: e.clientY - rect.top };
+  // pointer and mouse events carry clientX; a touch event keeps it on its touch point
+  const t = e?.changedTouches?.[0] ?? e?.touches?.[0];
+  const cx = typeof e?.clientX === 'number' ? e.clientX : t?.clientX ?? 0;
+  const cy = typeof e?.clientY === 'number' ? e.clientY : t?.clientY ?? 0;
+  return { x: cx - rect.left, y: cy - rect.top };
 }
+
+// ── iPad and Apple Pencil ──────────────────────────────────────────────────────
+/** A finger or pen device (iPad, tablet, touch screen) */
+const COARSE_POINTER = typeof window !== 'undefined' && !!window.matchMedia?.('(pointer: coarse)').matches;
+/** Resize and rotate handles big enough for a finger on touch screens */
+const HANDLE_SIZE = COARSE_POINTER ? 22 : 10;
+/** The last pointer used: snap and hit distances double for a pen or finger */
+let lastPointerType: string = 'mouse';
+const touchScale = () => (lastPointerType === 'mouse' ? 1 : 2);
+/** The on-screen 45° lock does what holding Shift does with a keyboard */
+const shiftLock = { on: false };
+const shiftHeld = (ev: any) => !!ev?.shiftKey || shiftLock.on;
+const PENCIL_KEY = 'metricore_pencil_only';
+const readPencilOnly = () => { try { return localStorage.getItem(PENCIL_KEY) === 'true'; } catch { return false; } };
 
 /** In-place update of a Fabric Line's world endpoints (no scale/skew accumulation). */
 function setFabricLineCoords(line: any, x1: number, y1: number, x2: number, y2: number) {
@@ -169,7 +187,7 @@ function makeWallHitRect(axisP1: WorldPoint, axisP2: WorldPoint, thicknessMm: nu
     hasControls: true, hasBorders: true,
     lockRotation: true, lockScalingY: true,
     cornerColor: '#2563eb', cornerStyle: 'circle' as const,
-    cornerSize: 10, transparentCorners: false, borderColor: '#2563eb',
+    cornerSize: HANDLE_SIZE, transparentCorners: false, borderColor: '#2563eb',
     borderScaleFactor: 2,
     selectable: false, evented: false,
   });
@@ -339,6 +357,14 @@ export const InteractiveCanvas = ({
   compareOverlay = null,
 }: InteractiveCanvasProps) => {
   const containerRef = useRef<HTMLDivElement>(null);
+  // iPad: the Pencil draws; fingers pan and pinch when "Pencil only" is on
+  const [pencilOnly, setPencilOnly] = useState<boolean>(readPencilOnly);
+  const pencilOnlyRef = useRef(pencilOnly);
+  pencilOnlyRef.current = pencilOnly;
+  const [angleLock, setAngleLock] = useState(false);
+  const [touchDevice, setTouchDevice] = useState(COARSE_POINTER);
+  const transformRef = useRef(transform);
+  transformRef.current = transform;
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const fabricCanvasRef = useRef<FabricCanvas | null>(null);
 
@@ -513,7 +539,9 @@ export const InteractiveCanvas = ({
       height: initialHeight,
       backgroundColor: '#f5f5f5',
       selection: false,
-    });
+      // pointer events: Apple Pencil and fingers arrive with their position and pointerType
+      enablePointerEvents: true,
+    } as any);
 
     fabricCanvasRef.current = canvas;
 
@@ -522,8 +550,8 @@ export const InteractiveCanvas = ({
       for (const entry of entries) {
         const { width, height } = entry.contentRect;
         if (fabricCanvasRef.current && width > 0 && height > 0) {
-          const newWidth = Math.max(width, 800);
-          const newHeight = Math.max(height, 600);
+          const newWidth = Math.max(width, COARSE_POINTER ? 320 : 800);
+          const newHeight = Math.max(height, COARSE_POINTER ? 320 : 600);
           fabricCanvasRef.current.setWidth(newWidth);
           fabricCanvasRef.current.setHeight(newHeight);
           fabricCanvasRef.current.requestRenderAll();
@@ -1216,7 +1244,7 @@ export const InteractiveCanvas = ({
           lockRotation: false,
           cornerColor: '#2563eb',
           cornerStyle: 'circle' as const,
-          cornerSize: 10,
+          cornerSize: HANDLE_SIZE,
           transparentCorners: false,
           borderColor: '#2563eb',
         });
@@ -2591,7 +2619,7 @@ export const InteractiveCanvas = ({
             lockRotation: !canTurn,
             cornerColor: '#2563eb',
             cornerStyle: 'circle',
-            cornerSize: 10,
+            cornerSize: HANDLE_SIZE,
             transparentCorners: false,
             borderColor: '#2563eb',
             borderScaleFactor: 2,
@@ -2972,7 +3000,7 @@ export const InteractiveCanvas = ({
       if (!target || !(target as any)._isWallPrimary) return;
       // Shift while sliding a wall: only straight out from it (square to the wall), never along
       const orig = e.transform?.original;
-      if (e.e?.shiftKey && orig && e.transform?.action === 'drag') {
+      if (shiftHeld(e.e) && orig && e.transform?.action === 'drag') {
         const a = ((target.angle ?? 0) * Math.PI) / 180;
         const nx = -Math.sin(a), ny = Math.cos(a);
         const dx = (target.left ?? 0) - orig.left, dy = (target.top ?? 0) - orig.top;
@@ -3083,7 +3111,7 @@ export const InteractiveCanvas = ({
     // Shift while turning: lock to 45° steps
     const snapTurn = (opt: any) => {
       const t = opt?.target;
-      if (!t || !opt?.e?.shiftKey) return;
+      if (!t || !shiftHeld(opt?.e)) return;
       const a = Math.round((t.angle ?? 0) / 45) * 45;
       if (a !== t.angle) { t.rotate(a); t.setCoords(); }
     };
@@ -3304,6 +3332,97 @@ export const InteractiveCanvas = ({
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [onDeleteMeasurement, onMeasurementUpdate]);
+
+  // ── Touch gestures (iPad) ────────────────────────────────────────────────
+  // Runs before Fabric sees the event (capture on the container). Two fingers pinch to zoom
+  // and move the plan; with "Pencil only" on, one finger moves the plan and only the Pencil
+  // draws, which also keeps a resting hand from placing points.
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!el) return;
+    const touches = new Map<number, { x: number; y: number }>();
+    let pinch: { dist: number; mid: { x: number; y: number }; zoom: number; panX: number; panY: number } | null = null;
+    let fingerPan: { id: number; x: number; y: number } | null = null;
+    const local = (e: PointerEvent) => { const r = el.getBoundingClientRect(); return { x: e.clientX - r.left, y: e.clientY - r.top }; };
+    const startPinch = () => {
+      const [a, b] = [...touches.values()];
+      const t = transformRef.current;
+      pinch = { dist: Math.hypot(a.x - b.x, a.y - b.y) || 1, mid: { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 }, zoom: t.zoom, panX: t.panX, panY: t.panY };
+    };
+    const down = (e: PointerEvent) => {
+      lastPointerType = e.pointerType || 'mouse';
+      if (e.pointerType === 'pen') {
+        setTouchDevice(true);
+        // the first time a Pencil is used, fingers stop drawing (palm rejection)
+        if (!pencilOnlyRef.current) { setPencilOnly(true); try { localStorage.setItem(PENCIL_KEY, 'true'); } catch { /* this device only */ } }
+        return;
+      }
+      if (e.pointerType !== 'touch') return;
+      setTouchDevice(true);
+      touches.set(e.pointerId, local(e));
+      if (touches.size >= 2) {
+        fingerPan = null;
+        startPinch();
+        e.stopPropagation(); e.preventDefault();
+        return;
+      }
+      if (pencilOnlyRef.current) {
+        fingerPan = { id: e.pointerId, ...local(e) };
+        e.stopPropagation(); e.preventDefault();
+      }
+    };
+    const move = (e: PointerEvent) => {
+      if (e.pointerType !== 'touch' || !touches.has(e.pointerId)) return;
+      touches.set(e.pointerId, local(e));
+      if (pinch && touches.size >= 2) {
+        const [a, b] = [...touches.values()];
+        const dist = Math.hypot(a.x - b.x, a.y - b.y) || 1;
+        const mid = { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
+        const zoom = Math.max(0.1, Math.min(5, pinch.zoom * (dist / pinch.dist)));
+        // keep the point between the fingers still while zooming, and follow the fingers
+        const wx = (pinch.mid.x - pinch.panX) / pinch.zoom;
+        const wy = (pinch.mid.y - pinch.panY) / pinch.zoom;
+        onTransformChange({ zoom, panX: mid.x - wx * zoom, panY: mid.y - wy * zoom });
+        e.stopPropagation(); e.preventDefault();
+        return;
+      }
+      if (fingerPan && fingerPan.id === e.pointerId) {
+        const p = local(e);
+        const t = transformRef.current;
+        onTransformChange({ panX: t.panX + (p.x - fingerPan.x), panY: t.panY + (p.y - fingerPan.y) });
+        fingerPan = { id: e.pointerId, ...p };
+        e.stopPropagation(); e.preventDefault();
+      }
+    };
+    const up = (e: PointerEvent) => {
+      if (e.pointerType !== 'touch') return;
+      const wasGesture = !!pinch || (fingerPan?.id === e.pointerId);
+      touches.delete(e.pointerId);
+      if (touches.size < 2) pinch = null;
+      if (fingerPan?.id === e.pointerId) fingerPan = null;
+      if (wasGesture) e.stopPropagation();
+    };
+    el.addEventListener('pointerdown', down, true);
+    el.addEventListener('pointermove', move, true);
+    el.addEventListener('pointerup', up, true);
+    el.addEventListener('pointercancel', up, true);
+    return () => {
+      el.removeEventListener('pointerdown', down, true);
+      el.removeEventListener('pointermove', move, true);
+      el.removeEventListener('pointerup', up, true);
+      el.removeEventListener('pointercancel', up, true);
+    };
+  }, [onTransformChange]);
+
+  // The on-screen 45° lock (iPad) acts like holding Shift
+  useEffect(() => { shiftLock.on = angleLock; return () => { shiftLock.on = false; }; }, [angleLock]);
+
+  /** Finish or cancel the drawing in progress, as Esc does with a keyboard */
+  const finishDrawing = () => {
+    const ev = new KeyboardEvent('keydown', { key: 'Escape', bubbles: true });
+    (ev as any).fromTouchBar = true;
+    window.dispatchEvent(ev);
+  };
 
   // Handle mouse wheel zoom
   useEffect(() => {
@@ -3543,7 +3662,7 @@ export const InteractiveCanvas = ({
       lockScalingY: true,
       cornerColor: '#2563eb',
       cornerStyle: 'circle',
-      cornerSize: 10,
+      cornerSize: HANDLE_SIZE,
       transparentCorners: false,
       borderColor: '#2563eb',
     });
@@ -3608,7 +3727,7 @@ export const InteractiveCanvas = ({
     // Snap click point to nearest endpoint or midpoint
     if (activeTool && activeTool !== 'pan' && activeTool !== 'select' && activeTool !== 'eraser') {
       const snapZoom = fabricCanvasRef.current?.getZoom() || 1;
-      const snapResult = computeSnapPoint(worldPoint, measurements, 12 / snapZoom);
+      const snapResult = computeSnapPoint(worldPoint, measurements, (12 * touchScale()) / snapZoom);
       if (snapResult) worldPoint = snapResult.point;
     }
     midpointSnapRef.current = null;
@@ -3631,7 +3750,7 @@ export const InteractiveCanvas = ({
     // Handle select mode — check arc control point hit before letting Fabric handle selection
     if (activeTool === 'select') {
       const snapZoom = fabricCanvasRef.current?.getZoom() || 1;
-      const hitThresh = 12 / snapZoom;
+      const hitThresh = (12 * touchScale()) / snapZoom;
       let arcHit: { id: string; p1: WorldPoint; p2: WorldPoint; ctrl: WorldPoint } | null = null;
       measurementMapRef.current.forEach((m, id) => {
         if (arcHit) return;
@@ -3650,7 +3769,7 @@ export const InteractiveCanvas = ({
       // World-space pointer — getCSSPointer gives viewport-relative CSS coords; viewToWorld converts to world coords
       const rawPtr = getCSSPointer(canvas, e.e);
       const worldPtr = viewToWorld(rawPtr, transform, viewport!);
-      const hitThreshold = 20 / transform.zoom; // 20 screen-px expressed in world units
+      const hitThreshold = (20 * touchScale()) / transform.zoom; // 20 screen-px (40 for a finger or pen) in world units
 
       // ── Count markers: check by world-space distance (reliable for small circles) ──
       let countHit: { marker: any; measurementId: string; markerIndex: number } | null = null;
@@ -3907,14 +4026,14 @@ export const InteractiveCanvas = ({
     // Handle polygon tool
     if (activeTool === 'polygon') {
       // Shift-snap: snap new vertex to 45° from the previous vertex
-      if (e.e.shiftKey && polygonPoints.length > 0) {
+      if (shiftHeld(e.e) && polygonPoints.length > 0) {
         worldPoint = snapEndpointToAngle(polygonPoints[polygonPoints.length - 1], worldPoint, 45);
       }
 
       // Snap-to-close: if we have ≥3 points and click near the first point, complete the polygon
       if (polygonPoints.length >= 3) {
         const first = polygonPoints[0];
-        const snapThresholdWorld = 15 / transform.zoom;
+        const snapThresholdWorld = (15 * touchScale()) / transform.zoom;
         const dx = worldPoint.x - first.x;
         const dy = worldPoint.y - first.y;
         if (Math.sqrt(dx * dx + dy * dy) < snapThresholdWorld) {
@@ -4039,7 +4158,7 @@ export const InteractiveCanvas = ({
     if (activeTool === 'polygon') {
       const snapPointer = getCSSPointer(canvas, e.e);
       let snapWorld: WorldPoint = viewToWorld({ x: snapPointer.x, y: snapPointer.y }, transform, viewport);
-      const snapThreshold = 15 / transform.zoom;
+      const snapThreshold = (15 * touchScale()) / transform.zoom;
 
       // Snap cursor to wall endpoints when near one
       let snappedToWall = false;
@@ -4104,7 +4223,7 @@ export const InteractiveCanvas = ({
 
     // Snap: endpoints (priority) then midpoints — 12 screen-px threshold
     const zoom = fabricCanvasRef.current?.getZoom() || 1;
-    const snapResult = computeSnapPoint(currentWorldPoint, measurements, 12 / zoom);
+    const snapResult = computeSnapPoint(currentWorldPoint, measurements, (12 * touchScale()) / zoom);
     if (snapResult) {
       currentWorldPoint = snapResult.point;
       midpointSnapRef.current = snapResult.isMidpoint ? snapResult.point : null;
@@ -4116,7 +4235,7 @@ export const InteractiveCanvas = ({
     }
 
     // Shift-snap: 45° for line, square for rectangle
-    if (e.e.shiftKey && startPoint) {
+    if (shiftHeld(e.e) && startPoint) {
       if (activeTool === 'line') currentWorldPoint = snapEndpointToAngle(startPoint, currentWorldPoint, 45);
       else if (activeTool === 'rectangle') currentWorldPoint = snapToSquare(startPoint, currentWorldPoint);
     }
@@ -4181,7 +4300,7 @@ export const InteractiveCanvas = ({
       });
     } else if (activeTool === 'wall-line') {
       let bestSnap: { snapped: WorldPoint; guideFrom: WorldPoint; guideTo: WorldPoint } | null = null;
-      if (e.e.shiftKey) {
+      if (shiftHeld(e.e)) {
         currentWorldPoint = snapEndpointToAngle(startPoint, currentWorldPoint, 45);
         snappedWallEndRef.current = null;
         perpSnapRef.current = null;
@@ -4408,7 +4527,7 @@ export const InteractiveCanvas = ({
     let worldEndPoint = viewToWorld({ x: pointer.x, y: pointer.y }, transform, viewport);
 
     // Shift-snap: commit the same snap applied during preview
-    if (e.e.shiftKey && startPoint) {
+    if (shiftHeld(e.e) && startPoint) {
       if (activeTool === 'line') worldEndPoint = snapEndpointToAngle(startPoint, worldEndPoint, 45);
       else if (activeTool === 'rectangle') worldEndPoint = snapToSquare(startPoint, worldEndPoint);
     }
@@ -4464,7 +4583,7 @@ export const InteractiveCanvas = ({
         lockRotation: true,
         cornerColor: '#2563eb',
         cornerStyle: 'circle',
-        cornerSize: 10,
+        cornerSize: HANDLE_SIZE,
         transparentCorners: false,
         borderColor: '#2563eb',
       });
@@ -4496,7 +4615,7 @@ export const InteractiveCanvas = ({
 
       onMeasurementComplete(measurement);
     } else if (activeTool === 'wall-line') {
-      if (e.e.shiftKey) worldEndPoint = snapEndpointToAngle(startPoint, worldEndPoint, 45);
+      if (shiftHeld(e.e)) worldEndPoint = snapEndpointToAngle(startPoint, worldEndPoint, 45);
       else if (snappedWallEndRef.current) worldEndPoint = snappedWallEndRef.current;
       snappedWallEndRef.current = null;
 
@@ -4582,7 +4701,7 @@ export const InteractiveCanvas = ({
         lockRotation: true,
         cornerColor: '#2563eb',
         cornerStyle: 'circle' as const,
-        cornerSize: 10,
+        cornerSize: HANDLE_SIZE,
         transparentCorners: false,
         borderColor: '#2563eb',
       });
@@ -4632,7 +4751,7 @@ export const InteractiveCanvas = ({
         lockRotation: true,
         cornerColor: '#2563eb',
         cornerStyle: 'circle',
-        cornerSize: 10,
+        cornerSize: HANDLE_SIZE,
         transparentCorners: false,
         borderColor: '#2563eb',
       });
@@ -4696,7 +4815,7 @@ export const InteractiveCanvas = ({
         lockRotation: true,
         cornerColor: '#2563eb',
         cornerStyle: 'circle',
-        cornerSize: 10,
+        cornerSize: HANDLE_SIZE,
         transparentCorners: false,
         borderColor: '#2563eb',
         lockUniScaling: true, // Keep circle uniform when scaling
@@ -4954,7 +5073,20 @@ export const InteractiveCanvas = ({
         </div>
       )}
 
-      <div ref={containerRef} className="w-full h-full" />
+      <div ref={containerRef} className="w-full h-full touch-none select-none [-webkit-touch-callout:none]" />
+      {touchDevice && (
+        // iPad and tablets: what Esc, Shift and the mouse do on a computer
+        <div className="absolute bottom-3 left-1/2 z-20 flex -translate-x-1/2 flex-wrap items-center gap-1.5 rounded-lg border border-border bg-card/95 p-1.5 text-sm shadow-lg">
+          <button type="button" onClick={finishDrawing} className="h-10 rounded-md border border-border px-3 font-medium hover:bg-muted">Finish</button>
+          <button type="button" onClick={() => window.dispatchEvent(new KeyboardEvent('keydown', { key: 'z', ctrlKey: true, bubbles: true }))}
+            className="h-10 rounded-md border border-border px-3 hover:bg-muted">Undo</button>
+          <button type="button" onClick={() => setAngleLock(v => !v)}
+            className={`h-10 rounded-md border px-3 ${angleLock ? 'border-primary bg-primary/15 font-medium' : 'border-border hover:bg-muted'}`}>45° lock {angleLock ? 'on' : 'off'}</button>
+          <button type="button" onClick={() => { const v = !pencilOnly; setPencilOnly(v); try { localStorage.setItem(PENCIL_KEY, String(v)); } catch { /* this device only */ } }}
+            title="On: only the Apple Pencil draws, fingers move and zoom the plan"
+            className={`h-10 rounded-md border px-3 ${pencilOnly ? 'border-primary bg-primary/15 font-medium' : 'border-border hover:bg-muted'}`}>Pencil only {pencilOnly ? 'on' : 'off'}</button>
+        </div>
+      )}
       {compareOverlay && (
         <img
           ref={overlayImgRef}

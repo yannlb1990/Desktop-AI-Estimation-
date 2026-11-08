@@ -363,7 +363,8 @@ export const PDFTakeoff = ({ projectId, estimateId, onAddCostItems }: PDFTakeoff
       if (e.key === 'Escape') {
         // Esc closes the open box first; full screen only when nothing else is open
         if (measurementPopup) { setMeasurementPopup(null); return; }
-        setIsTakeoffFullscreen(false);
+        // the iPad Finish button ends the drawing but stays in full screen
+        if (!(e as any).fromTouchBar) setIsTakeoffFullscreen(false);
         setModMode(null);
         dispatch({ type: 'SET_ACTIVE_TOOL', payload: 'select' });
         return;

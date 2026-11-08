@@ -26,7 +26,7 @@ export const Magnifier = ({ canvasRef, isVisible, onClose }: MagnifierProps) => 
     if (!isVisible || !canvasRef.current) return;
 
     const canvas = canvasRef.current;
-    const handleMouseMove = (e: MouseEvent) => {
+    const handleMouseMove = (e: PointerEvent | MouseEvent) => {
       const rect = canvas.getBoundingClientRect();
       setMousePos({
         x: e.clientX - rect.left,
@@ -34,8 +34,8 @@ export const Magnifier = ({ canvasRef, isVisible, onClose }: MagnifierProps) => 
       });
     };
 
-    canvas.addEventListener('mousemove', handleMouseMove);
-    return () => canvas.removeEventListener('mousemove', handleMouseMove);
+    canvas.addEventListener('pointermove', handleMouseMove);
+    return () => canvas.removeEventListener('pointermove', handleMouseMove);
   }, [isVisible, canvasRef]);
 
   // Render magnified view
@@ -109,7 +109,7 @@ export const Magnifier = ({ canvasRef, isVisible, onClose }: MagnifierProps) => 
 
   useEffect(() => {
     if (isDragging) {
-      const handleGlobalMouseMove = (e: MouseEvent) => {
+      const handleGlobalMouseMove = (e: PointerEvent | MouseEvent) => {
         setPosition({
           x: e.clientX - dragStart.x,
           y: e.clientY - dragStart.y,
@@ -117,11 +117,11 @@ export const Magnifier = ({ canvasRef, isVisible, onClose }: MagnifierProps) => 
       };
       const handleGlobalMouseUp = () => setIsDragging(false);
       
-      window.addEventListener('mousemove', handleGlobalMouseMove);
-      window.addEventListener('mouseup', handleGlobalMouseUp);
+      window.addEventListener('pointermove', handleGlobalMouseMove);
+      window.addEventListener('pointerup', handleGlobalMouseUp);
       return () => {
-        window.removeEventListener('mousemove', handleGlobalMouseMove);
-        window.removeEventListener('mouseup', handleGlobalMouseUp);
+        window.removeEventListener('pointermove', handleGlobalMouseMove);
+        window.removeEventListener('pointerup', handleGlobalMouseUp);
       };
     }
   }, [isDragging, dragStart]);
