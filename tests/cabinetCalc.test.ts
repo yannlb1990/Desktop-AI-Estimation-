@@ -1,0 +1,22 @@
+import { cabinetParts, cabinetLines, defaultCabinets, DEFAULT_CABINET_PRICES as P } from '@/lib/estimate/cabinetCalc';
+let failures = 0;
+const expect = (name: string, ok: boolean, got?: unknown) => { if (!ok) { failures++; console.log('FAIL', name, JSON.stringify(got ?? '')); } };
+const base = (len: number, banks = 0) => ({ room: 'Kitchen', runs: [{ id: 'a', kind: 'base' as const, lengthM: len, drawerBanks: banks }], finish: 'melamine' as const, endPanels: 0, benchtop: 'none' as const, benchtopLm: 0, cutOuts: 0, install: false });
+const p = cabinetParts(base(3.6, 2));
+expect('6 carcasses on 600 modules', p.carcasses === 6, p);
+expect('2 banks: 4 doors, 6 drawers', p.doors === 4 && p.drawers === 6 && p.runners === 6, p);
+expect('hinges 2 per door, handles doors + drawers', p.hinges === 8 && p.handles === 10, p);
+expect('fronts 3.6 x 0.72', Math.abs(p.frontsM2 - 2.59) < 0.01, p);
+expect('kickboard on base runs', p.kickboardLm === 3.6, p);
+expect('sheets with 15% waste', p.sheets === Math.ceil((6 * 1.91 * 1.15) / 2.88), p);
+const tall = cabinetParts({ ...base(0), runs: [{ id: 't', kind: 'tall', lengthM: 0.6, drawerBanks: 2 }] });
+expect('tall: 4 hinges per door, no drawer banks', tall.doors === 1 && tall.hinges === 4 && tall.drawers === 0, tall);
+const lines = cabinetLines(defaultCabinets(), P, 'QLD');
+expect('all joinery, priced', lines.length >= 7 && lines.every(l => l.trade === 'Joinery' && l.unitPrice > 0 && l.quantity > 0), lines);
+const carc = lines[0];
+expect('carcass line carries make and install hours', carc.labourHours > 0 && carc.unit === 'ea', carc);
+expect('benchtop from the library', lines.some(l => l.scope === 'Kitchen benchtop, natural stone'));
+const mine = cabinetLines(base(3.6), { ...P, boardSheet: 120 });
+expect('own prices', mine[0].unitPrice === 120);
+if (failures) { console.log(`${failures} cabinet failures`); process.exit(1); }
+console.log('all cabinet calculator tests passed');

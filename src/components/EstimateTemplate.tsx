@@ -10,7 +10,9 @@ import { ServicesDialog, type PricedServiceLine } from "@/components/estimate/Se
 import { RoomPackDialog } from "@/components/estimate/RoomPackDialog";
 import { HomeWarrantyPanel } from "@/components/estimate/HomeWarrantyPanel";
 import { ScreenGuide } from "@/components/ScreenGuide";
-import { orderTradesFor, tradeProfile } from "@/lib/businessTrade";
+import { orderTradesFor, tradeProfile, getBusinessTrade } from "@/lib/businessTrade";
+import { RoofCalcDialog } from "@/components/estimate/RoofCalcDialog";
+import { CabinetBuilderDialog } from "@/components/estimate/CabinetBuilderDialog";
 import { BoqImportDialog, type BoqLineOut } from "@/components/estimate/BoqImportDialog";
 import type { PackLine } from "@/lib/estimate/roomPacks";
 import { SiteVisitPanel } from "@/components/estimate/SiteVisitPanel";
@@ -602,6 +604,8 @@ export const EstimateTemplate = ({ projectId, estimateId }: EstimateTemplateProp
   const [servicesOpen, setServicesOpen] = useState(false);
   const [packOpen, setPackOpen] = useState(false);
   const [boqOpen, setBoqOpen] = useState(false);
+  const [roofOpen, setRoofOpen] = useState(false);
+  const [cabOpen, setCabOpen] = useState(false);
   const [flashRowId, setFlashRowId] = useState<string | null>(null);
   const [showTemplateModal, setShowTemplateModal] = useState(false);
   const [customTemplates, setCustomTemplates] = useState<EstimateTemplateData[]>(() => loadCustomTemplates());
@@ -945,7 +949,8 @@ export const EstimateTemplate = ({ projectId, estimateId }: EstimateTemplateProp
       quantity: l.quantity,
       unit: l.unit,
       unit_price: l.unitPrice,
-      labour_hours: 0,
+      // calculators that work out labour (cabinet builder) send hours; packs are all-in prices
+      labour_hours: (l as PackLine & { labourHours?: number }).labourHours ?? 0,
       labour_rate: labourRateForTrade(l.trade, labourRates) || config.defaultLabourRate,
       labour_rate_override: false,
       material_wastage_pct: 0,
@@ -2571,6 +2576,26 @@ export const EstimateTemplate = ({ projectId, estimateId }: EstimateTemplateProp
           <span className="text-muted-foreground">Bring in a BOQ from a QS or another builder: Excel, CSV or PDF, checked against its own total</span>
           <Button variant="outline" size="sm" className="ml-auto" onClick={() => setBoqOpen(true)}>Import a BOQ</Button>
         </div>
+        {['builder', 'roofer', 'carpenter'].includes(getBusinessTrade()) && (
+          <div className="mt-3 flex flex-wrap items-center gap-3 rounded-lg border border-border px-4 py-2.5 text-sm">
+            <span className="font-medium">Roof</span>
+            <span className="text-muted-foreground">Area on the slope from the pitch, ridges, hips, barges, gutters, valleys and flashings</span>
+            <Button variant="outline" size="sm" className="ml-auto" onClick={() => setRoofOpen(true)}>Open roof calculator</Button>
+          </div>
+        )}
+        {['builder', 'cabinetmaker'].includes(getBusinessTrade()) && (
+          <div className="mt-3 flex flex-wrap items-center gap-3 rounded-lg border border-border px-4 py-2.5 text-sm">
+            <span className="font-medium">Cabinets</span>
+            <span className="text-muted-foreground">Kitchen, vanity, laundry or robes from their runs: carcasses, fronts, drawers, hardware and sheets to order, with your hours</span>
+            <Button variant="outline" size="sm" className="ml-auto" onClick={() => setCabOpen(true)}>Open cabinet builder</Button>
+          </div>
+        )}
+        <CabinetBuilderDialog open={cabOpen} onOpenChange={setCabOpen} state={projectState}
+          labourRate={labourRateForTrade('Joinery', labourRates) || config.defaultLabourRate}
+          rooms={[...new Set(items.map(i => i.area).filter(Boolean))]}
+          onAdd={lines => { addPackLines(lines); setCabOpen(false); }} />
+        <RoofCalcDialog open={roofOpen} onOpenChange={setRoofOpen} state={projectState}
+          onAdd={lines => { addPackLines(lines); setRoofOpen(false); }} />
         <BoqImportDialog open={boqOpen} onOpenChange={setBoqOpen} state={projectState} defaultMarkup={config.defaultMarkup} onAdd={addBoqLines} />
         <RoomPackDialog open={packOpen} onOpenChange={setPackOpen} state={projectState}
           rooms={[...new Set(items.map(i => i.area).filter(Boolean))]} onAdd={addPackLines} />

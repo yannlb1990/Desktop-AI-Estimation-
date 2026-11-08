@@ -56,6 +56,9 @@ export const TRADE_SCOPES: Record<TradeName, TradeScope[]> = {
   'Roofing': [
     s('Colorbond roofing', 'm²', 75), s('Concrete roof tiles', 'm²', 70), s('Terracotta roof tiles', 'm²', 110), s('Sarking', 'm²', 9),
     s('Fascia and gutter', 'lm', 65), s('Downpipes', 'ea', 180), s('Ridge and flashings', 'lm', 45), s('Roof insulation blanket', 'm²', 14),
+    s('Ridge and hip capping', 'lm', 38), s('Valley gutter', 'lm', 70), s('Barge flashing', 'lm', 42), s('Apron and wall flashing', 'lm', 48),
+    s('Roof battens', 'm²', 14), s('Penetration flashing', 'ea', 160), s('Skylight supply and install', 'ea', 1400),
+    s('Roof vent (whirlybird)', 'ea', 280), s('Remove existing roof', 'm²', 22),
   ],
   'Windows & Doors': [
     s('Aluminium window (standard)', 'ea', 850), s('Aluminium window (double glazed)', 'ea', 1350), s('Aluminium sliding door', 'ea', 2200),
