@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { tradeProfile } from '@/lib/businessTrade';
 import { MousePointer, Move, Eraser, Minus, Square, Pentagon, Circle, Hash, Undo, Redo, DoorOpen, AppWindow, PenLine, Columns3, Crosshair, Spline, Type } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
@@ -479,6 +480,12 @@ export const MeasurementToolbar = ({
               Count
             </p>
             <div className="w-px bg-orange-900/30 self-stretch shrink-0" />
+            <span className="flex flex-wrap gap-1">
+              {tradeProfile().countPresets.map(p => (
+                <button key={p} type="button" onClick={() => onCountNameChange?.(p)}
+                  className={`rounded border px-2 py-1 text-[11px] ${countName === p ? 'border-primary bg-primary/15 text-foreground' : 'border-border text-muted-foreground hover:text-foreground'}`}>{p}</button>
+              ))}
+            </span>
             <input
               type="text"
               placeholder="Category name (e.g. Door: Internal)"

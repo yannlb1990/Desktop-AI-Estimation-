@@ -10,6 +10,7 @@ import { ServicesDialog, type PricedServiceLine } from "@/components/estimate/Se
 import { RoomPackDialog } from "@/components/estimate/RoomPackDialog";
 import { HomeWarrantyPanel } from "@/components/estimate/HomeWarrantyPanel";
 import { ScreenGuide } from "@/components/ScreenGuide";
+import { orderTradesFor, tradeProfile } from "@/lib/businessTrade";
 import { BoqImportDialog, type BoqLineOut } from "@/components/estimate/BoqImportDialog";
 import type { PackLine } from "@/lib/estimate/roomPacks";
 import { SiteVisitPanel } from "@/components/estimate/SiteVisitPanel";
@@ -108,7 +109,8 @@ function getAllTrades(): string[] {
     const custom: string[] = raw
       ? (JSON.parse(raw) as Array<{ trade_name: string }>).map(c => c.trade_name).filter(Boolean)
       : [];
-    const combined = [...AU_TRADES_BASE];
+    // the business's own trades first (Settings, What does your business do)
+    const combined = orderTradesFor([...AU_TRADES_BASE]);
     for (const c of custom.map(normaliseTrade)) {
       if (c && !combined.includes(c)) combined.push(c);
     }
@@ -662,7 +664,7 @@ export const EstimateTemplate = ({ projectId, estimateId }: EstimateTemplateProp
 
   const [newItem, setNewItem] = useState({
     area: "",
-    trade: "",
+    trade: tradeProfile().trades[0] ?? "",
     scope_of_work: "",
     material_type: "",
     quantity: "",
@@ -2559,11 +2561,11 @@ export const EstimateTemplate = ({ projectId, estimateId }: EstimateTemplateProp
           <Button variant="outline" size="sm" className="ml-auto" onClick={() => setServicesOpen(true)}>Open services calculator</Button>
         </div>
         <ServicesDialog open={servicesOpen} measurements={takeoffMeasurements} onAdd={addServiceLines} onClose={() => setServicesOpen(false)} />
-        <div className="mt-3 flex flex-wrap items-center gap-3 rounded-lg border border-border px-4 py-2.5 text-sm">
+        {tradeProfile().roomPacks && <div className="mt-3 flex flex-wrap items-center gap-3 rounded-lg border border-border px-4 py-2.5 text-sm">
           <span className="font-medium">Room packs</span>
           <span className="text-muted-foreground">Kitchen, bathroom, laundry or robes in one go: every trade the room needs, priced for {projectState}</span>
           <Button variant="outline" size="sm" className="ml-auto" onClick={() => setPackOpen(true)}>Open room packs</Button>
-        </div>
+        </div>}
         <div className="mt-3 flex flex-wrap items-center gap-3 rounded-lg border border-border px-4 py-2.5 text-sm">
           <span className="font-medium">Bill of quantities</span>
           <span className="text-muted-foreground">Bring in a BOQ from a QS or another builder: Excel, CSV or PDF, checked against its own total</span>

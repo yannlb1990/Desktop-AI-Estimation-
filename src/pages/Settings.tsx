@@ -16,6 +16,7 @@ import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { getThemePref, setThemePref, type ThemePref } from "@/lib/theme";
 import { TenderAttachments } from "@/components/tender/TenderAttachments";
+import { TRADE_PROFILES, getBusinessTrade, setBusinessTrade, tradeProfile, type BusinessTrade } from "@/lib/businessTrade";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
 import {
@@ -106,6 +107,7 @@ const Settings = () => {
 
   // ── Company Profile ─────────────────────────────────────────────────────────
   const [companyName, setCompanyName] = useState("");
+  const [businessTrade, setBusinessTradeState] = useState<BusinessTrade>(getBusinessTrade);
   const [abn, setAbn]                 = useState("");
   const [phone, setPhone]             = useState("");
   const [address, setAddress]         = useState("");
@@ -206,6 +208,7 @@ const Settings = () => {
     const data = saved ? JSON.parse(saved) : {};
     const brand = LOAD_BRAND();
     setCompanyName(data.company_name || localUser?.displayName || "");
+    if (data.business_trade) setBusinessTradeState(data.business_trade);
     setAbn(data.abn || "");
     setCompanyACN(data.acn || brand.acn || "");
     setPhone(data.phone || "");
@@ -285,6 +288,7 @@ const Settings = () => {
         const c = remote.company ?? {};
         if (c.company_name !== undefined) {
           setCompanyName(c.company_name || localUser?.displayName || "");
+          if (c.business_trade) { setBusinessTradeState(c.business_trade); setBusinessTrade(c.business_trade); }
           setAbn(c.abn || ""); setCompanyACN(c.acn || ""); setPhone(c.phone || "");
           setCompanyEmail(c.email || ""); setAddress(c.address || "");
           setCity(c.city || ""); setState(c.state || localUser?.state || ""); setPostcode(c.postcode || "");
@@ -351,7 +355,7 @@ const Settings = () => {
   const markSaved = (section: string) => setSavedAt(s => ({ ...s, [section]: Date.now() }));
   const [armed, setArmed] = useState(false);
   useEffect(() => { if (!loading) { const t = setTimeout(() => setArmed(true), 400); return () => clearTimeout(t); } }, [loading]);
-  useAutoSave(armed, [companyName, abn, companyACN, phone, companyEmail, address, city, state, postcode], () => handleSaveProfile(true));
+  useAutoSave(armed, [companyName, abn, companyACN, phone, companyEmail, address, city, state, postcode, businessTrade], () => handleSaveProfile(true));
   useAutoSave(armed, [logoDataUrl, brandColor, accentColor, companyTagline, builderLicence, liabilityInsurance], () => handleSaveBranding(true));
   useAutoSave(armed, [overheadPercentage, marginPercentage, gstPercentage, materialMarkup, labourRate], () => handleSaveRates(true));
   useAutoSave(armed, [quotePrefix, quoteValidityDays, pdfTemplate], () => handleSaveQuoteSettings(true));
@@ -380,8 +384,9 @@ const Settings = () => {
     try {
       const profileData = {
         company_name: companyName, abn, acn: companyACN, phone, email: companyEmail,
-        address, city, state, postcode, updated_at: new Date().toISOString(),
+        address, city, state, postcode, business_trade: businessTrade, updated_at: new Date().toISOString(),
       };
+      setBusinessTrade(businessTrade);
       localStorage.setItem(PROFILE_KEY(), JSON.stringify(profileData));
       const existingBrand = LOAD_BRAND();
       localStorage.setItem(getUserStorageKey("quote_brand"), JSON.stringify({
@@ -623,6 +628,18 @@ const Settings = () => {
             <Card className="p-6">
               <h3 className="font-display text-xl font-bold mb-6">Company Information</h3>
               <div className="space-y-4">
+                <div>
+                  <Label htmlFor="businessTrade">What does your business do?</Label>
+                  <select id="businessTrade" value={businessTrade} onChange={e => setBusinessTradeState(e.target.value as BusinessTrade)}
+                    className="mt-1 h-10 w-full max-w-sm rounded-md border border-input bg-background px-3 text-sm">
+                    {TRADE_PROFILES.map(t => <option key={t.key} value={t.key}>{t.label}</option>)}
+                  </select>
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    {businessTrade === 'builder'
+                      ? 'Every trade is shown, as for a builder.'
+                      : `Your trades come first on new lines, the takeoff offers ${tradeProfile(businessTrade).label.toLowerCase()} count markers, and quotes start with ${tradeProfile(businessTrade).label.toLowerCase()} inclusions and exclusions. Every other trade stays one click away.`}
+                  </p>
+                </div>
                 <div className="grid grid-cols-3 gap-4">
                   <div>
                     <Label htmlFor="companyName">Company Name</Label>

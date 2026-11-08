@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
+import { getBusinessTrade } from '@/lib/businessTrade';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -28,7 +29,8 @@ const readPrices = (): Record<string, string> => {
 const num = (v: string | undefined) => { const x = parseFloat(v ?? ''); return Number.isFinite(x) && x > 0 ? x : 0; };
 
 export const ServicesDialog: React.FC<Props> = ({ open, measurements, onAdd, onClose }) => {
-  const [tab, setTab] = useState<Tab>('electrical');
+  // a plumber opens on plumbing, everyone else on electrical
+  const [tab, setTab] = useState<Tab>(() => (getBusinessTrade() === 'plumber' ? 'plumbing' as Tab : 'electrical'));
   const [qty, setQty] = useState<Record<string, string>>({});
   const [prices, setPrices] = useState<Record<string, string>>({});
   const [bedrooms, setBedrooms] = useState('3');

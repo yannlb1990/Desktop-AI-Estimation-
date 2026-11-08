@@ -18,6 +18,7 @@ import { approveQuoteVersion, clearQuoteApproval, loadProject, createQuoteShare,
 import { scaleLinesToTotal, shownTotal, lineAmount } from "@/lib/pricing/quoteLines"
 import { gstOn } from "@/lib/pricing/estimatePricing"
 import { checkEstimate } from "@/lib/estimate/checks"
+import { tradeProfile } from "@/lib/businessTrade"
 import { homeWarranty } from "@/lib/pricing/homeWarranty"
 import { readHomeWarranty } from "@/components/estimate/HomeWarrantyPanel"
 import { refreshBrand, saveBrand as saveSharedBrand } from "@/lib/branding"
@@ -164,8 +165,9 @@ export const QuoteGenerator = ({ project, estimate, listenForOpen }: QuoteGenera
   const [finalPct, setFinalPct] = useState("50")
 
   // Scope
-  const [inclusions, setInclusions] = useState<string[]>(DEFAULT_INCLUSIONS)
-  const [exclusions, setExclusions] = useState<string[]>(DEFAULT_EXCLUSIONS)
+  // a trade's own standard wording (Settings, What does your business do); a builder's otherwise
+  const [inclusions, setInclusions] = useState<string[]>(() => tradeProfile().inclusions ?? DEFAULT_INCLUSIONS)
+  const [exclusions, setExclusions] = useState<string[]>(() => tradeProfile().exclusions ?? DEFAULT_EXCLUSIONS)
   const [scopeNotes, setScopeNotes] = useState("")
   const [terms, setTerms] = useState(DEFAULT_TERMS)
 
