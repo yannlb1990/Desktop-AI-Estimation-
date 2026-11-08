@@ -53,9 +53,42 @@ const Toggle = ({ value, onChange }: { value: boolean; onChange: (v: boolean) =>
 
 // ── Settings page ─────────────────────────────────────────────────────────────
 
+/** The settings, grouped the way a builder thinks about them */
+const SETTINGS_GROUPS: { label: string; items: { key: string; label: string }[] }[] = [
+  { label: 'Business', items: [{ key: 'profile', label: 'Company details' }, { key: 'branding', label: 'Logo and branding' }, { key: 'regional', label: 'State and region' }] },
+  { label: 'Pricing', items: [{ key: 'rates', label: 'Rates and markup' }] },
+  { label: 'Quotes', items: [{ key: 'quotes', label: 'Quote settings' }] },
+  { label: 'Suppliers', items: [{ key: 'suppliers', label: 'Suppliers' }] },
+  { label: 'Connections', items: [{ key: 'xero', label: 'Xero' }, { key: 'ai', label: 'Claude AI' }] },
+  { label: 'Account', items: [{ key: 'notifications', label: 'Alerts' }, { key: 'billing', label: 'Plan and billing' }, { key: 'team', label: 'Team' }] },
+];
+
+/** Saves a section a moment after its values stop changing; not before \`armed\` (settings loaded). */
+function useAutoSave(armed: boolean, values: unknown[], save: () => void, delay = 800) {
+  const json = JSON.stringify(values);
+  const last = useRef<string | null>(null);
+  useEffect(() => {
+    if (!armed || last.current === null) { last.current = json; return; }
+    if (json === last.current) return;
+    const t = setTimeout(() => { last.current = json; save(); }, delay);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [armed, json]);
+}
+
 const Settings = () => {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
+  const [tab, setTab] = useState(() => {
+    const t = new URLSearchParams(window.location.search).get('tab') || 'profile';
+    return SETTINGS_GROUPS.some(g => g.items.some(i => i.key === t)) ? t : 'profile';
+  });
+  const openTab = (t: string) => {
+    setTab(t);
+    const url = new URL(window.location.href);
+    url.searchParams.set('tab', t);
+    window.history.replaceState(null, '', url.toString());
+  };
   const [saving, setSaving] = useState(false);
   const logoInputRef = useRef<HTMLInputElement>(null);
 
@@ -308,6 +341,24 @@ const Settings = () => {
     init();
   }, []);
 
+  // ── Saving as you go ─────────────────────────────────────────────────────────
+  // Every change saves itself shortly after you stop typing. It only starts once the saved
+  // settings have loaded, so the empty fields shown while loading never overwrite them.
+  const [savedAt, setSavedAt] = useState<Record<string, number>>({});
+  const markSaved = (section: string) => setSavedAt(s => ({ ...s, [section]: Date.now() }));
+  const [armed, setArmed] = useState(false);
+  useEffect(() => { if (!loading) { const t = setTimeout(() => setArmed(true), 400); return () => clearTimeout(t); } }, [loading]);
+  useAutoSave(armed, [companyName, abn, companyACN, phone, companyEmail, address, city, state, postcode], () => handleSaveProfile(true));
+  useAutoSave(armed, [logoDataUrl, brandColor, accentColor, companyTagline, builderLicence, liabilityInsurance], () => handleSaveBranding(true));
+  useAutoSave(armed, [overheadPercentage, marginPercentage, gstPercentage, materialMarkup, labourRate], () => handleSaveRates(true));
+  useAutoSave(armed, [quotePrefix, quoteValidityDays, pdfTemplate], () => handleSaveQuoteSettings(true));
+  useAutoSave(armed, [notifDueDate, notifDaysBeforeStr, notifProjectUpdate, notifWeeklyDigest, notifEmail], () => saveNotifPrefs(true));
+  const SavedNote = ({ section }: { section: string }) => (
+    <p className="text-xs text-muted-foreground">
+      {savedAt[section] ? `Saved ${new Date(savedAt[section]).toLocaleTimeString('en-AU', { hour: 'numeric', minute: '2-digit' })}` : 'Changes save automatically'}
+    </p>
+  );
+
   // ── Logo upload ───────────────────────────────────────────────────────────────
 
   const handleLogoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -321,7 +372,7 @@ const Settings = () => {
 
   // ── Save handlers ─────────────────────────────────────────────────────────────
 
-  const handleSaveProfile = () => {
+  const handleSaveProfile = (silent = false) => {
     setSaving(true);
     try {
       const profileData = {
@@ -340,12 +391,13 @@ const Settings = () => {
         address: [address, city, state, postcode].filter(Boolean).join(", ") || existingBrand.address,
       }));
       syncUserSettings('company', profileData);
-      toast.success("Profile updated");
+      markSaved('profile');
+      if (!silent) toast.success("Profile updated");
     } catch { toast.error("Failed to save profile"); }
     finally { setSaving(false); }
   };
 
-  const handleSaveBranding = () => {
+  const handleSaveBranding = (silent = false) => {
     const existing = LOAD_BRAND();
     const brandData = {
       ...existing,
@@ -358,16 +410,18 @@ const Settings = () => {
     };
     localStorage.setItem(getUserStorageKey("quote_brand"), JSON.stringify(brandData));
     syncUserSettings('branding', brandData);
-    toast.success("Branding saved. Applied to all future quotes.");
+    markSaved('branding');
+    if (!silent) toast.success("Branding saved. Applied to all future quotes.");
   };
 
-  const handleSaveRates = () => {
+  const handleSaveRates = (silent = false) => {
     setSaving(true);
     try {
       const ratesData = { overhead: overheadPercentage, margin: marginPercentage, gst: gstPercentage, materialMarkup, labourRate };
       localStorage.setItem(getUserStorageKey("default_rates"), JSON.stringify(ratesData));
       syncUserSettings('rates', ratesData);
-      toast.success("Default rates saved");
+      markSaved('rates');
+      if (!silent) toast.success("Default rates saved");
     } catch { toast.error("Failed to save rates"); }
     finally { setSaving(false); }
   };
@@ -407,18 +461,20 @@ const Settings = () => {
     syncUserSettings('suppliers', updated);
   };
 
-  const saveNotifPrefs = () => {
+  const saveNotifPrefs = (silent = false) => {
     const notifData = { dueDate: notifDueDate, daysBefore: notifDaysBeforeStr, projectUpdate: notifProjectUpdate, weeklyDigest: notifWeeklyDigest, notifEmail };
     localStorage.setItem(getUserStorageKey("notif_prefs"), JSON.stringify(notifData));
     syncUserSettings('notif_prefs', notifData);
-    toast.success("Notification preferences saved");
+    markSaved('notifications');
+    if (!silent) toast.success("Notification preferences saved");
   };
 
-  const handleSaveQuoteSettings = () => {
+  const handleSaveQuoteSettings = (silent = false) => {
     const quoteData = { prefix: quotePrefix, validityDays: quoteValidityDays, pdfTemplate };
     localStorage.setItem(QUOTE_KEY(), JSON.stringify(quoteData));
     syncUserSettings('quote_settings', quoteData);
-    toast.success("Quote settings saved");
+    markSaved('quotes');
+    if (!silent) toast.success("Quote settings saved");
   };
 
   const handleChangePassword = async () => {
@@ -522,7 +578,6 @@ const Settings = () => {
     return <div className="flex min-h-screen items-center justify-center"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>;
   }
 
-  const tabCount = isBusinessPlan ? 11 : 10;
 
   return (
     <div className="min-h-screen bg-muted/30">
@@ -534,32 +589,32 @@ const Settings = () => {
         </div>
       </nav>
 
-      <div className="container mx-auto px-6 py-8 max-w-5xl">
+      <div className="container mx-auto px-4 md:px-6 py-8 max-w-6xl">
         <div className="mb-8">
           <h1 className="font-display text-4xl font-bold mb-2">Settings</h1>
-          <p className="text-muted-foreground">Manage your account, subscription, and preferences</p>
+          <p className="text-muted-foreground">Your business, pricing, quotes and connections. Changes save as you go.</p>
         </div>
 
-        <Tabs defaultValue={new URLSearchParams(window.location.search).get('tab') || 'profile'} className="space-y-6">
-          <div className="overflow-x-auto">
-            {/* wraps onto a second row instead of hiding tabs off the right edge */}
-            <TabsList className="flex h-auto w-full flex-wrap justify-start gap-1" data-tabs={tabCount}>
-              <TabsTrigger value="profile"><Building2 className="h-4 w-4 mr-1.5 hidden sm:inline" />Profile</TabsTrigger>
-              <TabsTrigger value="branding"><Palette className="h-4 w-4 mr-1.5 hidden sm:inline" />Branding</TabsTrigger>
-              <TabsTrigger value="rates"><DollarSign className="h-4 w-4 mr-1.5 hidden sm:inline" />Rates</TabsTrigger>
-              <TabsTrigger value="suppliers"><Package className="h-4 w-4 mr-1.5 hidden sm:inline" />Suppliers</TabsTrigger>
-              <TabsTrigger value="quotes"><FileText className="h-4 w-4 mr-1.5 hidden sm:inline" />Quotes</TabsTrigger>
-              <TabsTrigger value="regional"><MapPin className="h-4 w-4 mr-1.5 hidden sm:inline" />Regional</TabsTrigger>
-              <TabsTrigger value="notifications"><Bell className="h-4 w-4 mr-1.5 hidden sm:inline" />Alerts</TabsTrigger>
-              <TabsTrigger value="billing"><CreditCard className="h-4 w-4 mr-1.5 hidden sm:inline" />Billing</TabsTrigger>
-              <TabsTrigger value="xero">Xero</TabsTrigger>
-              <TabsTrigger value="ai">AI</TabsTrigger>
-              {isBusinessPlan && (
-                <TabsTrigger value="team"><Users className="h-4 w-4 mr-1.5 hidden sm:inline" />Team</TabsTrigger>
-              )}
-            </TabsList>
-          </div>
-
+        <Tabs value={tab} onValueChange={openTab} className="md:grid md:grid-cols-[200px_1fr] md:gap-8">
+          {/* Sections down the side on a computer, a list on top on a phone */}
+          <nav className="mb-6 md:mb-0">
+            <div className="space-y-4 md:sticky md:top-6">
+              {SETTINGS_GROUPS.filter(g => g.items.some(i => i.key !== 'team' || isBusinessPlan)).map(g => (
+                <div key={g.label}>
+                  <p className="mb-1 px-2 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">{g.label}</p>
+                  <div className="flex flex-wrap gap-1 md:flex-col">
+                    {g.items.filter(i => i.key !== 'team' || isBusinessPlan).map(i => (
+                      <button key={i.key} type="button" onClick={() => openTab(i.key)}
+                        className={`rounded-md px-2.5 py-1.5 text-left text-sm transition-colors ${tab === i.key ? 'bg-primary/10 font-medium text-foreground' : 'text-muted-foreground hover:bg-muted hover:text-foreground'}`}>
+                        {i.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </nav>
+          <div className="min-w-0 space-y-6">
           {/* ── Company Profile ─────────────────────────────────────────────── */}
           <TabsContent value="profile" className="space-y-6">
             <Card className="p-6">
@@ -618,10 +673,7 @@ const Settings = () => {
                     <Input id="postcode" value={postcode} onChange={e => setPostcode(e.target.value)} placeholder="2000" maxLength={4} />
                   </div>
                 </div>
-                <Button onClick={handleSaveProfile} className="bg-primary text-primary-foreground" disabled={saving}>
-                  {saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
-                  Save Profile
-                </Button>
+                <SavedNote section="profile" />
               </div>
             </Card>
 
@@ -754,9 +806,7 @@ const Settings = () => {
                   <p className="text-xs text-muted-foreground mt-1.5">Displayed in the Insurance &amp; Compliance section of every quote</p>
                 </div>
 
-                <Button onClick={handleSaveBranding} className="bg-primary text-primary-foreground">
-                  <Save className="mr-2 h-4 w-4" />Save Branding
-                </Button>
+                <SavedNote section="branding" />
               </div>
             </Card>
           </TabsContent>
@@ -791,10 +841,7 @@ const Settings = () => {
                     <p className="text-xs text-muted-foreground mt-1">NSW average: $85–$110/hr</p>
                   </div>
                 </div>
-                <Button onClick={handleSaveRates} disabled={saving} className="bg-primary text-primary-foreground">
-                  {saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
-                  Save Default Rates
-                </Button>
+                <SavedNote section="rates" />
               </div>
             </Card>
 
@@ -998,9 +1045,7 @@ const Settings = () => {
               </div>
             </Card>
 
-            <Button onClick={handleSaveQuoteSettings} className="bg-primary text-primary-foreground">
-              <Save className="mr-2 h-4 w-4" />Save Quote Settings
-            </Button>
+            <SavedNote section="quotes" />
           </TabsContent>
 
           {/* ── Regional Settings ──────────────────────────────────────────────── */}
@@ -1028,19 +1073,7 @@ const Settings = () => {
                     <p>• Regional areas: -8 to -12% typically</p>
                   </div>
                 </div>
-                <Button
-                  onClick={() => {
-                    const profileRaw = localStorage.getItem(PROFILE_KEY());
-                    const profileData = profileRaw ? JSON.parse(profileRaw) : {};
-                    const updated = { ...profileData, state, updated_at: new Date().toISOString() };
-                    localStorage.setItem(PROFILE_KEY(), JSON.stringify(updated));
-                    syncUserSettings('company', updated);
-                    toast.success("Regional settings saved");
-                  }}
-                  className="bg-primary text-primary-foreground"
-                >
-                  <Save className="mr-2 h-4 w-4" />Save Regional Settings
-                </Button>
+                <SavedNote section="profile" />
               </div>
             </Card>
           </TabsContent>
@@ -1090,9 +1123,7 @@ const Settings = () => {
                   ))}
                 </div>
 
-                <Button onClick={saveNotifPrefs} className="bg-primary text-primary-foreground">
-                  <Save className="h-4 w-4 mr-2" />Save Preferences
-                </Button>
+                <SavedNote section="notifications" />
               </div>
             </Card>
           </TabsContent>
@@ -1324,6 +1355,7 @@ const Settings = () => {
               </Card>
             </TabsContent>
           )}
+          </div>
         </Tabs>
       </div>
     </div>
