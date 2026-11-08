@@ -3,7 +3,9 @@ import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
 import { getUserStorageKey } from '@/lib/localAuth';
 import { syncProjectToSupabase } from '@/lib/db/projects';
-import { projectVisits, photoUrl } from '@/lib/site/siteStore';
+import { projectVisits } from '@/lib/site/siteStore';
+import { SitePhotoThumb, SitePhotoViewer } from '@/components/site/SitePhotoThumb';
+import { roomQuantities } from '@/lib/site/visit';
 import { draftLinesFromVisit, siteScopeText, siteReviewSummary, aiDraftLines, type SiteDraftLine, type SiteAiSuggestion, type SiteAiCheck } from '@/lib/site/toEstimate';
 import { supabase } from '@/integrations/supabase/client';
 import { planSiteUpdates, type SiteLinkedItem, type SiteChange } from '@/lib/site/siteUpdates';
@@ -19,27 +21,12 @@ interface Props {
   onUpdate: (changes: SiteChange[], quiet?: boolean) => void;
 }
 
-function Thumb({ photo, onOpen }: { photo: SitePhoto; onOpen: (url: string) => void }) {
-  const [src, setSrc] = useState<string | null>(null);
-  useEffect(() => {
-    let url: string | null = null;
-    photoUrl(photo).then(u => { url = u; setSrc(u); });
-    return () => { if (url?.startsWith('blob:')) URL.revokeObjectURL(url); };
-  }, [photo.id, photo.path]);
-  if (!photo.path && !src) return <div className="grid h-16 w-16 place-items-center rounded border border-border text-[10px] text-muted-foreground">uploading</div>;
-  return (
-    <button type="button" onClick={() => src && onOpen(src)} className="h-16 w-16 overflow-hidden rounded border border-border bg-muted">
-      {src && <img src={src} alt="" className="h-full w-full object-cover" />}
-    </button>
-  );
-}
-
 /** Estimate > Add to estimate: what was recorded on site for this project, ready to price. */
 export function SiteVisitPanel({ projectId, addedKeys, siteItems, onAdd, onUpdate }: Props) {
   const [visits, setVisits] = useState<SiteVisit[]>([]);
   const [picked, setPicked] = useState<Set<string>>(new Set());
   const [qtyOverride, setQtyOverride] = useState<Record<string, string>>({});
-  const [bigPhoto, setBigPhoto] = useState<string | null>(null);
+  const [bigPhoto, setBigPhoto] = useState<{ url: string; caption: string } | null>(null);
   // AI review per visit, kept on the project so it is not run again on every open
   type Review = { at: string; suggestions: SiteAiSuggestion[]; checks: SiteAiCheck[] };
   const readReviews = (): Record<string, Review> => {
@@ -149,6 +136,7 @@ export function SiteVisitPanel({ projectId, addedKeys, siteItems, onAdd, onUpdat
                     {reviewing === v.id ? 'Reading photos and notes (about a minute)...' : review ? 'Review again: the visit changed' : 'Review with AI'}
                   </Button>
                 )}
+                <a className="text-xs text-gold hover:underline" href={`/site-report/${v.id}`} target="_blank" rel="noreferrer">View full site report</a>
                 <button type="button" className="text-xs text-gold hover:underline" onClick={() => copyNotes(v)}>Use notes for the quote's scope</button>
               </span>
             </div>
@@ -161,12 +149,13 @@ export function SiteVisitPanel({ projectId, addedKeys, siteItems, onAdd, onUpdat
                   <div className="flex flex-wrap items-baseline justify-between gap-2">
                     <span className="font-medium">{room.name}</span>
                     <span className="text-xs text-muted-foreground">
-                      {room.lengthM && room.widthM ? `${room.lengthM} x ${room.widthM} m${room.heightM ? `, ${room.heightM} m high` : ''}` : 'no sizes taken'}
+                      {room.lengthM && room.widthM ? `${room.lengthM} x ${room.widthM} m${room.heightM ? `, ${room.heightM} m high` : ''}` : roomQuantities(room).floor > 0 ? '' : 'no sizes taken'}
+                      {roomQuantities(room).floor > 0 ? ` · floor ${roomQuantities(room).floor} m²` : ''}
                     </span>
                   </div>
                   {room.notes && <p className="text-muted-foreground whitespace-pre-line">{room.notes}</p>}
                   {room.photos.length > 0 && (
-                    <div className="flex flex-wrap gap-2">{room.photos.map(p => <Thumb key={p.id} photo={p} onOpen={setBigPhoto} />)}</div>
+                    <div className="flex flex-wrap gap-2">{room.photos.map(p => <SitePhotoThumb key={p.id} photo={p} onOpen={(url, caption) => setBigPhoto({ url, caption })} />)}</div>
                   )}
                   {roomLines.map(l => {
                     const inEstimate = addedKeys.has(l.key);
@@ -251,12 +240,7 @@ export function SiteVisitPanel({ projectId, addedKeys, siteItems, onAdd, onUpdat
         );
       })}
 
-      {bigPhoto && (
-        <div className="fixed inset-0 z-[10050] grid place-items-center bg-black/80 p-6" onClick={() => setBigPhoto(null)}>
-          <img src={bigPhoto} alt="" className="max-h-full max-w-full rounded-lg" />
-          <button type="button" className="absolute right-6 top-6 rounded-md bg-card px-3 py-1.5 text-sm">Close</button>
-        </div>
-      )}
+      <SitePhotoViewer photo={bigPhoto} onClose={() => setBigPhoto(null)} />
     </div>
   );
 }

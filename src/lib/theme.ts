@@ -7,7 +7,7 @@
 export type ThemePref = 'dark' | 'light' | 'system';
 
 const KEY = 'metricore_theme';
-const APP_PATHS = /^\/(dashboard|site|xero|project|insights|clients|settings|materials|admin)(\/|$)/;
+const APP_PATHS = /^\/(dashboard|site|site-report|xero|project|insights|clients|settings|materials|admin)(\/|$)/;
 
 export function getThemePref(): ThemePref {
   try {

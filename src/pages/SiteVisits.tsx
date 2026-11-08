@@ -74,7 +74,11 @@ export default function SiteVisits() {
             <button key={v.id} onClick={() => navigate(`/site/${v.id}`)} className="w-full rounded-xl border border-border bg-card px-4 py-3 text-left">
               <div className="flex items-center justify-between gap-2">
                 <span className="font-medium truncate">{v.jobName || 'Untitled visit'}</span>
-                <span className={`shrink-0 text-xs ${pending ? 'text-amber-400' : 'text-gold'}`}>{pending ? 'Waiting for signal' : 'In the office'}</span>
+                {(() => {
+                  // In the office only once the cloud has this version of the visit and every photo
+                  const delivered = !pending && !!v.syncedAt && v.syncedAt >= v.updatedAt;
+                  return <span className={`shrink-0 text-xs ${delivered ? 'text-gold' : 'text-amber-400'}`}>{delivered ? 'In the office' : 'Waiting for signal'}</span>;
+                })()}
               </div>
               <div className="mt-0.5 text-xs text-muted-foreground">
                 {v.address || 'No address'} · {v.rooms.length} room{v.rooms.length !== 1 ? 's' : ''}

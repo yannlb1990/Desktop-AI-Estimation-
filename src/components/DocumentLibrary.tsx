@@ -1,4 +1,7 @@
 import { useState, useEffect } from "react"
+import { projectVisits } from "@/lib/site/siteStore"
+import type { SiteVisit } from "@/lib/site/visit"
+import { SiteVisitReport } from "@/components/site/SiteVisitReport"
 import { getUserStorageKey } from "@/lib/localAuth"
 import { syncProjectToSupabase } from "@/lib/db/projects"
 import { Button } from "@/components/ui/button"
@@ -338,7 +341,10 @@ export const DocumentLibrary = ({ projectId, projectName, clientName = "", siteA
   const [savedQuotes, setSavedQuotes] = useState<SavedQuoteSnapshot[]>([])
   const [savedPlans, setSavedPlans] = useState<SavedPlanRecord[]>([])
   const [search, setSearch] = useState("")
-  const [activeSection, setActiveSection] = useState<"quotes" | "plans">("quotes")
+  const [activeSection, setActiveSection] = useState<"quotes" | "plans" | "site">("quotes")
+  const [siteVisits, setSiteVisits] = useState<SiteVisit[]>([])
+  const [openVisit, setOpenVisit] = useState<string | null>(null)
+  useEffect(() => { projectVisits(projectId).then(setSiteVisits).catch(() => setSiteVisits([])) }, [projectId])
 
   useEffect(() => {
     const proj = getProjectData(projectId)
@@ -422,6 +428,12 @@ export const DocumentLibrary = ({ projectId, projectName, clientName = "", siteA
             <FileImage className="inline h-4 w-4 mr-1.5 -mt-0.5" />
             Plans ({savedPlans.length})
           </button>
+          <button
+            onClick={() => setActiveSection("site")}
+            className={`px-4 py-2 text-sm font-medium transition-colors ${activeSection === "site" ? "bg-primary text-primary-foreground" : "bg-background text-muted-foreground hover:bg-muted"}`}
+          >
+            From site ({siteVisits.length})
+          </button>
         </div>
         <div className="relative flex-1 max-w-xs">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
@@ -496,6 +508,34 @@ export const DocumentLibrary = ({ projectId, projectName, clientName = "", siteA
       )}
 
       {/* Plans section */}
+      {/* Site visits recorded on the phone or iPad: each opens as the full report with its photos */}
+      {activeSection === "site" && (
+        <div className="space-y-3">
+          {siteVisits.length === 0 && (
+            <p className="text-sm text-muted-foreground">No site visits for this project yet. Record one on the phone (Site on the dashboard), then link it to this project.</p>
+          )}
+          {siteVisits.map(v => {
+            const photos = v.rooms.reduce((n, r) => n + r.photos.length, 0)
+            const open = openVisit === v.id
+            return (
+              <div key={v.id} className="rounded-lg border border-border">
+                <div className="flex flex-wrap items-center justify-between gap-2 px-4 py-3 text-sm">
+                  <span>
+                    <span className="font-medium">{v.jobName || "Site visit"}</span>
+                    <span className="ml-2 text-muted-foreground">{new Date(v.updatedAt).toLocaleDateString("en-AU")} · {v.rooms.length} room{v.rooms.length !== 1 ? "s" : ""} · {photos} photo{photos !== 1 ? "s" : ""}</span>
+                  </span>
+                  <span className="flex gap-2">
+                    <Button size="sm" variant="outline" onClick={() => setOpenVisit(open ? null : v.id)}>{open ? "Hide" : "Show here"}</Button>
+                    <Button size="sm" variant="outline" onClick={() => window.open(`/site-report/${v.id}`, "_blank")}>Open report to print</Button>
+                  </span>
+                </div>
+                {open && <div className="border-t border-border p-4"><SiteVisitReport visit={v} /></div>}
+              </div>
+            )
+          })}
+        </div>
+      )}
+
       {activeSection === "plans" && (
         <div className="space-y-3">
           {filteredPlans.length === 0 ? (

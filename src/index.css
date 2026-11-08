@@ -219,3 +219,14 @@
   html:not(.dark) .text-violet-400 { color: rgb(109 40 217); }
   html:not(.dark) .border-amber-500\/50, html:not(.dark) .border-amber-400\/50 { border-color: rgb(217 119 6 / 0.6); }
 }
+
+/* Printing (site reports and other pages): always black on white, whatever the theme */
+@media print {
+  .dark, :root {
+    --background: 0 0% 100%; --foreground: 0 0% 0%;
+    --card: 0 0% 100%; --card-foreground: 0 0% 0%;
+    --muted: 0 0% 96%; --muted-foreground: 0 0% 35%;
+    --border: 0 0% 82%; --primary: 0 0% 10%;
+  }
+  body { background: #fff !important; }
+}

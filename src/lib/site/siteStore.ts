@@ -313,6 +313,19 @@ export async function projectVisits(projectId: string): Promise<SiteVisit[]> {
   } catch { return []; }
 }
 
+/** One visit by id, from the cloud (any device), else this device's copy. */
+export async function getVisit(id: string): Promise<SiteVisit | null> {
+  const local = loadLocalVisits().find(v => v.id === id) ?? null;
+  const uid = await userId();
+  if (!uid || uid === 'offline') return local;
+  try {
+    const { data, error } = await withTimeout<any>((supabase as any).from('site_visits')
+      .select('data, project_id').eq('user_id', uid).eq('id', id).is('deleted_at', null).maybeSingle(), 15_000);
+    if (error || !data?.data?.id) return local;
+    return { ...(data.data as SiteVisit), projectId: data.project_id };
+  } catch { return local; }
+}
+
 /** A photo removed from a visit: its uploaded copy goes too. */
 export function removeUploadedPhoto(path: string | undefined) {
   if (path) supabase.storage.from(BUCKET).remove([path]).catch(() => undefined);

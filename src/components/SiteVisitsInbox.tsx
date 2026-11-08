@@ -8,6 +8,7 @@ import { ensureClientForProject } from '@/lib/db/clients';
 import { stateFromAddress } from '@/lib/defaultState';
 import { pullVisits, linkVisitToProject } from '@/lib/site/siteStore';
 import type { SiteVisit } from '@/lib/site/visit';
+import { SitePhotoThumb, SitePhotoViewer } from '@/components/site/SitePhotoThumb';
 
 /** Dashboard: visits sent from site. Linked ones open the estimate; new jobs become a project in one click. */
 export function SiteVisitsInbox() {
@@ -16,8 +17,14 @@ export function SiteVisitsInbox() {
   const [linkTo, setLinkTo] = useState<Record<string, string>>({});
 
   const [busy, setBusy] = useState(false);
-  // Only visits still waiting for a project: linked ones live in their project's estimate
-  useEffect(() => { pullVisits().then(all => setVisits(all.filter(v => v.rooms.length > 0 && !v.projectId))).catch(() => {}); }, []);
+  const [big, setBig] = useState<{ url: string; caption: string } | null>(null);
+  // Visits from the last 30 days, linked or not, newest first: each one opens as a full report
+  useEffect(() => {
+    const since = Date.now() - 30 * 86_400_000;
+    pullVisits().then(all => setVisits(all
+      .filter(v => (v.rooms.length > 0 || v.notes) && new Date(v.updatedAt).getTime() >= since)
+      .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt)))).catch(() => {});
+  }, []);
   if (visits.length === 0) return null;
 
   const projects: { id: string; name: string }[] = (() => {
@@ -28,7 +35,7 @@ export function SiteVisitsInbox() {
   const attach = async (v: SiteVisit, projectId: string) => {
     const ok = await linkVisitToProject(v.id, projectId);
     if (!ok) toast.warning('Linked on this computer; the cloud link is saved when the connection is back');
-    setVisits(vs => vs.filter(x => x.id !== v.id));
+    setVisits(vs => vs.map(x => x.id === v.id ? { ...x, projectId } : x));
     navigate(`/project/${projectId}`);
   };
 
@@ -57,20 +64,29 @@ export function SiteVisitsInbox() {
   };
 
   return (
-    <div className="rounded-xl border border-amber-400/30 bg-amber-400/5 p-4 space-y-3">
-      <div className="font-semibold">From site ({visits.length})</div>
+    <div className="rounded-xl border border-gold/30 bg-gold/5 p-4 space-y-3">
+      <div className="font-semibold">From site, last 30 days ({visits.length})</div>
       {visits.map(v => {
         const linked = v.projectId && nameOf(v.projectId);
         const lines = v.rooms.reduce((n, r) => n + r.scope.length, 0);
         const photos = v.rooms.reduce((n, r) => n + r.photos.length, 0);
         return (
-          <div key={v.id} className="flex flex-wrap items-center justify-between gap-3 text-sm">
-            <span>
-              <span className="font-medium">{v.jobName || 'Site visit'}</span>
-              <span className="ml-2 text-muted-foreground">
-                {v.address || 'no address'} · {v.rooms.length} room{v.rooms.length !== 1 ? 's' : ''}, {lines} item{lines !== 1 ? 's' : ''}, {photos} photo{photos !== 1 ? 's' : ''}
+          <div key={v.id} className="flex flex-wrap items-center justify-between gap-3 border-t border-border/60 pt-3 text-sm first:border-0 first:pt-0">
+            <span className="flex flex-wrap items-center gap-3">
+              <span>
+                <span className="font-medium">{v.jobName || 'Site visit'}</span>
+                <span className="ml-2 text-muted-foreground">
+                  {new Date(v.updatedAt).toLocaleDateString('en-AU')} · {v.address || 'no address'} · {v.rooms.length} room{v.rooms.length !== 1 ? 's' : ''}, {lines} item{lines !== 1 ? 's' : ''}, {photos} photo{photos !== 1 ? 's' : ''}
+                </span>
+              </span>
+              <span className="flex gap-1.5">
+                {v.rooms.flatMap(r => r.photos).slice(0, 3).map(p => (
+                  <SitePhotoThumb key={p.id} photo={p} size="h-10 w-10" onOpen={(url, caption) => setBig({ url, caption })} />
+                ))}
               </span>
             </span>
+            <span className="flex flex-wrap items-center gap-2">
+              <Button size="sm" variant="outline" onClick={() => navigate(`/site-report/${v.id}`)}>View site report</Button>
             {linked ? (
               <Button size="sm" variant="outline" onClick={() => navigate(`/project/${v.projectId}`)}>Open {linked}</Button>
             ) : (
@@ -84,10 +100,12 @@ export function SiteVisitsInbox() {
                 {linkTo[v.id] && <Button size="sm" variant="outline" disabled={busy} onClick={() => { setBusy(true); attach(v, linkTo[v.id]); }}>Add</Button>}
               </span>
             )}
+            </span>
           </div>
         );
       })}
-      <p className="text-xs text-muted-foreground">In the project, open Estimate, Add to estimate, From site: photos, notes and draft lines with quantities from the room sizes.</p>
+      <p className="text-xs text-muted-foreground">View site report shows the rooms, sizes, ticks, notes and photos, ready to print. In the project, Estimate, Add to estimate turns them into lines.</p>
+      <SitePhotoViewer photo={big} onClose={() => setBig(null)} />
     </div>
   );
 }

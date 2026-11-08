@@ -41,7 +41,7 @@
       (function () {
         try {
           var pref = localStorage.getItem('metricore_theme');
-          var app = /^\/(dashboard|site|xero|project|insights|clients|settings|materials|admin)(\/|$)/.test(location.pathname);
+          var app = /^\/(dashboard|site|site-report|xero|project|insights|clients|settings|materials|admin)(\/|$)/.test(location.pathname);
           var light = app && (pref === 'light' || (pref === 'system' && window.matchMedia('(prefers-color-scheme: light)').matches));
           if (light) { document.documentElement.classList.remove('dark'); document.documentElement.classList.add('light'); }
         } catch (e) {}
