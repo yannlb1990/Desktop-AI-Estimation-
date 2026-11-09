@@ -120,6 +120,17 @@ const HANDLE_SIZE = COARSE_POINTER ? 22 : 10;
 /** The last pointer used: snap and hit distances double for a pen or finger */
 let lastPointerType: string = 'mouse';
 const touchScale = () => (lastPointerType === 'mouse' ? 1 : 2);
+/**
+ * The Apple Pencil. Safari normally reports it as 'pen', but some iPads and settings report
+ * it as 'touch': it is then told apart from a finger by its tiny contact size or its tilt.
+ */
+const isPencilEvent = (e: PointerEvent) => {
+  if (e.pointerType === 'pen') return true;
+  if (e.pointerType !== 'touch') return false;
+  const tiny = e.width > 0 && e.height > 0 && e.width < 6 && e.height < 6;
+  const tilted = !!(e.tiltX || e.tiltY);
+  return tiny || tilted;
+};
 /** The on-screen 45° lock does what holding Shift does with a keyboard */
 const shiftLock = { on: false };
 const shiftHeld = (ev: any) => !!ev?.shiftKey || shiftLock.on;
@@ -392,6 +403,9 @@ export const InteractiveCanvas = ({
   const [lengthInput, setLengthInput] = useState('');
   // Tool wheel: press and hold one finger (Pencil only on) to pick a tool where you are
   const [toolWheel, setToolWheel] = useState<{ x: number; y: number } | null>(null);
+  // pointers that are the Pencil (some iPads report it as a touch), and what last touched the plan
+  const penIdsRef = useRef(new Set<number>());
+  const [lastInput, setLastInput] = useState<'Pencil' | 'finger' | null>(null);
   const onToolChangeRef = useRef(onToolChange);
   onToolChangeRef.current = onToolChange;
   const planSnapAt = (p: WorldPoint, thresh: number): PlanSnap | null =>
@@ -3419,6 +3433,31 @@ export const InteractiveCanvas = ({
     // a quick tap with two fingers undoes, with three redoes (like Procreate and Notes)
     let tap: { start: number; most: number; moved: boolean; first: Map<number, { x: number; y: number }> } | null = null;
     let holdTimer: ReturnType<typeof setTimeout> | null = null;
+    let penActiveAt = -1e9;
+    const palmIds = new Set<number>();
+    const downInfo = new Map<number, { target: EventTarget | null; e: PointerEvent }>();
+    // Safari's touch events say for certain when a touch is the Pencil (touchType 'stylus').
+    // If a Pencil touch was taken for a finger (moving the plan), hand it back to the drawing.
+    const touchStart = (te: TouchEvent) => {
+      for (const t of Array.from(te.changedTouches)) {
+        if ((t as any).touchType !== 'stylus') continue;
+        for (const [id, info] of downInfo) {
+          if (Math.hypot(info.e.clientX - t.clientX, info.e.clientY - t.clientY) > 30) continue;
+          touches.delete(id); downInfo.delete(id);
+          if (fingerPan?.id === id) fingerPan = null;
+          if (touches.size < 2) pinch = null;
+          if (holdTimer) { clearTimeout(holdTimer); holdTimer = null; }
+          tap = null;
+          const o = info.e;
+          info.target?.dispatchEvent(new PointerEvent('pointerdown', {
+            bubbles: true, cancelable: true, composed: true, pointerId: id, pointerType: 'pen', isPrimary: true,
+            clientX: t.clientX, clientY: t.clientY, screenX: o.screenX, screenY: o.screenY, button: 0, buttons: 1, pressure: 0.5,
+          }));
+          break;
+        }
+      }
+    };
+    el.addEventListener('touchstart', touchStart, { capture: true, passive: true });
     const key = (k: string) => window.dispatchEvent(new KeyboardEvent('keydown', { key: k, ctrlKey: true, bubbles: true }));
     const startPinch = () => {
       const [a, b] = [...touches.values()];
@@ -3427,7 +3466,14 @@ export const InteractiveCanvas = ({
     };
     const down = (e: PointerEvent) => {
       lastPointerType = e.pointerType || 'mouse';
-      if (e.pointerType === 'pen') {
+      if (isPencilEvent(e)) {
+        lastPointerType = 'pen';
+        penIdsRef.current.add(e.pointerId);
+        penActiveAt = performance.now();
+        // a palm already resting on the screen must not keep moving the plan
+        fingerPan = null; pinch = null;
+        if (holdTimer) { clearTimeout(holdTimer); holdTimer = null; }
+        setLastInput('Pencil');
         setTouchDevice(true);
         // the first time a Pencil is used, fingers stop drawing (palm rejection)
         if (!pencilOnlyRef.current) { setPencilOnly(true); try { localStorage.setItem(PENCIL_KEY, 'true'); } catch { /* this device only */ } }
@@ -3435,7 +3481,15 @@ export const InteractiveCanvas = ({
       }
       if (e.pointerType !== 'touch') return;
       setTouchDevice(true);
+      setLastInput('finger');
+      // palm rejection: while the Pencil is on the glass (and just after), fingers do nothing
+      if (pencilOnlyRef.current && (penIdsRef.current.size > 0 || performance.now() - penActiveAt < 400)) {
+        palmIds.add(e.pointerId);
+        e.stopPropagation(); e.preventDefault();
+        return;
+      }
       touches.set(e.pointerId, local(e));
+      downInfo.set(e.pointerId, { target: e.target, e });
       if (touches.size === 1) tap = { start: performance.now(), most: 1, moved: false, first: new Map() };
       if (tap) { tap.most = Math.max(tap.most, touches.size); tap.first.set(e.pointerId, local(e)); }
       if (touches.size >= 2) {
@@ -3455,6 +3509,10 @@ export const InteractiveCanvas = ({
       }
     };
     const move = (e: PointerEvent) => {
+      if (penIdsRef.current.has(e.pointerId)) { penActiveAt = performance.now(); return; }
+      if (palmIds.has(e.pointerId)) { e.stopPropagation(); e.preventDefault(); return; }
+      // a hand that was already down when the Pencil touched: keep it away from the drawing
+      if (e.pointerType === 'touch' && pencilOnlyRef.current && penIdsRef.current.size > 0) { e.stopPropagation(); e.preventDefault(); return; }
       if (e.pointerType !== 'touch' || !touches.has(e.pointerId)) return;
       touches.set(e.pointerId, local(e));
       const f = tap?.first.get(e.pointerId);
@@ -3481,7 +3539,14 @@ export const InteractiveCanvas = ({
       }
     };
     const up = (e: PointerEvent) => {
+      if (penIdsRef.current.has(e.pointerId)) { penIdsRef.current.delete(e.pointerId); penActiveAt = performance.now(); return; }
+      if (palmIds.has(e.pointerId)) { palmIds.delete(e.pointerId); e.stopPropagation(); return; }
       if (e.pointerType !== 'touch') return;
+      downInfo.delete(e.pointerId);
+      if (pencilOnlyRef.current && (penIdsRef.current.size > 0 || performance.now() - penActiveAt < 400)) {
+        touches.delete(e.pointerId); if (touches.size < 2) pinch = null; if (fingerPan?.id === e.pointerId) fingerPan = null; tap = null;
+        e.stopPropagation(); return;
+      }
       const wasGesture = !!pinch || (fingerPan?.id === e.pointerId);
       touches.delete(e.pointerId);
       if (holdTimer) { clearTimeout(holdTimer); holdTimer = null; }
@@ -3501,6 +3566,7 @@ export const InteractiveCanvas = ({
     el.addEventListener('pointercancel', up, true);
     return () => {
       if (holdTimer) clearTimeout(holdTimer);
+      el.removeEventListener('touchstart', touchStart, { capture: true } as any);
       el.removeEventListener('pointerdown', down, true);
       el.removeEventListener('pointermove', move, true);
       el.removeEventListener('pointerup', up, true);
@@ -3604,7 +3670,8 @@ export const InteractiveCanvas = ({
     const onMove = (e: PointerEvent) => {
       const drawing = POINT_TOOLS.has(activeToolRef.current as string) || calibrationModeRef.current === 'manual';
       const finger = e.pointerType === 'touch' && !pencilOnlyRef.current && e.buttons > 0;
-      if (!loupeOnRef.current || !drawing || !(e.pointerType === 'pen' || finger)) { hide(); return; }
+      const pen = isPencilEvent(e) || penIdsRef.current.has(e.pointerId);
+      if (!loupeOnRef.current || !drawing || !(pen || (finger && !pencilOnlyRef.current))) { hide(); return; }
       const r = el.getBoundingClientRect();
       last = { x: e.clientX - r.left, y: e.clientY - r.top };
       // after Fabric has redrawn the snap marker for this move
@@ -3612,7 +3679,7 @@ export const InteractiveCanvas = ({
     };
     el.addEventListener('pointermove', onMove);
     el.addEventListener('pointerdown', onMove);
-    const onUp = (e: PointerEvent) => { if (e.pointerType !== 'pen') hide(); };
+    const onUp = (e: PointerEvent) => { if (!(isPencilEvent(e) || penIdsRef.current.has(e.pointerId))) hide(); };
     el.addEventListener('pointerup', onUp);
     el.addEventListener('pointerleave', hide);
     el.addEventListener('pointercancel', hide);
@@ -3631,6 +3698,10 @@ export const InteractiveCanvas = ({
 
   /** Finish or cancel the drawing in progress, as Esc does with a keyboard */
   const finishDrawing = () => {
+    // Finish means "save what I drew": close an area, save the counts, end a wall chain
+    if (activeTool === 'polygon' && polygonPoints.length >= 3) { handleDoubleClick(); return; }
+    if (activeTool === 'count' && countPoints.length > 0) { handleCompleteCount(); return; }
+    if (tapPendingRef.current) { cancelDraw(); return; }
     const ev = new KeyboardEvent('keydown', { key: 'Escape', bubbles: true });
     (ev as any).fromTouchBar = true;
     window.dispatchEvent(ev);
@@ -5357,6 +5428,7 @@ export const InteractiveCanvas = ({
           <button type="button" onClick={() => { const v = !loupeOn; setLoupeOn(v); try { localStorage.setItem(LOUPE_KEY, String(v)); } catch { /* this device only */ } }}
             title="A magnified circle above the Pencil tip while you place points"
             className={`h-10 rounded-md border px-3 ${loupeOn ? 'border-primary bg-primary/15 font-medium' : 'border-border hover:bg-muted'}`}>Magnifier {loupeOn ? 'on' : 'off'}</button>
+          {lastInput && <span className="px-1 text-xs text-muted-foreground" title="What the plan saw last. If the Pencil shows as finger, tell us.">Last touch: {lastInput}</span>}
         </div>
       )}
       {lastLine && isCalibrated && lengthDismissed !== lastLine.id && !isDrawing && (
