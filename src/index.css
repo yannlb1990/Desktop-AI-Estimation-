@@ -230,3 +230,9 @@
   }
   body { background: #fff !important; }
 }
+
+/* iPad and touch screens: takeoff tools big enough for a finger (44 px, Apple's guideline) */
+@media (pointer: coarse) {
+  .takeoff-toolbar button { min-height: 44px; min-width: 44px; }
+  .takeoff-toolbar select, .takeoff-toolbar input { min-height: 40px; }
+}

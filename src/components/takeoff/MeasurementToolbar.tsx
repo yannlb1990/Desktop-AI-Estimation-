@@ -192,7 +192,7 @@ export const MeasurementToolbar = ({
 
   return (
     <TooltipProvider delayDuration={300}>
-      <div className="flex flex-col gap-1">
+      <div className="takeoff-toolbar flex flex-col gap-1">
 
         {/* ── Row 1: Tool buttons ───────────────────────────────────────── */}
         <div className="flex items-center gap-1 p-2 bg-card border border-border rounded-lg overflow-x-auto">
