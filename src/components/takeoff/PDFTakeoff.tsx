@@ -481,7 +481,8 @@ export const PDFTakeoff = ({ projectId, estimateId, onAddCostItems }: PDFTakeoff
 
   const applyVerifiedScale = () => {
     if (!verifyMeasurement || !state.currentScale) return;
-    const actualMetres = parseFloat(verifyActualInput);
+    const typed = parseFloat(verifyActualInput);
+    const actualMetres = typed > 50 ? typed / 1000 : typed; // plan dimensions are in mm (2200), or typed in m (2.2)
     if (isNaN(actualMetres) || actualMetres <= 0) {
       toast.error('Enter a valid dimension');
       return;
@@ -1271,10 +1272,12 @@ export const PDFTakeoff = ({ projectId, estimateId, onAddCostItems }: PDFTakeoff
           </div>
           {verifyActualInput && !isNaN(parseFloat(verifyActualInput)) && verifyMeasurement && (() => {
             const actual = parseFloat(verifyActualInput);
-            const diff = Math.round((actual / verifyMeasurement.realValue - 1) * 100);
+            const actualM = actual > 50 ? actual / 1000 : actual; // 2200 means mm, 2.2 means m
+            const pct = Math.round((actualM / verifyMeasurement.realValue - 1) * 1000) / 10;
             return actual > 0 ? (
-              <p className={`text-xs font-medium ${Math.abs(diff) < 2 ? 'text-foreground/80' : 'text-amber-400'}`}>
-                {Math.abs(diff) < 1 ? '✓ Scale looks correct' : `Scale will be corrected by ${diff > 0 ? '+' : ''}${diff}%`}
+              <p className={`text-xs font-medium ${Math.abs(pct) < 1 ? 'text-foreground/80' : 'text-amber-400'}`}>
+                Measured {verifyMeasurement.realValue.toFixed(3)} m, the plan says {actualM.toFixed(3)} m: {Math.abs(pct).toFixed(1)}% {pct >= 0 ? 'short' : 'long'}.{' '}
+                {Math.abs(pct) < 1 ? 'The scale is good, you can cancel.' : 'Correct the scale to fix every measurement on this page.'}
               </p>
             ) : null;
           })()}
@@ -1448,6 +1451,7 @@ export const PDFTakeoff = ({ projectId, estimateId, onAddCostItems }: PDFTakeoff
                         <CheckCircle className="h-3.5 w-3.5" />
                         {state.currentScale?.scaleFactor ? `1:${state.currentScale.scaleFactor}` : 'Calibrated'}
                       </span>
+                      <Button variant="outline" size="sm" className="h-7 px-2 text-xs" onClick={handleStartVerify} title="Measure a second dimension written on the plan to see how accurate the scale is">Check scale</Button>
                       <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setShowRecalibConfirm(true)} title="Re-calibrate">
                         <Ruler className="h-3.5 w-3.5" />
                       </Button>

@@ -7,6 +7,7 @@ import { syncEstimateWithMeasurements, flowTakeoffIntoEstimate } from '@/lib/est
 import { measuredValueFor } from '@/lib/estimate/planLinks';
 import { removeEstimateLines } from '@/lib/estimate/fromCostItem';
 import { toast } from 'sonner';
+import { rescaleMeasurementsForScale } from '@/lib/takeoff/rescaleForScale';
 
 // Fields on Measurement whose change should cascade to linked cost item quantities
 /**
@@ -278,15 +279,28 @@ function takeoffReducer(state: TakeoffState, action: TakeoffAction): TakeoffStat
       };
     }
 
-    case 'SET_SCALE':
+    case 'SET_SCALE': {
+      // A corrected scale moves everything already measured on that page with it
+      const page = action.payload.pageIndex;
+      const oldUpm = state.scales[page]?.unitsPerMetre ?? 0;
+      const measurements = rescaleMeasurementsForScale(state.measurements, page, oldUpm, action.payload.scale?.unitsPerMetre ?? 0);
+      const changed = new Set(measurements.filter((m, i) => m !== state.measurements[i]).map(m => m.id));
+      const costItems = changed.size === 0 ? state.costItems : state.costItems.map(item => {
+        if (!item.linkedMeasurements.some(id => changed.has(id))) return item;
+        const newQty = rescaleCostQty(item, state.measurements, measurements, item.linkedMeasurements);
+        return { ...item, quantity: newQty, subtotal: newQty * item.unitCost };
+      });
       return {
         ...state,
+        measurements,
+        costItems,
         scales: { ...state.scales, [action.payload.pageIndex]: action.payload.scale },
         currentScale: action.payload.pageIndex === state.currentPageIndex
           ? action.payload.scale
           : state.currentScale,
         isCalibrated: action.payload.pageIndex === state.currentPageIndex
       };
+    }
 
     case 'RESET_SCALE': {
       const newScales = { ...state.scales };

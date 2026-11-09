@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useRef, useState, useCallback } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState, useCallback, useMemo } from 'react';
 import { drawingCornerAngle, wallCorners, squareness } from '@/lib/takeoff/wallAngles';
 import { toast } from 'sonner';
 import { Canvas as FabricCanvas, FabricImage, Circle, Line, Path, Rect, Polygon, Text, IText, Point as FabricPoint, util as fabricUtil } from 'fabric';
@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button';
 import { WorldPoint, ViewPoint, Transform, PDFViewportData, Measurement, ToolType } from '@/lib/takeoff/types';
 import { calculateLinearWorld, calculateRectangleAreaWorld, calculatePolygonAreaWorld, calculateCentroidWorld, calculateCircleAreaWorld } from '@/lib/takeoff/calculations';
 import { viewToWorld } from '@/lib/takeoff/coordinates';
+import { extractPlanSegments, buildPlanIndex, snapToPlan, type PlanSnapIndex, type PlanSnap } from '@/lib/takeoff/planSnap';
 import { DetectedOpening } from '@/lib/takeoff/pdfTextExtractor';
 import { getCachedPDF } from '@/lib/takeoff/pdfCache';
 import { patchPaletteJP2Tiles } from '@/lib/takeoff/jp2Patch';
@@ -124,6 +125,14 @@ const shiftLock = { on: false };
 const shiftHeld = (ev: any) => !!ev?.shiftKey || shiftLock.on;
 const PENCIL_KEY = 'metricore_pencil_only';
 const readPencilOnly = () => { try { return localStorage.getItem(PENCIL_KEY) === 'true'; } catch { return false; } };
+const PLAN_SNAP_KEY = 'metricore_plan_snap';
+const LOUPE_KEY = 'metricore_loupe';
+const readLoupe = () => { try { return localStorage.getItem(LOUPE_KEY) !== 'false'; } catch { return true; } };
+/** Tools that place points: the loupe shows while a Pencil or finger places them */
+const POINT_TOOLS = new Set(['line', 'rectangle', 'circle', 'polygon', 'count', 'wall-line', 'arc-wall', 'offset']);
+/** Tools that can be drawn by tapping the start then tapping the end */
+const TAP_TOOLS = new Set(['line', 'rectangle', 'circle', 'wall-line', 'offset']);
+const readPlanSnap = () => { try { return localStorage.getItem(PLAN_SNAP_KEY) !== 'false'; } catch { return true; } };
 
 /** In-place update of a Fabric Line's world endpoints (no scale/skew accumulation). */
 function setFabricLineCoords(line: any, x1: number, y1: number, x2: number, y2: number) {
@@ -361,6 +370,32 @@ export const InteractiveCanvas = ({
   const [pencilOnly, setPencilOnly] = useState<boolean>(readPencilOnly);
   const pencilOnlyRef = useRef(pencilOnly);
   pencilOnlyRef.current = pencilOnly;
+  // Snap to the plan's own lines (vector PDFs): corners, crossings, along a wall
+  const planIndexRef = useRef<PlanSnapIndex | null>(null);
+  const [planLines, setPlanLines] = useState<'none' | 'reading' | 'found' | 'scan'>('none');
+  const [planSnapOn, setPlanSnapOn] = useState<boolean>(readPlanSnap);
+  const planSnapOnRef = useRef(planSnapOn);
+  planSnapOnRef.current = planSnapOn;
+  const planSnapIndicatorRef = useRef<PlanSnap | null>(null);
+  const planReadTokenRef = useRef(0);
+  // Loupe: a magnified circle above the Pencil tip, so the hand never hides the point
+  const [loupeOn, setLoupeOn] = useState<boolean>(readLoupe);
+  const loupeOnRef = useRef(loupeOn);
+  loupeOnRef.current = loupeOn;
+  const loupeRef = useRef<HTMLCanvasElement>(null);
+  // Tap-tap drawing: a tap without dragging keeps the shape open until the next tap
+  const tapPendingRef = useRef(false);
+  const tapSecondRef = useRef(false);
+  // Exact length: type the real dimension for the line just drawn
+  const mountedAtRef = useRef(new Date().toISOString());
+  const [lengthDismissed, setLengthDismissed] = useState<string | null>(null);
+  const [lengthInput, setLengthInput] = useState('');
+  // Tool wheel: press and hold one finger (Pencil only on) to pick a tool where you are
+  const [toolWheel, setToolWheel] = useState<{ x: number; y: number } | null>(null);
+  const onToolChangeRef = useRef(onToolChange);
+  onToolChangeRef.current = onToolChange;
+  const planSnapAt = (p: WorldPoint, thresh: number): PlanSnap | null =>
+    planSnapOnRef.current ? snapToPlan(planIndexRef.current, p.x, p.y, thresh) : null;
   const [angleLock, setAngleLock] = useState(false);
   const [touchDevice, setTouchDevice] = useState(COARSE_POINTER);
   const transformRef = useRef(transform);
@@ -420,6 +455,8 @@ export const InteractiveCanvas = ({
   const angleHudRef = useRef<{ deg: number; at: WorldPoint } | null>(null);
   const activeToolRef = useRef(activeTool);
   activeToolRef.current = activeTool;
+  const calibrationModeRef = useRef(calibrationMode);
+  calibrationModeRef.current = calibrationMode;
   // Arc wall control-point drag state (select mode)
   const arcDragRef = useRef<{ id: string; p1: WorldPoint; p2: WorldPoint; ctrl: WorldPoint } | null>(null);
   // Chain wall drawing: endpoint of last completed wall — auto-starts next wall from here
@@ -468,6 +505,11 @@ export const InteractiveCanvas = ({
   // Drawing state
   const [isDrawing, setIsDrawing] = useState(false);
   const [startPoint, setStartPoint] = useState<WorldPoint | null>(null);
+  // the mouse-down handler is memoised without these, so read them through refs
+  const isDrawingRef = useRef(isDrawing);
+  isDrawingRef.current = isDrawing;
+  const startPointRef = useRef(startPoint);
+  startPointRef.current = startPoint;
   const previewShapeRef = useRef<any>(null);
   const [polygonPoints, setPolygonPoints] = useState<WorldPoint[]>([]);
   const [polygonMarkers, setPolygonMarkers] = useState<Circle[]>([]);
@@ -846,6 +888,19 @@ export const InteractiveCanvas = ({
           fabricCanvasRef.current.backgroundImage = img;
           fabricCanvasRef.current.requestRenderAll();
         }
+
+        // Read the drawing's own lines in the background for snapping (vector PDFs only)
+        planIndexRef.current = null;
+        setPlanLines('reading');
+        const readToken = ++planReadTokenRef.current;
+        extractPlanSegments(page, transform.rotation)
+          .then(segs => {
+            if (readToken !== planReadTokenRef.current) return; // another page or rotation since
+            // a scan holds a picture and at most a few border lines
+            planIndexRef.current = segs.length >= 40 ? buildPlanIndex(segs) : null;
+            setPlanLines(segs.length >= 40 ? 'found' : 'scan');
+          })
+          .catch(() => { planIndexRef.current = null; setPlanLines('scan'); });
 
         // Auto-fit: runs once per mount. Reads the container's live dimensions so the
         // zoom is always accurate regardless of when or which tab is visible.
@@ -2379,6 +2434,23 @@ export const InteractiveCanvas = ({
         ctx.restore();
       }
 
+      // Plan snap indicator: what the point locked onto in the drawing itself
+      const pSnap = planSnapIndicatorRef.current;
+      if (pSnap && !epSnap) {
+        const cx = tpx(pSnap.point.x), cy = tpy(pSnap.point.y);
+        const r = 7 * dpr;
+        ctx.save();
+        ctx.strokeStyle = '#22c55e';
+        ctx.lineWidth = 2 * dpr;
+        ctx.setLineDash([]);
+        ctx.beginPath();
+        if (pSnap.kind === 'corner') ctx.rect(cx - r, cy - r, r * 2, r * 2);
+        else if (pSnap.kind === 'intersection') { ctx.moveTo(cx - r, cy - r); ctx.lineTo(cx + r, cy + r); ctx.moveTo(cx + r, cy - r); ctx.lineTo(cx - r, cy + r); }
+        else { ctx.arc(cx, cy, r * 0.6, 0, Math.PI * 2); }
+        ctx.stroke();
+        ctx.restore();
+      }
+
       // Chain drawing anchor — amber dot showing where next wall will start
       {
         const chainAnchor = chainStartRef.current;
@@ -3344,6 +3416,10 @@ export const InteractiveCanvas = ({
     let pinch: { dist: number; mid: { x: number; y: number }; zoom: number; panX: number; panY: number } | null = null;
     let fingerPan: { id: number; x: number; y: number } | null = null;
     const local = (e: PointerEvent) => { const r = el.getBoundingClientRect(); return { x: e.clientX - r.left, y: e.clientY - r.top }; };
+    // a quick tap with two fingers undoes, with three redoes (like Procreate and Notes)
+    let tap: { start: number; most: number; moved: boolean; first: Map<number, { x: number; y: number }> } | null = null;
+    let holdTimer: ReturnType<typeof setTimeout> | null = null;
+    const key = (k: string) => window.dispatchEvent(new KeyboardEvent('keydown', { key: k, ctrlKey: true, bubbles: true }));
     const startPinch = () => {
       const [a, b] = [...touches.values()];
       const t = transformRef.current;
@@ -3360,8 +3436,12 @@ export const InteractiveCanvas = ({
       if (e.pointerType !== 'touch') return;
       setTouchDevice(true);
       touches.set(e.pointerId, local(e));
+      if (touches.size === 1) tap = { start: performance.now(), most: 1, moved: false, first: new Map() };
+      if (tap) { tap.most = Math.max(tap.most, touches.size); tap.first.set(e.pointerId, local(e)); }
       if (touches.size >= 2) {
         fingerPan = null;
+        // the first finger had started a line or box: a pinch means "move the plan", not "draw"
+        if (isDrawingRef.current && TAP_TOOLS.has(activeToolRef.current as string)) cancelDrawRef.current();
         startPinch();
         e.stopPropagation(); e.preventDefault();
         return;
@@ -3369,11 +3449,17 @@ export const InteractiveCanvas = ({
       if (pencilOnlyRef.current) {
         fingerPan = { id: e.pointerId, ...local(e) };
         e.stopPropagation(); e.preventDefault();
+        if (holdTimer) clearTimeout(holdTimer);
+        const at = local(e);
+        holdTimer = setTimeout(() => { holdTimer = null; if (touches.size === 1 && tap && !tap.moved) { fingerPan = null; setToolWheel(at); } }, 550);
       }
     };
     const move = (e: PointerEvent) => {
       if (e.pointerType !== 'touch' || !touches.has(e.pointerId)) return;
       touches.set(e.pointerId, local(e));
+      const f = tap?.first.get(e.pointerId);
+      if (tap && f) { const p = local(e); if (Math.hypot(p.x - f.x, p.y - f.y) > 12) tap.moved = true; }
+      if (holdTimer && (tap?.moved || touches.size > 1)) { clearTimeout(holdTimer); holdTimer = null; }
       if (pinch && touches.size >= 2) {
         const [a, b] = [...touches.values()];
         const dist = Math.hypot(a.x - b.x, a.y - b.y) || 1;
@@ -3398,6 +3484,13 @@ export const InteractiveCanvas = ({
       if (e.pointerType !== 'touch') return;
       const wasGesture = !!pinch || (fingerPan?.id === e.pointerId);
       touches.delete(e.pointerId);
+      if (holdTimer) { clearTimeout(holdTimer); holdTimer = null; }
+      if (touches.size === 0 && tap) {
+        const quick = !tap.moved && performance.now() - tap.start < 350;
+        if (quick && tap.most === 2) key('z');
+        else if (quick && tap.most === 3) key('y');
+        tap = null;
+      }
       if (touches.size < 2) pinch = null;
       if (fingerPan?.id === e.pointerId) fingerPan = null;
       if (wasGesture) e.stopPropagation();
@@ -3407,12 +3500,131 @@ export const InteractiveCanvas = ({
     el.addEventListener('pointerup', up, true);
     el.addEventListener('pointercancel', up, true);
     return () => {
+      if (holdTimer) clearTimeout(holdTimer);
       el.removeEventListener('pointerdown', down, true);
       el.removeEventListener('pointermove', move, true);
       el.removeEventListener('pointerup', up, true);
       el.removeEventListener('pointercancel', up, true);
     };
   }, [onTransformChange]);
+
+  /** Drop the shape being drawn (open tap-tap line, drag cut short by a pinch, Esc) */
+  const cancelDraw = () => {
+    const canvas = fabricCanvasRef.current;
+    const prev = previewShapeRef.current as any;
+    if (canvas && prev) {
+      (prev._wallPreviews as any[] | undefined)?.forEach(o => canvas.remove(o));
+      (prev._arcPreviews as any[] | undefined)?.forEach(o => canvas.remove(o));
+      canvas.remove(prev);
+    }
+    previewShapeRef.current = null;
+    previewLabelRef.current = null;
+    planSnapIndicatorRef.current = null;
+    tapPendingRef.current = false;
+    tapSecondRef.current = false;
+    isDrawingRef.current = false;
+    setIsDrawing(false);
+    setStartPoint(null);
+    canvas?.requestRenderAll();
+  };
+  const cancelDrawRef = useRef(cancelDraw);
+  cancelDrawRef.current = cancelDraw;
+  // a new tool or page drops an open tap-tap shape
+  useEffect(() => { if (tapPendingRef.current) cancelDrawRef.current(); tapPendingRef.current = false; tapSecondRef.current = false; }, [activeTool, pageIndex]);
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape' && tapPendingRef.current) cancelDrawRef.current(); };
+    window.addEventListener('keydown', onKey, true);
+    return () => window.removeEventListener('keydown', onKey, true);
+  }, []);
+
+  // The newest straight line drawn in this visit (line, wall, offset), for the exact length box
+  const lastLine = useMemo(() => {
+    let best: (typeof measurements)[number] | null = null;
+    for (const m of measurements) {
+      if (!['line', 'wall-line', 'offset'].includes((m as any).type) && !(m as any).wallThickness) continue;
+      if ((m as any).pageIndex !== undefined && (m as any).pageIndex !== pageIndex) continue;
+      if (!m.worldPoints || m.worldPoints.length !== 2 || (m as any).arcControlPoint) continue;
+      const t = (m as any).timestamp as string | undefined;
+      if (!t || t < mountedAtRef.current) continue;
+      if (!best || t > ((best as any).timestamp as string)) best = m;
+    }
+    return best;
+  }, [measurements, pageIndex]);
+  useEffect(() => { setLengthInput(''); }, [lastLine?.id]);
+  const setExactLength = () => {
+    const upm = unitsPerMetre;
+    const typed = parseFloat(lengthInput.replace(',', '.'));
+    if (!lastLine || !upm || !(typed > 0) || !onMeasurementUpdate) return;
+    const metres = typed > 50 ? typed / 1000 : typed; // 3600 is mm, 3.6 is m
+    const [a, b] = lastLine.worldPoints!;
+    const len = Math.hypot(b.x - a.x, b.y - a.y) || 1;
+    const k = (metres * upm) / len;
+    const end = { x: a.x + (b.x - a.x) * k, y: a.y + (b.y - a.y) * k };
+    onMeasurementUpdate(lastLine.id, { worldPoints: [a, end], realValue: metres } as any);
+    setLengthDismissed(lastLine.id);
+  };
+  useEffect(() => { if (!isDrawing) { tapPendingRef.current = false; tapSecondRef.current = false; } }, [isDrawing]);
+
+  // ── Loupe above the Pencil tip ───────────────────────────────────────────
+  // Copies the area under the tip, magnified, into a circle drawn above it (or below near
+  // the top edge). Shows while the Pencil hovers or presses, or a finger draws.
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!el) return;
+    let raf = 0;
+    let last: { x: number; y: number } | null = null;
+    const hide = () => { last = null; const l = loupeRef.current; if (l) l.style.display = 'none'; };
+    const paint = () => {
+      raf = 0;
+      const l = loupeRef.current;
+      const src = fabricCanvasRef.current?.getElement();
+      if (!l || !src || !last) return;
+      const size = 132, mag = 2.5;
+      const dpr = window.devicePixelRatio || 1;
+      if (l.width !== size * dpr) { l.width = size * dpr; l.height = size * dpr; }
+      const ctx = l.getContext('2d');
+      if (!ctx) return;
+      const k = src.width / (src.clientWidth || 1);
+      const srcSize = (size / mag) * k;
+      ctx.clearRect(0, 0, l.width, l.height);
+      ctx.save();
+      ctx.beginPath(); ctx.arc(l.width / 2, l.height / 2, l.width / 2, 0, Math.PI * 2); ctx.clip();
+      ctx.fillStyle = '#ffffff'; ctx.fillRect(0, 0, l.width, l.height);
+      ctx.drawImage(src, last.x * k - srcSize / 2, last.y * k - srcSize / 2, srcSize, srcSize, 0, 0, l.width, l.height);
+      ctx.restore();
+      const c = l.width / 2;
+      ctx.strokeStyle = '#dc2626'; ctx.lineWidth = 1.5 * dpr;
+      ctx.beginPath(); ctx.moveTo(c - 12 * dpr, c); ctx.lineTo(c + 12 * dpr, c); ctx.moveTo(c, c - 12 * dpr); ctx.lineTo(c, c + 12 * dpr); ctx.stroke();
+      // above the tip, or below it near the top edge
+      const above = last.y > size + 40;
+      l.style.left = `${Math.max(0, Math.min(el.clientWidth - size, last.x - size / 2))}px`;
+      l.style.top = `${above ? last.y - size - 40 : last.y + 40}px`;
+      l.style.display = 'block';
+    };
+    const onMove = (e: PointerEvent) => {
+      const drawing = POINT_TOOLS.has(activeToolRef.current as string) || calibrationModeRef.current === 'manual';
+      const finger = e.pointerType === 'touch' && !pencilOnlyRef.current && e.buttons > 0;
+      if (!loupeOnRef.current || !drawing || !(e.pointerType === 'pen' || finger)) { hide(); return; }
+      const r = el.getBoundingClientRect();
+      last = { x: e.clientX - r.left, y: e.clientY - r.top };
+      // after Fabric has redrawn the snap marker for this move
+      if (!raf) raf = requestAnimationFrame(() => requestAnimationFrame(paint));
+    };
+    el.addEventListener('pointermove', onMove);
+    el.addEventListener('pointerdown', onMove);
+    const onUp = (e: PointerEvent) => { if (e.pointerType !== 'pen') hide(); };
+    el.addEventListener('pointerup', onUp);
+    el.addEventListener('pointerleave', hide);
+    el.addEventListener('pointercancel', hide);
+    return () => {
+      if (raf) cancelAnimationFrame(raf);
+      el.removeEventListener('pointermove', onMove);
+      el.removeEventListener('pointerdown', onMove);
+      el.removeEventListener('pointerup', onUp);
+      el.removeEventListener('pointerleave', hide);
+      el.removeEventListener('pointercancel', hide);
+    };
+  }, []);
 
   // The on-screen 45° lock (iPad) acts like holding Shift
   useEffect(() => { shiftLock.on = angleLock; return () => { shiftLock.on = false; }; }, [angleLock]);
@@ -3724,12 +3936,18 @@ export const InteractiveCanvas = ({
     // Convert to world coordinates for storage (applies inverse transform)
     let worldPoint = viewToWorld(viewPoint, transform, viewport);
 
-    // Snap click point to nearest endpoint or midpoint
-    if (activeTool && activeTool !== 'pan' && activeTool !== 'select' && activeTool !== 'eraser') {
+    // Snap click point to nearest endpoint or midpoint (and both ends of the scale line)
+    const calibrating = calibrationMode === 'manual' && !isCalibrated;
+    if (calibrating || (activeTool && activeTool !== 'pan' && activeTool !== 'select' && activeTool !== 'eraser')) {
       const snapZoom = fabricCanvasRef.current?.getZoom() || 1;
       const snapResult = computeSnapPoint(worldPoint, measurements, (12 * touchScale()) / snapZoom);
       if (snapResult) worldPoint = snapResult.point;
+      else {
+        const ps = planSnapAt(worldPoint, (10 * touchScale()) / snapZoom);
+        if (ps) worldPoint = ps.point;
+      }
     }
+    planSnapIndicatorRef.current = null;
     midpointSnapRef.current = null;
     endpointSnapIndicatorRef.current = null;
 
@@ -3981,6 +4199,13 @@ export const InteractiveCanvas = ({
       }
     }
 
+    // Tap-tap drawing: this tap is the end of the shape started by the last tap
+    if (tapPendingRef.current && isDrawingRef.current && startPointRef.current && activeTool && TAP_TOOLS.has(activeTool)) {
+      tapPendingRef.current = false;
+      tapSecondRef.current = true;
+      return;
+    }
+
     // Chain wall drawing: auto-start from last wall endpoint
     if (activeTool === 'wall-line' && chainStartRef.current !== null) {
       worldPoint = chainStartRef.current;
@@ -4100,7 +4325,11 @@ export const InteractiveCanvas = ({
     // Handle calibration drag preview (use refs to avoid stale closure)
     if (calibrationMode === 'manual' && isCalibrationDraggingRef.current && calibrationStartPointRef.current) {
       const pointer = getCSSPointer(canvas, e.e);
-      const currentWorld = viewToWorld({ x: pointer.x, y: pointer.y }, transform, viewport);
+      let currentWorld = viewToWorld({ x: pointer.x, y: pointer.y }, transform, viewport);
+      // the scale line locks onto the drawing too: a dimension line or wall end, exactly
+      const ps = planSnapAt(currentWorld, (10 * touchScale()) / (fabricCanvasRef.current?.getZoom() || 1));
+      planSnapIndicatorRef.current = ps;
+      if (ps) currentWorld = ps.point;
       handleCalibrationMouseMove(currentWorld);
       return;
     }
@@ -4173,6 +4402,13 @@ export const InteractiveCanvas = ({
         }
         if (snappedToWall) break;
       }
+      if (!snappedToWall) {
+        const own = computeSnapPoint(snapWorld, measurements, snapThreshold);
+        const ps = own ? null : planSnapAt(snapWorld, (10 * touchScale()) / transform.zoom);
+        if (own) snapWorld = own.point;
+        else if (ps) snapWorld = ps.point;
+        planSnapIndicatorRef.current = ps;
+      } else planSnapIndicatorRef.current = null;
       endpointSnapIndicatorRef.current = snappedToWall ? snapWorld : null;
       polygonCursorRef.current = snapWorld;
 
@@ -4212,6 +4448,18 @@ export const InteractiveCanvas = ({
     }
 
     // Allow preview even without calibration
+    // Before the first point: show what the mouse or a hovering Pencil would lock onto
+    if (!isDrawing && activeTool && POINT_TOOLS.has(activeTool)) {
+      const hp = getCSSPointer(canvas, e.e);
+      const hw = viewToWorld({ x: hp.x, y: hp.y }, transform, viewport);
+      const hz = fabricCanvasRef.current?.getZoom() || 1;
+      const own = computeSnapPoint(hw, measurements, (12 * touchScale()) / hz);
+      const prevE = endpointSnapIndicatorRef.current, prevP = planSnapIndicatorRef.current;
+      endpointSnapIndicatorRef.current = own && !own.isMidpoint ? own.point : null;
+      planSnapIndicatorRef.current = own ? null : planSnapAt(hw, (10 * touchScale()) / hz);
+      if (prevE || prevP || endpointSnapIndicatorRef.current || planSnapIndicatorRef.current) canvas.requestRenderAll();
+    }
+
     if (!isDrawing || !startPoint) return;
 
     const pointer = getCSSPointer(canvas, e.e);
@@ -4229,9 +4477,13 @@ export const InteractiveCanvas = ({
       midpointSnapRef.current = snapResult.isMidpoint ? snapResult.point : null;
       // Feature 1: endpoint snap indicator
       endpointSnapIndicatorRef.current = snapResult.isMidpoint ? null : snapResult.point;
+      planSnapIndicatorRef.current = null;
     } else {
       midpointSnapRef.current = null;
       endpointSnapIndicatorRef.current = null;
+      const ps = shiftHeld(e.e) ? null : planSnapAt(currentWorldPoint, (10 * touchScale()) / zoom);
+      planSnapIndicatorRef.current = ps;
+      if (ps) currentWorldPoint = ps.point;
     }
 
     // Shift-snap: 45° for line, square for rectangle
@@ -4499,7 +4751,10 @@ export const InteractiveCanvas = ({
     // Handle calibration drag end (use refs to avoid stale closure)
     if (calibrationMode === 'manual' && isCalibrationDraggingRef.current && calibrationStartPointRef.current) {
       const pointer = getCSSPointer(canvas, e.e);
-      const worldEnd = viewToWorld({ x: pointer.x, y: pointer.y }, transform, viewport);
+      let worldEnd = viewToWorld({ x: pointer.x, y: pointer.y }, transform, viewport);
+      const ps = planSnapAt(worldEnd, (10 * touchScale()) / (fabricCanvasRef.current?.getZoom() || 1));
+      if (ps) worldEnd = ps.point;
+      planSnapIndicatorRef.current = null;
       handleCalibrationMouseUp(worldEnd);
       return;
     }
@@ -4521,7 +4776,7 @@ export const InteractiveCanvas = ({
       return;
     }
 
-    if (!isDrawing || !startPoint || !viewport) return;
+    if (!isDrawing || !startPoint || !viewport || !isDrawingRef.current) return;
 
     const pointer = getCSSPointer(canvas, e.e);
     let worldEndPoint = viewToWorld({ x: pointer.x, y: pointer.y }, transform, viewport);
@@ -4530,7 +4785,21 @@ export const InteractiveCanvas = ({
     if (shiftHeld(e.e) && startPoint) {
       if (activeTool === 'line') worldEndPoint = snapEndpointToAngle(startPoint, worldEndPoint, 45);
       else if (activeTool === 'rectangle') worldEndPoint = snapToSquare(startPoint, worldEndPoint);
+    } else {
+      const upZoom = fabricCanvasRef.current?.getZoom() || 1;
+      const own = computeSnapPoint(worldEndPoint, measurements, (12 * touchScale()) / upZoom);
+      const ps = own ? null : planSnapAt(worldEndPoint, (10 * touchScale()) / upZoom);
+      if (own) worldEndPoint = own.point;
+      else if (ps) worldEndPoint = ps.point;
     }
+    planSnapIndicatorRef.current = null;
+
+    // A tap without dragging starts tap-tap drawing: the next tap places the end
+    if (activeTool && TAP_TOOLS.has(activeTool)) {
+      const tiny = Math.hypot(worldEndPoint.x - startPoint.x, worldEndPoint.y - startPoint.y) < 5 / transform.zoom;
+      if (tiny && !tapSecondRef.current) { tapPendingRef.current = true; return; }
+    }
+    tapSecondRef.current = false;
 
     // Remove preview shape
     if (previewShapeRef.current) {
@@ -5085,6 +5354,44 @@ export const InteractiveCanvas = ({
           <button type="button" onClick={() => { const v = !pencilOnly; setPencilOnly(v); try { localStorage.setItem(PENCIL_KEY, String(v)); } catch { /* this device only */ } }}
             title="On: only the Apple Pencil draws, fingers move and zoom the plan"
             className={`h-10 rounded-md border px-3 ${pencilOnly ? 'border-primary bg-primary/15 font-medium' : 'border-border hover:bg-muted'}`}>Pencil only {pencilOnly ? 'on' : 'off'}</button>
+          <button type="button" onClick={() => { const v = !loupeOn; setLoupeOn(v); try { localStorage.setItem(LOUPE_KEY, String(v)); } catch { /* this device only */ } }}
+            title="A magnified circle above the Pencil tip while you place points"
+            className={`h-10 rounded-md border px-3 ${loupeOn ? 'border-primary bg-primary/15 font-medium' : 'border-border hover:bg-muted'}`}>Magnifier {loupeOn ? 'on' : 'off'}</button>
+        </div>
+      )}
+      {lastLine && isCalibrated && lengthDismissed !== lastLine.id && !isDrawing && (
+        <form onSubmit={e => { e.preventDefault(); setExactLength(); }}
+          className={`absolute right-3 z-20 flex items-center gap-1.5 rounded-md border border-border bg-card/95 px-2 py-1.5 text-xs shadow ${touchDevice ? 'top-3' : 'bottom-3'}`}>
+          <span className="text-muted-foreground">Last line {lastLine.realValue.toFixed(3)} m. Exact length</span>
+          <input value={lengthInput} onChange={e => setLengthInput(e.target.value)} inputMode="decimal" placeholder="3.6 or 3600"
+            className="h-8 w-24 rounded border border-input bg-background px-2 text-xs" aria-label="Exact length of the last line" />
+          <button type="submit" disabled={!(parseFloat(lengthInput) > 0)} className="h-8 rounded border border-border px-2 font-medium hover:bg-muted disabled:opacity-40">Set</button>
+          <button type="button" onClick={() => setLengthDismissed(lastLine.id)} className="h-8 rounded px-2 text-muted-foreground hover:bg-muted">Done</button>
+        </form>
+      )}
+      {toolWheel && (
+        <div className="absolute inset-0 z-40" onPointerDown={e => { if (e.target === e.currentTarget) setToolWheel(null); }}>
+          {([['line', 'Line'], ['wall-line', 'Wall'], ['rectangle', 'Rectangle'], ['polygon', 'Area'], ['count', 'Count'], ['select', 'Select'], ['eraser', 'Eraser']] as [ToolType, string][]).map(([tool, label], i, all) => {
+            const a = (i / all.length) * Math.PI * 2 - Math.PI / 2;
+            const cx = toolWheel.x + Math.cos(a) * 78, cy = toolWheel.y + Math.sin(a) * 78;
+            return (
+              <button key={tool} type="button" onClick={() => { onToolChangeRef.current?.(tool); setToolWheel(null); }}
+                style={{ left: cx, top: cy }}
+                className={`absolute h-11 min-w-[4.5rem] -translate-x-1/2 -translate-y-1/2 rounded-full border px-3 text-xs font-medium shadow-lg ${activeTool === tool ? 'border-primary bg-primary text-primary-foreground' : 'border-border bg-card'}`}>{label}</button>
+            );
+          })}
+        </div>
+      )}
+      <canvas ref={loupeRef} aria-hidden className="pointer-events-none absolute z-30 hidden rounded-full border-2 border-white shadow-xl" style={{ width: 132, height: 132 }} />
+      {planLines !== 'none' && (
+        <div className={`absolute z-20 flex items-center gap-2 rounded-md border border-border bg-card/95 px-2 py-1 text-xs shadow ${touchDevice ? 'left-3 top-3' : 'bottom-3 left-3'}`}>
+          {planLines === 'reading' && <span className="text-muted-foreground">Reading the plan's lines</span>}
+          {planLines === 'scan' && <span className="text-muted-foreground" title="Scanned or photographed plans are a picture, so there are no lines to lock onto">Scanned plan: snapping to your own points only</span>}
+          {planLines === 'found' && (
+            <button type="button" onClick={() => { const v = !planSnapOn; setPlanSnapOn(v); try { localStorage.setItem(PLAN_SNAP_KEY, String(v)); } catch { /* this device only */ } }}
+              title="Points lock onto the corners, crossings and lines of the drawing itself"
+              className={`rounded px-1.5 py-0.5 ${planSnapOn ? 'font-medium text-foreground' : 'text-muted-foreground'}`}>Snap to plan lines {planSnapOn ? 'on' : 'off'}</button>
+          )}
         </div>
       )}
       {compareOverlay && (
