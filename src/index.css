@@ -54,6 +54,7 @@
     --shadow-sm: 0 2px 8px hsl(30 40% 10% / 0.08);
     --shadow-md: 0 4px 16px hsl(30 40% 10% / 0.12);
     --shadow-lg: 0 8px 32px hsl(30 40% 10% / 0.16);
+    --shadow-ink: 33 22% 50%;          /* home page mock-up shadows: a soft tan on the light page */
     --shadow-glow: 0 0 40px hsl(48 28% 84% / 0.10);
 
     --transition-smooth: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
@@ -111,6 +112,7 @@
     --shadow-sm: 0 2px 8px hsl(0 0% 0% / 0.50);
     --shadow-md: 0 4px 20px hsl(0 0% 0% / 0.65);
     --shadow-lg: 0 8px 40px hsl(0 0% 0% / 0.78);
+    --shadow-ink: 0 0% 0%;
     --shadow-glow: 0 0 40px hsl(48 28% 84% / 0.05);
 
     --transition-smooth: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);

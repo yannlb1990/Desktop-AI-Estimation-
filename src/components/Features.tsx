@@ -11,15 +11,15 @@ import { MetricoreLogoMark } from "@/components/MetricoreLogoMark";
 
 /* ─── Takeoff Canvas Mockup ─────────────────────────────────────────────── */
 const TakeoffPreview = () => (
-  <div className="rounded-xl overflow-hidden border border-white/8 bg-card shadow-[0_20px_60px_rgba(0,0,0,0.5)]">
-    <div className="flex items-center gap-2 px-3 py-2 bg-card/80 border-b border-white/8">
+  <div className="rounded-xl overflow-hidden border border-foreground/8 bg-card shadow-[0_20px_60px_hsl(var(--shadow-ink)/0.5)]">
+    <div className="flex items-center gap-2 px-3 py-2 bg-card/80 border-b border-foreground/8">
       <div className="flex gap-1"><div className="w-2.5 h-2.5 rounded-full bg-[#ff5f57]" /><div className="w-2.5 h-2.5 rounded-full bg-[#febc2e]" /><div className="w-2.5 h-2.5 rounded-full bg-[#28c840]" /></div>
-      <span className="text-[10px] text-white/30 font-mono ml-2 flex-1 truncate">Ground_Floor_DA-01.pdf</span>
-      <span className="text-[9px] font-mono text-[#E1DCC9]/70 bg-[#E1DCC9]/8 border border-[#E1DCC9]/20 px-1.5 py-0.5 rounded">✓ 1:100</span>
+      <span className="text-[10px] text-foreground/30 font-mono ml-2 flex-1 truncate">Ground_Floor_DA-01.pdf</span>
+      <span className="text-[9px] font-mono text-primary/70 bg-primary/8 border border-primary/20 px-1.5 py-0.5 rounded">✓ 1:100</span>
     </div>
     <div className="flex">
-      <div className="w-32 shrink-0 bg-background border-r border-white/6 p-2 space-y-1">
-        <div className="text-[9px] font-mono text-white/30 uppercase tracking-widest px-1 mb-2">Measurements</div>
+      <div className="w-32 shrink-0 bg-background border-r border-foreground/6 p-2 space-y-1">
+        <div className="text-[9px] font-mono text-foreground/30 uppercase tracking-widest px-1 mb-2">Measurements</div>
         {[
           { label: "Living Rm", val: "44.6 m²", active: true },
           { label: "Kitchen", val: "12.3 m²", active: false },
@@ -29,46 +29,46 @@ const TakeoffPreview = () => (
         ].map((r) => (
           <div key={r.label} className="flex items-center gap-1.5 px-1 py-0.5">
             <div className={`w-1.5 h-1.5 rounded-full shrink-0 ${r.active ? "bg-primary" : "bg-primary/15"}`} />
-            <span className="text-[9px] text-white/40 flex-1 truncate">{r.label}</span>
-            <span className={`text-[9px] font-mono ${r.active ? "text-[#E1DCC9]" : "text-[#E1DCC9]/40"}`}>{r.val}</span>
+            <span className="text-[9px] text-foreground/40 flex-1 truncate">{r.label}</span>
+            <span className={`text-[9px] font-mono ${r.active ? "text-primary" : "text-primary/40"}`}>{r.val}</span>
           </div>
         ))}
-        <div className="border-t border-white/6 mt-2 pt-2 px-1 flex justify-between">
-          <span className="text-[9px] text-white/30 font-mono">TOTAL</span>
-          <span className="text-[9px] font-mono text-[#E1DCC9] font-bold">92.7 m²</span>
+        <div className="border-t border-foreground/6 mt-2 pt-2 px-1 flex justify-between">
+          <span className="text-[9px] text-foreground/30 font-mono">TOTAL</span>
+          <span className="text-[9px] font-mono text-primary font-bold">92.7 m²</span>
         </div>
       </div>
       <div className="flex-1 bg-card relative">
         <svg viewBox="0 0 280 200" className="w-full h-full" style={{ display: "block" }}>
           <defs>
             <pattern id="ft-grid" width="15" height="15" patternUnits="userSpaceOnUse">
-              <path d="M 15 0 L 0 0 0 15" fill="none" stroke="rgba(225,220,201,0.06)" strokeWidth="0.5" />
+              <path d="M 15 0 L 0 0 0 15" fill="none" stroke="hsl(var(--primary) / 0.06)" strokeWidth="0.5" />
             </pattern>
           </defs>
           <rect width="280" height="200" fill="url(#ft-grid)" />
-          <rect x="20" y="12" width="240" height="172" fill="#1F150C" stroke="rgba(225,220,201,0.2)" strokeWidth="2" />
-          <line x1="110" y1="12" x2="110" y2="184" stroke="rgba(225,220,201,0.2)" strokeWidth="1.2" />
-          <line x1="110" y1="100" x2="260" y2="100" stroke="rgba(225,220,201,0.2)" strokeWidth="1.2" />
-          <line x1="190" y1="12" x2="190" y2="184" stroke="rgba(225,220,201,0.2)" strokeWidth="1.2" />
-          <polygon points="20,12 110,12 110,184 20,184" fill="rgba(225,220,201,0.08)" stroke="#E1DCC9" strokeWidth="1.2" />
-          <circle cx="20" cy="12" r="2" fill="#E1DCC9" /><circle cx="110" cy="12" r="2" fill="#E1DCC9" />
-          <circle cx="110" cy="184" r="2" fill="#E1DCC9" /><circle cx="20" cy="184" r="2" fill="#E1DCC9" />
-          <rect x="35" y="89" width="56" height="16" rx="3" fill="rgba(225,220,201,0.2)" stroke="#E1DCC9" strokeWidth="0.8" />
-          <text x="63" y="100" textAnchor="middle" fontSize="9" fontFamily="monospace" fill="#E1DCC9" fontWeight="bold">44.6 m²</text>
-          <text x="65" y="58" textAnchor="middle" fontSize="6.5" fill="rgba(225,220,201,0.35)" fontFamily="system-ui">LIVING / DINING</text>
-          <text x="148" y="56" textAnchor="middle" fontSize="6" fill="rgba(225,220,201,0.25)" fontFamily="system-ui">KITCHEN</text>
-          <text x="222" y="56" textAnchor="middle" fontSize="6" fill="rgba(225,220,201,0.25)" fontFamily="system-ui">MASTER</text>
-          <text x="148" y="148" textAnchor="middle" fontSize="6" fill="rgba(225,220,201,0.25)" fontFamily="system-ui">BED 2</text>
-          <text x="222" y="148" textAnchor="middle" fontSize="6" fill="rgba(225,220,201,0.25)" fontFamily="system-ui">ENSUITE</text>
-          <circle cx="110" cy="184" r="5" fill="none" stroke="#E1DCC9" strokeWidth="0.8" opacity="0.5">
+          <rect x="20" y="12" width="240" height="172" fill="hsl(var(--card))" stroke="hsl(var(--primary) / 0.2)" strokeWidth="2" />
+          <line x1="110" y1="12" x2="110" y2="184" stroke="hsl(var(--primary) / 0.2)" strokeWidth="1.2" />
+          <line x1="110" y1="100" x2="260" y2="100" stroke="hsl(var(--primary) / 0.2)" strokeWidth="1.2" />
+          <line x1="190" y1="12" x2="190" y2="184" stroke="hsl(var(--primary) / 0.2)" strokeWidth="1.2" />
+          <polygon points="20,12 110,12 110,184 20,184" fill="hsl(var(--primary) / 0.08)" stroke="hsl(var(--primary))" strokeWidth="1.2" />
+          <circle cx="20" cy="12" r="2" fill="hsl(var(--primary))" /><circle cx="110" cy="12" r="2" fill="hsl(var(--primary))" />
+          <circle cx="110" cy="184" r="2" fill="hsl(var(--primary))" /><circle cx="20" cy="184" r="2" fill="hsl(var(--primary))" />
+          <rect x="35" y="89" width="56" height="16" rx="3" fill="hsl(var(--primary) / 0.2)" stroke="hsl(var(--primary))" strokeWidth="0.8" />
+          <text x="63" y="100" textAnchor="middle" fontSize="9" fontFamily="monospace" fill="hsl(var(--primary))" fontWeight="bold">44.6 m²</text>
+          <text x="65" y="58" textAnchor="middle" fontSize="6.5" fill="hsl(var(--primary) / 0.35)" fontFamily="system-ui">LIVING / DINING</text>
+          <text x="148" y="56" textAnchor="middle" fontSize="6" fill="hsl(var(--primary) / 0.25)" fontFamily="system-ui">KITCHEN</text>
+          <text x="222" y="56" textAnchor="middle" fontSize="6" fill="hsl(var(--primary) / 0.25)" fontFamily="system-ui">MASTER</text>
+          <text x="148" y="148" textAnchor="middle" fontSize="6" fill="hsl(var(--primary) / 0.25)" fontFamily="system-ui">BED 2</text>
+          <text x="222" y="148" textAnchor="middle" fontSize="6" fill="hsl(var(--primary) / 0.25)" fontFamily="system-ui">ENSUITE</text>
+          <circle cx="110" cy="184" r="5" fill="none" stroke="hsl(var(--primary))" strokeWidth="0.8" opacity="0.5">
             <animate attributeName="r" values="4;7;4" dur="2s" repeatCount="indefinite" />
             <animate attributeName="opacity" values="0.5;0.15;0.5" dur="2s" repeatCount="indefinite" />
           </circle>
-          <circle cx="110" cy="184" r="2" fill="#E1DCC9" />
+          <circle cx="110" cy="184" r="2" fill="hsl(var(--primary))" />
         </svg>
-        <div className="absolute bottom-1.5 left-2 right-2 flex items-center justify-between px-2 py-1 bg-background/90 border border-white/6 rounded text-[9px] font-mono">
-          <span className="text-[#E1DCC9]">Polygon · 4 pts · 44.6 m²</span>
-          <span className="text-white/25">Page 1 / 3</span>
+        <div className="absolute bottom-1.5 left-2 right-2 flex items-center justify-between px-2 py-1 bg-background/90 border border-foreground/6 rounded text-[9px] font-mono">
+          <span className="text-primary">Polygon · 4 pts · 44.6 m²</span>
+          <span className="text-foreground/25">Page 1 / 3</span>
         </div>
       </div>
     </div>
@@ -77,16 +77,16 @@ const TakeoffPreview = () => (
 
 /* ─── Cost Breakdown Mockup ──────────────────────────────────────────────── */
 const CostBreakdownPreview = () => (
-  <div className="rounded-xl overflow-hidden border border-white/8 bg-card shadow-[0_20px_60px_rgba(0,0,0,0.5)]">
-    <div className="flex items-center gap-2 px-3 py-2.5 bg-card/80 border-b border-white/8">
-      <BadgeDollarSign className="h-3.5 w-3.5 text-[#E1DCC9]/70" />
-      <span className="text-[10px] text-white/40 font-mono">Trade Breakdown · 42 Riverside Ave</span>
-      <span className="ml-auto text-[9px] font-mono text-[#E1DCC9]/70 bg-[#E1DCC9]/8 border border-[#E1DCC9]/20 px-1.5 py-0.5 rounded">✓ QLD Rates 2024</span>
+  <div className="rounded-xl overflow-hidden border border-foreground/8 bg-card shadow-[0_20px_60px_hsl(var(--shadow-ink)/0.5)]">
+    <div className="flex items-center gap-2 px-3 py-2.5 bg-card/80 border-b border-foreground/8">
+      <BadgeDollarSign className="h-3.5 w-3.5 text-primary/70" />
+      <span className="text-[10px] text-foreground/40 font-mono">Trade Breakdown · 42 Riverside Ave</span>
+      <span className="ml-auto text-[9px] font-mono text-primary/70 bg-primary/8 border border-primary/20 px-1.5 py-0.5 rounded">✓ QLD Rates 2024</span>
     </div>
     <div className="p-4 space-y-0.5">
-      <div className="grid grid-cols-[1fr_56px_52px_60px] gap-2 pb-2 border-b border-white/6 mb-1">
+      <div className="grid grid-cols-[1fr_56px_52px_60px] gap-2 pb-2 border-b border-foreground/6 mb-1">
         {["TRADE", "QTY", "RATE", "TOTAL"].map((h) => (
-          <span key={h} className="text-[9px] font-mono text-white/25 uppercase tracking-wider">{h}</span>
+          <span key={h} className="text-[9px] font-mono text-foreground/25 uppercase tracking-wider">{h}</span>
         ))}
       </div>
       {[
@@ -97,25 +97,25 @@ const CostBreakdownPreview = () => (
         { trade: "Plumbing",      qty: "12 pts", rate: "$680", total: "$8,160"  },
         { trade: "Waterproofing", qty: "48 m²",  rate: "$67",  total: "$3,216"  },
       ].map((r) => (
-        <div key={r.trade} className="grid grid-cols-[1fr_56px_52px_60px] gap-2 py-1 px-1 -mx-1 hover:bg-white/3 rounded transition-colors">
-          <span className="text-[10px] text-white/60">{r.trade}</span>
-          <span className="text-[10px] font-mono text-white/35">{r.qty}</span>
-          <span className="text-[10px] font-mono text-white/35">{r.rate}</span>
-          <span className="text-[10px] font-mono text-white/60 text-right">{r.total}</span>
+        <div key={r.trade} className="grid grid-cols-[1fr_56px_52px_60px] gap-2 py-1 px-1 -mx-1 hover:bg-foreground/3 rounded transition-colors">
+          <span className="text-[10px] text-foreground/60">{r.trade}</span>
+          <span className="text-[10px] font-mono text-foreground/35">{r.qty}</span>
+          <span className="text-[10px] font-mono text-foreground/35">{r.rate}</span>
+          <span className="text-[10px] font-mono text-foreground/60 text-right">{r.total}</span>
         </div>
       ))}
       <div className="mt-3 space-y-1.5">
-        <div className="flex items-center justify-between px-3 py-2 rounded-lg bg-[#E1DCC9]/8 border border-[#E1DCC9]/15">
-          <span className="text-[10px] font-mono text-white font-semibold uppercase tracking-wide">Base Estimate</span>
-          <span className="text-[12px] font-bold text-white font-mono">$65,416</span>
+        <div className="flex items-center justify-between px-3 py-2 rounded-lg bg-primary/8 border border-primary/15">
+          <span className="text-[10px] font-mono text-foreground font-semibold uppercase tracking-wide">Base Estimate</span>
+          <span className="text-[12px] font-bold text-foreground font-mono">$65,416</span>
         </div>
         <div className="flex items-center justify-between px-3 py-2 rounded-lg bg-red-500/20 border border-red-500/30">
-          <span className="text-[10px] font-mono text-white font-semibold uppercase tracking-wide">Margin (15%)</span>
-          <span className="text-[12px] font-bold text-white font-mono">+$9,812</span>
+          <span className="text-[10px] font-mono text-foreground font-semibold uppercase tracking-wide">Margin (15%)</span>
+          <span className="text-[12px] font-bold text-foreground font-mono">+$9,812</span>
         </div>
-        <div className="flex items-center justify-between px-3 py-2.5 rounded-lg bg-[#E1DCC9]/10 border border-[#E1DCC9]/15">
-          <span className="text-[11px] font-bold text-white font-mono uppercase tracking-wide">Total inc. GST</span>
-          <span className="text-[14px] font-bold text-[#E1DCC9] font-mono">$75,228</span>
+        <div className="flex items-center justify-between px-3 py-2.5 rounded-lg bg-primary/10 border border-primary/15">
+          <span className="text-[11px] font-bold text-foreground font-mono uppercase tracking-wide">Total inc. GST</span>
+          <span className="text-[14px] font-bold text-primary font-mono">$75,228</span>
         </div>
       </div>
     </div>
@@ -124,16 +124,16 @@ const CostBreakdownPreview = () => (
 
 /* ─── Tender Mockup ──────────────────────────────────────────────────────── */
 const TenderPreview = () => (
-  <div className="rounded-xl overflow-hidden border border-white/8 bg-card shadow-[0_20px_60px_rgba(0,0,0,0.5)]">
-    <div className="flex items-center gap-2 px-3 py-2.5 bg-card/80 border-b border-white/8">
-      <FileOutput className="h-3.5 w-3.5 text-[#E1DCC9]/70" />
-      <span className="text-[10px] text-white/40 font-mono">Tender_42_Riverside_Ave.pdf</span>
+  <div className="rounded-xl overflow-hidden border border-foreground/8 bg-card shadow-[0_20px_60px_hsl(var(--shadow-ink)/0.5)]">
+    <div className="flex items-center gap-2 px-3 py-2.5 bg-card/80 border-b border-foreground/8">
+      <FileOutput className="h-3.5 w-3.5 text-primary/70" />
+      <span className="text-[10px] text-foreground/40 font-mono">Tender_42_Riverside_Ave.pdf</span>
       <div className="ml-auto flex gap-2">
-        <span className="text-[9px] font-mono text-white/30 px-1.5 py-0.5 rounded border border-white/10">PDF</span>
-        <span className="text-[9px] font-mono text-white/30 px-1.5 py-0.5 rounded border border-white/10">XLSX</span>
+        <span className="text-[9px] font-mono text-foreground/30 px-1.5 py-0.5 rounded border border-foreground/10">PDF</span>
+        <span className="text-[9px] font-mono text-foreground/30 px-1.5 py-0.5 rounded border border-foreground/10">XLSX</span>
       </div>
     </div>
-    <div className="bg-white/95 mx-3 my-3 rounded p-4 shadow-inner">
+    <div className="bg-foreground/95 mx-3 my-3 rounded p-4 shadow-inner">
       <div className="flex items-start justify-between mb-3 pb-2 border-b border-gray-200">
         <div>
           <div className="flex items-center gap-1.5 mb-1">
@@ -242,11 +242,11 @@ const Features = () => {
           <div className="container mx-auto px-6 lg:px-12 pt-14 pb-6 shrink-0">
             <div className="flex items-center gap-3 mb-4">
               <div className="h-px w-8 bg-primary/15" />
-              <span className="text-xs font-mono text-[#E1DCC9]/60 uppercase tracking-widest">The workflow</span>
+              <span className="text-xs font-mono text-primary/60 uppercase tracking-widest">The workflow</span>
             </div>
-            <h2 className="font-display text-4xl sm:text-5xl font-bold text-white leading-tight">
+            <h2 className="font-display text-4xl sm:text-5xl font-bold text-foreground leading-tight">
               Three steps.
-              <span className="block text-white/30 mt-1">That is the whole process.</span>
+              <span className="block text-foreground/30 mt-1">That is the whole process.</span>
             </h2>
           </div>
 
@@ -265,17 +265,17 @@ const Features = () => {
                   className="space-y-6"
                 >
                   <div className="flex items-center gap-4">
-                    <div className="w-10 h-10 rounded-xl bg-[#E1DCC9]/10 border border-[#E1DCC9]/15 flex items-center justify-center flex-shrink-0">
-                      <FeatureIcon className="h-5 w-5 text-[#E1DCC9]" />
+                    <div className="w-10 h-10 rounded-xl bg-primary/10 border border-primary/15 flex items-center justify-center flex-shrink-0">
+                      <FeatureIcon className="h-5 w-5 text-primary" />
                     </div>
-                    <span className="font-mono text-sm text-white/30 tracking-widest">
+                    <span className="font-mono text-sm text-foreground/30 tracking-widest">
                       STEP {feature.num}
                     </span>
                   </div>
-                  <h3 className="font-display text-3xl sm:text-[2.25rem] font-bold text-white leading-tight">
+                  <h3 className="font-display text-3xl sm:text-[2.25rem] font-bold text-foreground leading-tight">
                     {feature.title}
                   </h3>
-                  <p className="text-white/50 leading-relaxed text-base">
+                  <p className="text-foreground/50 leading-relaxed text-base">
                     {feature.description}
                   </p>
                 </motion.div>
@@ -292,7 +292,7 @@ const Features = () => {
                   className="relative"
                 >
                   <div
-                    className="absolute -top-8 -left-4 font-mono font-bold text-white/[0.03] select-none leading-none pointer-events-none z-0"
+                    className="absolute -top-8 -left-4 font-mono font-bold text-foreground/[0.03] select-none leading-none pointer-events-none z-0"
                     style={{ fontSize: "clamp(5rem, 12vw, 9rem)" }}
                     aria-hidden="true"
                   >
@@ -310,7 +310,7 @@ const Features = () => {
             <div className="flex items-center gap-4">
               {features.map((f, i) => (
                 <div key={i} className="flex-1 flex flex-col gap-1.5">
-                  <div className="h-0.5 bg-white/8 rounded-full relative overflow-hidden">
+                  <div className="h-0.5 bg-foreground/8 rounded-full relative overflow-hidden">
                     <motion.div
                       className="absolute inset-y-0 left-0 bg-primary rounded-full"
                       style={{ width: progressWidths[i] }}
@@ -318,7 +318,7 @@ const Features = () => {
                   </div>
                   <span
                     className={`text-[9px] font-mono uppercase tracking-widest transition-colors duration-300 ${
-                      i === active ? "text-[#E1DCC9]" : "text-white/20"
+                      i === active ? "text-primary" : "text-foreground/20"
                     }`}
                   >
                     {f.title.split(" ").slice(0, 3).join(" ")}

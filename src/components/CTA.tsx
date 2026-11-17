@@ -9,7 +9,7 @@ const CTA = () => {
     <section className="relative py-32 md:py-40 bg-background overflow-hidden">
 
       <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-        <div className="w-[700px] h-[400px] bg-[#E1DCC9]/4 blur-[120px] rounded-full" />
+        <div className="w-[700px] h-[400px] bg-primary/4 blur-[120px] rounded-full" />
       </div>
 
       <div className="container mx-auto px-6 lg:px-12 relative z-10 text-center">
@@ -21,14 +21,14 @@ const CTA = () => {
           transition={{ duration: 0.5 }}
           className="inline-flex items-center gap-2.5 mb-10"
         >
-          <div className="w-1.5 h-1.5 rounded-full bg-[#E1DCC9] animate-pulse" />
-          <span className="text-xs font-mono text-[#E1DCC9]/60 uppercase tracking-widest">
+          <div className="w-1.5 h-1.5 rounded-full bg-primary animate-pulse" />
+          <span className="text-xs font-mono text-primary/60 uppercase tracking-widest">
             Start today
           </span>
         </motion.div>
 
         <h2
-          className="font-display font-bold text-white leading-[0.9] tracking-tight mb-8 mx-auto"
+          className="font-display font-bold text-foreground leading-[0.9] tracking-tight mb-8 mx-auto"
           style={{ fontSize: "clamp(2.75rem, 7vw, 6rem)", maxWidth: "16ch" }}
         >
           <span className="flex flex-wrap justify-center gap-x-[0.25em]">
@@ -44,7 +44,7 @@ const CTA = () => {
               </motion.span>
             ))}
           </span>
-          <span className="flex flex-wrap justify-center gap-x-[0.25em] text-white/25 mt-1">
+          <span className="flex flex-wrap justify-center gap-x-[0.25em] text-foreground/25 mt-1">
             {words2.map((word, i) => (
               <motion.span
                 key={word + i}
@@ -64,7 +64,7 @@ const CTA = () => {
           whileInView={{ opacity: 1, y: 0 }}
           viewport={{ once: true }}
           transition={{ duration: 0.5, delay: 0.5 }}
-          className="text-white/40 text-base max-w-sm mx-auto mb-12 leading-relaxed"
+          className="text-foreground/40 text-base max-w-sm mx-auto mb-12 leading-relaxed"
         >
           Upload your plans, extract quantities, and produce professional
           estimates in a fraction of the time.
@@ -80,7 +80,7 @@ const CTA = () => {
             whileHover={{ scale: 1.04 }}
             whileTap={{ scale: 0.97 }}
             onClick={() => window.location.href = isSignedIn() ? "/dashboard" : "/auth?plan=pro&mode=signup"}
-            className="inline-flex items-center px-9 py-5 rounded-full bg-primary text-black font-bold text-base hover:bg-[#d4cfb5] transition-colors shadow-none hover:shadow-none"
+            className="inline-flex items-center px-9 py-5 rounded-full bg-primary text-primary-foreground font-bold text-base hover:bg-primary/90 transition-colors shadow-none hover:shadow-none"
           >
             Start free for 14 days
           </motion.button>
@@ -91,7 +91,7 @@ const CTA = () => {
           whileInView={{ opacity: 1 }}
           viewport={{ once: true }}
           transition={{ duration: 0.5, delay: 0.75 }}
-          className="mt-7 text-[11px] font-mono text-white/20 tracking-widest uppercase"
+          className="mt-7 text-[11px] font-mono text-foreground/20 tracking-widest uppercase"
         >
           No credit card · Full access · Cancel anytime · From $79/month
         </motion.p>

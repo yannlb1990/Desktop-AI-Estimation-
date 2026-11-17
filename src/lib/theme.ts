@@ -1,13 +1,13 @@
 /**
- * Light or dark for the app (dashboard, projects, settings...). Dark is the default; the
- * public pages (home, pricing, sign in) keep the brand's dark look whatever is chosen.
+ * Light or dark for the app (dashboard, projects, settings...). Dark is the default.
+ * The home page follows the same choice; pricing and sign in keep the brand's dark look.
  * The choice is kept on this device. index.html applies it before the page draws, so the
  * screen does not flash dark then light.
  */
 export type ThemePref = 'dark' | 'light' | 'system';
 
 const KEY = 'metricore_theme';
-const APP_PATHS = /^\/(dashboard|site|site-report|xero|project|insights|clients|settings|materials|admin)(\/|$)/;
+const APP_PATHS = /^\/($|dashboard|site|site-report|xero|project|insights|clients|settings|materials|admin)(\/|$)/;
 
 export function getThemePref(): ThemePref {
   try {
@@ -27,7 +27,7 @@ export function isAppPath(path: string): boolean {
   return APP_PATHS.test(path);
 }
 
-/** The look a page should have: the builder's choice inside the app, dark elsewhere. */
+/** The look a page should have: the builder's choice in the app and on the home page, dark elsewhere. */
 export function applyTheme(path = window.location.pathname): void {
   const mode = isAppPath(path) ? resolveTheme(getThemePref()) : 'dark';
   const root = document.documentElement;

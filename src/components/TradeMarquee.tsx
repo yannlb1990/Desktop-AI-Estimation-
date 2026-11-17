@@ -21,24 +21,24 @@ const TradeList = ({ aria }: { aria?: boolean }) => (
   <div className="flex items-center shrink-0" aria-hidden={aria}>
     {trades.map((t) => (
       <span key={t} className="flex items-center">
-        <span className="text-[13px] font-mono text-white/30 uppercase tracking-[0.15em] px-6 whitespace-nowrap">
+        <span className="text-[13px] font-mono text-foreground/30 uppercase tracking-[0.15em] px-6 whitespace-nowrap">
           {t}
         </span>
-        <span className="text-white/[0.12] text-sm select-none font-light">/</span>
+        <span className="text-foreground/[0.12] text-sm select-none font-light">/</span>
       </span>
     ))}
   </div>
 );
 
 const TradeMarquee = () => (
-  <div className="relative overflow-hidden py-5 bg-[#000000]">
+  <div className="relative overflow-hidden py-5 bg-background">
     <div
       className="absolute left-0 top-0 bottom-0 w-24 z-10 pointer-events-none"
-      style={{ background: "linear-gradient(to right, #000000, transparent)" }}
+      style={{ background: "linear-gradient(to right, hsl(var(--background)), transparent)" }}
     />
     <div
       className="absolute right-0 top-0 bottom-0 w-24 z-10 pointer-events-none"
-      style={{ background: "linear-gradient(to left, #000000, transparent)" }}
+      style={{ background: "linear-gradient(to left, hsl(var(--background)), transparent)" }}
     />
 
     <div className="flex" style={{ animation: "marquee-scroll 30s linear infinite" }}>

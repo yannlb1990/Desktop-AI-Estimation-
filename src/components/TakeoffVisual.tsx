@@ -3,7 +3,7 @@ import { motion } from "framer-motion";
 const viewportOpts = { once: true, margin: "-60px" } as const;
 
 const exportDocs = [
-  { label: "Tender PDF",      desc: "Branded BOQ ready to send",        color: "#E1DCC9", bg: "rgba(225,220,201,0.07)",  border: "rgba(225,220,201,0.18)" },
+  { label: "Tender PDF",      desc: "Branded BOQ ready to send",        color: "hsl(var(--primary))", bg: "hsl(var(--primary) / 0.07)",  border: "hsl(var(--primary) / 0.18)" },
   { label: "Cost Breakdown",  desc: "Trade-by-trade with your margin",   color: "#818cf8", bg: "rgba(129,140,248,0.08)", border: "rgba(129,140,248,0.18)" },
   { label: "Gantt Schedule",  desc: "Construction timeline per stage",   color: "#34d399", bg: "rgba(52,211,153,0.08)",  border: "rgba(52,211,153,0.18)" },
   { label: "Supplier Quotes", desc: "Email-ready RFQs per trade",        color: "#fb923c", bg: "rgba(251,146,60,0.08)",  border: "rgba(251,146,60,0.18)" },
@@ -13,7 +13,7 @@ const exportDocs = [
 
 const TakeoffVisual = () => {
   return (
-    <section className="py-20 md:py-28 bg-[#000000]">
+    <section className="py-20 md:py-28 bg-background">
       <div className="container mx-auto px-6 lg:px-12">
         <div className="grid lg:grid-cols-2 gap-12 lg:gap-20 items-start">
 
@@ -27,13 +27,13 @@ const TakeoffVisual = () => {
           >
             <div className="flex items-center gap-3">
               <div className="h-px w-8 bg-primary/15" />
-              <span className="text-xs font-mono text-[#E1DCC9]/70 uppercase tracking-widest">What comes out</span>
+              <span className="text-xs font-mono text-primary/70 uppercase tracking-widest">What comes out</span>
             </div>
-            <h2 className="font-display text-4xl sm:text-5xl font-bold text-white leading-tight">
+            <h2 className="font-display text-4xl sm:text-5xl font-bold text-foreground leading-tight">
               One takeoff.
-              <span className="block text-white/30 mt-1">Six documents, ready to send.</span>
+              <span className="block text-foreground/30 mt-1">Six documents, ready to send.</span>
             </h2>
-            <p className="text-white/50 leading-relaxed">
+            <p className="text-foreground/50 leading-relaxed">
               Upload your plans, measure on the canvas, and Metricore generates every document your project needs in the same session. Tender, Gantt, cost breakdown, FF&E — one click each.
             </p>
 
@@ -42,8 +42,8 @@ const TakeoffVisual = () => {
                 <div key={e.label} className="flex items-start gap-3">
                   <div className="h-1.5 w-1.5 rounded-full shrink-0 mt-[7px]" style={{ background: e.color, opacity: 0.7 }} />
                   <div>
-                    <div className="text-sm font-medium text-white/70">{e.label}</div>
-                    <div className="text-xs text-white/30 mt-0.5">{e.desc}</div>
+                    <div className="text-sm font-medium text-foreground/70">{e.label}</div>
+                    <div className="text-xs text-foreground/30 mt-0.5">{e.desc}</div>
                   </div>
                 </div>
               ))}
@@ -51,7 +51,7 @@ const TakeoffVisual = () => {
 
             <button
               onClick={() => window.location.href = "/project/new"}
-              className="inline-flex items-center px-7 py-3 rounded-full bg-primary text-[#000000] font-bold hover:bg-primary/80 transition-colors"
+              className="inline-flex items-center px-7 py-3 rounded-full bg-primary text-primary-foreground font-bold hover:bg-primary/80 transition-colors"
             >
               Start a takeoff
             </button>
@@ -66,57 +66,57 @@ const TakeoffVisual = () => {
             className="space-y-3"
           >
             {/* Canvas mockup */}
-            <div className="rounded-xl overflow-hidden border border-white/8 bg-[#1F150C] shadow-[0_20px_60px_rgba(0,0,0,0.5)]">
+            <div className="rounded-xl overflow-hidden border border-foreground/8 bg-card shadow-[0_20px_60px_hsl(var(--shadow-ink)/0.5)]">
               {/* Window chrome */}
-              <div className="flex items-center gap-2 px-3 py-2 bg-[#1F150C] border-b border-white/8">
+              <div className="flex items-center gap-2 px-3 py-2 bg-card border-b border-foreground/8">
                 <div className="flex gap-1">
                   <div className="w-2.5 h-2.5 rounded-full bg-[#ff5f57]" />
                   <div className="w-2.5 h-2.5 rounded-full bg-[#febc2e]" />
                   <div className="w-2.5 h-2.5 rounded-full bg-[#28c840]" />
                 </div>
-                <span className="text-[10px] text-white/30 font-mono ml-2 flex-1 truncate">Ground_Floor_DA-01.pdf</span>
-                <span className="text-[9px] font-mono text-[#E1DCC9]/70 bg-[#E1DCC9]/8 border border-[#E1DCC9]/20 px-1.5 py-0.5 rounded">✓ 1:100</span>
+                <span className="text-[10px] text-foreground/30 font-mono ml-2 flex-1 truncate">Ground_Floor_DA-01.pdf</span>
+                <span className="text-[9px] font-mono text-primary/70 bg-primary/8 border border-primary/20 px-1.5 py-0.5 rounded">✓ 1:100</span>
               </div>
               {/* Toolbar + canvas */}
               <div className="flex">
-                <div className="w-10 shrink-0 bg-[#000000] border-r border-white/6 flex flex-col items-center py-3 gap-3">
+                <div className="w-10 shrink-0 bg-background border-r border-foreground/6 flex flex-col items-center py-3 gap-3">
                   {["↖", "—", "▭", "✏", "⊕"].map((sym) => (
-                    <div key={sym} className="w-6 h-6 flex items-center justify-center rounded text-white/20 text-[10px]">
+                    <div key={sym} className="w-6 h-6 flex items-center justify-center rounded text-foreground/20 text-[10px]">
                       {sym}
                     </div>
                   ))}
                 </div>
-                <div className="flex-1 bg-[#1F150C] relative">
+                <div className="flex-1 bg-card relative">
                   <svg viewBox="0 0 380 240" className="w-full" style={{ display: "block" }}>
                     <defs>
                       <pattern id="tv-grid" width="16" height="16" patternUnits="userSpaceOnUse">
-                        <path d="M 16 0 L 0 0 0 16" fill="none" stroke="rgba(225,220,201,0.05)" strokeWidth="0.5" />
+                        <path d="M 16 0 L 0 0 0 16" fill="none" stroke="hsl(var(--primary) / 0.05)" strokeWidth="0.5" />
                       </pattern>
                     </defs>
                     <rect width="380" height="240" fill="url(#tv-grid)" />
-                    <rect x="24" y="16" width="332" height="208" fill="#1F150C" stroke="rgba(225,220,201,0.35)" strokeWidth="2" />
-                    <line x1="150" y1="16" x2="150" y2="224" stroke="rgba(225,220,201,0.25)" strokeWidth="1.2" />
-                    <line x1="150" y1="130" x2="356" y2="130" stroke="rgba(225,220,201,0.25)" strokeWidth="1.2" />
-                    <line x1="260" y1="16" x2="260" y2="224" stroke="rgba(225,220,201,0.25)" strokeWidth="1.2" />
-                    <polygon points="24,16 150,16 150,224 24,224" fill="rgba(225,220,201,0.06)" stroke="#E1DCC9" strokeWidth="1.4" />
-                    <circle cx="24" cy="16" r="3" fill="#E1DCC9" />
-                    <circle cx="150" cy="16" r="3" fill="#E1DCC9" />
-                    <circle cx="150" cy="224" r="3" fill="#E1DCC9" />
-                    <circle cx="24" cy="224" r="3" fill="#E1DCC9" />
-                    <rect x="44" y="109" width="72" height="20" rx="4" fill="rgba(65,45,21,0.6)" stroke="#E1DCC9" strokeWidth="0.8" />
-                    <text x="80" y="123" textAnchor="middle" fontSize="10" fontFamily="monospace" fill="#E1DCC9" fontWeight="bold">44.6 m²</text>
-                    <text x="87" y="72" textAnchor="middle" fontSize="7.5" fill="rgba(225,220,201,0.28)" fontFamily="system-ui">LIVING / DINING</text>
-                    <text x="197" y="68" textAnchor="middle" fontSize="7" fill="rgba(225,220,201,0.22)" fontFamily="system-ui">KITCHEN</text>
-                    <text x="305" y="68" textAnchor="middle" fontSize="7" fill="rgba(225,220,201,0.22)" fontFamily="system-ui">MASTER BED</text>
-                    <text x="197" y="178" textAnchor="middle" fontSize="7" fill="rgba(225,220,201,0.22)" fontFamily="system-ui">BED 2</text>
-                    <text x="305" y="178" textAnchor="middle" fontSize="7" fill="rgba(225,220,201,0.22)" fontFamily="system-ui">ENSUITE</text>
-                    <circle cx="150" cy="224" r="5" fill="none" stroke="#E1DCC9" strokeWidth="0.8" opacity="0.5">
+                    <rect x="24" y="16" width="332" height="208" fill="hsl(var(--card))" stroke="hsl(var(--primary) / 0.35)" strokeWidth="2" />
+                    <line x1="150" y1="16" x2="150" y2="224" stroke="hsl(var(--primary) / 0.25)" strokeWidth="1.2" />
+                    <line x1="150" y1="130" x2="356" y2="130" stroke="hsl(var(--primary) / 0.25)" strokeWidth="1.2" />
+                    <line x1="260" y1="16" x2="260" y2="224" stroke="hsl(var(--primary) / 0.25)" strokeWidth="1.2" />
+                    <polygon points="24,16 150,16 150,224 24,224" fill="hsl(var(--primary) / 0.06)" stroke="hsl(var(--primary))" strokeWidth="1.4" />
+                    <circle cx="24" cy="16" r="3" fill="hsl(var(--primary))" />
+                    <circle cx="150" cy="16" r="3" fill="hsl(var(--primary))" />
+                    <circle cx="150" cy="224" r="3" fill="hsl(var(--primary))" />
+                    <circle cx="24" cy="224" r="3" fill="hsl(var(--primary))" />
+                    <rect x="44" y="109" width="72" height="20" rx="4" fill="rgba(65,45,21,0.6)" stroke="hsl(var(--primary))" strokeWidth="0.8" />
+                    <text x="80" y="123" textAnchor="middle" fontSize="10" fontFamily="monospace" fill="hsl(var(--primary))" fontWeight="bold">44.6 m²</text>
+                    <text x="87" y="72" textAnchor="middle" fontSize="7.5" fill="hsl(var(--primary) / 0.28)" fontFamily="system-ui">LIVING / DINING</text>
+                    <text x="197" y="68" textAnchor="middle" fontSize="7" fill="hsl(var(--primary) / 0.22)" fontFamily="system-ui">KITCHEN</text>
+                    <text x="305" y="68" textAnchor="middle" fontSize="7" fill="hsl(var(--primary) / 0.22)" fontFamily="system-ui">MASTER BED</text>
+                    <text x="197" y="178" textAnchor="middle" fontSize="7" fill="hsl(var(--primary) / 0.22)" fontFamily="system-ui">BED 2</text>
+                    <text x="305" y="178" textAnchor="middle" fontSize="7" fill="hsl(var(--primary) / 0.22)" fontFamily="system-ui">ENSUITE</text>
+                    <circle cx="150" cy="224" r="5" fill="none" stroke="hsl(var(--primary))" strokeWidth="0.8" opacity="0.5">
                       <animate attributeName="r" values="4;9;4" dur="2s" repeatCount="indefinite" />
                       <animate attributeName="opacity" values="0.5;0.1;0.5" dur="2s" repeatCount="indefinite" />
                     </circle>
-                    <circle cx="150" cy="224" r="2.5" fill="#E1DCC9" />
-                    <rect x="310" y="16" width="46" height="88" fill="rgba(0,0,0,0.85)" stroke="rgba(255,255,255,0.08)" strokeWidth="0.8" />
-                    <text x="316" y="28" fontSize="5.5" fill="rgba(255,255,255,0.25)" fontFamily="monospace">ITEMS</text>
+                    <circle cx="150" cy="224" r="2.5" fill="hsl(var(--primary))" />
+                    <rect x="310" y="16" width="46" height="88" fill="hsl(var(--background) / 0.85)" stroke="hsl(var(--foreground) / 0.08)" strokeWidth="0.8" />
+                    <text x="316" y="28" fontSize="5.5" fill="hsl(var(--foreground) / 0.25)" fontFamily="monospace">ITEMS</text>
                     {[
                       { y: 40, label: "Living", val: "44.6" },
                       { y: 52, label: "Kitchen", val: "18.3" },
@@ -124,16 +124,16 @@ const TakeoffVisual = () => {
                       { y: 76, label: "Bed 2", val: "14.8" },
                     ].map((r) => (
                       <g key={r.label}>
-                        <text x="316" y={r.y} fontSize="5" fill="rgba(255,255,255,0.3)" fontFamily="monospace">{r.label}</text>
-                        <text x="352" y={r.y} textAnchor="end" fontSize="5" fill="rgba(225,220,201,0.7)" fontFamily="monospace">{r.val}</text>
+                        <text x="316" y={r.y} fontSize="5" fill="hsl(var(--foreground) / 0.3)" fontFamily="monospace">{r.label}</text>
+                        <text x="352" y={r.y} textAnchor="end" fontSize="5" fill="hsl(var(--primary) / 0.7)" fontFamily="monospace">{r.val}</text>
                       </g>
                     ))}
-                    <line x1="312" y1="88" x2="352" y2="88" stroke="rgba(255,255,255,0.08)" strokeWidth="0.6" />
-                    <text x="352" y="100" textAnchor="end" fontSize="5.5" fill="#E1DCC9" fontFamily="monospace" fontWeight="bold">99.8 m²</text>
+                    <line x1="312" y1="88" x2="352" y2="88" stroke="hsl(var(--foreground) / 0.08)" strokeWidth="0.6" />
+                    <text x="352" y="100" textAnchor="end" fontSize="5.5" fill="hsl(var(--primary))" fontFamily="monospace" fontWeight="bold">99.8 m²</text>
                   </svg>
-                  <div className="absolute bottom-1.5 left-12 right-2 flex items-center justify-between px-2 py-1 bg-[#000000]/90 border border-white/6 rounded text-[8px] font-mono">
-                    <span className="text-[#E1DCC9]">Polygon · 4 pts · 44.6 m²</span>
-                    <span className="text-white/20">Page 1 / 3</span>
+                  <div className="absolute bottom-1.5 left-12 right-2 flex items-center justify-between px-2 py-1 bg-background/90 border border-foreground/6 rounded text-[8px] font-mono">
+                    <span className="text-primary">Polygon · 4 pts · 44.6 m²</span>
+                    <span className="text-foreground/20">Page 1 / 3</span>
                   </div>
                 </div>
               </div>
@@ -150,7 +150,7 @@ const TakeoffVisual = () => {
                   <div className="text-[9px] font-mono uppercase tracking-widest mb-0.5" style={{ color: e.color, opacity: 0.85 }}>
                     {e.label}
                   </div>
-                  <div className="text-[8px] text-white/25 leading-tight">{e.desc}</div>
+                  <div className="text-[8px] text-foreground/25 leading-tight">{e.desc}</div>
                 </div>
               ))}
             </div>

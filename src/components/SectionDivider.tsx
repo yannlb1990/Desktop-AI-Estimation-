@@ -7,12 +7,12 @@ const SectionDivider = () => (
         top: "-24px",
         bottom: "-24px",
         background:
-          "radial-gradient(ellipse 45% 100% at 50% 50%, rgba(225,220,201,0.07), transparent 70%)",
+          "radial-gradient(ellipse 45% 100% at 50% 50%, hsl(var(--primary) / 0.07), transparent 70%)",
         filter: "blur(10px)",
       }}
     />
     {/* Hairline */}
-    <div className="absolute inset-0 bg-white/[0.07]" />
+    <div className="absolute inset-0 bg-foreground/[0.07]" />
   </div>
 );
 
