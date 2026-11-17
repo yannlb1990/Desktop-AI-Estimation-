@@ -8,6 +8,7 @@ import { measuredValueFor } from '@/lib/estimate/planLinks';
 import { removeEstimateLines } from '@/lib/estimate/fromCostItem';
 import { toast } from 'sonner';
 import { rescaleMeasurementsForScale } from '@/lib/takeoff/rescaleForScale';
+import { remapMeasurements, remapPoint } from '@/lib/takeoff/rotateWorld';
 
 // Fields on Measurement whose change should cascade to linked cost item quantities
 /**
@@ -226,6 +227,20 @@ function buildInitialState(projectId?: string): TakeoffState {
   };
 }
 
+/** Turn a page's measurements (and its scale line) with the plan: rotation `from` to `to` */
+function remapPage(state: TakeoffState, pageIndex: number, from: number, to: number): TakeoffState {
+  const size = state.pageSizes?.[pageIndex];
+  if (!size) return state;
+  const { width: W, height: H } = size;
+  const measurements = remapMeasurements(state.measurements, pageIndex, from, to, W, H, state.pdfFile?.planId);
+  const sc = state.scales[pageIndex];
+  const line = sc?.calibrationLine;
+  const scales = line
+    ? { ...state.scales, [pageIndex]: { ...sc, calibrationLine: { ...line, p1: remapPoint(line.p1, from, to, W, H), p2: remapPoint(line.p2, from, to, W, H) } } }
+    : state.scales;
+  return { ...state, measurements, scales };
+}
+
 function takeoffReducer(state: TakeoffState, action: TakeoffAction): TakeoffState {
   switch (action.type) {
     case 'SET_PDF_FILE': {
@@ -323,7 +338,23 @@ function takeoffReducer(state: TakeoffState, action: TakeoffAction): TakeoffStat
       const newRotations = action.payload.rotation !== undefined
         ? { ...state.rotations, [state.currentPageIndex]: action.payload.rotation }
         : state.rotations;
-      return { ...state, transform: newTransform, rotations: newRotations };
+      const turned = action.payload.rotation !== undefined && action.payload.rotation !== state.transform.rotation;
+      const moved = turned
+        ? remapPage(state, state.currentPageIndex, state.transform.rotation, action.payload.rotation as number)
+        : state;
+      return { ...moved, transform: newTransform, rotations: newRotations };
+    }
+
+    case 'SET_PAGE_SIZE': {
+      const { pageIndex, width, height } = action.payload;
+      const cur = state.pageSizes?.[pageIndex];
+      if (cur && cur.width === width && cur.height === height) return state;
+      return { ...state, pageSizes: { ...(state.pageSizes || {}), [pageIndex]: { width, height } } };
+    }
+
+    case 'REMAP_PAGE_MEASUREMENTS': {
+      const { pageIndex, from, to } = action.payload;
+      return remapPage(state, pageIndex, from, to);
     }
 
     case 'SET_ACTIVE_TOOL':

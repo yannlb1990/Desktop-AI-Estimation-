@@ -13,6 +13,8 @@ import { InteractiveCanvas } from './InteractiveCanvas';
 import { MeasurementToolbar } from './MeasurementToolbar';
 import { ViewportControls } from './ViewportControls';
 import { Magnifier } from './Magnifier';
+import type { DoorSwing } from '@/lib/takeoff/doorSwing';
+import { remapMeasurements } from '@/lib/takeoff/rotateWorld';
 import { TakeoffTable } from './TakeoffTable';
 import { DetectionResultsPanel } from './DetectionResultsPanel';
 import { useTakeoffState } from '@/hooks/useTakeoffState';
@@ -206,6 +208,8 @@ export const PDFTakeoff = ({ projectId, estimateId, onAddCostItems }: PDFTakeoff
   };
   const [pendingModMeasurement, setPendingModMeasurement] = useState<Measurement | null>(null);
   const [pendingModIsNew, setPendingModIsNew] = useState(true);
+  // a door waiting for the builder to show which way it opens (next click on the plan)
+  const [swingPickId, setSwingPickId] = useState<string | null>(null);
   // Custom line: after draw, ask "add to estimate?"
   const [customLinePending, setCustomLinePending] = useState<Measurement | null>(null);
   // Existing measurement popup (select tool click)
@@ -364,6 +368,8 @@ export const PDFTakeoff = ({ projectId, estimateId, onAddCostItems }: PDFTakeoff
       if (e.key === 'Escape') {
         // Esc closes the open box first; full screen only when nothing else is open
         if (measurementPopup) { setMeasurementPopup(null); return; }
+        // choosing a door's swing: Esc keeps it as shown and stays in Door
+        if (swingPickId) { setSwingPickId(null); return; }
         // the iPad Finish button ends the drawing but stays in full screen
         if (!(e as any).fromTouchBar) setIsTakeoffFullscreen(false);
         setModMode(null);
@@ -391,7 +397,7 @@ export const PDFTakeoff = ({ projectId, estimateId, onAddCostItems }: PDFTakeoff
     };
     document.addEventListener('keydown', handleKeyDown);
     return () => document.removeEventListener('keydown', handleKeyDown);
-  }, [dispatch, state.activeTool, state.pdfFile, state.currentPageIndex, measurementPopup]);
+  }, [dispatch, state.activeTool, state.pdfFile, state.currentPageIndex, measurementPopup, swingPickId]);
 
   // Auto-open context panel when a special mode activates
   useEffect(() => {
@@ -422,7 +428,8 @@ export const PDFTakeoff = ({ projectId, estimateId, onAddCostItems }: PDFTakeoff
   };
 
   const handleRotate = () => {
-    const newRotation = ((rotation + 90) % 360) as 0 | 90 | 180 | 270;
+    // from the page's real rotation: the local copy could be out of step with it
+    const newRotation = (((state.transform.rotation || 0) + 90) % 360) as 0 | 90 | 180 | 270;
     setRotation(newRotation);
     dispatch({ 
       type: 'SET_TRANSFORM', 
@@ -537,15 +544,19 @@ export const PDFTakeoff = ({ projectId, estimateId, onAddCostItems }: PDFTakeoff
     if (m.wallThickness !== undefined) {
       m = { ...m, wallClassification };
     }
+    // doors and windows are openings: only a straight line (jamb to jamb) can be one
+    const isLine = measurement.type === 'line';
     if (modMode === 'wall') {
       m = { ...m, color: '#f59e0b', measurementType: 'Wall', label: '' };
-    } else if (modMode === 'door') {
+    } else if (modMode === 'door' && isLine) {
       m = { ...m, color: '#8b5cf6', measurementType: 'Door', label: '', modSubtype: doorSubtype };
-    } else if (modMode === 'window') {
+    } else if (modMode === 'window' && isLine) {
       m = { ...m, color: '#06b6d4', measurementType: 'Window', label: '', modSubtype: windowSubtype };
     }
 
     dispatch({ type: 'ADD_MEASUREMENT', payload: m });
+    // a new door: the next click shows which jamb it hangs from and which way it opens
+    if (m.measurementType === 'Door') setSwingPickId(m.id);
   }, [dispatch, isVerifyMode, modMode, state.pdfFile?.planId, doorSubtype, windowSubtype, wallClassification]);
 
   const handleDeleteLastMeasurement = useCallback(() => {
@@ -566,7 +577,23 @@ export const PDFTakeoff = ({ projectId, estimateId, onAddCostItems }: PDFTakeoff
     costItems.forEach(item => dispatch({ type: 'ADD_COST_ITEM', payload: item }));
     setPendingModMeasurement(null);
     setMeasurementPopup(null);
+    // a line just made a door (Custom, or from its card): show which way it opens next
+    if (measurement.measurementType === 'Door' && !measurement.doorHinge && measurement.type === 'line') setSwingPickId(measurement.id);
   }, [dispatch]);
+
+  const handleSwingPicked = useCallback((id: string, swing: DoorSwing) => {
+    dispatch({ type: 'UPDATE_MEASUREMENT', payload: { id, updates: { doorHinge: swing.hinge, doorSide: swing.side, doorFlipped: undefined } } });
+    setSwingPickId(null);
+  }, [dispatch]);
+
+  // Door and Window draw straight lines only: picking another tool ends them, so a polygon
+  // or a rectangle never turns into a door
+  const prevToolRef = useRef(state.activeTool);
+  useEffect(() => {
+    const changed = prevToolRef.current !== state.activeTool;
+    prevToolRef.current = state.activeTool;
+    if (changed && state.activeTool !== 'line') setModMode(m => (m === 'door' || m === 'window' ? null : m));
+  }, [state.activeTool]);
 
   const handleModCancel = useCallback(() => {
     setPendingModMeasurement(null);
@@ -609,12 +636,11 @@ export const PDFTakeoff = ({ projectId, estimateId, onAddCostItems }: PDFTakeoff
     toast.success('Measurement deleted');
   }, [dispatch, measurementPopup]);
 
-  const handlePopupFlipDoor = useCallback(() => {
+  const handlePopupChangeSwing = useCallback(() => {
     if (!measurementPopup) return;
-    const m = state.measurements.find(x => x.id === measurementPopup.id);
-    if (!m) return;
-    dispatch({ type: 'UPDATE_MEASUREMENT', payload: { id: measurementPopup.id, updates: { doorFlipped: !m.doorFlipped } } });
-  }, [dispatch, measurementPopup, state.measurements]);
+    setSwingPickId(measurementPopup.id);
+    setMeasurementPopup(null);
+  }, [measurementPopup]);
 
   const handleDeleteMeasurement = useCallback((id: string) => {
     canvasActionsRef.current?.removeObjects(id);
@@ -630,9 +656,37 @@ export const PDFTakeoff = ({ projectId, estimateId, onAddCostItems }: PDFTakeoff
     dispatch({ type: 'SET_TRANSFORM', payload: transform });
   }, [dispatch]);
 
+  const currentPageRef = useRef(state.currentPageIndex);
+  currentPageRef.current = state.currentPageIndex;
+
+  // Measurements drawn while the plan was turned another way sit beside the drawing.
+  // Find the turn that puts them back on the page, so one tap fixes them.
+  const offPlanFix = useMemo(() => {
+    const size = state.pageSizes?.[state.currentPageIndex];
+    if (!size || !pdfViewport) return null;
+    const cur = state.transform.rotation || 0;
+    const pageMs = state.measurements.filter(m => m.pageIndex === state.currentPageIndex
+      && (!m.planId || !state.pdfFile?.planId || m.planId === state.pdfFile.planId));
+    if (!pageMs.length) return null;
+    const vw = cur % 180 === 0 ? size.width : size.height, vh = cur % 180 === 0 ? size.height : size.width;
+    const offCount = (ms: Measurement[]) => ms.filter(m => (m.worldPoints || []).some(p => p.x < -5 || p.y < -5 || p.x > vw + 5 || p.y > vh + 5)).length;
+    const now = offCount(pageMs);
+    if (now === 0) return null;
+    let best: { from: number; off: number } | null = null;
+    for (const from of [0, 90, 180, 270]) {
+      if (from === cur) continue;
+      const off = offCount(remapMeasurements(pageMs, state.currentPageIndex, from, cur, size.width, size.height));
+      if (!best || off < best.off) best = { from, off };
+    }
+    return best && best.off < now ? { from: best.from, count: now } : null;
+  }, [state.measurements, state.pageSizes, state.currentPageIndex, state.transform.rotation, state.pdfFile?.planId, pdfViewport]);
+
   const handleViewportReady = useCallback((viewport: PDFViewportData) => {
     setPdfViewport({ width: viewport.width, height: viewport.height });
-  }, []);
+    if (viewport.unrotatedWidth && viewport.unrotatedHeight) {
+      dispatch({ type: 'SET_PAGE_SIZE', payload: { pageIndex: currentPageRef.current, width: viewport.unrotatedWidth, height: viewport.unrotatedHeight } });
+    }
+  }, [dispatch]);
 
   // New callbacks for upgraded components
   const handleCalibrationCancel = useCallback(() => {
@@ -1534,6 +1588,16 @@ export const PDFTakeoff = ({ projectId, estimateId, onAddCostItems }: PDFTakeoff
                   </div>
                 )}
 
+                {offPlanFix && (
+                  <div className="flex items-center gap-3 rounded-lg border border-amber-500/30 bg-amber-500/8 px-4 py-2 text-xs text-amber-400">
+                    <span>{offPlanFix.count} measurement{offPlanFix.count === 1 ? ' sits' : 's sit'} off the plan. They were drawn while the plan was turned another way.</span>
+                    <Button variant="ghost" size="sm" className="ml-auto h-7 text-xs text-amber-400 hover:text-amber-300"
+                      onClick={() => dispatch({ type: 'REMAP_PAGE_MEASUREMENTS', payload: { pageIndex: state.currentPageIndex, from: offPlanFix.from, to: state.transform.rotation || 0 } })}>
+                      Put them back on the plan
+                    </Button>
+                  </div>
+                )}
+
                 {/* Uncalibrated page warning */}
                 {state.pdfFile && !state.isCalibrated && !state.calibrationMode && (
                   <div className="flex items-center gap-3 px-4 py-2 bg-amber-500/8 border border-amber-500/30 rounded-lg text-xs text-amber-400">
@@ -1704,6 +1768,12 @@ export const PDFTakeoff = ({ projectId, estimateId, onAddCostItems }: PDFTakeoff
                       </div>
                     )}
                     {calibrationBar}
+                    {swingPickId && (
+                      <div className="absolute top-3 left-1/2 -translate-x-1/2 z-30 flex items-center gap-3 px-3 py-2 bg-card/95 border border-violet-400/60 rounded-lg shadow-lg text-xs">
+                        <span>Which way does it open? Point near the hinge side, on the side it swings to, then click.</span>
+                        <button onClick={() => setSwingPickId(null)} className="text-muted-foreground hover:text-foreground hover:underline shrink-0">Keep as shown</button>
+                      </div>
+                    )}
                     <InteractiveCanvas
                       compareOverlay={compareOverlay}
                       key={`${state.currentPageIndex}-${state.pdfFile?.planId ?? 'none'}`}
@@ -1733,6 +1803,9 @@ export const PDFTakeoff = ({ projectId, estimateId, onAddCostItems }: PDFTakeoff
                       detectedOpenings={detectedOpenings}
                       onMeasurementComplete={handleMeasurementComplete}
                       onMeasurementUpdate={handleMeasurementUpdate}
+                      rotationSaved={state.rotations?.[state.currentPageIndex] !== undefined}
+                      swingPickId={swingPickId}
+                      onSwingPicked={handleSwingPicked}
                       onCalibrationPointsSet={handleCalibrationPointsSet}
                       onTransformChange={handleTransformChange}
                       onViewportReady={handleViewportReady}
@@ -2244,11 +2317,10 @@ export const PDFTakeoff = ({ projectId, estimateId, onAddCostItems }: PDFTakeoff
               if (!isDoorMeasurement) return null;
               return (
                 <button
-                  onClick={handlePopupFlipDoor}
+                  onClick={handlePopupChangeSwing}
                   className="mt-2 w-full px-2.5 py-1.5 rounded text-xs font-medium border border-violet-400/60 text-violet-700 hover:bg-violet-50 dark:text-violet-300 dark:hover:bg-violet-950/30 flex items-center justify-center gap-1.5 transition-colors"
                 >
-                  <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" /></svg>
-                  Flip swing
+                  Change which way it opens
                 </button>
               );
             })()}

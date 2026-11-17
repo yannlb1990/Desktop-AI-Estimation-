@@ -1,4 +1,5 @@
 import { useEffect, useLayoutEffect, useRef, useState, useCallback, useMemo } from 'react';
+import { pickSwing, swingOf, type DoorSwing } from '@/lib/takeoff/doorSwing';
 import { drawingCornerAngle, wallCorners, squareness } from '@/lib/takeoff/wallAngles';
 import { toast } from 'sonner';
 import { Canvas as FabricCanvas, FabricImage, Circle, Line, Path, Rect, Polygon, Text, IText, Point as FabricPoint, util as fabricUtil } from 'fabric';
@@ -339,6 +340,11 @@ interface InteractiveCanvasProps {
   countName?: string;
   /** Called when the canvas wants to switch the active tool (e.g. text → select after placing). */
   onToolChange?: (tool: ToolType) => void;
+  /** the page already has a rotation chosen (by the user or an earlier visit): never turn it on load */
+  rotationSaved?: boolean;
+  /** a door just drawn: the next pointer move shows its swing, the next click sets it */
+  swingPickId?: string | null;
+  onSwingPicked?: (id: string, swing: DoorSwing) => void;
   /** Plan revision compare: changes drawn over the sheet (green added, red removed) */
   compareOverlay?: { dataUrl: string; scale: number } | null;
 }
@@ -374,6 +380,9 @@ export const InteractiveCanvas = ({
   canvasElementRef,
   countName: countNameProp = '',
   onToolChange,
+  rotationSaved,
+  swingPickId = null,
+  onSwingPicked,
   compareOverlay = null,
 }: InteractiveCanvasProps) => {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -467,6 +476,23 @@ export const InteractiveCanvas = ({
   const shapeSigRef = useRef<Map<string, string>>(new Map());
   // corner angle readout while drawing a wall: the angle and where the cursor is
   const angleHudRef = useRef<{ deg: number; at: WorldPoint } | null>(null);
+  const measurementsRef = useRef(measurements);
+  measurementsRef.current = measurements;
+  // choosing a new door's swing: which door, and the swing the pointer shows right now
+  const swingPickIdRef = useRef(swingPickId);
+  swingPickIdRef.current = swingPickId;
+  const onSwingPickedRef = useRef(onSwingPicked);
+  onSwingPickedRef.current = onSwingPicked;
+  const swingPreviewRef = useRef<{ id: string; swing: DoorSwing } | null>(null);
+  useEffect(() => {
+    const canvas = fabricCanvasRef.current;
+    // choosing the swing: drop the selection handles so only the door shows
+    if (swingPickId) { canvas?.discardActiveObject(); canvas?.requestRenderAll(); return; }
+    swingPreviewRef.current = null;
+    canvas?.requestRenderAll();
+  }, [swingPickId]);
+  const rotationSetRef = useRef(!!rotationSaved);
+  rotationSetRef.current = !!rotationSaved;
   const activeToolRef = useRef(activeTool);
   activeToolRef.current = activeTool;
   const calibrationModeRef = useRef(calibrationMode);
@@ -815,10 +841,13 @@ export const InteractiveCanvas = ({
         // Get base dimensions for coordinate system (always scale 1.0)
         const baseViewport = page.getViewport({ scale: 1.0, rotation: transform.rotation });
 
+        const flatViewport = page.getViewport({ scale: 1.0, rotation: 0 });
         const pdfViewport: PDFViewportData = {
           width: baseViewport.width,
           height: baseViewport.height,
-          scale: 1.0
+          scale: 1.0,
+          unrotatedWidth: flatViewport.width,
+          unrotatedHeight: flatViewport.height,
         };
         setViewport(pdfViewport);
         onViewportReady(pdfViewport);
@@ -928,7 +957,10 @@ export const InteractiveCanvas = ({
             const vpH = baseViewport.height;
             const fit0  = Math.min(canvasW / vpW, canvasH / vpH);
             const fit90 = Math.min(canvasW / vpH, canvasH / vpW);
-            const autoRotate = fit90 > fit0 * 1.15;
+            // Only turn a plan nobody has measured or turned yet: the screen shape differs between
+            // an iPad and a computer, and turning it again on each device moved the plan around
+            const pageHasMeasurements = measurementsRef.current.some(m => m.pageIndex === pageIndex);
+            const autoRotate = fit90 > fit0 * 1.15 && transform.rotation === 0 && !pageHasMeasurements && !rotationSetRef.current;
             const fitW = autoRotate ? vpH : vpW;
             const fitH = autoRotate ? vpW : vpH;
             const fitZoom = Math.min(canvasW / fitW, canvasH / fitH) * 0.95;
@@ -1227,11 +1259,11 @@ export const InteractiveCanvas = ({
       });
     }
 
-    // Room floor areas and walls can be re-shaped from outside (Rooms from walls > Update
-    // area; a joined wall following a moved one): drop the old drawing so it is drawn again
+    // Any measurement can be moved from outside (the plan turned, Exact length, Rooms from
+    // walls > Update area, a joined wall following a moved one): drop the old drawing so it
+    // is drawn again where its points now are
     measurements.forEach(m => {
-      if (!m.roomKey && !(m.wallThickness && m.type === 'line' && !m.arcControlPoint)) return;
-      const sig = JSON.stringify(m.worldPoints);
+      const sig = JSON.stringify([m.worldPoints, (m as any).arcControlPoint ?? null]);
       const was = shapeSigRef.current.get(m.id);
       shapeSigRef.current.set(m.id, sig);
       if (was === undefined || was === sig || !objectsMap.has(m.id)) return;
@@ -1590,86 +1622,79 @@ export const InteractiveCanvas = ({
         ctx.fillText(text, ax, ly);
       };
 
-      // Door/window symbols — p1/p2 in world coords, converted inside
-      const drawDoorSymbol = (p1: WorldPoint, p2: WorldPoint, color: string, subtype?: string, flipped?: boolean) => {
-        const [fp1, fp2] = flipped ? [p2, p1] : [p1, p2];
-        const x1 = tpx(fp1.x), y1 = tpy(fp1.y);
-        const x2 = tpx(fp2.x), y2 = tpy(fp2.y);
+      // Door symbols: p1/p2 are the jambs (world coords); the swing says which jamb is the hinge
+      // and which side of the wall the leaf opens to (src/lib/takeoff/doorSwing.ts)
+      const drawDoorSymbol = (p1: WorldPoint, p2: WorldPoint, color: string, subtype: string | undefined, swing: DoorSwing, preview = false) => {
+        const x1 = tpx(p1.x), y1 = tpy(p1.y);
+        const x2 = tpx(p2.x), y2 = tpy(p2.y);
         const dx = x2 - x1, dy = y2 - y1;
         const len = Math.sqrt(dx * dx + dy * dy);
         if (len < 1) return;
-        // Arc radius = full door opening width on screen, matching the plan's door symbol.
-        const symR = len;
-        const lineAngle = Math.atan2(dy, dx);
+        const ux = dx / len, uy = dy / len;
+        // unit normal toward the side the door opens to
+        const nx = -uy * swing.side, ny = ux * swing.side;
+        const [hx, hy, jx, jy] = swing.hinge === 'start' ? [x1, y1, x2, y2] : [x2, y2, x1, y1];
+        // quarter arc from the closed position (the other jamb) to the open leaf, the short way round
+        const swingArc = (cx: number, cy: number, fromX: number, fromY: number, r: number, dirX: number, dirY: number) => {
+          const a0 = Math.atan2(fromY - cy, fromX - cx);
+          const a1 = Math.atan2(dirY, dirX);
+          let d = a1 - a0;
+          while (d > Math.PI) d -= Math.PI * 2;
+          while (d < -Math.PI) d += Math.PI * 2;
+          ctx.beginPath(); ctx.arc(cx, cy, r, a0, a0 + d, d < 0); ctx.stroke();
+        };
         ctx.save();
-        ctx.strokeStyle = color + 'cc';
-        ctx.lineWidth = 1 * dpr;
+        ctx.strokeStyle = color + (preview ? 'ff' : 'dd');
+        ctx.lineWidth = (preview ? 2 : 1.5) * dpr;
         if (subtype === 'Cavity Slider') {
-          // Two parallel lines + bidirectional arrow
-          const perpX = -dy / len, perpY = dx / len;
-          const off = 4 * dpr;
+          // the door slides into the wall beside the opening, on the hinge jamb's side
+          const off = 3 * dpr;
           ctx.setLineDash([]);
           for (const s of [-1, 1]) {
             ctx.beginPath();
-            ctx.moveTo(x1 + perpX * off * s, y1 + perpY * off * s);
-            ctx.lineTo(x2 + perpX * off * s, y2 + perpY * off * s);
+            ctx.moveTo(x1 - uy * off * s, y1 + ux * off * s);
+            ctx.lineTo(x2 - uy * off * s, y2 + ux * off * s);
             ctx.stroke();
           }
-          const aSize = 6 * dpr;
-          for (const [ax, ay, dir] of [[x1, y1, 1], [x2, y2, -1]] as [number, number, number][]) {
-            ctx.beginPath();
-            ctx.moveTo(ax, ay);
-            ctx.lineTo(ax + Math.cos(lineAngle) * aSize * dir, ay + Math.sin(lineAngle) * aSize * dir);
-            ctx.stroke();
-          }
+          const back = swing.hinge === 'start' ? -1 : 1; // away from the opening, past the hinge jamb
+          ctx.setLineDash([4 * dpr, 3 * dpr]);
+          ctx.beginPath(); ctx.moveTo(hx, hy); ctx.lineTo(hx + ux * len * back, hy + uy * len * back); ctx.stroke();
         } else if (subtype === 'Bi-fold') {
+          // two panels folding toward the hinge jamb, on the opening side
           ctx.setLineDash([]);
-          const half = symR / 2;
-          ctx.beginPath();
-          ctx.moveTo(x1, y1);
-          ctx.lineTo(x1 + Math.cos(lineAngle - Math.PI / 4) * half, y1 + Math.sin(lineAngle - Math.PI / 4) * half);
-          ctx.stroke();
-          ctx.beginPath();
-          ctx.moveTo(x1, y1);
-          ctx.lineTo(x1 + Math.cos(lineAngle + Math.PI / 4) * half, y1 + Math.sin(lineAngle + Math.PI / 4) * half);
-          ctx.stroke();
+          const half = len / 2;
+          const toJx = (jx - hx) / len, toJy = (jy - hy) / len;
+          const peakX = hx + toJx * half * 0.5 + nx * half * 0.5, peakY = hy + toJy * half * 0.5 + ny * half * 0.5;
+          ctx.beginPath(); ctx.moveTo(hx, hy); ctx.lineTo(peakX, peakY); ctx.lineTo(hx + toJx * half, hy + toJy * half); ctx.stroke();
+          const peak2X = hx + toJx * half * 1.5 + nx * half * 0.5, peak2Y = hy + toJy * half * 1.5 + ny * half * 0.5;
+          ctx.beginPath(); ctx.moveTo(hx + toJx * half, hy + toJy * half); ctx.lineTo(peak2X, peak2Y); ctx.lineTo(jx, jy); ctx.stroke();
         } else if (subtype === 'French') {
-          ctx.setLineDash([4 * dpr, 3 * dpr]);
-          const half = symR / 2;
-          ctx.beginPath(); ctx.arc(x1, y1, half, lineAngle, lineAngle + Math.PI / 2, false); ctx.stroke();
-          ctx.beginPath(); ctx.arc(x2, y2, half, lineAngle + Math.PI, lineAngle + Math.PI * 1.5, false); ctx.stroke();
-        } else if (subtype === 'Garage') {
-          ctx.setLineDash([]);
-          const perpX = -dy / len, perpY = dx / len;
-          const nLines = 4;
-          for (let i = 0; i <= nLines; i++) {
-            const t = i / nLines;
-            const bx = x1 + dx * t, by = y1 + dy * t;
-            const off = 6 * dpr;
-            ctx.beginPath();
-            ctx.moveTo(bx + perpX * off, by + perpY * off);
-            ctx.lineTo(bx - perpX * off, by - perpY * off);
-            ctx.stroke();
+          // a pair: each leaf half the opening, hung from both jambs, opening the same side
+          const half = len / 2;
+          for (const [cx, cy, ox, oy] of [[x1, y1, ux, uy], [x2, y2, -ux, -uy]] as [number, number, number, number][]) {
+            ctx.setLineDash([]);
+            ctx.beginPath(); ctx.moveTo(cx, cy); ctx.lineTo(cx + nx * half, cy + ny * half); ctx.stroke();
+            ctx.setLineDash([4 * dpr, 3 * dpr]);
+            swingArc(cx, cy, cx + ox * half, cy + oy * half, half, nx, ny);
           }
-        } else if (subtype === 'Fire Door') {
-          ctx.setLineDash([4 * dpr, 3 * dpr]);
-          ctx.beginPath(); ctx.arc(x1, y1, symR, lineAngle, lineAngle + Math.PI / 2, false); ctx.stroke();
-          ctx.setLineDash([]);
-          const endAngle = lineAngle + Math.PI / 2;
-          ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x1 + symR * Math.cos(endAngle), y1 + symR * Math.sin(endAngle)); ctx.stroke();
-          ctx.fillStyle = color + 'cc';
-          ctx.font = `bold ${Math.max(8 * dpr, symR * 0.55)}px system-ui`;
-          ctx.textAlign = 'center';
-          ctx.fillText('FD', (x1 + x1 + symR * Math.cos(endAngle)) / 2, (y1 + y1 + symR * Math.sin(endAngle)) / 2 - 4 * dpr);
         } else {
-          // Default: Internal / Entry — compact quarter-circle swing indicator
-          ctx.setLineDash([4 * dpr, 3 * dpr]);
-          ctx.beginPath(); ctx.arc(x1, y1, symR, lineAngle, lineAngle + Math.PI / 2, false); ctx.stroke();
+          // Internal, Entry, Fire Door: one leaf hung from the hinge jamb
           ctx.setLineDash([]);
-          const endAngle = lineAngle + Math.PI / 2;
-          ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x1 + symR * Math.cos(endAngle), y1 + symR * Math.sin(endAngle));
-          ctx.strokeStyle = color + '88'; ctx.stroke();
+          ctx.beginPath(); ctx.moveTo(hx, hy); ctx.lineTo(hx + nx * len, hy + ny * len); ctx.stroke();
+          ctx.setLineDash([4 * dpr, 3 * dpr]);
+          swingArc(hx, hy, jx, jy, len, nx, ny);
+          if (subtype === 'Fire Door') {
+            ctx.setLineDash([]);
+            ctx.fillStyle = color;
+            ctx.font = `bold ${Math.max(8 * dpr, Math.min(14 * dpr, len * 0.18))}px system-ui`;
+            ctx.textAlign = 'center';
+            ctx.fillText('FD', hx + (jx - hx) * 0.35 + nx * len * 0.35, hy + (jy - hy) * 0.35 + ny * len * 0.35);
+          }
         }
+        // hinge dot so the hanging side reads at a glance
+        ctx.setLineDash([]);
+        ctx.fillStyle = color;
+        if (subtype !== 'French' && subtype !== 'Cavity Slider') { ctx.beginPath(); ctx.arc(hx, hy, 3 * dpr, 0, Math.PI * 2); ctx.fill(); }
         ctx.restore();
       };
 
@@ -2281,7 +2306,22 @@ export const InteractiveCanvas = ({
 
           const isDoor = mType === 'Door' || lbl.startsWith('Door ') || lbl.startsWith('Door—') || lbl === 'Door';
           const isWindow = mType === 'Window' || lbl.startsWith('Window ') || lbl.startsWith('Window—') || lbl === 'Window';
-          if (isDoor) drawDoorSymbol(wP1, wP2, measurement.color || '#8b5cf6', (measurement as any).modSubtype, (measurement as any).doorFlipped);
+          if (isDoor) {
+            const pick = swingPreviewRef.current;
+            const picking = pick && pick.id === measurement.id;
+            drawDoorSymbol(wP1, wP2, measurement.color || '#8b5cf6', (measurement as any).modSubtype, picking ? pick.swing : swingOf(measurement as any), !!picking);
+            if (picking && measurement.realValue) {
+              // the opening width while choosing the swing, so a wrong width shows straight away
+              const mx = tpx((wP1.x + wP2.x) / 2), my = tpy((wP1.y + wP2.y) / 2);
+              ctx.save();
+              ctx.font = `700 ${11 * dpr}px system-ui, -apple-system, sans-serif`;
+              ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+              const txt = `${Math.round(measurement.realValue * 1000)}`;
+              ctx.lineWidth = 3 * dpr; ctx.strokeStyle = 'rgba(255,255,255,0.92)'; ctx.strokeText(txt, mx, my - 10 * dpr);
+              ctx.fillStyle = measurement.color || '#8b5cf6'; ctx.fillText(txt, mx, my - 10 * dpr);
+              ctx.restore();
+            }
+          }
           else if (isWindow) drawWindowSymbol(wP1, wP2, measurement.color || '#06b6d4', (measurement as any).modSubtype);
         } else if ((measurement as any).type === 'count') {
           let sx = 0, sy = 0;
@@ -2702,6 +2742,8 @@ export const InteractiveCanvas = ({
             evented: isSelectMode,
             hasControls: isSelectMode,
             hasBorders: isSelectMode,
+            // a straight line along a wall (a door, a window) is a pixel wide: give it room to click
+            padding: isRegularLine ? 6 * touchScale() : 0,
             lockRotation: !canTurn,
             cornerColor: '#2563eb',
             cornerStyle: 'circle',
@@ -4007,6 +4049,19 @@ export const InteractiveCanvas = ({
     // Convert to world coordinates for storage (applies inverse transform)
     let worldPoint = viewToWorld(viewPoint, transform, viewport);
 
+    // A door was just drawn: this click (or tap) sets which way it opens
+    const pickId = swingPickIdRef.current;
+    if (pickId) {
+      const door = measurementsRef.current.find(m => m.id === pickId);
+      if (door && door.worldPoints?.length >= 2) {
+        const swing = pickSwing(door.worldPoints[0], door.worldPoints[1], worldPoint);
+        swingPreviewRef.current = null;
+        onSwingPickedRef.current?.(pickId, swing);
+        canvas.requestRenderAll();
+        return;
+      }
+    }
+
     // Snap click point to nearest endpoint or midpoint (and both ends of the scale line)
     const calibrating = calibrationMode === 'manual' && !isCalibrated;
     if (calibrating || (activeTool && activeTool !== 'pan' && activeTool !== 'select' && activeTool !== 'eraser')) {
@@ -4392,6 +4447,23 @@ export const InteractiveCanvas = ({
   const handleMouseMove = useCallback((e: any) => {
     const canvas = fabricCanvasRef.current;
     if (!canvas || !viewport) return;
+
+    // Choosing a new door's swing: the leaf follows the pointer
+    const pickId = swingPickIdRef.current;
+    if (pickId) {
+      const door = measurementsRef.current.find(m => m.id === pickId);
+      if (door && door.worldPoints?.length >= 2) {
+        const p = getCSSPointer(canvas, e.e);
+        const at = viewToWorld({ x: p.x, y: p.y }, transform, viewport);
+        const swing = pickSwing(door.worldPoints[0], door.worldPoints[1], at);
+        const prev = swingPreviewRef.current;
+        if (!prev || prev.id !== pickId || prev.swing.hinge !== swing.hinge || prev.swing.side !== swing.side) {
+          swingPreviewRef.current = { id: pickId, swing };
+          canvas.requestRenderAll();
+        }
+        return;
+      }
+    }
 
     // Handle calibration drag preview (use refs to avoid stale closure)
     if (calibrationMode === 'manual' && isCalibrationDraggingRef.current && calibrationStartPointRef.current) {

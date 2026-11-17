@@ -40,6 +40,9 @@ export interface PDFViewportData {
   width: number;   // PDF points
   height: number;  // PDF points
   scale: number;
+  /** the page's size with no rotation, to turn measurements with the plan */
+  unrotatedWidth?: number;
+  unrotatedHeight?: number;
 }
 
 // === MEASUREMENT TYPES ===
@@ -125,6 +128,8 @@ export interface Measurement {
   arcControlPoint?: WorldPoint; // control point for arc-wall tool (passes through this point)
   modSubtype?: string;          // subtype for door/window mark-as (e.g. 'Internal', 'Awning')
   doorFlipped?: boolean;        // mirror the door swing symbol (swaps hinge endpoint)
+  doorHinge?: 'start' | 'end'; // which jamb the door hangs from (src/lib/takeoff/doorSwing.ts)
+  doorSide?: 1 | -1;            // which side of the wall it opens to
   roomKey?: string;             // floor area made by 'Rooms from walls': the walls that close it
   roomPerimeterM?: number;      // its inside perimeter (skirting, cornice)
   timestamp: string;   // ISO 8601 — JSON-safe (Date objects don't survive JSON.parse)
@@ -298,6 +303,8 @@ export interface TakeoffState {
   
   // Scaling state (Record for JSON serialization, not Map)
   scales: Record<number, ScaleData>;
+  /** each page's size with no rotation (PDF points), for turning measurements with the plan */
+  pageSizes?: Record<number, { width: number; height: number }>;
   currentScale: ScaleData | null;
   isCalibrated: boolean;
   calibrationMode: CalibrationMode;
@@ -345,6 +352,8 @@ export type TakeoffAction =
   | { type: 'RESET_SCALE'; payload: number }
   | { type: 'SET_CALIBRATION_MODE'; payload: CalibrationMode }
   | { type: 'SET_TRANSFORM'; payload: Partial<Transform> }
+  | { type: 'SET_PAGE_SIZE'; payload: { pageIndex: number; width: number; height: number } }
+  | { type: 'REMAP_PAGE_MEASUREMENTS'; payload: { pageIndex: number; from: number; to: number } }
   | { type: 'SET_ACTIVE_TOOL'; payload: ToolType }
   | { type: 'ADD_MEASUREMENT'; payload: Measurement }
   | { type: 'UPDATE_MEASUREMENT'; payload: { id: string; updates: Partial<Measurement> } }
